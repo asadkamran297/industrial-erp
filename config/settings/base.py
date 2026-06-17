@@ -77,13 +77,12 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": config("DB_ENGINE", default="django.db.backends.mysql"),
+        "ENGINE": config("DB_ENGINE", default="django.db.backends.postgresql"),
         "NAME": config("DB_NAME", default="industrial_erp"),
-        "USER": config("DB_USER", default="root"),
+        "USER": config("DB_USER", default="postgres"),
         "PASSWORD": config("DB_PASSWORD", default=""),
         "HOST": config("DB_HOST", default="127.0.0.1"),
-        "PORT": config("DB_PORT", default="3306"),
-        "OPTIONS": {"charset": "utf8mb4"},
+        "PORT": config("DB_PORT", default="5432"),
     }
 }
 

@@ -5,5 +5,5 @@
 - Keep soft-deleted records by setting `deleted_at` rather than hard deleting operational history.
 - Include audit fields for created/updated ownership where useful.
 - Use explicit field names and choices.
-- Plan production for MySQL/MariaDB with `utf8mb4`.
+- Plan production for PostgreSQL.
 - Add indexes intentionally for search, filters, and reporting once modules are introduced.

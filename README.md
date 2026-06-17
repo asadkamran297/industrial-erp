@@ -6,7 +6,7 @@ Production-grade Django foundation for a custom Industrial ERP and MIS portal. T
 
 - Python 3.12+
 - Django 5.2 LTS
-- MySQL/MariaDB ready, SQLite enabled for local first run
+- PostgreSQL ready, SQLite enabled for local first run
 - Django Templates
 - Tailwind CSS CDN foundation with static CSS overrides
 - HTMX
@@ -26,7 +26,7 @@ Open `http://127.0.0.1:8000/accounts/login/`.
 
 ## Environment
 
-Copy `.env.example` to `.env` and adjust values for production. Local settings default to SQLite with `USE_SQLITE=True`; set it to `False` to use the MySQL/MariaDB variables.
+Copy `.env.example` to `.env` and adjust values for production. Local settings default to SQLite with `USE_SQLITE=True`; set it to `False` to use the PostgreSQL variables.
 
 ## Main Apps
 
