@@ -5,6 +5,7 @@
 - `config/settings/`: environment-specific Django settings.
 - `apps.accounts`: custom user and authentication.
 - `apps.core`: shared models, system settings, global context.
+- `apps.core.constants`: shared statuses, common choices, and application-wide constants.
 - `apps.portal`: authenticated user portal.
 - `templates/components`: reusable UI patterns.
 

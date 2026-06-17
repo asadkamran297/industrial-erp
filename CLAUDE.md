@@ -7,6 +7,7 @@ Work as a senior Django ERP engineer. The project foundation is intentionally sm
 1. Inspect existing files and avoid overwriting unrelated user changes.
 2. Check settings imports, app labels, and migrations when touching models.
 3. Preserve the custom portal direction; Django Admin is not the product UI.
+4. Put shared statuses, choice arrays, and application-wide constants in `apps/core/constants.py` and reuse them everywhere.
 
 ## After Editing
 
