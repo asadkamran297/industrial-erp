@@ -1,0 +1,9 @@
+<nav class="mb-5 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+  <ol class="flex flex-wrap items-center gap-2">
+    <li><a href="{% url 'portal:dashboard' %}" class="hover:text-[var(--primary-color)]">Portal</a></li>
+    {% for label, url in breadcrumbs %}
+      <li>/</li>
+      <li>{% if url %}<a href="{{ url }}" class="hover:text-[var(--primary-color)]">{{ label }}</a>{% else %}<span class="text-slate-900 dark:text-white">{{ label }}</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+</nav>

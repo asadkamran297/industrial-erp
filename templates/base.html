@@ -1,0 +1,21 @@
+{% load static %}
+<!doctype html>
+<html lang="en" x-data="themeController()" x-init="init()" :class="{ 'dark': theme === 'dark' }">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ system_setting.company_name }}{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <link rel="stylesheet" href="{% static 'dist/app.css' %}">
+  <script defer src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
+  <script defer src="{% static 'js/theme.js' %}"></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-950 antialiased dark:bg-slate-950 dark:text-slate-100" style="--primary-color: {{ system_setting.primary_color }}; --secondary-color: {{ system_setting.secondary_color }};">
+  {% block body %}{% endblock %}
+</body>
+</html>

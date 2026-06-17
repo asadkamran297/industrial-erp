@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Portal | {{ system_setting.company_name }}{% endblock %}
+{% block body %}
+<div class="min-h-screen" x-data="{ sidebarOpen: false, profileOpen: false }">
+  <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
+
+  <aside class="fixed inset-y-0 left-0 z-40 w-72 -translate-x-full border-r border-slate-200 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 transition lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen }">
+    <div class="flex items-center gap-3 px-2 py-3">
+      <div class="grid h-11 w-11 place-items-center rounded-lg bg-[var(--primary-color)] text-sm font-bold text-white">
+        {% if system_setting.company_logo %}<img src="{{ system_setting.company_logo.url }}" alt="" class="h-11 w-11 rounded-lg object-cover">{% else %}ERP{% endif %}
+      </div>
+      <div class="min-w-0">
+        <p class="truncate text-sm font-semibold">{{ system_setting.company_name }}</p>
+        <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ system_setting.company_tagline }}</p>
+      </div>
+    </div>
+
+    <nav class="mt-6 space-y-1" aria-label="Main menu">
+      {% include "components/ui/button.html" with label="Dashboard" href="/portal/" active=True %}
+      {% include "components/ui/button.html" with label="Operations" href="#" %}
+      {% include "components/ui/button.html" with label="Inventory" href="#" %}
+      {% include "components/ui/button.html" with label="Employees" href="#" %}
+      {% include "components/ui/button.html" with label="Reports" href="#" %}
+      {% include "components/ui/button.html" with label="Settings" href="#" %}
+      {% include "components/ui/button.html" with label="Help" href="#" %}
+    </nav>
+  </aside>
+
+  <div class="lg:pl-72">
+    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
+      <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
+        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 lg:hidden dark:border-slate-700" @click="sidebarOpen = true" aria-label="Open menu">
+          <span class="text-xl">=</span>
+        </button>
+        <div class="hidden min-w-0 flex-1 sm:block">
+          {% include "components/ui/search_box.html" with placeholder="Search records, reports, requests..." %}
+        </div>
+        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" @click="toggleTheme()" aria-label="Toggle theme">◐</button>
+        <input class="h-10 w-10 rounded-lg border border-slate-200 bg-transparent p-1 dark:border-slate-700" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Primary color">
+        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="Notifications">!</button>
+        <div class="relative">
+          <button class="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-700" @click="profileOpen = !profileOpen">
+            <span class="grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{{ request.user.username|slice:":2"|upper }}</span>
+            <span class="hidden text-sm font-medium sm:block">{{ request.user.display_name }}</span>
+          </button>
+          <div x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-2 w-52 rounded-lg border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <p class="px-3 py-2 text-xs text-slate-500">{{ request.user.get_user_type_display }}</p>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button class="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sign out</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="px-4 py-6 sm:px-6 lg:px-8">
+      {% include "components/ui/breadcrumb.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}
