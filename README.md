@@ -25,6 +25,21 @@ python manage.py runserver
 
 Open `http://127.0.0.1:8000/accounts/login/`.
 
+## Frontend Assets
+
+Tailwind CSS is built locally. After changing template classes or `static/src/app.css`, run:
+
+```powershell
+npm install
+npm run build
+```
+
+During active UI work, you can keep Tailwind watching:
+
+```powershell
+npm run watch:css
+```
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust values for production. Local settings default to SQLite with `USE_SQLITE=True`; set it to `False` to use PostgreSQL. You can configure PostgreSQL with either `DATABASE_URL` or the individual `DB_*` variables.

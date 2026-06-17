@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "build": "npm run build:css",
+    "build:css": "tailwindcss -i ./static/src/app.css -o ./static/dist/app.css --minify",
+    "watch:css": "tailwindcss -i ./static/src/app.css -o ./static/dist/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

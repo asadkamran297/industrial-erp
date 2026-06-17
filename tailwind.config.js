@@ -1,0 +1,12 @@
+module.exports = {
+  darkMode: "class",
+  content: [
+    "./templates/**/*.html",
+    "./apps/**/*.py",
+    "./static/js/**/*.js"
+  ],
+  theme: {
+    extend: {}
+  },
+  plugins: []
+};
