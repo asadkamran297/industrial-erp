@@ -6,6 +6,8 @@ ROLE_PERMISSION_CODES = {
     "Super Admin": ["*"],
     "Admin": [
         "dashboard.view",
+        "operations.view",
+        "inventory.view",
         "configurations.view",
         "configurations.manage",
         "organizations.view",
@@ -18,9 +20,11 @@ ROLE_PERMISSION_CODES = {
         "payroll.view",
         "reports.view",
         "settings.view",
+        "help.view",
     ],
     "HR Manager": [
         "dashboard.view",
+        "help.view",
         "hr.view",
         "hr.manage",
         "employees.view",
@@ -29,6 +33,7 @@ ROLE_PERMISSION_CODES = {
     ],
     "Payroll Officer": [
         "dashboard.view",
+        "help.view",
         "employees.view",
         "payroll.view",
         "payroll.generate",
@@ -36,6 +41,7 @@ ROLE_PERMISSION_CODES = {
     ],
     "Payroll Approver": [
         "dashboard.view",
+        "help.view",
         "employees.view",
         "payroll.view",
         "payroll.approve",
@@ -43,16 +49,23 @@ ROLE_PERMISSION_CODES = {
     ],
     "Manager": [
         "dashboard.view",
+        "operations.view",
+        "inventory.view",
+        "help.view",
         "employees.view",
         "payroll.view",
         "reports.view",
     ],
     "Operator": [
         "dashboard.view",
+        "operations.view",
+        "inventory.view",
+        "help.view",
         "employees.view",
     ],
     "Viewer": [
         "dashboard.view",
+        "help.view",
         "reports.view",
     ],
 }

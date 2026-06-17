@@ -15,15 +15,7 @@
       </div>
     </div>
 
-    <nav class="mt-6 space-y-1" aria-label="Main menu">
-      {% include "components/ui/button.html" with label="Dashboard" href="/portal/" active=True %}
-      {% include "components/ui/button.html" with label="Operations" href="#" %}
-      {% include "components/ui/button.html" with label="Inventory" href="#" %}
-      {% include "components/ui/button.html" with label="Employees" href="#" %}
-      {% include "components/ui/button.html" with label="Reports" href="#" %}
-      {% include "components/ui/button.html" with label="Settings" href="#" %}
-      {% include "components/ui/button.html" with label="Help" href="#" %}
-    </nav>
+    {% include "components/navigation/sidebar.html" %}
   </aside>
 
   <div class="lg:pl-72">

@@ -4,6 +4,8 @@ from apps.core.constants import STATUS_ACTIVE
 
 PERMISSIONS = [
     ("dashboard.view", "View Dashboard"),
+    ("operations.view", "View Operations"),
+    ("inventory.view", "View Inventory"),
     ("configurations.view", "View Configuration Masters"),
     ("configurations.manage", "Manage Configuration Masters"),
     ("organizations.view", "View Organizations"),
@@ -20,6 +22,7 @@ PERMISSIONS = [
     ("reports.view", "View Reports"),
     ("settings.view", "View Settings"),
     ("settings.manage", "Manage Settings"),
+    ("help.view", "View Help"),
 ]
 
 
