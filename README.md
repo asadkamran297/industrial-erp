@@ -26,7 +26,7 @@ Open `http://127.0.0.1:8000/accounts/login/`.
 
 ## Environment
 
-Copy `.env.example` to `.env` and adjust values for production. Local settings default to SQLite with `USE_SQLITE=True`; set it to `False` to use the PostgreSQL variables.
+Copy `.env.example` to `.env` and adjust values for production. Local settings default to SQLite with `USE_SQLITE=True`; set it to `False` to use PostgreSQL. You can configure PostgreSQL with either `DATABASE_URL` or the individual `DB_*` variables.
 
 ## Main Apps
 

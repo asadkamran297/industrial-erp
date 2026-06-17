@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
 from decouple import Csv, config
 
@@ -12,6 +13,18 @@ def env_bool(name: str, default: bool = False) -> bool:
     if value in {"0", "false", "no", "off", "release", "production", "prod"}:
         return False
     return default
+
+
+def postgres_database_from_url(url: str) -> dict[str, str]:
+    parsed = urlparse(url)
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": parsed.username or "",
+        "PASSWORD": parsed.password or "",
+        "HOST": parsed.hostname or "127.0.0.1",
+        "PORT": str(parsed.port or 5432),
+    }
 
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me-in-env")
@@ -75,8 +88,12 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+DATABASE_URL = config("DATABASE_URL", default="")
+
 DATABASES = {
-    "default": {
+    "default": postgres_database_from_url(DATABASE_URL)
+    if DATABASE_URL
+    else {
         "ENGINE": config("DB_ENGINE", default="django.db.backends.postgresql"),
         "NAME": config("DB_NAME", default="industrial_erp"),
         "USER": config("DB_USER", default="postgres"),
