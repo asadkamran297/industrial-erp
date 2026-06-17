@@ -6,7 +6,8 @@ function themeController() {
       const savedTheme = localStorage.getItem('portal-theme');
       const savedColor = localStorage.getItem('portal-primary-color');
       this.theme = savedTheme || document.documentElement.dataset.defaultTheme || 'light';
-      this.primaryColor = savedColor || getComputedStyle(document.body).getPropertyValue('--primary-color').trim() || '#2563eb';
+      const cssColor = getComputedStyle(document.body).getPropertyValue('--primary-color').trim();
+      this.primaryColor = this.normalizeColor(savedColor) || this.normalizeColor(cssColor) || '#2563eb';
       this.applyTheme();
       this.setPrimaryColor(this.primaryColor);
     },
@@ -19,9 +20,12 @@ function themeController() {
       document.documentElement.classList.toggle('dark', this.theme === 'dark');
     },
     setPrimaryColor(color) {
-      this.primaryColor = color;
-      document.body.style.setProperty('--primary-color', color);
-      localStorage.setItem('portal-primary-color', color);
+      this.primaryColor = this.normalizeColor(color) || '#2563eb';
+      document.body.style.setProperty('--primary-color', this.primaryColor);
+      localStorage.setItem('portal-primary-color', this.primaryColor);
+    },
+    normalizeColor(color) {
+      return /^#[0-9a-fA-F]{6}$/.test(color || '') ? color : null;
     }
   };
 }
