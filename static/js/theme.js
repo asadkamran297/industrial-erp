@@ -1,4 +1,4 @@
-function themeController() {
+window.themeController = function themeController() {
   return {
     theme: 'light',
     primaryColor: '#2563eb',
@@ -28,4 +28,4 @@ function themeController() {
       return /^#[0-9a-fA-F]{6}$/.test(color || '') ? color : null;
     }
   };
-}
+};
