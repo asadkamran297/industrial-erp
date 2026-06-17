@@ -7,3 +7,4 @@
 - Use explicit field names and choices.
 - Plan production for PostgreSQL.
 - Add indexes intentionally for search, filters, and reporting once modules are introduced.
+- Seeders must be idempotent. Use `update_or_create` or `get_or_create` so running `python manage.py seed` multiple times does not duplicate master data.

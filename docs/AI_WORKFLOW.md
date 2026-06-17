@@ -6,7 +6,8 @@
 2. Keep changes focused to the requested foundation or module.
 3. Create migrations for model changes.
 4. Run checks and migrations.
-5. Document commands and important files changed.
+5. Run `python manage.py seed` when new default master data or roles are added.
+6. Document commands and important files changed.
 
 ## Future Module Pattern
 

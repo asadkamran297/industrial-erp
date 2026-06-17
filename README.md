@@ -18,6 +18,7 @@ Production-grade Django foundation for a custom Industrial ERP and MIS portal. T
 .\.venv\Scripts\activate
 python -m pip install -r requirements\base.txt
 python manage.py migrate
+python manage.py seed
 python manage.py createsuperuser
 python manage.py runserver
 ```
@@ -34,3 +35,21 @@ Copy `.env.example` to `.env` and adjust values for production. Local settings d
 - `apps.core`: base model, soft delete, system branding settings
 - `apps.portal`: authenticated dashboard and portal layout
 - `apps.design_system`: reusable component home for future UI patterns
+
+## Seed Data
+
+Run all seeders:
+
+```powershell
+python manage.py seed
+```
+
+Run one module:
+
+```powershell
+python manage.py seed configurations
+python manage.py seed access_control
+python manage.py seed organizations
+```
+
+Seeders are idempotent and can be run repeatedly without creating duplicate master data.
