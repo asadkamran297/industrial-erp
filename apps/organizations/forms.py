@@ -1,10 +1,12 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
+from apps.core.forms import AutoSelectSingleChoiceMixin
+
 from .models import Branch, Organization
 
 
-class OrganizationForm(forms.ModelForm):
+class OrganizationForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = Organization
         fields = ("parent", "title", "code", "status")
@@ -31,7 +33,7 @@ class OrganizationForm(forms.ModelForm):
         return cleaned_data
 
 
-class BranchForm(forms.ModelForm):
+class BranchForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = Branch
         fields = (

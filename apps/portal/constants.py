@@ -24,7 +24,11 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     NavigationItem("Dashboard", permission="dashboard.view", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
     NavigationItem("Production", permission="operations.view", section=SECTION_OPERATIONS, icon="P"),
     NavigationItem("Inventory", permission="inventory.view", section=SECTION_OPERATIONS, icon="I"),
-    NavigationItem("Employees", permission="employees.view", section=SECTION_WORKFORCE, icon="E"),
+    NavigationItem("Employees", permission="employees.view", section=SECTION_WORKFORCE, icon="E", url_name="hr:employee_list"),
+    NavigationItem("Payroll", permission="payroll.view", section=SECTION_WORKFORCE, icon="P", children=(
+        NavigationItem("Salary Items", permission="payroll.view", url_name="payroll:employee_salary_list"),
+        NavigationItem("Payroll Runs", permission="payroll.view", url_name="payroll:payroll_list"),
+    )),
     NavigationItem("Reports", permission="reports.view", section=SECTION_ANALYTICS, icon="R"),
     NavigationItem(
         "Company Structure",
@@ -47,6 +51,13 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
             NavigationItem("User Assignments", permission="access_control.manage", url_name="access_control:user_assignment_list"),
         ),
     ),
+    NavigationItem("Master Data", permission="configurations.view", section=SECTION_SETUP, icon="M", children=(
+        NavigationItem("Departments", permission="configurations.view", href="/masters/departments/"),
+        NavigationItem("Designations", permission="configurations.view", href="/masters/designations/"),
+        NavigationItem("Cities", permission="configurations.view", href="/masters/cities/"),
+        NavigationItem("Job Types", permission="configurations.view", href="/masters/job-types/"),
+        NavigationItem("Allowances & Deductions", permission="configurations.view", href="/masters/allowance-deductions/"),
+    )),
     NavigationItem("System Settings", permission="settings.view", section=SECTION_SETUP, icon="S"),
     NavigationItem("Help Desk", permission="help.view", section=SECTION_SUPPORT, icon="?"),
 )

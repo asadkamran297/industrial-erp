@@ -28,7 +28,10 @@ urlpatterns = [
     path('accounts/', include('apps.accounts.urls')),
     path('access-control/', include('apps.access_control.urls')),
     path('logout/', LogoutView.as_view(), name='logout'),
+    path('masters/', include('apps.configurations.urls')),
+    path('hr/', include('apps.hr.urls')),
     path('organization-setup/', include('apps.organizations.urls')),
+    path('payroll/', include('apps.payroll.urls')),
     path('portal/', include('apps.portal.urls')),
 ]
 

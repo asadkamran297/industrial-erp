@@ -3,13 +3,14 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from apps.core.constants import STATUS_ACTIVE
+from apps.core.forms import AutoSelectSingleChoiceMixin
 
 from .models import Permission, Role, RolePermission, UserAssignment
 
 User = get_user_model()
 
 
-class RoleForm(forms.ModelForm):
+class RoleForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     permissions = forms.ModelMultipleChoiceField(
         queryset=Permission.objects.filter(status=STATUS_ACTIVE).order_by("seq", "title"),
         required=False,
@@ -48,7 +49,7 @@ class RoleForm(forms.ModelForm):
         return role
 
 
-class PermissionForm(forms.ModelForm):
+class PermissionForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = Permission
         fields = ("title", "code", "seq", "status")
@@ -80,7 +81,7 @@ class PermissionForm(forms.ModelForm):
         return title
 
 
-class UserAssignmentForm(forms.ModelForm):
+class UserAssignmentForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = UserAssignment
         fields = ("user", "organization", "branch", "role", "start_date", "end_date", "is_primary", "status")
