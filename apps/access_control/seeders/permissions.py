@@ -19,6 +19,8 @@ PERMISSIONS = [
     ("payroll.view", "View Payroll"),
     ("payroll.generate", "Generate Payroll"),
     ("payroll.approve", "Approve Payroll"),
+    ("finance.view", "View Finance"),
+    ("finance.manage", "Manage Finance"),
     ("reports.view", "View Reports"),
     ("settings.view", "View Settings"),
     ("settings.manage", "Manage Settings"),

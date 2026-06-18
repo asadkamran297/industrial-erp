@@ -53,6 +53,7 @@ LOCAL_APPS = [
     "apps.access_control",
     "apps.hr",
     "apps.payroll",
+    "apps.finance",
     "apps.portal",
     "apps.design_system",
 ]

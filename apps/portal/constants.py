@@ -24,6 +24,11 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     NavigationItem("Dashboard", permission="dashboard.view", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
     NavigationItem("Production", permission="operations.view", section=SECTION_OPERATIONS, icon="P"),
     NavigationItem("Inventory", permission="inventory.view", section=SECTION_OPERATIONS, icon="I"),
+    NavigationItem("Finance", permission="finance.view", section=SECTION_OPERATIONS, icon="F", children=(
+        NavigationItem("Fiscal Years", permission="finance.view", url_name="finance:fiscal_year_list"),
+        NavigationItem("Chart of Accounts", permission="finance.view", url_name="finance:account_configuration_list"),
+        NavigationItem("Vouchers", permission="finance.view", url_name="finance:account_voucher_list"),
+    )),
     NavigationItem("Employees", permission="employees.view", section=SECTION_WORKFORCE, icon="E", url_name="hr:employee_list"),
     NavigationItem("Payroll", permission="payroll.view", section=SECTION_WORKFORCE, icon="P", children=(
         NavigationItem("Salary Items", permission="payroll.view", url_name="payroll:employee_salary_list"),

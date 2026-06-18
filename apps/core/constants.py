@@ -11,9 +11,33 @@ STATUS_INACTIVE: Final = "inactive"
 STATUS_ARCHIVED: Final = "archived"
 STATUS_COMPLETED: Final = "completed"
 STATUS_ONGOING: Final = "ongoing"
+STATUS_CREATED: Final = "created"
+STATUS_SUBMITTED: Final = "submitted"
+STATUS_VERIFIED: Final = "verified"
+STATUS_DOUBLE_VERIFIED: Final = "double_verified"
 
 ALLOWANCE: Final = "allowance"
 DEDUCTION: Final = "deduction"
+
+ACCOUNT_TYPE_ASSET: Final = "asset"
+ACCOUNT_TYPE_LIABILITY: Final = "liability"
+ACCOUNT_TYPE_REVENUE: Final = "revenue"
+ACCOUNT_TYPE_EXPENSE: Final = "expense"
+
+ACCOUNT_LEDGER_GENERAL: Final = "G"
+ACCOUNT_LEDGER_SUBSIDIARY: Final = "S"
+
+BALANCE_INCOME_BALANCE_SHEET: Final = "B"
+BALANCE_INCOME_INCOME_STATEMENT: Final = "I"
+
+ACCOUNT_NATURE_DEBIT: Final = "D"
+ACCOUNT_NATURE_CREDIT: Final = "C"
+
+VOUCHER_TYPE_PAYMENT: Final = "PV"
+VOUCHER_TYPE_RECEIPT: Final = "RV"
+
+YES: Final = "Y"
+NO: Final = "N"
 
 QUALIFICATION_DEGREE: Final = "degree"
 QUALIFICATION_DIPLOMA: Final = "diploma"
@@ -33,6 +57,45 @@ RECORD_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_ACTIVE, "Active"),
     (STATUS_INACTIVE, "Inactive"),
     (STATUS_ARCHIVED, "Archived"),
+)
+
+FIN_ACCOUNT_TYPE_CHOICES: Final[StatusChoices] = (
+    (ACCOUNT_TYPE_ASSET, "Asset"),
+    (ACCOUNT_TYPE_LIABILITY, "Liability"),
+    (ACCOUNT_TYPE_REVENUE, "Revenue"),
+    (ACCOUNT_TYPE_EXPENSE, "Expense"),
+)
+
+FIN_ACCOUNT_LEDGER_CHOICES: Final[StatusChoices] = (
+    (ACCOUNT_LEDGER_GENERAL, "General"),
+    (ACCOUNT_LEDGER_SUBSIDIARY, "Subsidiary"),
+)
+
+FIN_BALANCE_INCOME_CHOICES: Final[StatusChoices] = (
+    (BALANCE_INCOME_BALANCE_SHEET, "Balance Sheet"),
+    (BALANCE_INCOME_INCOME_STATEMENT, "Income Statement"),
+)
+
+FIN_ACCOUNT_NATURE_CHOICES: Final[StatusChoices] = (
+    (ACCOUNT_NATURE_DEBIT, "Debit"),
+    (ACCOUNT_NATURE_CREDIT, "Credit"),
+)
+
+FIN_VOUCHER_TYPE_CHOICES: Final[StatusChoices] = (
+    (VOUCHER_TYPE_PAYMENT, "Payment Voucher"),
+    (VOUCHER_TYPE_RECEIPT, "Receipt Voucher"),
+)
+
+FIN_VOUCHER_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_CREATED, "Created"),
+    (STATUS_SUBMITTED, "Submitted"),
+    (STATUS_VERIFIED, "Verified"),
+    (STATUS_DOUBLE_VERIFIED, "Double Verified"),
+)
+
+YES_NO_CHOICES: Final[StatusChoices] = (
+    (YES, "Yes"),
+    (NO, "No"),
 )
 
 COMPLETION_STATUS_CHOICES: Final[StatusChoices] = (
