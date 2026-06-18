@@ -8,6 +8,7 @@ from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginati
 
 from .forms import EmployeeSalaryForm, PayrollForm
 from .models import EmployeeSalary, Payroll
+from apps.hr.models import Employee
 
 
 class EmployeeSalaryListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
@@ -43,6 +44,10 @@ class EmployeeSalaryCreateView(PortalPermissionRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "New Salary Item"
+        context["employee_salary_map"] = {str(employee.pk): float(employee.salary) for employee in Employee.objects.filter(status="active")}
+        context["element_type_map"] = {
+            str(item.pk): item.get_type_display() for item in context["form"].fields["allowance_deduction"].queryset
+        }
         return context
 
 

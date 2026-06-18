@@ -6,6 +6,7 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from apps.core.constants import RECORD_STATUS_CHOICES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.organizations.models import Organization
+from apps.payroll.models import EmployeeSalary, Payroll
 
 from .forms import EmployeeExperienceForm, EmployeeForm, EmployeeQualificationForm
 from .models import Employee, EmployeeExperience, EmployeeQualification
@@ -58,6 +59,8 @@ class EmployeeDetailView(PortalPermissionRequiredMixin, DetailView):
                 "breadcrumbs": [("Dashboard", reverse_lazy("portal:dashboard")), ("Employees", reverse_lazy("hr:employee_list")), (self.object.full_name, "")],
                 "experience_form": EmployeeExperienceForm(),
                 "qualification_form": EmployeeQualificationForm(),
+                "salary_items": EmployeeSalary.objects.select_related("allowance_deduction").filter(employee=self.object),
+                "payrolls": Payroll.objects.filter(employee=self.object).order_by("-year", "-month"),
             }
         )
         return context

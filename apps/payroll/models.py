@@ -16,6 +16,7 @@ class EmployeeSalary(BaseModel):
     class Meta:
         db_table = "hr_employee_salaries"
         ordering = ["employee", "allowance_deduction_type"]
+        unique_together = ("employee", "allowance_deduction")
 
     def __str__(self) -> str:
         return f"{self.employee} - {self.allowance_deduction}"
