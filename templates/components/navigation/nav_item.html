@@ -2,10 +2,10 @@
   <div x-data="{ open: {{ item.is_open|yesno:'true,false' }} }">
     <button type="button" class="{{ item.item_class }}" @click="open = !open" :aria-expanded="open.toString()">
       {% if item.depth == 0 %}<span class="{{ item.icon_class }}">{{ item.icon }}</span>{% endif %}
-      <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-      <span class="text-xs text-current/70 transition" :class="{ 'rotate-90': open }">&gt;</span>
+      <span class="min-w-0 flex-1 truncate" x-show="!sidebarCollapsed || item.depth > 0" x-transition.opacity>{{ item.label }}</span>
+      <span class="text-xs text-current/70 transition" x-show="!sidebarCollapsed || item.depth > 0" :class="{ 'rotate-90': open }">&gt;</span>
     </button>
-    <div x-show="open" x-transition class="mt-1 space-y-1 border-l border-slate-200 pl-4 dark:border-slate-800">
+    <div x-show="open && (!sidebarCollapsed || item.depth > 0)" x-transition class="mt-1 space-y-1 border-l border-slate-200 pl-4 dark:border-slate-800">
       {% for child in item.children %}
         {% include "components/navigation/nav_item.html" with item=child %}
       {% endfor %}
@@ -14,6 +14,6 @@
 {% else %}
   <a href="{{ item.href }}" class="{{ item.item_class }}">
     {% if item.depth == 0 %}<span class="{{ item.icon_class }}">{{ item.icon }}</span>{% endif %}
-    <span class="truncate">{{ item.label }}</span>
+    <span class="truncate" x-show="!sidebarCollapsed || item.depth > 0" x-transition.opacity>{{ item.label }}</span>
   </a>
 {% endif %}

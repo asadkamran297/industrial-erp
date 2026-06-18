@@ -1,24 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Portal | {{ system_setting.company_name }}{% endblock %}
 {% block body %}
-<div class="min-h-screen" x-data="{ sidebarOpen: false, profileOpen: false, notificationsOpen: false }">
+<div class="min-h-screen" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('portal-sidebar-collapsed') === 'true', profileOpen: false, notificationsOpen: false, toggleSidebarCollapse() { this.sidebarCollapsed = !this.sidebarCollapsed; localStorage.setItem('portal-sidebar-collapsed', this.sidebarCollapsed); } }">
   <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 
-  <aside class="fixed inset-y-0 left-0 z-40 w-72 -translate-x-full border-r border-slate-200 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 transition lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen }">
+  <aside class="fixed inset-y-0 left-0 z-40 w-72 -translate-x-full border-r border-slate-200 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 transition-all lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen, 'lg:w-20': sidebarCollapsed, 'lg:w-72': !sidebarCollapsed }">
     <div class="flex items-center gap-3 px-2 py-3">
       <div class="grid h-11 w-11 place-items-center rounded-lg bg-[var(--primary-color)] text-sm font-bold text-white">
         {% if system_setting.company_logo %}<img src="{{ system_setting.company_logo.url }}" alt="" class="h-11 w-11 rounded-lg object-cover">{% else %}ERP{% endif %}
       </div>
-      <div class="min-w-0">
+      <div class="min-w-0" x-show="!sidebarCollapsed" x-transition.opacity>
         <p class="truncate text-sm font-semibold">{{ system_setting.company_name }}</p>
         <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ system_setting.company_tagline }}</p>
       </div>
+      <button type="button" class="ml-auto hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 lg:grid dark:border-slate-700 dark:hover:bg-slate-800" @click="toggleSidebarCollapse()" :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+        <span class="text-sm transition" :class="{ 'rotate-180': sidebarCollapsed }">&lt;</span>
+      </button>
     </div>
 
     {% include "components/navigation/sidebar.html" %}
   </aside>
 
-  <div class="lg:pl-72">
+  <div class="transition-all" :class="sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'">
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
       <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 lg:hidden dark:border-slate-700" @click="sidebarOpen = true" aria-label="Open menu">
