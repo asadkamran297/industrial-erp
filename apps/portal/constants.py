@@ -56,6 +56,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Designations", permission="configurations.view", href="/masters/designations/"),
         NavigationItem("Cities", permission="configurations.view", href="/masters/cities/"),
         NavigationItem("Job Types", permission="configurations.view", href="/masters/job-types/"),
+        NavigationItem("Banks", permission="configurations.view", href="/masters/banks/"),
         NavigationItem("Allowances & Deductions", permission="configurations.view", href="/masters/allowance-deductions/"),
     )),
     NavigationItem("System Settings", permission="settings.view", section=SECTION_SETUP, icon="S"),

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Portal | {{ system_setting.company_name }}{% endblock %}
 {% block body %}
-<div class="min-h-screen" x-data="{ sidebarOpen: false, profileOpen: false }">
+<div class="min-h-screen" x-data="{ sidebarOpen: false, profileOpen: false, notificationsOpen: false }">
   <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 
   <aside class="fixed inset-y-0 left-0 z-40 w-72 -translate-x-full border-r border-slate-200 bg-white/95 p-4 shadow-2xl shadow-slate-900/10 transition lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen }">
@@ -29,7 +29,33 @@
         </div>
         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" @click="toggleTheme()" aria-label="Toggle theme">◐</button>
         <input class="h-10 w-10 rounded-lg border border-slate-200 bg-transparent p-1 dark:border-slate-700" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Primary color">
-        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="Notifications">!</button>
+        <div class="relative">
+          <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="notificationsOpen = !notificationsOpen" aria-label="Notifications" :aria-expanded="notificationsOpen.toString()">
+            <span class="text-lg leading-none" aria-hidden="true">&#128276;</span>
+            <span class="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-bold leading-none text-white">3</span>
+          </button>
+          <div x-show="notificationsOpen" x-transition @click.outside="notificationsOpen = false" class="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+              <p class="text-sm font-semibold">Notifications</p>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">3 new</span>
+            </div>
+            <div class="max-h-80 overflow-y-auto">
+              <a href="#" class="block border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                <p class="text-sm font-medium">Payroll review pending</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">June payroll needs approval.</p>
+              </a>
+              <a href="#" class="block border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                <p class="text-sm font-medium">Employee record updated</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">A profile change was saved.</p>
+              </a>
+              <a href="#" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+                <p class="text-sm font-medium">Low stock alert</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Inventory item crossed reorder level.</p>
+              </a>
+            </div>
+            <a href="#" class="block border-t border-slate-200 px-4 py-3 text-center text-sm font-medium text-[var(--primary-color)] dark:border-slate-800">View all</a>
+          </div>
+        </div>
         <div class="relative">
           <button class="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-700" @click="profileOpen = !profileOpen">
             <span class="grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{{ request.user.username|slice:":2"|upper }}</span>

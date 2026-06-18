@@ -37,6 +37,8 @@
     <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Designation</p><p class="mt-1 font-medium">{{ employee.designation|default:"-" }}</p></div>
     <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Joining</p><p class="mt-1 font-medium">{{ employee.doj|default:employee.joining_date|default:"-" }}</p></div>
     <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Salary</p><p class="mt-1 font-medium">{{ employee.salary }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Bank</p><p class="mt-1 font-medium">{{ employee.bank|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Account No.</p><p class="mt-1 font-medium">{{ employee.account_number|default:"-" }}</p></div>
   </section>
 
   <section class="mt-5" x-show="tab === 'experience'">

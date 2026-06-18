@@ -16,7 +16,7 @@ class User(AbstractUser):
 
     name = models.CharField(max_length=160, blank=True)
     email = models.EmailField(blank=True, null=True, unique=True)
-    employee = models.ForeignKey("hr.Employee", null=True, blank=True, related_name="users", on_delete=models.SET_NULL)
+    employee = models.ForeignKey("hr.Employee", null=True, blank=True, related_name="users", on_delete=models.SET_NULL, db_column="hr_employee_id")
     phone = models.CharField(max_length=40, blank=True, unique=True, null=True)
     whatsapp = models.CharField(max_length=40, blank=True)
     address = models.TextField(blank=True)

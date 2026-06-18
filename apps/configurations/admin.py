@@ -8,6 +8,7 @@ for model in (
     models.Gender,
     models.ExpenseType,
     models.PaymentMethod,
+    models.Bank,
     models.Manufacturer,
     models.ImageType,
     models.City,

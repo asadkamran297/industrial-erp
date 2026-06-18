@@ -52,6 +52,12 @@ class PaymentMethod(LookupModel):
         ordering = ["title"]
 
 
+class Bank(LookupModel):
+    class Meta:
+        db_table = "conf_banks"
+        ordering = ["title"]
+
+
 class Manufacturer(LookupModel):
     local_global = models.CharField(max_length=20, choices=SCOPE_CHOICES, blank=True)
 

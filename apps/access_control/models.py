@@ -32,8 +32,8 @@ class Permission(BaseModel):
 
 
 class RolePermission(models.Model):
-    permission = models.ForeignKey(Permission, related_name="role_links", on_delete=models.CASCADE)
-    role = models.ForeignKey(Role, related_name="permission_links", on_delete=models.CASCADE)
+    permission = models.ForeignKey(Permission, related_name="role_links", on_delete=models.CASCADE, db_column="iams_permission_id")
+    role = models.ForeignKey(Role, related_name="permission_links", on_delete=models.CASCADE, db_column="iams_role_id")
 
     class Meta:
         db_table = "iams_permission_role"
@@ -44,14 +44,14 @@ class RolePermission(models.Model):
 
 
 class UserAssignment(BaseModel):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="assignments", on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="assignments", on_delete=models.CASCADE, db_column="iams_user_id")
     organization = models.ForeignKey(
-        "organizations.Organization", null=True, blank=True, related_name="user_assignments", on_delete=models.SET_NULL
+        "organizations.Organization", null=True, blank=True, related_name="user_assignments", on_delete=models.SET_NULL, db_column="org_organization_id"
     )
     branch = models.ForeignKey(
-        "organizations.Branch", null=True, blank=True, related_name="user_assignments", on_delete=models.SET_NULL
+        "organizations.Branch", null=True, blank=True, related_name="user_assignments", on_delete=models.SET_NULL, db_column="org_branch_id"
     )
-    role = models.ForeignKey(Role, related_name="user_assignments", on_delete=models.PROTECT)
+    role = models.ForeignKey(Role, related_name="user_assignments", on_delete=models.PROTECT, db_column="iams_role_id")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     is_primary = models.BooleanField(default=False)

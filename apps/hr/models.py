@@ -10,18 +10,18 @@ from apps.core.models import BaseModel
 
 
 class Employee(BaseModel):
-    designation = models.ForeignKey("configurations.Designation", null=True, blank=True, on_delete=models.SET_NULL)
-    department = models.ForeignKey("configurations.Department", null=True, blank=True, on_delete=models.SET_NULL)
-    salutation = models.ForeignKey("configurations.Salutation", null=True, blank=True, on_delete=models.SET_NULL)
-    gender = models.ForeignKey("configurations.Gender", null=True, blank=True, on_delete=models.SET_NULL)
-    blood_group = models.ForeignKey("configurations.BloodGroup", null=True, blank=True, on_delete=models.SET_NULL)
-    job_type = models.ForeignKey("configurations.JobType", null=True, blank=True, on_delete=models.SET_NULL)
-    religion = models.ForeignKey("configurations.Religion", null=True, blank=True, on_delete=models.SET_NULL)
-    marital_status = models.ForeignKey("configurations.MaritalStatus", null=True, blank=True, on_delete=models.SET_NULL)
+    designation = models.ForeignKey("configurations.Designation", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_designation_id")
+    department = models.ForeignKey("configurations.Department", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_department_id")
+    salutation = models.ForeignKey("configurations.Salutation", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_salutation_id")
+    gender = models.ForeignKey("configurations.Gender", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_gender_id")
+    blood_group = models.ForeignKey("configurations.BloodGroup", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_blood_group_id")
+    job_type = models.ForeignKey("configurations.JobType", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_job_type_id")
+    religion = models.ForeignKey("configurations.Religion", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_religion_id")
+    marital_status = models.ForeignKey("configurations.MaritalStatus", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_marital_status_id")
     organization = models.ForeignKey(
-        "organizations.Organization", null=True, blank=True, related_name="employees", on_delete=models.SET_NULL
+        "organizations.Organization", null=True, blank=True, related_name="employees", on_delete=models.SET_NULL, db_column="org_organization_id"
     )
-    branch = models.ForeignKey("organizations.Branch", null=True, blank=True, related_name="employees", on_delete=models.SET_NULL)
+    branch = models.ForeignKey("organizations.Branch", null=True, blank=True, related_name="employees", on_delete=models.SET_NULL, db_column="org_branch_id")
     first_name = models.CharField(max_length=80)
     middle_name = models.CharField(max_length=80, blank=True)
     last_name = models.CharField(max_length=80, blank=True)
@@ -35,7 +35,7 @@ class Employee(BaseModel):
     address = models.TextField(blank=True)
     avatar = models.ImageField(upload_to="employees/avatars/", blank=True)
     joining_date = models.DateField(null=True, blank=True)
-    bank = models.CharField(max_length=120, blank=True)
+    bank = models.ForeignKey("configurations.Bank", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_bank_id")
     account_number = models.CharField(max_length=80, blank=True)
     spouse_name = models.CharField(max_length=160, blank=True)
     nok = models.CharField("next of kin", max_length=160, blank=True)
@@ -54,7 +54,7 @@ class Employee(BaseModel):
 
 
 class EmployeeExperience(BaseModel):
-    employee = models.ForeignKey(Employee, related_name="experiences", on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, related_name="experiences", on_delete=models.CASCADE, db_column="hr_employee_id")
     organization = models.CharField(max_length=180)
     from_date = models.DateField(null=True, blank=True)
     to_date = models.DateField(null=True, blank=True)
@@ -70,10 +70,10 @@ class EmployeeExperience(BaseModel):
 
 
 class EmployeeQualification(BaseModel):
-    employee = models.ForeignKey(Employee, related_name="qualifications", on_delete=models.CASCADE)
-    qualification = models.ForeignKey("configurations.Qualification", related_name="employee_links", on_delete=models.PROTECT)
+    employee = models.ForeignKey(Employee, related_name="qualifications", on_delete=models.CASCADE, db_column="hr_employee_id")
+    qualification = models.ForeignKey("configurations.Qualification", related_name="employee_links", on_delete=models.PROTECT, db_column="conf_qualification_id")
     specialization = models.ForeignKey(
-        "configurations.Specialization", null=True, blank=True, related_name="employee_qualifications", on_delete=models.SET_NULL
+        "configurations.Specialization", null=True, blank=True, related_name="employee_qualifications", on_delete=models.SET_NULL, db_column="conf_specialization_id"
     )
     qualification_type = models.CharField(max_length=30, choices=QUALIFICATION_TYPE_CHOICES)
     institute = models.CharField(max_length=180, blank=True)

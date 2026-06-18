@@ -6,9 +6,9 @@ from apps.core.models import BaseModel
 
 
 class EmployeeSalary(BaseModel):
-    employee = models.ForeignKey("hr.Employee", related_name="salary_items", on_delete=models.CASCADE)
+    employee = models.ForeignKey("hr.Employee", related_name="salary_items", on_delete=models.CASCADE, db_column="hr_employee_id")
     allowance_deduction = models.ForeignKey(
-        "configurations.AllowanceDeduction", related_name="employee_salary_items", on_delete=models.PROTECT
+        "configurations.AllowanceDeduction", related_name="employee_salary_items", on_delete=models.PROTECT, db_column="conf_allowance_deduction_id"
     )
     allowance_deduction_type = models.CharField(max_length=20, choices=ALLOWANCE_DEDUCTION_TYPE_CHOICES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
@@ -22,7 +22,7 @@ class EmployeeSalary(BaseModel):
 
 
 class Payroll(BaseModel):
-    employee = models.ForeignKey("hr.Employee", related_name="payrolls", on_delete=models.PROTECT)
+    employee = models.ForeignKey("hr.Employee", related_name="payrolls", on_delete=models.PROTECT, db_column="hr_employee_id")
     month = models.PositiveSmallIntegerField()
     year = models.PositiveSmallIntegerField()
     base_salary = models.DecimalField(max_digits=14, decimal_places=2, default=0)

@@ -50,6 +50,7 @@ class EmployeeForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
                 "job_type",
                 "religion",
                 "marital_status",
+                "bank",
                 "status",
             )
         }
@@ -67,7 +68,6 @@ class EmployeeForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
                 "address": forms.Textarea(attrs={"class": "form-input", "rows": 3}),
                 "avatar": forms.FileInput(attrs={"class": "form-input", "accept": "image/*"}),
                 "salary": forms.NumberInput(attrs={"class": "form-input", "min": 0, "step": "0.01"}),
-                "bank": forms.TextInput(attrs={"class": "form-input"}),
                 "account_number": forms.TextInput(attrs={"class": "form-input"}),
                 "emergency_contact": forms.TextInput(attrs={"class": "form-input"}),
             }

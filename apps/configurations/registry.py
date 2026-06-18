@@ -25,6 +25,7 @@ MASTER_CONFIGS: tuple[MasterConfig, ...] = (
     MasterConfig("job-types", "Job Types", models.JobType),
     MasterConfig("expense-types", "Expense Types", models.ExpenseType),
     MasterConfig("payment-methods", "Payment Methods", models.PaymentMethod),
+    MasterConfig("banks", "Banks", models.Bank),
     MasterConfig("manufacturers", "Manufacturers", models.Manufacturer, ("local_global",)),
     MasterConfig("image-types", "Image Types", models.ImageType),
     MasterConfig("allowance-deductions", "Allowance & Deduction Types", models.AllowanceDeduction, ("type",)),

@@ -186,6 +186,19 @@ def seed_configurations() -> int:
         ],
     )
     created_count += seed_lookup(
+        models.Bank,
+        [
+            ("HBL", "Habib Bank Limited"),
+            ("UBL", "United Bank Limited"),
+            ("MCB", "MCB Bank"),
+            ("ABL", "Allied Bank Limited"),
+            ("ASKARI", "Askari Bank"),
+            ("MEEZAN", "Meezan Bank"),
+            ("BANK_ALFALAH", "Bank Alfalah"),
+            ("FAYSAL", "Faysal Bank"),
+        ],
+    )
+    created_count += seed_lookup(
         models.ImageType,
         [
             ("PROFILE", "Profile"),
