@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any
 
 from django.http import HttpRequest
@@ -6,48 +5,7 @@ from django.urls import reverse
 
 from apps.access_control.selectors import get_user_permission_codes
 
-
-@dataclass(frozen=True)
-class NavigationItem:
-    label: str
-    permission: str | None = None
-    url_name: str | None = None
-    href: str = "#"
-    section: str = "main"
-    icon: str = ""
-    children: tuple["NavigationItem", ...] = ()
-
-
-NAV_ITEMS: tuple[NavigationItem, ...] = (
-    NavigationItem("Dashboard", permission="dashboard.view", url_name="portal:dashboard", icon="D"),
-    NavigationItem("Operations", permission="operations.view", section="work", icon="O"),
-    NavigationItem("Inventory", permission="inventory.view", section="work", icon="I"),
-    NavigationItem("Employees", permission="employees.view", section="people", icon="E"),
-    NavigationItem("Reports", permission="reports.view", section="insights", icon="R"),
-    NavigationItem(
-        "Organization Setup",
-        permission="organizations.view",
-        section="admin",
-        icon="O",
-        children=(
-            NavigationItem("Organizations", permission="organizations.view", url_name="organizations:organization_list"),
-            NavigationItem("Branches", permission="organizations.view", url_name="organizations:branch_list"),
-        ),
-    ),
-    NavigationItem(
-        "IAMS",
-        permission="access_control.view",
-        section="admin",
-        icon="A",
-        children=(
-            NavigationItem("Roles", permission="access_control.view"),
-            NavigationItem("Permissions", permission="access_control.view"),
-            NavigationItem("User Assignments", permission="access_control.manage"),
-        ),
-    ),
-    NavigationItem("Settings", permission="settings.view", section="admin", icon="S"),
-    NavigationItem("Help", permission="help.view", section="support", icon="?"),
-)
+from .constants import NAV_ITEMS, NavigationItem
 
 
 def resolve_nav_href(item: NavigationItem) -> str:
@@ -75,11 +33,12 @@ def build_navigation_item(
     item: NavigationItem,
     permission_codes: set[str],
     current_path: str,
+    depth: int = 0,
 ) -> dict[str, Any] | None:
     children = [
         child
         for child in (
-            build_navigation_item(child_item, permission_codes, current_path)
+            build_navigation_item(child_item, permission_codes, current_path, depth + 1)
             for child_item in item.children
         )
         if child is not None
@@ -98,12 +57,37 @@ def build_navigation_item(
         "section": item.section,
         "icon": item.icon,
         "permission": item.permission or "",
+        "depth": depth,
         "children": children,
         "has_children": bool(children),
         "is_active": is_active or has_active_child,
         "is_current": is_active,
         "is_open": has_active_child,
+        "item_class": get_nav_item_class(depth, bool(children), is_active or has_active_child),
+        "icon_class": get_nav_icon_class(is_active or has_active_child),
     }
+
+
+def get_nav_item_class(depth: int, has_children: bool, is_active: bool) -> str:
+    base = "flex w-full items-center text-left text-sm transition"
+    if depth == 0:
+        size = "min-h-11 gap-3 rounded-lg px-3 font-medium"
+        active = "bg-[var(--primary-color)] text-white shadow-sm"
+        inactive = "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+    else:
+        size = "min-h-10 gap-2 rounded-md px-3"
+        active = "bg-slate-100 font-semibold text-[var(--primary-color)] dark:bg-slate-800"
+        inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+    if depth >= 2 and not has_children:
+        size = "min-h-9 rounded-md px-3"
+    return f"{base} {size} {active if is_active else inactive}"
+
+
+def get_nav_icon_class(is_active: bool) -> str:
+    base = "grid h-7 w-7 shrink-0 place-items-center rounded-md"
+    active = "bg-white/15 text-white"
+    inactive = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+    return f"{base} {active if is_active else inactive}"
 
 
 def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:
