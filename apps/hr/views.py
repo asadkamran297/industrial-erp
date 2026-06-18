@@ -1,14 +1,14 @@
 from django.contrib import messages
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.organizations.models import Organization
 
-from .forms import EmployeeForm
-from .models import Employee
+from .forms import EmployeeExperienceForm, EmployeeForm, EmployeeQualificationForm
+from .models import Employee, EmployeeExperience, EmployeeQualification
 
 
 class EmployeeListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
@@ -28,6 +28,38 @@ class EmployeeListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Employees", "")]
+        return context
+
+
+class EmployeeDetailView(PortalPermissionRequiredMixin, DetailView):
+    permission_required = "employees.view"
+    model = Employee
+    template_name = "hr/employee_detail.html"
+    context_object_name = "employee"
+
+    def get_queryset(self):
+        return Employee.objects.select_related(
+            "organization",
+            "branch",
+            "department",
+            "designation",
+            "salutation",
+            "gender",
+            "blood_group",
+            "job_type",
+            "religion",
+            "marital_status",
+        ).prefetch_related("experiences", "qualifications")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "breadcrumbs": [("Dashboard", reverse_lazy("portal:dashboard")), ("Employees", reverse_lazy("hr:employee_list")), (self.object.full_name, "")],
+                "experience_form": EmployeeExperienceForm(),
+                "qualification_form": EmployeeQualificationForm(),
+            }
+        )
         return context
 
 
@@ -70,3 +102,59 @@ class EmployeeDeleteView(PortalPermissionRequiredMixin, View):
         Employee.objects.get(pk=pk).soft_delete(request.user)
         messages.success(request, "Employee deleted.")
         return redirect("hr:employee_list")
+
+
+class EmployeeExperienceCreateView(PortalPermissionRequiredMixin, View):
+    permission_required = "employees.manage"
+
+    def post(self, request, employee_pk):
+        employee = get_object_or_404(Employee, pk=employee_pk)
+        form = EmployeeExperienceForm(request.POST)
+        if form.is_valid():
+            experience = form.save(commit=False)
+            experience.employee = employee
+            experience.created_by = request.user
+            experience.updated_by = request.user
+            experience.save()
+            messages.success(request, "Experience saved.")
+        else:
+            messages.error(request, "Experience could not be saved. Please check the form.")
+        return redirect("hr:employee_detail", pk=employee.pk)
+
+
+class EmployeeExperienceDeleteView(PortalPermissionRequiredMixin, View):
+    permission_required = "employees.manage"
+
+    def post(self, request, employee_pk, pk):
+        experience = get_object_or_404(EmployeeExperience, pk=pk, employee_id=employee_pk)
+        experience.soft_delete(request.user)
+        messages.success(request, "Experience deleted.")
+        return redirect("hr:employee_detail", pk=employee_pk)
+
+
+class EmployeeQualificationCreateView(PortalPermissionRequiredMixin, View):
+    permission_required = "employees.manage"
+
+    def post(self, request, employee_pk):
+        employee = get_object_or_404(Employee, pk=employee_pk)
+        form = EmployeeQualificationForm(request.POST)
+        if form.is_valid():
+            qualification = form.save(commit=False)
+            qualification.employee = employee
+            qualification.created_by = request.user
+            qualification.updated_by = request.user
+            qualification.save()
+            messages.success(request, "Qualification saved.")
+        else:
+            messages.error(request, "Qualification could not be saved. Please check the form.")
+        return redirect("hr:employee_detail", pk=employee.pk)
+
+
+class EmployeeQualificationDeleteView(PortalPermissionRequiredMixin, View):
+    permission_required = "employees.manage"
+
+    def post(self, request, employee_pk, pk):
+        qualification = get_object_or_404(EmployeeQualification, pk=pk, employee_id=employee_pk)
+        qualification.soft_delete(request.user)
+        messages.success(request, "Qualification deleted.")
+        return redirect("hr:employee_detail", pk=employee_pk)

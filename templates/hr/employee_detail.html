@@ -1,0 +1,41 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title=employee.full_name subtitle="Employee profile, employment, education, and experience record." %}
+
+<div class="mt-6" x-data="{ tab: 'profile' }">
+  <div class="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'profile' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'profile'">Profile</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'employment' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'employment'">Employment</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'experience' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'experience'">Experience</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'qualification' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'qualification'">Qualifications</button>
+  </div>
+
+  <section class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" x-show="tab === 'profile'">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">CNIC</p><p class="mt-1 font-medium">{{ employee.cnic }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Email</p><p class="mt-1 font-medium">{{ employee.email|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Contact</p><p class="mt-1 font-medium">{{ employee.contact|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Father/Husband</p><p class="mt-1 font-medium">{{ employee.father_husband_name|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">DOB</p><p class="mt-1 font-medium">{{ employee.dob|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Address</p><p class="mt-1 font-medium">{{ employee.address|default:"-" }}</p></div>
+  </section>
+
+  <section class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" x-show="tab === 'employment'">
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Organization</p><p class="mt-1 font-medium">{{ employee.organization|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Branch</p><p class="mt-1 font-medium">{{ employee.branch|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Department</p><p class="mt-1 font-medium">{{ employee.department|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Designation</p><p class="mt-1 font-medium">{{ employee.designation|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Joining</p><p class="mt-1 font-medium">{{ employee.doj|default:employee.joining_date|default:"-" }}</p></div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Salary</p><p class="mt-1 font-medium">{{ employee.salary }}</p></div>
+  </section>
+
+  <section class="mt-5" x-show="tab === 'experience'">
+    <form method="post" action="{% url 'hr:employee_experience_create' employee.pk %}" class="mb-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{% for field in experience_form %}<div {% if field.name == "leave_reason" %}class="lg:col-span-2"{% endif %}><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add</button></div></div></form>
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Organization</th><th class="px-4 py-3">From</th><th class="px-4 py-3">To</th><th class="px-4 py-3">Salary</th><th class="px-4 py-3 text-right">Action</th></tr></thead><tbody>{% for exp in employee.experiences.all %}<tr><td class="px-4 py-3">{{ exp.organization }}</td><td class="px-4 py-3">{{ exp.from_date|default:"-" }}</td><td class="px-4 py-3">{{ exp.to_date|default:"-" }}</td><td class="px-4 py-3">{{ exp.salary }}</td><td class="px-4 py-3"><form class="flex justify-end" method="post" action="{% url 'hr:employee_experience_delete' employee.pk exp.pk %}">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50" title="Delete"><span aria-hidden="true">&#128465;</span></button></form></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No experience found.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  <section class="mt-5" x-show="tab === 'qualification'">
+    <form method="post" action="{% url 'hr:employee_qualification_create' employee.pk %}" class="mb-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{% for field in qualification_form %}<div><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add</button></div></div></form>
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Qualification</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Institute</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Action</th></tr></thead><tbody>{% for q in employee.qualifications.all %}<tr><td class="px-4 py-3">{{ q.qualification }}</td><td class="px-4 py-3">{{ q.get_qualification_type_display }}</td><td class="px-4 py-3">{{ q.institute|default:"-" }}</td><td class="px-4 py-3">{{ q.get_status_display }}</td><td class="px-4 py-3"><form class="flex justify-end" method="post" action="{% url 'hr:employee_qualification_delete' employee.pk q.pk %}">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50" title="Delete"><span aria-hidden="true">&#128465;</span></button></form></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No qualification found.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+</div>
+{% endblock %}

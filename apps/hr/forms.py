@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
-from .models import Employee
+from .models import Employee, EmployeeExperience, EmployeeQualification
 
 
 class EmployeeForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
@@ -95,3 +95,47 @@ class EmployeeForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     def save(self, commit=True):
         self.instance.full_name = self.cleaned_data["full_name"]
         return super().save(commit)
+
+
+class EmployeeExperienceForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
+    class Meta:
+        model = EmployeeExperience
+        fields = ("organization", "from_date", "to_date", "leave_reason", "salary")
+        widgets = {
+            "organization": forms.TextInput(attrs={"class": "form-input"}),
+            "from_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+            "to_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+            "leave_reason": forms.Textarea(attrs={"class": "form-input", "rows": 3}),
+            "salary": forms.NumberInput(attrs={"class": "form-input", "min": 0, "step": "0.01"}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_date = cleaned_data.get("from_date")
+        to_date = cleaned_data.get("to_date")
+        if from_date and to_date and to_date < from_date:
+            self.add_error("to_date", "To date cannot be before from date.")
+        return cleaned_data
+
+
+class EmployeeQualificationForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
+    class Meta:
+        model = EmployeeQualification
+        fields = ("qualification", "specialization", "qualification_type", "institute", "from_date", "to_date", "status")
+        widgets = {
+            "qualification": forms.Select(attrs={"class": "form-select"}),
+            "specialization": forms.Select(attrs={"class": "form-select"}),
+            "qualification_type": forms.Select(attrs={"class": "form-select"}),
+            "institute": forms.TextInput(attrs={"class": "form-input"}),
+            "from_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+            "to_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from_date = cleaned_data.get("from_date")
+        to_date = cleaned_data.get("to_date")
+        if from_date and to_date and to_date < from_date:
+            self.add_error("to_date", "To date cannot be before from date.")
+        return cleaned_data
