@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('apps.accounts.urls')),
     path('logout/', LogoutView.as_view(), name='logout'),
+    path('organization-setup/', include('apps.organizations.urls')),
     path('portal/', include('apps.portal.urls')),
 ]
 

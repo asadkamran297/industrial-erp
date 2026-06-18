@@ -1,0 +1,40 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% url "organizations:branch_create" as create_url %}
+{% include "components/ui/page_header.html" with title="Branches" subtitle="Manage plant, office, and site branch records." action_label="New Branch" action_url=create_url %}
+
+<section class="mt-6">
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <tr>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Organization</th>
+            <th class="px-4 py-3">City</th>
+            <th class="px-4 py-3">Phone</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for branch in branches %}
+            <tr>
+              <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">{{ branch.title }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ branch.code }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ branch.organization }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ branch.city|default:"-" }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ branch.phone|default:"-" }}</td>
+              <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ branch.get_status_display }}</span></td>
+              <td class="px-4 py-3 text-right"><a class="text-sm font-medium text-[var(--primary-color)]" href="{% url 'organizations:branch_update' branch.pk %}">Edit</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No branches found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}
