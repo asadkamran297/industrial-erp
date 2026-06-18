@@ -69,22 +69,22 @@ def build_navigation_item(
 
 
 def get_nav_item_class(depth: int, has_children: bool, is_active: bool) -> str:
-    base = "flex w-full items-center text-left text-sm transition"
+    base = "flex w-full items-center text-left text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--primary-color)]/30"
     if depth == 0:
-        size = "min-h-11 gap-3 rounded-lg px-3 font-medium"
-        active = "bg-[var(--primary-color)] text-white shadow-sm"
-        inactive = "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+        size = "min-h-10 gap-3 rounded-lg px-3 font-semibold"
+        active = "bg-[var(--primary-color)] text-white shadow-sm shadow-blue-900/10"
+        inactive = "text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
     else:
-        size = "min-h-10 gap-2 rounded-md px-3"
+        size = "min-h-9 gap-2 rounded-md px-3"
         active = "bg-slate-100 font-semibold text-[var(--primary-color)] dark:bg-slate-800"
-        inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
     if depth >= 2 and not has_children:
         size = "min-h-9 rounded-md px-3"
     return f"{base} {size} {active if is_active else inactive}"
 
 
 def get_nav_icon_class(is_active: bool) -> str:
-    base = "grid h-7 w-7 shrink-0 place-items-center rounded-md"
+    base = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-bold"
     active = "bg-white/15 text-white"
     inactive = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
     return f"{base} {active if is_active else inactive}"

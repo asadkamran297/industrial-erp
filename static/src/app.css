@@ -30,6 +30,24 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
+.portal-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.portal-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.portal-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.portal-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(203 213 225);
+}
+
 @layer components {
   .form-input,
   .form-select {

@@ -12,26 +12,34 @@ class NavigationItem:
     children: tuple["NavigationItem", ...] = ()
 
 
+SECTION_WORKSPACE = "Workspace"
+SECTION_OPERATIONS = "Operations"
+SECTION_WORKFORCE = "Workforce"
+SECTION_ANALYTICS = "Analytics"
+SECTION_SETUP = "Setup"
+SECTION_SUPPORT = "Support"
+
+
 NAV_ITEMS: tuple[NavigationItem, ...] = (
-    NavigationItem("Dashboard", permission="dashboard.view", url_name="portal:dashboard", icon="D"),
-    NavigationItem("Operations", permission="operations.view", section="work", icon="O"),
-    NavigationItem("Inventory", permission="inventory.view", section="work", icon="I"),
-    NavigationItem("Employees", permission="employees.view", section="people", icon="E"),
-    NavigationItem("Reports", permission="reports.view", section="insights", icon="R"),
+    NavigationItem("Dashboard", permission="dashboard.view", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
+    NavigationItem("Production", permission="operations.view", section=SECTION_OPERATIONS, icon="P"),
+    NavigationItem("Inventory", permission="inventory.view", section=SECTION_OPERATIONS, icon="I"),
+    NavigationItem("Employees", permission="employees.view", section=SECTION_WORKFORCE, icon="E"),
+    NavigationItem("Reports", permission="reports.view", section=SECTION_ANALYTICS, icon="R"),
     NavigationItem(
-        "Organization Setup",
+        "Company Structure",
         permission="organizations.view",
-        section="admin",
-        icon="O",
+        section=SECTION_SETUP,
+        icon="C",
         children=(
             NavigationItem("Organizations", permission="organizations.view", url_name="organizations:organization_list"),
             NavigationItem("Branches", permission="organizations.view", url_name="organizations:branch_list"),
         ),
     ),
     NavigationItem(
-        "IAMS",
+        "Access Control",
         permission="access_control.view",
-        section="admin",
+        section=SECTION_SETUP,
         icon="A",
         children=(
             NavigationItem("Roles", permission="access_control.view"),
@@ -39,6 +47,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
             NavigationItem("User Assignments", permission="access_control.manage"),
         ),
     ),
-    NavigationItem("Settings", permission="settings.view", section="admin", icon="S"),
-    NavigationItem("Help", permission="help.view", section="support", icon="?"),
+    NavigationItem("System Settings", permission="settings.view", section=SECTION_SETUP, icon="S"),
+    NavigationItem("Help Desk", permission="help.view", section=SECTION_SUPPORT, icon="?"),
 )
