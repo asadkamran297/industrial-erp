@@ -48,6 +48,13 @@
 
     <main class="px-4 py-6 sm:px-6 lg:px-8">
       {% include "components/ui/breadcrumb.html" %}
+      {% if messages %}
+        <div class="mb-5 space-y-2">
+          {% for message in messages %}
+            <div class="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
   </div>

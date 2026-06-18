@@ -26,6 +26,7 @@ urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'images/favicon.svg', permanent=True)),
     path('admin/', admin.site.urls),
     path('accounts/', include('apps.accounts.urls')),
+    path('access-control/', include('apps.access_control.urls')),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('organization-setup/', include('apps.organizations.urls')),
     path('portal/', include('apps.portal.urls')),

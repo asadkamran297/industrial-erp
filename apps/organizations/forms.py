@@ -1,4 +1,5 @@
 from django import forms
+from django.core.exceptions import ValidationError
 
 from .models import Branch, Organization
 
@@ -13,6 +14,21 @@ class OrganizationForm(forms.ModelForm):
             "code": forms.TextInput(attrs={"class": "form-input", "placeholder": "Organization code"}),
             "status": forms.Select(attrs={"class": "form-select"}),
         }
+
+    def clean_code(self):
+        code = self.cleaned_data["code"].strip().upper()
+        qs = Organization.all_objects.filter(code__iexact=code, deleted_at__isnull=True)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("Organization code already exists.")
+        return code
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.instance.pk and cleaned_data.get("parent") and cleaned_data["parent"].pk == self.instance.pk:
+            self.add_error("parent", "Organization cannot be its own parent.")
+        return cleaned_data
 
 
 class BranchForm(forms.ModelForm):
@@ -46,3 +62,22 @@ class BranchForm(forms.ModelForm):
             "fax": forms.TextInput(attrs={"class": "form-input", "placeholder": "Fax"}),
             "status": forms.Select(attrs={"class": "form-select"}),
         }
+
+    def clean_code(self):
+        code = self.cleaned_data["code"].strip().upper()
+        qs = Branch.all_objects.filter(code__iexact=code, deleted_at__isnull=True)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("Branch code already exists.")
+        return code
+
+    def clean(self):
+        cleaned_data = super().clean()
+        organization = cleaned_data.get("organization")
+        parent = cleaned_data.get("parent")
+        if self.instance.pk and parent and parent.pk == self.instance.pk:
+            self.add_error("parent", "Branch cannot be its own parent.")
+        if organization and parent and parent.organization_id != organization.pk:
+            self.add_error("parent", "Parent branch must belong to the selected organization.")
+        return cleaned_data

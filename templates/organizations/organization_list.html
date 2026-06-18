@@ -4,6 +4,7 @@
 {% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." action_label="New Organization" action_url=create_url %}
 
 <section class="mt-6">
+  {% include "components/table/search_filters.html" with search_placeholder="Search organizations..." %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -23,7 +24,14 @@
               <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.code }}</td>
               <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.parent|default:"-" }}</td>
               <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ organization.get_status_display }}</span></td>
-              <td class="px-4 py-3 text-right"><a class="text-sm font-medium text-[var(--primary-color)]" href="{% url 'organizations:organization_update' organization.pk %}">Edit</a></td>
+              <td class="px-4 py-3">
+                <div class="flex justify-end gap-3">
+                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:organization_update' organization.pk %}" title="Edit" aria-label="Edit">
+                    <span aria-hidden="true">&#9998;</span>
+                  </a>
+                  <form method="post" action="{% url 'organizations:organization_delete' organization.pk %}" onsubmit="return confirm('Delete this organization?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>
+                </div>
+              </td>
             </tr>
           {% empty %}
             <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No organizations found.</td></tr>
@@ -32,5 +40,6 @@
       </table>
     </div>
   </div>
+  {% include "components/table/pagination.html" %}
 </section>
 {% endblock %}

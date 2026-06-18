@@ -1,15 +1,43 @@
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib import messages
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, ListView, UpdateView, View
 
+from apps.core.constants import RECORD_STATUS_CHOICES
+from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from .forms import BranchForm, OrganizationForm
 from .models import Branch, Organization
 from .selectors import get_branches, get_organizations
 
 
-class OrganizationListView(LoginRequiredMixin, ListView):
+class AuditSaveMixin:
+    def form_valid(self, form):
+        if not form.instance.pk:
+            form.instance.created_by = self.request.user
+        form.instance.updated_by = self.request.user
+        messages.success(self.request, self.success_message)
+        return super().form_valid(form)
+
+
+class SoftDeleteView(PortalPermissionRequiredMixin, View):
+    model = None
+    success_url = None
+    success_message = "Record deleted."
+    permission_required = None
+
+    def post(self, request, pk):
+        record = self.model.objects.get(pk=pk)
+        record.soft_delete(request.user)
+        messages.success(request, self.success_message)
+        return redirect(self.success_url)
+
+
+class OrganizationListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
+    permission_required = "organizations.view"
     template_name = "organizations/organization_list.html"
     context_object_name = "organizations"
+    search_fields = ("title", "code", "parent__title")
+    filter_fields = {"status": "status"}
 
     def get_queryset(self):
         return get_organizations()
@@ -19,12 +47,17 @@ class OrganizationListView(LoginRequiredMixin, ListView):
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Organizations", "")]
         return context
 
+    def get_filter_specs(self):
+        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
-class OrganizationCreateView(LoginRequiredMixin, CreateView):
+
+class OrganizationCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
+    permission_required = "organizations.manage"
     model = Organization
     form_class = OrganizationForm
     template_name = "organizations/organization_form.html"
     success_url = reverse_lazy("organizations:organization_list")
+    success_message = "Organization saved."
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -33,11 +66,13 @@ class OrganizationCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class OrganizationUpdateView(LoginRequiredMixin, UpdateView):
+class OrganizationUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
+    permission_required = "organizations.manage"
     model = Organization
     form_class = OrganizationForm
     template_name = "organizations/organization_form.html"
     success_url = reverse_lazy("organizations:organization_list")
+    success_message = "Organization updated."
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -46,9 +81,19 @@ class OrganizationUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
 
-class BranchListView(LoginRequiredMixin, ListView):
+class OrganizationDeleteView(SoftDeleteView):
+    model = Organization
+    success_url = reverse_lazy("organizations:organization_list")
+    success_message = "Organization deleted."
+    permission_required = "organizations.manage"
+
+
+class BranchListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
+    permission_required = "organizations.view"
     template_name = "organizations/branch_list.html"
     context_object_name = "branches"
+    search_fields = ("title", "code", "phone", "email", "organization__title", "city__title")
+    filter_fields = {"status": "status", "organization": "organization_id"}
 
     def get_queryset(self):
         return get_branches()
@@ -58,12 +103,25 @@ class BranchListView(LoginRequiredMixin, ListView):
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Branches", "")]
         return context
 
+    def get_filter_specs(self):
+        return [
+            {"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
+            {
+                "name": "organization",
+                "label": "All organizations",
+                "choices": [(str(org.pk), org.title) for org in Organization.objects.order_by("title")],
+                "value": self.request.GET.get("organization", ""),
+            },
+        ]
 
-class BranchCreateView(LoginRequiredMixin, CreateView):
+
+class BranchCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
+    permission_required = "organizations.manage"
     model = Branch
     form_class = BranchForm
     template_name = "organizations/branch_form.html"
     success_url = reverse_lazy("organizations:branch_list")
+    success_message = "Branch saved."
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -72,14 +130,23 @@ class BranchCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class BranchUpdateView(LoginRequiredMixin, UpdateView):
+class BranchUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
+    permission_required = "organizations.manage"
     model = Branch
     form_class = BranchForm
     template_name = "organizations/branch_form.html"
     success_url = reverse_lazy("organizations:branch_list")
+    success_message = "Branch updated."
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Edit Branch"
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Branches", self.success_url), ("Edit", "")]
         return context
+
+
+class BranchDeleteView(SoftDeleteView):
+    model = Branch
+    success_url = reverse_lazy("organizations:branch_list")
+    success_message = "Branch deleted."
+    permission_required = "organizations.manage"

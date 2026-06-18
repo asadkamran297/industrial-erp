@@ -1,0 +1,29 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% url "access_control:permission_create" as create_url %}
+{% include "components/ui/page_header.html" with title="Permissions" subtitle="Maintain system capability codes used by roles and navigation." action_label="New Permission" action_url=create_url %}
+<section class="mt-6">
+  {% include "components/table/search_filters.html" with search_placeholder="Search permissions..." %}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <tr><th class="px-4 py-3">Title</th><th class="px-4 py-3">Code</th><th class="px-4 py-3">Seq</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Actions</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        {% for permission in permissions %}
+          <tr>
+            <td class="px-4 py-3 font-medium">{{ permission.title }}</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ permission.code }}</td><td class="px-4 py-3">{{ permission.seq }}</td>
+            <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ permission.get_status_display }}</span></td>
+            <td class="px-4 py-3"><div class="flex justify-end gap-2"><a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'access_control:permission_update' permission.pk %}" title="Edit" aria-label="Edit"><span aria-hidden="true">&#9998;</span></a><form method="post" action="{% url 'access_control:permission_delete' permission.pk %}" onsubmit="return confirm('Delete this permission?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form></div></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No permissions found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  </div>
+</section>
+{% include "components/table/pagination.html" %}
+{% endblock %}

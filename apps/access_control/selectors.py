@@ -15,8 +15,11 @@ def get_user_permission_codes(user: User) -> set[str]:
 
     permission_codes = UserAssignment.objects.filter(
         user=user,
+        deleted_at__isnull=True,
         status=STATUS_ACTIVE,
+        role__deleted_at__isnull=True,
         role__status=STATUS_ACTIVE,
+        role__permission_links__permission__deleted_at__isnull=True,
         role__permission_links__permission__status=STATUS_ACTIVE,
     ).values_list("role__permission_links__permission__code", flat=True)
 

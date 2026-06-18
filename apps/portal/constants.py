@@ -42,9 +42,9 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         section=SECTION_SETUP,
         icon="A",
         children=(
-            NavigationItem("Roles", permission="access_control.view"),
-            NavigationItem("Permissions", permission="access_control.view"),
-            NavigationItem("User Assignments", permission="access_control.manage"),
+            NavigationItem("Roles", permission="access_control.view", url_name="access_control:role_list"),
+            NavigationItem("Permissions", permission="access_control.view", url_name="access_control:permission_list"),
+            NavigationItem("User Assignments", permission="access_control.manage", url_name="access_control:user_assignment_list"),
         ),
     ),
     NavigationItem("System Settings", permission="settings.view", section=SECTION_SETUP, icon="S"),
