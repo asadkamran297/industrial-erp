@@ -2,12 +2,12 @@
 {% block content %}
 {% include "components/ui/page_header.html" with title=employee.full_name subtitle="Employee profile, employment, education, and experience record." %}
 
-<div class="mt-6" x-data="{ tab: 'profile' }">
+<div class="mt-6" x-data="{ tab: window.location.hash ? window.location.hash.substring(1) : 'profile', setTab(value) { this.tab = value; window.history.replaceState(null, '', '#' + value); } }">
   <div class="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'profile' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'profile'">Profile</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'employment' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'employment'">Employment</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'experience' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'experience'">Experience</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'qualification' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="tab = 'qualification'">Qualifications</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'profile' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('profile')">Profile</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'employment' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('employment')">Employment</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'experience' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('experience')">Experience</button>
+    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'qualification' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('qualification')">Qualifications</button>
   </div>
 
   <section class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" x-show="tab === 'profile'">
