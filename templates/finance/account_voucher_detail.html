@@ -1,7 +1,53 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% include "components/ui/page_header.html" with title=voucher.voucher_no subtitle="Voucher lines and posting detail." %}
-<section class="mt-6 grid gap-4 sm:grid-cols-4"><div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Date</p><p class="font-medium">{{ voucher.voucher_date }}</p></div><div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Type</p><p class="font-medium">{{ voucher.get_voucher_type_display }}</p></div><div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Status</p><p class="font-medium">{{ voucher.get_status_display }}</p></div><div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Posted</p><p class="font-medium">{{ voucher.get_posted_display }}</p></div></section>
-<form method="post" action="{% url 'finance:account_voucher_line_create' voucher.pk %}" class="mt-6 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{% for field in line_form %}<div {% if field.name == "remarks" %}class="lg:col-span-2"{% endif %}><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Line</button></div></div></form>
-<div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">#</th><th class="px-4 py-3">Account</th><th class="px-4 py-3">Debit</th><th class="px-4 py-3">Credit</th><th class="px-4 py-3">Party</th><th class="px-4 py-3 text-right">Action</th></tr></thead><tbody>{% for line in voucher.lines.all %}<tr><td class="px-4 py-3">{{ line.line_number }}</td><td class="px-4 py-3">{{ line.account_no }}</td><td class="px-4 py-3">{{ line.debit_amount }}</td><td class="px-4 py-3">{{ line.credit_amount }}</td><td class="px-4 py-3">{{ line.person_organization_title|default:"-" }}</td><td class="px-4 py-3"><form class="flex justify-end" method="post" action="{% url 'finance:account_voucher_line_delete' voucher.pk line.pk %}">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50"><span>&#128465;</span></button></form></td></tr>{% empty %}<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No lines found.</td></tr>{% endfor %}</tbody></table></div>
+<section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Date</p><p class="font-medium">{{ voucher.voucher_date }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Type</p><p class="font-medium">{{ voucher.get_voucher_type_display }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Status</p><p class="font-medium">{{ voucher.get_status_display }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Posted</p><p class="font-medium">{{ voucher.get_posted_display }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Debit Total</p><p class="font-medium">{{ voucher.debit_amount }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Credit Total</p><p class="font-medium">{{ voucher.credit_amount }}</p></div>
+</section>
+<div class="mt-4 rounded-lg border {% if voucher.is_balanced %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %} px-4 py-3 text-sm">
+  {% if voucher.is_balanced %}Voucher is balanced and ready for the next workflow step.{% else %}Current difference: {{ balance_difference }}. Debit and credit totals must be equal before submission or posting.{% endif %}
+</div>
+<form method="post" action="{% url 'finance:account_voucher_line_create' voucher.pk %}" class="mt-6 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {% for field in line_form %}
+      <div {% if field.name == "remarks" or field.name == "person_organization_title" %}class="lg:col-span-2"{% endif %}>
+        <label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}
+        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Line</button></div>
+  </div>
+</form>
+<div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 dark:bg-slate-800">
+      <tr><th class="px-4 py-3">#</th><th class="px-4 py-3">Account</th><th class="px-4 py-3">Debit</th><th class="px-4 py-3">Credit</th><th class="px-4 py-3">Party</th><th class="px-4 py-3">Receipt</th><th class="px-4 py-3">Bank</th><th class="px-4 py-3 text-right">Action</th></tr>
+    </thead>
+    <tbody>
+      {% for line in voucher.lines.all %}
+      <tr>
+        <td class="px-4 py-3">{{ line.line_number }}</td>
+        <td class="px-4 py-3">{{ line.account_no }}</td>
+        <td class="px-4 py-3">{{ line.debit_amount }}</td>
+        <td class="px-4 py-3">{{ line.credit_amount }}</td>
+        <td class="px-4 py-3">{{ line.person_organization_title|default:"-" }}</td>
+        <td class="px-4 py-3">{{ line.receipt_no|default:"-" }}</td>
+        <td class="px-4 py-3">{{ line.bank|default:"-" }}</td>
+        <td class="px-4 py-3">
+          <form class="flex justify-end" method="post" action="{% url 'finance:account_voucher_line_delete' voucher.pk line.pk %}">{% csrf_token %}
+            <button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50"><span>&#128465;</span></button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No lines found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

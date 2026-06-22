@@ -1,11 +1,13 @@
 from django.contrib import messages
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.organizations.models import Organization
+from apps.payroll.forms import EmployeeSalaryInlineForm
 from apps.payroll.models import EmployeeSalary, Payroll
 
 from .forms import EmployeeExperienceForm, EmployeeForm, EmployeeQualificationForm
@@ -60,6 +62,7 @@ class EmployeeDetailView(PortalPermissionRequiredMixin, DetailView):
                 "experience_form": EmployeeExperienceForm(),
                 "qualification_form": EmployeeQualificationForm(),
                 "salary_items": EmployeeSalary.objects.select_related("allowance_deduction").filter(employee=self.object),
+                "salary_item_form": EmployeeSalaryInlineForm(employee=self.object),
                 "payrolls": Payroll.objects.filter(employee=self.object).order_by("-year", "-month"),
             }
         )
@@ -161,3 +164,52 @@ class EmployeeQualificationDeleteView(PortalPermissionRequiredMixin, View):
         qualification.soft_delete(request.user)
         messages.success(request, "Qualification deleted.")
         return redirect("hr:employee_detail", pk=employee_pk)
+
+
+def employee_payroll_redirect(employee_pk: int):
+    return HttpResponseRedirect(f"{reverse('hr:employee_detail', kwargs={'pk': employee_pk})}#payroll")
+
+
+class EmployeeSalaryItemCreateView(PortalPermissionRequiredMixin, View):
+    permission_required = "payroll.generate"
+
+    def post(self, request, employee_pk):
+        employee = get_object_or_404(Employee, pk=employee_pk)
+        form = EmployeeSalaryInlineForm(request.POST, employee=employee)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.created_by = request.user
+            item.updated_by = request.user
+            item.save()
+            messages.success(request, "Salary element saved.")
+        else:
+            messages.error(request, "Salary element could not be saved. Please check duplicate element or amount.")
+        return employee_payroll_redirect(employee.pk)
+
+
+class EmployeeSalaryItemUpdateView(PortalPermissionRequiredMixin, View):
+    permission_required = "payroll.generate"
+
+    def post(self, request, employee_pk, pk):
+        employee = get_object_or_404(Employee, pk=employee_pk)
+        salary_item = get_object_or_404(EmployeeSalary, pk=pk, employee=employee)
+        form = EmployeeSalaryInlineForm(request.POST, employee=employee, instance=salary_item)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.updated_by = request.user
+            item.save()
+            messages.success(request, "Salary element updated.")
+        else:
+            messages.error(request, "Salary element could not be updated. Please check duplicate element or amount.")
+        return employee_payroll_redirect(employee.pk)
+
+
+class EmployeeSalaryItemDeleteView(PortalPermissionRequiredMixin, View):
+    permission_required = "payroll.generate"
+
+    def post(self, request, employee_pk, pk):
+        employee = get_object_or_404(Employee, pk=employee_pk)
+        salary_item = get_object_or_404(EmployeeSalary, pk=pk, employee=employee)
+        salary_item.soft_delete(request.user)
+        messages.success(request, "Salary element deleted.")
+        return employee_payroll_redirect(employee.pk)

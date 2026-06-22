@@ -59,9 +59,55 @@
       <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Payroll Records</p><p class="mt-1 text-2xl font-bold">{{ payrolls.count }}</p></div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800"><h3 class="font-semibold">Salary Elements</h3></div>
-      <table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Element</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Amount</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for item in salary_items %}<tr><td class="px-4 py-3">{{ item.allowance_deduction }}</td><td class="px-4 py-3">{{ item.get_allowance_deduction_type_display }}</td><td class="px-4 py-3">{{ item.amount }}</td></tr>{% empty %}<tr><td colspan="3" class="px-4 py-8 text-center text-slate-500">No salary elements found.</td></tr>{% endfor %}</tbody></table>
+    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <h3 class="font-semibold">Salary Elements</h3>
+        <p class="mt-1 text-xs text-slate-500">Basic salary comes from employee profile. Add each allowance/deduction only once.</p>
+      </div>
+      <form method="post" action="{% url 'hr:employee_salary_item_create' employee.pk %}" class="border-b border-slate-200 p-4 dark:border-slate-800">
+        {% csrf_token %}
+        <div class="grid gap-3 sm:grid-cols-[1fr_12rem_auto]">
+          <div>
+            <label class="mb-1 block text-xs font-medium">Element</label>
+            {{ salary_item_form.allowance_deduction }}
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium">Amount</label>
+            {{ salary_item_form.amount }}
+          </div>
+          <div class="flex items-end">
+            <button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white" type="submit">Add</button>
+          </div>
+        </div>
+      </form>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Element</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Amount</th><th class="px-4 py-3 text-right">Actions</th></tr></thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for item in salary_items %}
+              <tr>
+                <td class="px-4 py-3 font-medium">{{ item.allowance_deduction }}</td>
+                <td class="px-4 py-3">{{ item.get_allowance_deduction_type_display }}</td>
+                <td class="px-4 py-3">
+                  <form id="salary-item-update-{{ item.pk }}" method="post" action="{% url 'hr:employee_salary_item_update' employee.pk item.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="allowance_deduction" value="{{ item.allowance_deduction_id }}">
+                    <input class="form-input max-w-40" type="number" min="0" step="0.01" name="amount" value="{{ item.amount }}">
+                  </form>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex justify-end gap-2">
+                    <button class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" type="submit" form="salary-item-update-{{ item.pk }}" title="Update" aria-label="Update"><span aria-hidden="true">&#10003;</span></button>
+                    <form method="post" action="{% url 'hr:employee_salary_item_delete' employee.pk item.pk %}" onsubmit="return confirm('Delete this salary element?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No salary elements found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

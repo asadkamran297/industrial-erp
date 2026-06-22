@@ -98,6 +98,13 @@ YES_NO_CHOICES: Final[StatusChoices] = (
     (NO, "No"),
 )
 
+FIN_ACCOUNT_TYPE_CODE_MAP: Final[dict[str, str]] = {
+    ACCOUNT_TYPE_ASSET: "A",
+    ACCOUNT_TYPE_LIABILITY: "L",
+    ACCOUNT_TYPE_REVENUE: "R",
+    ACCOUNT_TYPE_EXPENSE: "E",
+}
+
 COMPLETION_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_COMPLETED, "Completed"),
     (STATUS_ONGOING, "Ongoing"),

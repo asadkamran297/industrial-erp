@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
@@ -123,12 +124,14 @@ class AccountVoucherDetailView(PortalPermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["line_form"] = AccountVoucherLineForm()
+        context["balance_difference"] = self.object.balance_difference
         return context
 
 
 class AccountVoucherLineCreateView(PortalPermissionRequiredMixin, View):
     permission_required = "finance.manage"
 
+    @transaction.atomic
     def post(self, request, voucher_pk):
         voucher = get_object_or_404(AccountVoucher, pk=voucher_pk)
         if voucher.posted == "Y":
@@ -144,15 +147,22 @@ class AccountVoucherLineCreateView(PortalPermissionRequiredMixin, View):
             line.created_by = request.user
             line.updated_by = request.user
             line.save()
-            messages.success(request, "Voucher line saved.")
+            if voucher.is_balanced:
+                messages.success(request, "Voucher line saved. Voucher is balanced.")
+            else:
+                messages.success(request, "Voucher line saved.")
+                messages.warning(request, "Voucher totals are not balanced yet. Debit and credit must match before submission or posting.")
         else:
-            messages.error(request, "Voucher line could not be saved.")
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
         return redirect("finance:account_voucher_detail", pk=voucher.pk)
 
 
 class AccountVoucherLineDeleteView(PortalPermissionRequiredMixin, View):
     permission_required = "finance.manage"
 
+    @transaction.atomic
     def post(self, request, voucher_pk, pk):
         voucher = get_object_or_404(AccountVoucher, pk=voucher_pk)
         if voucher.posted == "Y":

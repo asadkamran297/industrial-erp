@@ -9,6 +9,9 @@ from .views import (
     EmployeeListView,
     EmployeeQualificationCreateView,
     EmployeeQualificationDeleteView,
+    EmployeeSalaryItemCreateView,
+    EmployeeSalaryItemDeleteView,
+    EmployeeSalaryItemUpdateView,
     EmployeeUpdateView,
 )
 
@@ -24,4 +27,7 @@ urlpatterns = [
     path("employees/<int:employee_pk>/experiences/<int:pk>/delete/", EmployeeExperienceDeleteView.as_view(), name="employee_experience_delete"),
     path("employees/<int:employee_pk>/qualifications/new/", EmployeeQualificationCreateView.as_view(), name="employee_qualification_create"),
     path("employees/<int:employee_pk>/qualifications/<int:pk>/delete/", EmployeeQualificationDeleteView.as_view(), name="employee_qualification_delete"),
+    path("employees/<int:employee_pk>/salary-items/new/", EmployeeSalaryItemCreateView.as_view(), name="employee_salary_item_create"),
+    path("employees/<int:employee_pk>/salary-items/<int:pk>/update/", EmployeeSalaryItemUpdateView.as_view(), name="employee_salary_item_update"),
+    path("employees/<int:employee_pk>/salary-items/<int:pk>/delete/", EmployeeSalaryItemDeleteView.as_view(), name="employee_salary_item_delete"),
 ]
