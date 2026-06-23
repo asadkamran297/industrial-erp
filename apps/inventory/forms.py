@@ -1,0 +1,139 @@
+from decimal import Decimal
+
+from django import forms
+from django.core.exceptions import ValidationError
+
+from apps.core.forms import AutoSelectSingleChoiceMixin
+
+from .models import (
+    Customer,
+    InventoryClass,
+    InventoryItem,
+    POSDetail,
+    POSMaster,
+    POSReturnDetail,
+    POSReturnMaster,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseReturnDetail,
+    PurchaseReturnMaster,
+    UOM,
+    UOMConversion,
+    Vendor,
+)
+
+
+class StyledModelForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-select")
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-input")
+                field.widget.attrs.setdefault("rows", 3)
+            else:
+                field.widget.attrs.setdefault("class", "form-input")
+
+
+class InventoryClassForm(StyledModelForm):
+    class Meta:
+        model = InventoryClass
+        fields = ("title", "class_code", "status")
+
+
+class UOMForm(StyledModelForm):
+    class Meta:
+        model = UOM
+        fields = ("title", "code", "status")
+
+
+class UOMConversionForm(StyledModelForm):
+    class Meta:
+        model = UOMConversion
+        fields = ("uom_from", "uom_to", "conversion_factor", "status")
+
+
+class VendorForm(StyledModelForm):
+    class Meta:
+        model = Vendor
+        fields = ("name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num", "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status")
+
+
+class InventoryItemForm(StyledModelForm):
+    class Meta:
+        model = InventoryItem
+        fields = ("item_name", "code", "uom", "item_class", "conversion", "item_bar_code", "status", "imported", "inventory", "price")
+
+    def clean_code(self):
+        return (self.cleaned_data.get("code") or "").strip().upper()
+
+
+class PurchaseOrderForm(StyledModelForm):
+    class Meta:
+        model = PurchaseOrder
+        fields = ("vendor", "descr", "purchase_date", "quot_num", "quot_date", "status")
+        widgets = {"purchase_date": forms.DateInput(attrs={"type": "date"}), "quot_date": forms.DateInput(attrs={"type": "date"})}
+
+
+class PurchaseOrderItemForm(StyledModelForm):
+    class Meta:
+        model = PurchaseOrderItem
+        fields = ("inventory_item", "quantity", "rate", "unit_rate", "uom", "tax_perc", "discount_perc", "discount_amount", "extra_qty", "retail_price", "status")
+
+
+class ReceivePOForm(forms.Form):
+    purchase_order_item = forms.ModelChoiceField(queryset=PurchaseOrderItem.objects.all(), widget=forms.Select(attrs={"class": "form-select"}))
+    quantity = forms.DecimalField(decimal_places=4, max_digits=18, widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0.0001"}))
+    extra_qty = forms.DecimalField(decimal_places=4, max_digits=18, required=False, initial=Decimal("0.0000"), widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0"}))
+    retail_price = forms.DecimalField(decimal_places=2, max_digits=18, widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}))
+    receive_date = forms.DateField(widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
+    invoice_num = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-input"}))
+    invoice_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
+    rv_number = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-input"}))
+    remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-input", "rows": 2}))
+
+
+class CustomerForm(StyledModelForm):
+    class Meta:
+        model = Customer
+        fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "status", "remarks")
+
+
+class POSMasterForm(StyledModelForm):
+    class Meta:
+        model = POSMaster
+        fields = ("invoice_type", "invoice_num", "sale_date", "discount_amount", "tax_amount", "total_paid", "customer", "pay_mode", "credit_card_type", "credit_card_number", "expiry_date", "cc_last_4_digit", "online_transaction_id", "status", "remarks")
+        widgets = {"sale_date": forms.DateInput(attrs={"type": "date"})}
+
+
+class POSDetailForm(StyledModelForm):
+    class Meta:
+        model = POSDetail
+        fields = ("inventory_item", "quantity", "price", "tax_perc", "tax_amount", "discount_perc", "discount_amount", "status")
+
+
+class POSReturnMasterForm(StyledModelForm):
+    class Meta:
+        model = POSReturnMaster
+        fields = ("pos_master", "return_date", "adjusted_amount", "pay_mode", "status", "remarks")
+        widgets = {"return_date": forms.DateInput(attrs={"type": "date"})}
+
+
+class POSReturnDetailForm(StyledModelForm):
+    class Meta:
+        model = POSReturnDetail
+        fields = ("pos_detail", "quantity", "status")
+
+
+class PurchaseReturnMasterForm(StyledModelForm):
+    class Meta:
+        model = PurchaseReturnMaster
+        fields = ("purchase_master", "return_date", "adjusted_amount", "status", "remarks")
+        widgets = {"return_date": forms.DateInput(attrs={"type": "date"})}
+
+
+class PurchaseReturnDetailForm(StyledModelForm):
+    class Meta:
+        model = PurchaseReturnDetail
+        fields = ("inventory_item", "quantity", "rate", "status")

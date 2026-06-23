@@ -15,6 +15,10 @@ STATUS_CREATED: Final = "created"
 STATUS_SUBMITTED: Final = "submitted"
 STATUS_VERIFIED: Final = "verified"
 STATUS_DOUBLE_VERIFIED: Final = "double_verified"
+STATUS_POSTED: Final = "posted"
+STATUS_CANCELLED: Final = "cancelled"
+STATUS_RETURNED: Final = "returned"
+STATUS_PARTIAL_RETURNED: Final = "partial_returned"
 
 ALLOWANCE: Final = "allowance"
 DEDUCTION: Final = "deduction"
@@ -96,6 +100,63 @@ FIN_VOUCHER_STATUS_CHOICES: Final[StatusChoices] = (
 YES_NO_CHOICES: Final[StatusChoices] = (
     (YES, "Yes"),
     (NO, "No"),
+)
+
+INVENTORY_IMPORTED_LOCAL: Final = "L"
+INVENTORY_IMPORTED_IMPORTED: Final = "I"
+INVENTORY_TYPE_INVENTORY: Final = "I"
+INVENTORY_TYPE_FIXED_ASSET: Final = "F"
+LEDGER_OPENING: Final = "OPENING"
+LEDGER_RECEIVE: Final = "RECEIVE"
+LEDGER_PURCHASE_RETURN: Final = "PURCHASE_RETURN"
+LEDGER_SALE: Final = "SALE"
+LEDGER_SALE_RETURN: Final = "SALE_RETURN"
+LEDGER_ADJUSTMENT: Final = "ADJUSTMENT"
+PAY_MODE_CASH: Final = "cash"
+PAY_MODE_CARD: Final = "card"
+PAY_MODE_ONLINE: Final = "online"
+PAY_MODE_CREDIT: Final = "credit"
+
+INV_IMPORTED_CHOICES: Final[StatusChoices] = (
+    (INVENTORY_IMPORTED_IMPORTED, "Imported"),
+    (INVENTORY_IMPORTED_LOCAL, "Local"),
+)
+
+INV_ITEM_TYPE_CHOICES: Final[StatusChoices] = (
+    (INVENTORY_TYPE_INVENTORY, "Inventory"),
+    (INVENTORY_TYPE_FIXED_ASSET, "Fixed Asset"),
+)
+
+INV_TRANSACTION_TYPE_CHOICES: Final[StatusChoices] = (
+    (LEDGER_OPENING, "Opening"),
+    (LEDGER_RECEIVE, "Receive"),
+    (LEDGER_PURCHASE_RETURN, "Purchase Return"),
+    (LEDGER_SALE, "Sale"),
+    (LEDGER_SALE_RETURN, "Sale Return"),
+    (LEDGER_ADJUSTMENT, "Adjustment"),
+)
+
+INV_POS_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_CREATED, "Created"),
+    (STATUS_SUBMITTED, "Submitted"),
+    (STATUS_POSTED, "Posted"),
+    (STATUS_CANCELLED, "Cancelled"),
+    (STATUS_RETURNED, "Returned"),
+    (STATUS_PARTIAL_RETURNED, "Partial Returned"),
+)
+
+INV_RETURN_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_CREATED, "Created"),
+    (STATUS_SUBMITTED, "Submitted"),
+    (STATUS_POSTED, "Posted"),
+    (STATUS_CANCELLED, "Cancelled"),
+)
+
+PAY_MODE_CHOICES: Final[StatusChoices] = (
+    (PAY_MODE_CASH, "Cash"),
+    (PAY_MODE_CARD, "Card"),
+    (PAY_MODE_ONLINE, "Online"),
+    (PAY_MODE_CREDIT, "Credit"),
 )
 
 FIN_ACCOUNT_TYPE_CODE_MAP: Final[dict[str, str]] = {

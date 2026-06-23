@@ -6,6 +6,7 @@ PERMISSIONS = [
     ("dashboard.view", "View Dashboard"),
     ("operations.view", "View Operations"),
     ("inventory.view", "View Inventory"),
+    ("inventory.manage", "Manage Inventory"),
     ("configurations.view", "View Configuration Masters"),
     ("configurations.manage", "Manage Configuration Masters"),
     ("organizations.view", "View Organizations"),
