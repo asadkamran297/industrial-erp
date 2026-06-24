@@ -422,7 +422,7 @@ class POSDetail(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
-            last = self.pos_master.items.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+            last = POSDetail.all_objects.filter(pos_master=self.pos_master).order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
             self.seq_num = last + 1
         self.transaction_id = self.pos_master.transaction_id
         self.sale_num = self.pos_master.sale_num

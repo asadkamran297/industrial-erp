@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.configurations.models import City
@@ -23,6 +24,21 @@ class InventoryFlowTests(TestCase):
 
     def test_item_creates_zero_stock_row(self):
         self.assertEqual(self.item.stock.current_quantity, Decimal("0.0000"))
+
+    def test_pos_page_renders_submit_handler_for_line_items(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("inventory:pos_list"))
+        self.assertContains(response, "submitSale")
+        self.assertContains(response, "guard(event)")
+
+    def test_pos_page_hides_zero_stock_items(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("inventory:pos_list"))
+        self.assertEqual(response.context["items_json"], [])
 
     def test_receive_sale_and_returns_update_stock(self):
         po = PurchaseOrder.objects.create(vendor=self.vendor, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)

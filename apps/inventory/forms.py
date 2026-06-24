@@ -116,10 +116,11 @@ class CustomerForm(StyledModelForm):
 class POSMasterForm(StyledModelForm):
     class Meta:
         model = POSMaster
-        fields = ("invoice_type", "invoice_num", "customer", "pay_mode", "credit_card_type", "credit_card_number", "expiry_date", "cc_last_4_digit", "online_transaction_id", "remarks")
+        fields = ("pay_mode", "customer")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["pay_mode"].initial = "cash"
         if not self.instance.pk and not self.initial.get("customer"):
             default_customer = Customer.get_default()
             if default_customer:
@@ -129,7 +130,8 @@ class POSMasterForm(StyledModelForm):
 class POSDetailForm(StyledModelForm):
     class Meta:
         model = POSDetail
-        fields = ("inventory_item", "quantity", "price", "tax_perc", "tax_amount", "discount_perc", "discount_amount", "status")
+        fields = ("inventory_item", "quantity", "price", "discount_amount")
+        labels = {"inventory_item": "Item", "discount_amount": "Discount"}
 
 
 class POSReturnMasterForm(StyledModelForm):

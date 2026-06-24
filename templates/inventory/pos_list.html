@@ -1,1 +1,146 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-4">{% include "components/ui/page_header.html" with title="POS Sales" action_label="New Sale" action_url="/inventory/pos-sales/new/" %}{% include "components/table/search_filters.html" %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Sale</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Net</th><th class="px-4 py-3">Posted</th><th class="px-4 py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for sale in sales %}<tr><td class="px-4 py-3">{{ sale.sale_num }}</td><td class="px-4 py-3">{{ sale.sale_date }}</td><td class="px-4 py-3">{{ sale.customer|default:'Walk-in' }}</td><td class="px-4 py-3">{{ sale.net_amount }}</td><td class="px-4 py-3">{{ sale.posted }}</td><td class="px-4 py-3"><div class="flex justify-end gap-2"><a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:pos_detail' sale.pk %}">&#128065;</a>{% if sale.posted != 'Y' %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'inventory:pos_update' sale.pk %}">&#9998;</a>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No sales found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% block content %}
+{{ items_json|json_script:"pos-items" }}
+<section class="space-y-4"
+  x-data="posTerminal()">
+
+  <form x-ref="saleForm" method="post" action="{% url 'inventory:pos_checkout' %}" @submit.prevent="submitSale($event)">{% csrf_token %}
+
+    <!-- Top: title + pay mode + customer + totals -->
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">POS Sales</h1>
+        <div class="flex flex-wrap items-end gap-3">
+          {% for field in master_form %}
+            <div class="min-w-[160px]"><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-900/30"><p class="text-xs font-medium text-sky-700 dark:text-sky-300">Total Amount</p><p class="text-xl font-bold text-sky-800 dark:text-sky-200" x-text="fmt(totalAmount)"></p></div>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/30"><p class="text-xs font-medium text-amber-700 dark:text-amber-300">Discount Amount</p><p class="text-xl font-bold text-amber-800 dark:text-amber-200" x-text="fmt(discountAmount)"></p></div>
+        <div class="rounded-lg border border-emerald-300 bg-emerald-100 p-3 dark:border-emerald-700 dark:bg-emerald-900/40"><p class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Net Payable</p><p class="text-2xl font-extrabold text-emerald-800 dark:text-emerald-200" x-text="fmt(netPayable)"></p></div>
+      </div>
+    </div>
+
+    <!-- Add item selector -->
+    <div class="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <label class="mb-1 block text-xs font-medium">Add Item</label>
+      <select class="form-select max-w-md" x-model="picker" @change="addItem()">
+        <option value="">-- Select item to add --</option>
+        {% for it in items_json %}<option value="{{ it.id }}">{{ it.name }} ({{ it.stock }})</option>{% endfor %}
+      </select>
+    </div>
+
+    <!-- Items grid -->
+    <div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr><th class="px-3 py-3 w-10">#</th><th class="px-3 py-3">Item</th><th class="px-3 py-3 w-28">Qty</th><th class="px-3 py-3 w-32">Price</th><th class="px-3 py-3 w-32">Discount</th><th class="px-3 py-3 w-32">Net</th><th class="px-3 py-3 w-12"></th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          <template x-for="(line, i) in lines" :key="line.uid">
+            <tr>
+              <td class="px-3 py-2" x-text="i + 1"></td>
+              <td class="px-3 py-2 font-medium max-w-[220px] truncate whitespace-nowrap" x-text="line.name" :title="line.name"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.qty" @input="line.qty = round2(line.qty); distribute()"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.price" @input="line.price = round2(line.price); distribute()"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.discount" @input="line.discount = round2(line.discount)"></td>
+              <td class="px-3 py-2 font-medium" x-text="fmt(lineNet(line))"></td>
+              <td class="px-3 py-2 text-right"><button type="button" @click="removeLine(i)" class="text-rose-600 hover:text-rose-700">&times;</button></td>
+            </tr>
+          </template>
+          <tr x-show="lines.length === 0"><td colspan="7" class="px-4 py-8 text-center text-slate-500">No items. Select an item above to add.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- hidden inputs synced on submit -->
+    <div x-ref="hidden"></div>
+
+    <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
+      <div class="flex items-center gap-2">
+        <label class="whitespace-nowrap text-sm font-medium">Overall Discount (Amount)</label>
+        <input type="number" step="0.01" min="0" class="form-input w-40" x-model.number="overallAmt" @input="overallAmt = round2(overallAmt); distribute()">
+      </div>
+      <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">&#10003; Submit &amp; Print</button>
+    </div>
+  </form>
+
+  {% if recent_sales %}
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <p class="border-b border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">Recent Sales</p>
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Sale</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Net</th><th class="px-4 py-3 text-right">Actions</th></tr></thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        {% for s in recent_sales %}
+          <tr><td class="px-4 py-3">{{ s.sale_num }}</td><td class="px-4 py-3">{{ s.sale_date }}</td><td class="px-4 py-3">{{ s.customer|default:'Walk-in' }}</td><td class="px-4 py-3">{{ s.net_amount|floatformat:2 }}</td><td class="px-4 py-3 text-right"><a class="text-[var(--primary-color)]" href="{% url 'inventory:pos_receipt' s.pk %}">Receipt</a> &middot; <a class="text-slate-500" href="{% url 'inventory:pos_detail' s.pk %}">View</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<script>
+  function posTerminal() {
+    var items = JSON.parse(document.getElementById("pos-items").textContent);
+    return {
+      items: items,
+      map: Object.fromEntries(items.map(it => [String(it.id), it])),
+      uidSeq: 1,
+      picker: "",
+      overallAmt: 0,
+      lines: [],
+      addItem() {
+        var it = this.map[String(this.picker)];
+        this.picker = "";
+        if (!it) return;
+        var existing = this.lines.find(l => String(l.item) === String(it.id));
+        if (existing) { existing.qty = (Number(existing.qty) || 0) + 1; }
+        else { this.lines.push({ uid: this.uidSeq++, item: it.id, name: it.name, qty: 1, price: it.price, discount: 0 }); }
+        this.distribute();
+      },
+      removeLine(i) { this.lines.splice(i, 1); this.distribute(); },
+      lineSub(l) { return (Number(l.qty) || 0) * (Number(l.price) || 0); },
+      distribute() {
+        var total = this.lines.reduce((s, l) => s + this.lineSub(l), 0);
+        var amt = Number(this.overallAmt) || 0;
+        if (amt <= 0 || total <= 0) { this.lines.forEach(l => l.discount = 0); return; }
+        var allocated = 0;
+        this.lines.forEach((l, i) => {
+          if (i === this.lines.length - 1) { l.discount = this.round2(amt - allocated); }
+          else { var share = this.round2(amt * this.lineSub(l) / total); l.discount = share; allocated += share; }
+        });
+      },
+      lineNet(line) { return (Number(line.qty) || 0) * (Number(line.price) || 0) - (Number(line.discount) || 0); },
+      get totalAmount() { return this.lines.reduce((s, l) => s + this.lineSub(l), 0); },
+      get discountAmount() { return this.lines.reduce((s, l) => s + (Number(l.discount) || 0), 0); },
+      get netPayable() { return this.totalAmount - this.discountAmount; },
+      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+      round2(v) { var n = Number(v); return isNaN(n) ? 0 : Math.round(n * 100) / 100; },
+      guard(event) {
+        var hasValidLine = this.lines.some(l => l.item && Number(l.qty) > 0);
+        if (!hasValidLine) {
+          if (event && typeof event.preventDefault === "function") event.preventDefault();
+          return false;
+        }
+        return true;
+      },
+      submitSale(event) {
+        if (!this.guard(event)) return;
+        this.syncHidden();
+        this.$refs.saleForm.submit();
+      },
+      syncHidden() {
+        var box = this.$refs.hidden; box.innerHTML = "";
+        this.lines.filter(l => l.item && Number(l.qty) > 0).forEach(l => {
+          [["item_id", l.item], ["qty", l.qty], ["price", l.price], ["discount", l.discount]].forEach(([n, v]) => {
+            var inp = document.createElement("input"); inp.type = "hidden"; inp.name = n; inp.value = v; box.appendChild(inp);
+          });
+        });
+      },
+    };
+  }
+</script>
+{% endblock %}

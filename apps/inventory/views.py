@@ -1,8 +1,10 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from decimal import Decimal
@@ -13,7 +15,7 @@ from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, S
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -520,15 +522,93 @@ class CustomerUpdateView(CustomerCreateView, UpdateView):
     success_message = "Customer updated."
 
 
-class POSListView(InventoryListMixin, ListView):
+class POSListView(InventoryManageMixin, View):
     template_name = "inventory/pos_list.html"
-    context_object_name = "sales"
-    queryset = POSMaster.objects.select_related("customer").order_by("-sale_date", "-id")
-    search_fields = ("sale_num", "transaction_id", "invoice_num", "customer__customer_name")
-    filter_fields = {"status": "status", "posted": "posted"}
 
-    def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": INV_POS_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+    def get(self, request):
+        from django.shortcuts import render
+
+        items = [
+            {"id": s.inventory_item_id, "name": s.item_name, "price": float(s.current_price or 0), "stock": float(s.current_quantity or 0)}
+            for s in Stock.objects.filter(status=STATUS_ACTIVE, current_quantity__gt=0).order_by("item_name")
+        ]
+        context = {
+            "master_form": POSMasterForm(),
+            "items_json": items,
+            "recent_sales": POSMaster.objects.select_related("customer").filter(posted=YES).order_by("-id")[:10],
+        }
+        return render(request, self.template_name, context)
+
+
+class POSCheckoutView(InventoryManageMixin, View):
+    def post(self, request):
+        item_ids = request.POST.getlist("item_id")
+        qtys = request.POST.getlist("qty")
+        prices = request.POST.getlist("price")
+        discounts = request.POST.getlist("discount")
+
+        lines = []
+        for idx, item_id in enumerate(item_ids):
+            if not item_id:
+                continue
+            qty = Decimal(qtys[idx] or "0").quantize(Decimal("0.01"))
+            if qty <= 0:
+                continue
+            price = Decimal(prices[idx] or "0").quantize(Decimal("0.01"))
+            discount = Decimal(discounts[idx] or "0").quantize(Decimal("0.01"))
+            lines.append((int(item_id), qty, price, discount))
+
+        if not lines:
+            messages.error(request, "Add at least one item with quantity before posting.")
+            return redirect("inventory:pos_list")
+
+        needed = {}
+        for item_id, qty, _price, _disc in lines:
+            needed[item_id] = needed.get(item_id, Decimal("0")) + qty
+        for stock in Stock.objects.filter(inventory_item_id__in=needed):
+            if needed[stock.inventory_item_id] > (stock.current_quantity or Decimal("0")):
+                messages.error(request, f"Insufficient stock for {stock.item_name} (available {stock.current_quantity}).")
+                return redirect("inventory:pos_list")
+
+        return self._checkout(request, lines)
+
+    @transaction.atomic
+    def _checkout(self, request, lines):
+        sale = POSMaster.objects.create(
+            transaction_id=generate_transaction_id("SAL", POSMaster),
+            pay_mode=request.POST.get("pay_mode") or "cash",
+            customer_id=request.POST.get("customer") or None,
+            remarks=f"Walking customer {timezone.now():%Y-%m-%d %H:%M:%S}",
+            created_by=request.user,
+            updated_by=request.user,
+        )
+        for item_id, qty, price, discount in lines:
+            POSDetail.objects.create(
+                pos_master=sale,
+                inventory_item_id=item_id,
+                quantity=qty,
+                price=price,
+                discount_amount=discount,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+        post_sale(sale=sale, user=request.user)
+        messages.success(request, f"Sale {sale.sale_num} posted — {len(lines)} item(s), stock updated.")
+        return redirect("inventory:pos_receipt", pk=sale.pk)
+
+
+class POSReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    model = POSMaster
+    template_name = "inventory/pos_receipt.html"
+    context_object_name = "sale"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        items = self.object.items.all()
+        context["items"] = items
+        context["total_qty"] = sum((i.quantity or Decimal("0") for i in items), Decimal("0"))
+        context["total_discount"] = sum((i.discount_amount or Decimal("0") for i in items), Decimal("0"))
+        return context
 
 
 class POSCreateView(InventoryManageMixin, CreateView):
@@ -542,6 +622,8 @@ class POSCreateView(InventoryManageMixin, CreateView):
     def form_valid(self, form):
         if not form.instance.transaction_id:
             form.instance.transaction_id = generate_transaction_id("SAL", POSMaster)
+        if not form.instance.remarks:
+            form.instance.remarks = f"Walking customer {timezone.now():%Y-%m-%d %H:%M:%S}"
         return super().form_valid(form)
 
 
@@ -575,38 +657,6 @@ class POSDetailView(InventoryListMixin, DetailView):
         context["net_amount"] = net_amount
         context["payable_amount"] = net_amount
         return context
-
-
-class POSItemCreateView(InventoryManageMixin, View):
-    def post(self, request, pk):
-        sale = get_object_or_404(POSMaster, pk=pk)
-        if sale.posted == YES:
-            messages.error(request, "Posted sale cannot be updated.")
-            return redirect("inventory:pos_detail", pk=pk)
-        form = POSDetailForm(request.POST)
-        if form.is_valid():
-            item = form.save(commit=False)
-            item.pos_master = sale
-            item.created_by = request.user
-            item.updated_by = request.user
-            item.save()
-            messages.success(request, "Sale item saved.")
-        else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
-        return redirect("inventory:pos_detail", pk=pk)
-
-
-class POSPostView(InventoryManageMixin, View):
-    def post(self, request, pk):
-        sale = get_object_or_404(POSMaster, pk=pk)
-        try:
-            post_sale(sale=sale, user=request.user)
-            messages.success(request, "Sale posted and stock updated.")
-        except ValidationError as exc:
-            messages.error(request, exc)
-        return redirect("inventory:pos_detail", pk=pk)
 
 
 class POSReturnListView(InventoryListMixin, ListView):
