@@ -8,7 +8,7 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
@@ -476,10 +476,35 @@ class CustomerListView(BaseSimpleListView):
     queryset = Customer.objects.select_related("city").order_by("customer_name")
     search_fields = ("customer_name", "customer_code", "customer_cell_no")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Customers", "create_url": reverse_lazy("inventory:customer_create"), "edit_url_name": "inventory:customer_update", "columns": [("Name", "customer_name"), ("Code", "customer_code"), ("Cell", "customer_cell_no"), ("Status", "get_status_display")]}
+    extra_context = {"title": "Customers", "create_url": reverse_lazy("inventory:customer_create"), "edit_url_name": "inventory:customer_update", "status_toggle_url_name": "inventory:customer_toggle_status", "default_toggle_url_name": "inventory:customer_toggle_default", "columns": [("Name", "customer_name"), ("Code", "customer_code"), ("Cell", "customer_cell_no"), ("Status", "status_toggle"), ("Default Customer", "default_toggle")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+
+
+class CustomerToggleStatusView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        customer = get_object_or_404(Customer, pk=pk)
+        customer.status = STATUS_INACTIVE if customer.status == STATUS_ACTIVE else STATUS_ACTIVE
+        customer.updated_by = request.user
+        if customer.status == STATUS_INACTIVE and customer.is_default:
+            customer.is_default = False
+            customer.save(update_fields=["status", "is_default", "updated_by", "updated_at"])
+        else:
+            customer.save(update_fields=["status", "updated_by", "updated_at"])
+        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:customer_list"))
+
+
+class CustomerToggleDefaultView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        customer = get_object_or_404(Customer, pk=pk)
+        if not customer.is_default and customer.status != STATUS_ACTIVE:
+            messages.error(request, "An inactive customer cannot be set as default.")
+            return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:customer_list"))
+        customer.is_default = not customer.is_default
+        customer.updated_by = request.user
+        customer.save()
+        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:customer_list"))
 
 
 class CustomerCreateView(InventoryManageMixin, CreateView):
@@ -539,6 +564,16 @@ class POSDetailView(InventoryListMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["item_form"] = POSDetailForm()
+        items = self.object.items.all()
+        bill_amount = sum((i.total_price or Decimal("0") for i in items), Decimal("0"))
+        discount_total = sum((i.discount_amount or Decimal("0") for i in items), Decimal("0"))
+        tax_total = sum((i.tax_amount or Decimal("0") for i in items), Decimal("0"))
+        net_amount = bill_amount - discount_total + tax_total
+        context["bill_amount"] = bill_amount
+        context["discount_total"] = discount_total
+        context["tax_total"] = tax_total
+        context["net_amount"] = net_amount
+        context["payable_amount"] = net_amount
         return context
 
 

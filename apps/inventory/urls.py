@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionToggleView, ManualTransactionSubmitView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
+from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionToggleView, ManualTransactionSubmitView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
 
 app_name = "inventory"
 
@@ -38,6 +38,8 @@ urlpatterns = [
     path("customers/", CustomerListView.as_view(), name="customer_list"),
     path("customers/new/", CustomerCreateView.as_view(), name="customer_create"),
     path("customers/<int:pk>/edit/", CustomerUpdateView.as_view(), name="customer_update"),
+    path("customers/<int:pk>/toggle-status/", CustomerToggleStatusView.as_view(), name="customer_toggle_status"),
+    path("customers/<int:pk>/toggle-default/", CustomerToggleDefaultView.as_view(), name="customer_toggle_default"),
     path("pos-sales/", POSListView.as_view(), name="pos_list"),
     path("pos-sales/new/", POSCreateView.as_view(), name="pos_create"),
     path("pos-sales/<int:pk>/", POSDetailView.as_view(), name="pos_detail"),

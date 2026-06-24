@@ -4,6 +4,7 @@ from apps.access_control.seeders.permissions import seed_permissions
 from apps.access_control.seeders.roles import seed_roles
 from apps.configurations.seeders.configurations import seed_configurations
 from apps.core.seeders import seed_system_settings
+from apps.inventory.seeders.customers import seed_customers
 from apps.inventory.seeders.uoms import seed_uoms
 from apps.organizations.seeders.organizations import seed_organizations
 
@@ -16,7 +17,7 @@ SEEDERS = {
         ("roles", seed_roles),
     ],
     "organizations": [("organizations", seed_organizations)],
-    "inventory": [("units of measure", seed_uoms)],
+    "inventory": [("units of measure", seed_uoms), ("customers", seed_customers)],
 }
 
 DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory"]

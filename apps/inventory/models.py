@@ -338,12 +338,22 @@ class Customer(BaseModel):
     ntn_number = models.CharField(max_length=50, blank=True)
     sale_tax_num = models.CharField(max_length=50, blank=True)
     city = models.ForeignKey("configurations.City", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_city_id")
+    is_default = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
     remarks = models.TextField(blank=True)
 
     class Meta:
         db_table = "inv_customers"
         ordering = ["customer_name"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            Customer.all_objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+
+    @classmethod
+    def get_default(cls):
+        return cls.objects.filter(is_default=True, status=STATUS_ACTIVE).first()
 
     def __str__(self):
         return self.customer_name

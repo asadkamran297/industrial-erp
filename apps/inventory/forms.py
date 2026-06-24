@@ -109,14 +109,21 @@ class ManualTransactionForm(StyledModelForm):
 class CustomerForm(StyledModelForm):
     class Meta:
         model = Customer
-        fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "status", "remarks")
+        fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "is_default", "status", "remarks")
+        labels = {"is_default": "Set as default customer"}
 
 
 class POSMasterForm(StyledModelForm):
     class Meta:
         model = POSMaster
-        fields = ("invoice_type", "invoice_num", "sale_date", "discount_amount", "tax_amount", "total_paid", "customer", "pay_mode", "credit_card_type", "credit_card_number", "expiry_date", "cc_last_4_digit", "online_transaction_id", "status", "remarks")
-        widgets = {"sale_date": forms.DateInput(attrs={"type": "date"})}
+        fields = ("invoice_type", "invoice_num", "customer", "pay_mode", "credit_card_type", "credit_card_number", "expiry_date", "cc_last_4_digit", "online_transaction_id", "remarks")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk and not self.initial.get("customer"):
+            default_customer = Customer.get_default()
+            if default_customer:
+                self.fields["customer"].initial = default_customer.pk
 
 
 class POSDetailForm(StyledModelForm):
