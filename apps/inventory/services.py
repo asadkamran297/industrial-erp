@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, YES
+from apps.core.constants import LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, YES
 
 from .models import (
     ItemLedger,
@@ -59,9 +59,6 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         raise ValidationError("PO item cannot receive more than ordered quantity unless extra quantity is available.")
 
     po = purchase_order_item.purchase_order
-    po.status = STATUS_POSTED
-    po.updated_by = user
-    po.save(update_fields=["status", "updated_by", "updated_at"])
 
     receipt = PurchaseOrderItemReceived.objects.create(
         purchase_order_item=purchase_order_item,
@@ -90,6 +87,14 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     purchase_order_item.retail_price = retail_price
     purchase_order_item.updated_by = user
     purchase_order_item.save()
+
+    po_items = po.items.all()
+    if po_items.exists() and all(item.total_receive_qty >= item.quantity for item in po_items):
+        po.status = STATUS_FULLY_RECEIVED
+    else:
+        po.status = STATUS_PARTIAL_RECEIVED
+    po.updated_by = user
+    po.save(update_fields=["status", "updated_by", "updated_at"])
 
     purchase_master, _ = PurchaseMaster.objects.get_or_create(
         purchase_order=po,

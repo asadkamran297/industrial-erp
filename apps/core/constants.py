@@ -19,6 +19,8 @@ STATUS_POSTED: Final = "posted"
 STATUS_CANCELLED: Final = "cancelled"
 STATUS_RETURNED: Final = "returned"
 STATUS_PARTIAL_RETURNED: Final = "partial_returned"
+STATUS_PARTIAL_RECEIVED: Final = "partial_received"
+STATUS_FULLY_RECEIVED: Final = "fully_received"
 
 ALLOWANCE: Final = "allowance"
 DEDUCTION: Final = "deduction"
@@ -143,6 +145,13 @@ INV_POS_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_CANCELLED, "Cancelled"),
     (STATUS_RETURNED, "Returned"),
     (STATUS_PARTIAL_RETURNED, "Partial Returned"),
+)
+
+INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_CREATED, "Created"),
+    (STATUS_PARTIAL_RECEIVED, "Partial Received"),
+    (STATUS_FULLY_RECEIVED, "Fully Received"),
+    (STATUS_CANCELLED, "Cancelled"),
 )
 
 INV_RETURN_STATUS_CHOICES: Final[StatusChoices] = (

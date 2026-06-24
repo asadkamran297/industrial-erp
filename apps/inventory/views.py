@@ -1,10 +1,11 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_RETURN_STATUS_CHOICES, RECORD_STATUS_CHOICES, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, RECORD_STATUS_CHOICES, STATUS_FULLY_RECEIVED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
@@ -37,7 +38,7 @@ class InventoryClassListView(BaseSimpleListView):
     queryset = InventoryClass.objects.order_by("title")
     search_fields = ("title", "class_code")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Inventory Classes", "create_url": reverse_lazy("inventory:class_create"), "edit_url_name": "inventory:class_update", "columns": [("Title", "title"), ("Code", "class_code"), ("Status", "get_status_display")]}
+    extra_context = {"title": "Inventory Classes", "create_url": reverse_lazy("inventory:class_create"), "edit_url_name": "inventory:class_update", "columns": [("Class Name", "title"), ("Class Code", "class_code"), ("Status", "get_status_display")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
@@ -58,6 +59,7 @@ class InventoryClassUpdateView(InventoryClassCreateView, UpdateView):
 
 class UOMListView(BaseSimpleListView):
     model = UOM
+    template_name = "inventory/uom_list.html"
     queryset = UOM.objects.order_by("title")
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
@@ -65,6 +67,55 @@ class UOMListView(BaseSimpleListView):
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+
+    def get_selected_uom(self):
+        selected_uom_id = self.request.GET.get("selected_uom") or self.request.POST.get("selected_uom")
+        if not selected_uom_id:
+            return None
+        return UOM.objects.filter(pk=selected_uom_id).first()
+
+    def get_selected_conversion(self, selected_uom):
+        if not selected_uom:
+            return None
+        return UOMConversion.objects.filter(uom_from=selected_uom).select_related("uom_from", "uom_to").first()
+
+    def get_conversion_form(self, selected_uom, selected_conversion=None, data=None):
+        form = UOMConversionForm(data=data, instance=selected_conversion)
+        form.fields["uom_from"].queryset = UOM.objects.filter(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
+        form.fields["uom_to"].queryset = UOM.objects.exclude(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
+        if selected_uom and not form.is_bound:
+            form.initial.setdefault("uom_from", selected_uom.pk)
+        return form
+
+    def post(self, request, *args, **kwargs):
+        selected_uom = self.get_selected_uom()
+        if not selected_uom:
+            messages.error(request, "Select a UOM first.")
+            return redirect("inventory:uom_list")
+
+        existing_conversion = self.get_selected_conversion(selected_uom)
+        form = self.get_conversion_form(selected_uom, selected_conversion=existing_conversion, data=request.POST)
+        if form.is_valid():
+            conversion = form.save(commit=False)
+            conversion.created_by = conversion.created_by or request.user
+            conversion.updated_by = request.user
+            conversion.save()
+            messages.success(request, "UOM conversion updated." if existing_conversion else "UOM conversion saved.")
+            return redirect(f"{reverse_lazy('inventory:uom_list')}?selected_uom={selected_uom.pk}")
+
+        self.object_list = self.get_queryset()
+        context = self.get_context_data(form=form)
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        selected_uom = self.get_selected_uom()
+        selected_conversion = self.get_selected_conversion(selected_uom)
+        context["selected_uom"] = selected_uom
+        context["selected_conversion"] = selected_conversion
+        context["uom_conversions"] = [selected_conversion] if selected_conversion else []
+        context["conversion_form"] = kwargs.get("form") or self.get_conversion_form(selected_uom, selected_conversion=selected_conversion)
+        return context
 
 
 class UOMCreateView(InventoryManageMixin, CreateView):
@@ -169,12 +220,12 @@ class LedgerListView(InventoryListMixin, ListView):
 class PurchaseOrderListView(InventoryListMixin, ListView):
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("vendor").order_by("-purchase_date", "-id")
+    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "vendor__name", "quot_num")
     filter_fields = {"status": "status"}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": INV_RETURN_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
 
 
 class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
@@ -191,8 +242,8 @@ class PurchaseOrderUpdateView(PurchaseOrderCreateView, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if self.object.status == "posted":
-            messages.error(request, "Posted purchase order cannot be updated.")
+        if self.object.status == STATUS_FULLY_RECEIVED:
+            messages.error(request, "Fully received purchase order cannot be updated.")
             return redirect("inventory:purchase_order_detail", pk=self.object.pk)
         return super().dispatch(request, *args, **kwargs)
 
@@ -214,8 +265,8 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
 class PurchaseOrderItemCreateView(InventoryManageMixin, View):
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
-        if order.status == "posted":
-            messages.error(request, "Posted purchase order cannot be updated.")
+        if order.status == STATUS_FULLY_RECEIVED:
+            messages.error(request, "Fully received purchase order cannot be updated.")
             return redirect("inventory:purchase_order_detail", pk=pk)
         form = PurchaseOrderItemForm(request.POST)
         if form.is_valid():

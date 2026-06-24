@@ -9,6 +9,7 @@ from apps.core.constants import (
     INV_IMPORTED_CHOICES,
     INV_ITEM_TYPE_CHOICES,
     INV_POS_STATUS_CHOICES,
+    INV_PURCHASE_ORDER_STATUS_CHOICES,
     INV_RETURN_STATUS_CHOICES,
     INV_TRANSACTION_TYPE_CHOICES,
     NO,
@@ -26,8 +27,8 @@ TWO_DP = Decimal("0.01")
 
 
 class InventoryClass(BaseModel):
-    title = models.CharField(max_length=160)
-    class_code = models.CharField(max_length=20, unique=True)
+    title = models.CharField("Class Name", max_length=160)
+    class_code = models.CharField("Class Code", max_length=20, unique=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
     class Meta:
@@ -159,7 +160,7 @@ class PurchaseOrder(BaseModel):
     purchase_date = models.DateField(default=timezone.localdate)
     quot_num = models.CharField(max_length=80, blank=True)
     quot_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_CREATED)
+    status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_CREATED)
 
     class Meta:
         db_table = "inv_purchase_orders"
@@ -203,6 +204,11 @@ class PurchaseOrderItem(BaseModel):
         db_table = "inv_purchase_order_items"
         ordering = ["purchase_order", "seq_num"]
         unique_together = (("purchase_order", "seq_num"),)
+
+    @property
+    def pending_receive_qty(self):
+        pending_qty = (self.quantity or Decimal("0.0000")) - (self.total_receive_qty or Decimal("0.0000"))
+        return pending_qty if pending_qty > Decimal("0.0000") else Decimal("0.0000")
 
     def save(self, *args, **kwargs):
         if not self.seq_num:

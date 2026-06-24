@@ -1,0 +1,115 @@
+{% extends "layouts/portal.html" %}
+{% load inventory_extras %}
+{% block content %}
+<section class="space-y-4">
+  {% include "components/ui/page_header.html" with title=title action_label="New" action_url=create_url %}
+  {% include "components/table/search_filters.html" %}
+
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Title</th>
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in records %}
+            <tr class="{% if selected_uom and selected_uom.pk == row.pk %}bg-slate-50 dark:bg-slate-800/40{% endif %}">
+              <td class="px-4 py-3">
+                <a class="font-medium text-slate-900 hover:text-[var(--primary-color)] dark:text-slate-100" href="?selected_uom={{ row.pk }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ row.title }}</a>
+              </td>
+              <td class="px-4 py-3">{{ row.code }}</td>
+              <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ row.get_status_display }}</span></td>
+              <td class="px-4 py-3">
+                <div class="flex justify-end gap-2">
+                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url edit_url_name row.pk %}" title="Edit"><span>&#9998;</span></a>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "components/table/pagination.html" %}
+
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">UOM Conversions</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400">{% if selected_uom %}{{ selected_uom.title }} selected.{% else %}Select a UOM from above to see related conversions.{% endif %}</p>
+      </div>
+      <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{% if selected_conversion %}Update{% else %}New Conversion{% endif %}</span>
+    </div>
+
+    {% if selected_uom %}
+      <form method="post" class="border-b border-slate-200 px-4 py-4 dark:border-slate-800">
+        {% csrf_token %}
+        <input type="hidden" name="selected_uom" value="{{ selected_uom.pk }}">
+        <div class="overflow-visible">
+          <div class="grid grid-cols-[1.4fr_1.4fr_1.2fr_0.9fr_auto] items-end gap-3">
+            <div class="min-w-0">
+              <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Uom from</label>
+              {{ conversion_form.uom_from.as_hidden }}
+              <input type="text" class="form-input" value="{{ selected_uom }}" readonly>
+              {% if conversion_form.uom_from.errors %}<p class="mt-1 text-xs text-rose-600">{{ conversion_form.uom_from.errors|join:', ' }}</p>{% endif %}
+            </div>
+            <div class="min-w-0 overflow-visible">
+              <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{{ conversion_form.uom_to.label }}</label>
+              {{ conversion_form.uom_to }}
+              {% if conversion_form.uom_to.errors %}<p class="mt-1 text-xs text-rose-600">{{ conversion_form.uom_to.errors|join:', ' }}</p>{% endif %}
+            </div>
+            <div class="min-w-0">
+              <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{{ conversion_form.conversion_factor.label }}</label>
+              {{ conversion_form.conversion_factor }}
+              {% if conversion_form.conversion_factor.errors %}<p class="mt-1 text-xs text-rose-600">{{ conversion_form.conversion_factor.errors|join:', ' }}</p>{% endif %}
+            </div>
+            <div class="min-w-0">
+              <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{{ conversion_form.status.label }}</label>
+              {{ conversion_form.status }}
+              {% if conversion_form.status.errors %}<p class="mt-1 text-xs text-rose-600">{{ conversion_form.status.errors|join:', ' }}</p>{% endif %}
+            </div>
+            <div class="shrink-0">
+              <button class="rounded-lg bg-[var(--primary-color)] px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap">{% if selected_conversion %}Update Conversion{% else %}Save Conversion{% endif %}</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    {% endif %}
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">From</th>
+            <th class="px-4 py-3">To</th>
+            <th class="px-4 py-3">Factor</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in uom_conversions %}
+            <tr>
+              <td class="px-4 py-3">{{ row.uom_from }}</td>
+              <td class="px-4 py-3">{{ row.uom_to }}</td>
+              <td class="px-4 py-3">{{ row.conversion_factor }}</td>
+              <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ row.get_status_display }}</span></td>
+              <td class="px-4 py-3 text-right text-xs text-slate-500">Inline</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">{% if selected_uom %}No conversion saved for this UOM yet.{% else %}Select a UOM from the table above.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

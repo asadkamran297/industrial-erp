@@ -1,1 +1,109 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-4">{% include "components/ui/page_header.html" with title="Purchase Orders" action_label="New PO" action_url="/inventory/purchase-orders/new/" %}{% include "components/table/search_filters.html" %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">PO</th><th class="px-4 py-3">Vendor</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for order in orders %}<tr><td class="px-4 py-3">{{ order.purchase_num }}</td><td class="px-4 py-3">{{ order.vendor }}</td><td class="px-4 py-3">{{ order.purchase_date }}</td><td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ order.status }}</span></td><td class="px-4 py-3"><div class="flex justify-end gap-2"><a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_order_detail' order.pk %}">&#128065;</a>{% if order.status != 'posted' %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'inventory:purchase_order_update' order.pk %}">&#9998;</a>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="space-y-4" x-data="{ openPo: null }">
+  {% include "components/ui/page_header.html" with title="Purchase Orders" action_label="New PO" action_url="/inventory/purchase-orders/new/" %}
+  {% include "components/table/search_filters.html" %}
+
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">PO</th>
+            <th class="px-4 py-3">Vendor</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for order in orders %}
+            <tr class="align-top">
+              <td class="px-4 py-3">
+                <button
+                  type="button"
+                  class="flex items-center gap-2 font-medium text-slate-900 transition hover:text-[var(--primary-color)] dark:text-slate-100"
+                  @click="openPo = openPo === {{ order.pk }} ? null : {{ order.pk }}"
+                  :aria-expanded="(openPo === {{ order.pk }}).toString()"
+                >
+                  <span class="inline-grid h-5 w-5 place-items-center rounded-full border border-slate-200 text-[10px] dark:border-slate-700" x-text="openPo === {{ order.pk }} ? '-' : '+'"></span>
+                  <span>{{ order.purchase_num }}</span>
+                </button>
+              </td>
+              <td class="px-4 py-3">{{ order.vendor }}</td>
+              <td class="px-4 py-3">{{ order.purchase_date }}</td>
+              <td class="px-4 py-3">
+                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ order.get_status_display }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex justify-end gap-2">
+                  <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_order_detail' order.pk %}">&#128065;</a>
+                  {% if order.status != 'fully_received' %}
+                    <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'inventory:purchase_order_update' order.pk %}">&#9998;</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            <tr x-show="openPo === {{ order.pk }}" class="bg-slate-50/70 dark:bg-slate-950/30">
+              <td colspan="5" class="px-4 py-4">
+                <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+                  <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                    <div>
+                      <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">PO Items</p>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ order.items.count }} item{{ order.items.count|pluralize }} in this purchase order</p>
+                    </div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                      Quotation: {{ order.quot_num|default:'-' }}
+                    </div>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs sm:text-sm">
+                      <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+                        <tr>
+                          <th class="px-4 py-3">Item</th>
+                          <th class="px-4 py-3">UOM</th>
+                          <th class="px-4 py-3">Qty</th>
+                          <th class="px-4 py-3">Received</th>
+                          <th class="px-4 py-3">Pending</th>
+                          <th class="px-4 py-3">Rate</th>
+                          <th class="px-4 py-3">Extra Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for item in order.items.all %}
+                          <tr>
+                            <td class="px-4 py-3">
+                              <div class="font-medium text-slate-900 dark:text-slate-100">{{ item.descr }}</div>
+                              <div class="text-xs text-slate-500 dark:text-slate-400">{{ item.inventory_item.code }}</div>
+                            </td>
+                            <td class="px-4 py-3">{{ item.uom.code }}</td>
+                            <td class="px-4 py-3">{{ item.quantity }}</td>
+                            <td class="px-4 py-3">{{ item.total_receive_qty }}</td>
+                            <td class="px-4 py-3">{{ item.pending_receive_qty }}</td>
+                            <td class="px-4 py-3">{{ item.rate }}</td>
+                            <td class="px-4 py-3">{{ item.extra_qty }}</td>
+                          </tr>
+                        {% empty %}
+                          <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet.</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

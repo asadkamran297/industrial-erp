@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.configurations.models import City
-from apps.core.constants import STATUS_ACTIVE
+from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED
 
 from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Vendor, PurchaseMaster
 from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
@@ -51,3 +51,49 @@ class InventoryFlowTests(TestCase):
         post_purchase_return(purchase_return=purchase_return, user=self.user)
         self.item.stock.refresh_from_db()
         self.assertEqual(self.item.stock.current_quantity, Decimal("8.0000"))
+    def test_purchase_order_status_moves_from_created_to_partial_to_fully_received(self):
+        po = PurchaseOrder.objects.create(vendor=self.vendor, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
+        po_item = PurchaseOrderItem.objects.create(
+            purchase_order=po,
+            inventory_item=self.item,
+            quantity=Decimal("10.0000"),
+            rate=Decimal("100.00"),
+            unit_rate=Decimal("100.0000"),
+            uom=self.uom,
+            descr=self.item.item_name,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.assertEqual(po.status, STATUS_CREATED)
+
+        receive_purchase_order_item(
+            purchase_order_item=po_item,
+            quantity=Decimal("4.0000"),
+            extra_qty=Decimal("0.0000"),
+            retail_price=Decimal("120.00"),
+            receive_date=timezone.localdate(),
+            invoice_num="INV-PO-1",
+            invoice_date=timezone.localdate(),
+            rv_number="RV-PO-1",
+            remarks="Partial receive",
+            user=self.user,
+        )
+        po.refresh_from_db()
+        self.assertEqual(po.status, STATUS_PARTIAL_RECEIVED)
+
+        receive_purchase_order_item(
+            purchase_order_item=po_item,
+            quantity=Decimal("6.0000"),
+            extra_qty=Decimal("0.0000"),
+            retail_price=Decimal("120.00"),
+            receive_date=timezone.localdate(),
+            invoice_num="INV-PO-2",
+            invoice_date=timezone.localdate(),
+            rv_number="RV-PO-2",
+            remarks="Full receive",
+            user=self.user,
+        )
+        po.refresh_from_db()
+        self.assertEqual(po.status, STATUS_FULLY_RECEIVED)
+
