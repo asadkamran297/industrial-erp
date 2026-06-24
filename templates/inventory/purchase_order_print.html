@@ -1,0 +1,75 @@
+{% extends "layouts/print_base.html" %}
+{% block title %}Purchase Order {{ order.purchase_num }}{% endblock %}
+
+{% block print_content %}
+  <h1 class="doc-title">Purchase Order</h1>
+
+  <table class="meta">
+    <tr>
+      <td class="lbl">PO No:</td><td>{{ order.purchase_num }}</td>
+      <td class="lbl">Date:</td><td>{{ order.purchase_date }}</td>
+      <td class="lbl">Quot Num:</td><td>{{ order.quot_num|default:"N/A" }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Vendor Name:</td><td>{{ order.vendor.name }}</td>
+      <td class="lbl">Phone:</td><td>{{ order.vendor.tel1|default:order.vendor.tel2|default:"N/A" }}</td>
+      <td class="lbl">Email:</td><td>{{ order.vendor.email|default:"N/A" }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">NTN:</td><td>{{ order.vendor.ntn_number|default:"N/A" }}</td>
+      <td class="lbl">Sales Tax:</td><td>{{ order.vendor.sale_tax_num|default:"N/A" }}</td>
+      <td class="lbl">Quot Date:</td><td>{{ order.quot_date|default:"N/A" }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Address:</td><td colspan="5">{{ order.vendor.addr1 }} {{ order.vendor.addr2 }}</td>
+    </tr>
+    {% if order.descr %}<tr><td class="lbl">Descr:</td><td colspan="5">{{ order.descr }}</td></tr>{% endif %}
+  </table>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Sr#</th><th>Material Description</th><th>UOM</th>
+        <th class="num">PO Qty</th><th class="num">Unit Price</th>
+        <th class="num">Disc Amount</th><th>Status</th><th class="num">Total Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.seq_num }}</td>
+        <td>{{ item.descr }}</td>
+        <td>{{ item.uom.title }}</td>
+        <td class="num">{{ item.quantity }}</td>
+        <td class="num">{{ item.rate }}</td>
+        <td class="num">{{ item.discount_amount }}</td>
+        <td>{{ item.get_status_display }}</td>
+        <td class="num">{{ item.total_amount|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" style="text-align:center">No items.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="3" class="num">Totals:</th>
+        <th class="num">{{ total_qty }}</th>
+        <th></th>
+        <th class="num">{{ total_discount|floatformat:2 }}</th>
+        <th></th>
+        <th class="num">{{ grand_total|floatformat:2 }}</th>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="totals">
+    <div><b>Total Amount:</b> {{ grand_total|floatformat:2 }}</div>
+    <div class="words">Total in Words: {{ amount_in_words }}</div>
+  </div>
+
+  <div class="sign">
+    <div>{% if order.created_by %}Prepared By<br>{{ order.created_by.get_full_name|default:order.created_by.username }}{% else %}Prepared By{% endif %}</div>
+    <div>Checked By</div>
+    <div>Approved By</div>
+  </div>
+{% endblock %}

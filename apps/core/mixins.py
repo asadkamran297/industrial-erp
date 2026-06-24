@@ -2,6 +2,19 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Q
 
 from apps.access_control.selectors import user_has_permission
+from apps.core.constants import STATUS_ACTIVE
+
+
+class PrintContextMixin:
+    """Injects organization + branch (header/footer data) into any print view."""
+
+    def get_context_data(self, **kwargs):
+        from apps.organizations.models import Branch, Organization
+
+        context = super().get_context_data(**kwargs)
+        context.setdefault("org", Organization.objects.filter(status=STATUS_ACTIVE).order_by("id").first())
+        context.setdefault("branch", Branch.objects.filter(status=STATUS_ACTIVE).select_related("city").order_by("id").first())
+        return context
 
 
 class PortalPermissionRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):

@@ -8,6 +8,13 @@ class Organization(BaseModel):
     parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.SET_NULL, db_column="parent_id")
     title = models.CharField(max_length=180)
     code = models.CharField(max_length=60, unique=True)
+    logo = models.CharField(max_length=255, blank=True, help_text="Logo image URL or static path")
+    website = models.CharField(max_length=180, blank=True)
+    phone = models.CharField(max_length=60, blank=True)
+    cell = models.CharField(max_length=60, blank=True)
+    fax = models.CharField(max_length=60, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
     class Meta:

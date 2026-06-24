@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, PurchaseOrderItemCreateView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
+from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
 
 app_name = "inventory"
 
@@ -28,6 +28,8 @@ urlpatterns = [
     path("purchase-orders/<int:pk>/", PurchaseOrderDetailView.as_view(), name="purchase_order_detail"),
     path("purchase-orders/<int:pk>/items/new/", PurchaseOrderItemCreateView.as_view(), name="purchase_order_item_create"),
     path("purchase-order-items/<int:pk>/edit/", PurchaseOrderItemUpdateView.as_view(), name="purchase_order_item_update"),
+    path("purchase-order-items/<int:pk>/toggle-status/", PurchaseOrderItemToggleStatusView.as_view(), name="purchase_order_item_toggle_status"),
+    path("purchase-orders/<int:pk>/print/", PurchaseOrderPrintView.as_view(), name="purchase_order_print"),
     path("purchase-orders/<int:pk>/receive/", PurchaseReceiveView.as_view(), name="purchase_order_receive"),
     path("customers/", CustomerListView.as_view(), name="customer_list"),
     path("customers/new/", CustomerCreateView.as_view(), name="customer_create"),

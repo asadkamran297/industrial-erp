@@ -5,13 +5,15 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_FULLY_RECEIVED, YES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from decimal import Decimal
+
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_FULLY_RECEIVED, YES
+from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
 from .models import Customer, InventoryClass, InventoryItem, ItemLedger, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
-from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import amount_in_words, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
 class InventoryListMixin(SearchFilterPaginationMixin, PortalPermissionRequiredMixin):
@@ -256,8 +258,11 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         item_form = PurchaseOrderItemForm()
+        used_item_ids = self.object.items.values_list("inventory_item_id", flat=True)
+        available_items = item_form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom")
+        item_form.fields["inventory_item"].queryset = available_items
         context["item_form"] = item_form
-        context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": i.uom.title} for i in item_form.fields["inventory_item"].queryset.select_related("uom")}
+        context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": i.uom.title} for i in available_items}
         receive_form = ReceivePOForm(initial={"purchase_order_item": self.object.items.first()})
         receive_form.fields["purchase_order_item"].queryset = self.object.items.all()
         context["receive_form"] = receive_form
@@ -277,8 +282,12 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
             item.uom = item.inventory_item.uom
             item.created_by = request.user
             item.updated_by = request.user
-            item.save()
-            messages.success(request, "Purchase order item saved.")
+            try:
+                item.save()
+                messages.success(request, "Purchase order item saved.")
+            except ValidationError as exc:
+                for error in exc.messages:
+                    messages.error(request, error)
         else:
             for errors in form.errors.values():
                 for error in errors:
@@ -310,8 +319,39 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
         item = form.save(commit=False)
         item.uom = item.inventory_item.uom
         item.updated_by = self.request.user
-        item.save()
+        try:
+            item.save()
+        except ValidationError as exc:
+            form.add_error("inventory_item", exc)
+            return self.form_invalid(form)
         messages.success(self.request, "Purchase order item updated.")
+        return redirect("inventory:purchase_order_detail", pk=item.purchase_order_id)
+
+
+class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
+    model = PurchaseOrder
+    template_name = "inventory/purchase_order_print.html"
+    context_object_name = "order"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        items = list(self.object.items.all())
+        context["items"] = items
+        context["total_qty"] = sum((i.quantity or Decimal("0")) for i in items)
+        context["total_discount"] = sum((i.discount_amount or Decimal("0")) for i in items)
+        grand_total = sum((i.total_amount for i in items), Decimal("0"))
+        context["grand_total"] = grand_total
+        context["amount_in_words"] = amount_in_words(grand_total)
+        context["print_back_url"] = reverse_lazy("inventory:purchase_order_detail", kwargs={"pk": self.object.pk})
+        return context
+
+
+class PurchaseOrderItemToggleStatusView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        item = get_object_or_404(PurchaseOrderItem, pk=pk)
+        item.status = NO if item.status == YES else YES
+        item.updated_by = request.user
+        item.save()
         return redirect("inventory:purchase_order_detail", pk=item.purchase_order_id)
 
 

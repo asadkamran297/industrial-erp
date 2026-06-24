@@ -1,5 +1,35 @@
 from decimal import Decimal
 
+_ONES = ("", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen")
+_TENS = ("", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety")
+
+
+def _three_digits(n):
+    parts = []
+    if n >= 100:
+        parts.append(_ONES[n // 100] + " Hundred")
+        n %= 100
+    if n >= 20:
+        parts.append(_TENS[n // 10])
+        n %= 10
+    if n:
+        parts.append(_ONES[n])
+    return " ".join(parts)
+
+
+def amount_in_words(amount):
+    n = int(Decimal(amount or 0))
+    if n == 0:
+        return "Zero Only"
+    words = []
+    for value, name in ((10000000, "Crore"), (100000, "Lac"), (1000, "Thousand"), (1, "")):
+        if n >= value:
+            chunk = n // value
+            n %= value
+            words.append(_three_digits(chunk) + (" " + name if name else ""))
+    return " ".join(w for w in words if w).strip() + " Only"
+
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum

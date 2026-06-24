@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Print{% endblock %}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; }
+  .org-header { position: relative; text-align: center; border-bottom: 3px double #7a0000; padding-bottom: 12px; margin-bottom: 6px; }
+  .org-header img { height: 72px; width: auto; object-fit: contain; margin-bottom: 6px; }
+  .org-header .org-name { font-size: 26px; font-weight: 800; letter-spacing: .5px; color: #7a0000; text-transform: uppercase; }
+  .org-header .org-branch { font-size: 12px; font-weight: 600; color: #333; margin-top: 2px; }
+  .org-header .org-addr { font-size: 11px; color: #555; margin-top: 3px; }
+  .org-header .org-contact { position: absolute; top: 0; right: 0; text-align: right; font-size: 11px; color: #333; display: flex; flex-direction: column; gap: 2px; }
+  .org-header .org-contact span { white-space: nowrap; }
+  .org-header .org-contact b { color: #7a0000; }
+  .org-header .org-contact .org-printed { margin-top: 8px; color: #666; }
+  h1.doc-title { text-align: center; font-size: 20px; margin: 14px 0; }
+  .meta { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .meta td { padding: 3px 6px; vertical-align: top; font-size: 12px; }
+  .meta .lbl { font-weight: bold; white-space: nowrap; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.items th, table.items td { border: 1px solid #999; padding: 6px 8px; font-size: 11px; }
+  table.items th { background: #f0f0f0; text-align: left; }
+  table.items td.num, table.items th.num { text-align: right; }
+  .totals { text-align: right; margin-top: 8px; font-size: 13px; }
+  .totals b { display: inline-block; min-width: 130px; }
+  .words { margin-top: 6px; font-weight: bold; }
+  .sign { display: flex; justify-content: space-between; margin-top: 60px; }
+  .sign div { text-align: center; border-top: 1px solid #333; padding-top: 4px; min-width: 200px; font-weight: bold; }
+  .footer { margin-top: 30px; border-top: 1px solid #333; padding-top: 8px; text-align: center; font-size: 11px; color: #444; }
+  .print-btn { margin-bottom: 14px; }
+  @media print { .print-btn { display: none; } body { margin: 0; } }
+  {% block extra_style %}{% endblock %}
+</style>
+</head>
+<body>
+  <div class="print-btn"><button onclick="window.print()">Print</button> <button onclick="goBack()">Close</button></div>
+  <script>
+    var backUrl = "{{ print_back_url|default:'' }}";
+    function goBack() { if (backUrl) { window.location.href = backUrl; } else { window.history.back(); } }
+    window.addEventListener("load", function () { window.print(); });
+    window.addEventListener("afterprint", goBack);
+  </script>
+
+  {% block print_header %}
+  <div class="org-header">
+    {% if org.logo %}<img src="{{ org.logo }}" alt="logo">{% endif %}
+    <div class="org-name">{{ org.title|default:"Organization" }}</div>
+    {% if branch %}<div class="org-branch">{{ branch.title }}</div>{% endif %}
+    {% with addr=org.address|default:branch.address %}{% if addr %}<div class="org-addr">{{ addr }}</div>{% endif %}{% endwith %}
+    <div class="org-contact">
+      {% with phone=org.phone|default:branch.phone %}{% if phone %}<span><b>Phone:</b> {{ phone }}</span>{% endif %}{% endwith %}
+      {% if org.cell %}<span><b>Cell:</b> {{ org.cell }}</span>{% endif %}
+      {% with fax=org.fax|default:branch.fax %}{% if fax %}<span><b>Fax:</b> {{ fax }}</span>{% endif %}{% endwith %}
+      {% with email=org.email|default:branch.email %}{% if email %}<span><b>Email:</b> {{ email }}</span>{% endif %}{% endwith %}
+      {% if org.website %}<span><b>Website:</b> {{ org.website }}</span>{% endif %}
+      <span class="org-printed"><b>Printed:</b> {% now "d-m-Y, h:i A" %}</span>
+    </div>
+  </div>
+  {% endblock %}
+
+  {% block print_content %}{% endblock %}
+
+  {% block print_footer %}
+  <div class="footer">
+    {{ org.title }}{% if org.website %} &middot; {{ org.website }}{% endif %} &middot; This is a system generated document.
+  </div>
+  {% endblock %}
+</body>
+</html>

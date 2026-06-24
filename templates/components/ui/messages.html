@@ -1,0 +1,15 @@
+{% if messages %}
+<div class="fixed right-4 top-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+  {% for message in messages %}
+    {% if message.tags == 'success' %}
+      {% with cls="border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/60 dark:bg-emerald-900/40 dark:text-emerald-100" icon="&#10003;" %}{% include "components/ui/_toast.html" %}{% endwith %}
+    {% elif message.tags == 'error' %}
+      {% with cls="border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-700/60 dark:bg-rose-900/40 dark:text-rose-100" icon="&#9888;" %}{% include "components/ui/_toast.html" %}{% endwith %}
+    {% elif message.tags == 'warning' %}
+      {% with cls="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100" icon="&#9888;" %}{% include "components/ui/_toast.html" %}{% endwith %}
+    {% else %}
+      {% with cls="border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700/60 dark:bg-sky-900/40 dark:text-sky-100" icon="&#8505;" %}{% include "components/ui/_toast.html" %}{% endwith %}
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}

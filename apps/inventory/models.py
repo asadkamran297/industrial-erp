@@ -210,6 +210,16 @@ class PurchaseOrderItem(BaseModel):
         pending_qty = (self.quantity or Decimal("0.0000")) - (self.total_receive_qty or Decimal("0.0000"))
         return pending_qty if pending_qty > Decimal("0.0000") else Decimal("0.0000")
 
+    @property
+    def total_amount(self):
+        return (self.quantity or Decimal("0")) * (self.rate or Decimal("0")) - (self.discount_amount or Decimal("0"))
+
+    def clean(self):
+        if self.purchase_order_id and self.inventory_item_id:
+            duplicate = PurchaseOrderItem.objects.filter(purchase_order_id=self.purchase_order_id, inventory_item_id=self.inventory_item_id).exclude(pk=self.pk)
+            if duplicate.exists():
+                raise ValidationError({"inventory_item": "This item is already added to this purchase order."})
+
     def save(self, *args, **kwargs):
         if not self.seq_num:
             last = self.purchase_order.items.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
