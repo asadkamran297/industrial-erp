@@ -5,12 +5,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, RECORD_STATUS_CHOICES, STATUS_FULLY_RECEIVED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_FULLY_RECEIVED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -255,7 +255,9 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["item_form"] = PurchaseOrderItemForm()
+        item_form = PurchaseOrderItemForm()
+        context["item_form"] = item_form
+        context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": i.uom.title} for i in item_form.fields["inventory_item"].queryset.select_related("uom")}
         receive_form = ReceivePOForm(initial={"purchase_order_item": self.object.items.first()})
         receive_form.fields["purchase_order_item"].queryset = self.object.items.all()
         context["receive_form"] = receive_form
@@ -272,6 +274,7 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
         if form.is_valid():
             item = form.save(commit=False)
             item.purchase_order = order
+            item.uom = item.inventory_item.uom
             item.created_by = request.user
             item.updated_by = request.user
             item.save()
@@ -281,6 +284,35 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
                 for error in errors:
                     messages.error(request, error)
         return redirect("inventory:purchase_order_detail", pk=pk)
+
+
+class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
+    model = PurchaseOrderItem
+    form_class = PurchaseOrderItemForm
+    template_name = "inventory/simple_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.purchase_order.status != STATUS_CREATED:
+            messages.error(request, "Only items of a created purchase order can be edited.")
+            return redirect("inventory:purchase_order_detail", pk=self.object.purchase_order_id)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {"uom_title": self.object.uom.title}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = f"Edit Item - {self.object.purchase_num}"
+        return context
+
+    def form_valid(self, form):
+        item = form.save(commit=False)
+        item.uom = item.inventory_item.uom
+        item.updated_by = self.request.user
+        item.save()
+        messages.success(self.request, "Purchase order item updated.")
+        return redirect("inventory:purchase_order_detail", pk=item.purchase_order_id)
 
 
 class PurchaseReceiveView(InventoryManageMixin, View):

@@ -77,9 +77,12 @@ class PurchaseOrderForm(StyledModelForm):
 
 
 class PurchaseOrderItemForm(StyledModelForm):
+    uom_title = forms.CharField(required=False, disabled=True, label="UOM", widget=forms.TextInput(attrs={"class": "form-input", "readonly": "readonly"}))
+
     class Meta:
         model = PurchaseOrderItem
-        fields = ("inventory_item", "quantity", "rate", "unit_rate", "uom", "tax_perc", "discount_perc", "discount_amount", "extra_qty", "retail_price", "status")
+        fields = ("inventory_item", "uom_title", "quantity", "rate", "discount_amount", "status")
+        labels = {"inventory_item": "Inventory Name"}
 
 
 class ReceivePOForm(forms.Form):

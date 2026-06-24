@@ -184,7 +184,7 @@ class PurchaseOrderItem(BaseModel):
     seq_num = models.PositiveIntegerField()
     purchase_num = models.CharField(max_length=40)
     purchase_date = models.DateField()
-    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_CREATED)
+    status = models.CharField(max_length=20, choices=YES_NO_CHOICES, default=YES)
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
