@@ -15,6 +15,7 @@ from .models import (
     POSReturnMaster,
     PurchaseOrder,
     PurchaseOrderItem,
+    ManualTransaction,
     PurchaseReturnDetail,
     PurchaseReturnMaster,
     UOM,
@@ -95,6 +96,14 @@ class ReceivePOForm(forms.Form):
     invoice_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
     rv_number = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-input"}))
     remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-input", "rows": 2}))
+
+
+class ManualTransactionForm(StyledModelForm):
+    class Meta:
+        model = ManualTransaction
+        fields = ("inventory_item", "qty", "price", "descr")
+        labels = {"inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
+        widgets = {"descr": forms.TextInput()}
 
 
 class CustomerForm(StyledModelForm):

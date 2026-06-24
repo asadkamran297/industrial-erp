@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
+from .views import CustomerCreateView, CustomerListView, CustomerUpdateView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, ItemCreateView, ItemListView, ItemUpdateView, LedgerListView, POSCreateView, POSDetailView, POSItemCreateView, POSListView, POSPostView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionToggleView, ManualTransactionSubmitView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, StockListView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMCreateView, UOMListView, UOMUpdateView, VendorCreateView, VendorListView, VendorUpdateView
 
 app_name = "inventory"
 
@@ -30,6 +30,10 @@ urlpatterns = [
     path("purchase-order-items/<int:pk>/edit/", PurchaseOrderItemUpdateView.as_view(), name="purchase_order_item_update"),
     path("purchase-order-items/<int:pk>/toggle-status/", PurchaseOrderItemToggleStatusView.as_view(), name="purchase_order_item_toggle_status"),
     path("purchase-orders/<int:pk>/print/", PurchaseOrderPrintView.as_view(), name="purchase_order_print"),
+    path("manual-transactions/", ManualTransactionView.as_view(), name="manual_transaction"),
+    path("manual-transactions/add/", ManualTransactionAddView.as_view(), name="manual_transaction_add"),
+    path("manual-transactions/<int:pk>/toggle/", ManualTransactionToggleView.as_view(), name="manual_transaction_toggle"),
+    path("manual-transactions/submit/", ManualTransactionSubmitView.as_view(), name="manual_transaction_submit"),
     path("purchase-orders/<int:pk>/receive/", PurchaseReceiveView.as_view(), name="purchase_order_receive"),
     path("customers/", CustomerListView.as_view(), name="customer_list"),
     path("customers/new/", CustomerCreateView.as_view(), name="customer_create"),

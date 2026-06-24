@@ -8,13 +8,13 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_FULLY_RECEIVED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
-from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
-from .services import amount_in_words, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
 class InventoryListMixin(SearchFilterPaginationMixin, PortalPermissionRequiredMixin):
@@ -395,6 +395,80 @@ class PurchaseReceiveView(InventoryManageMixin, View):
                 for error in errors:
                     messages.error(request, error)
         return redirect("inventory:purchase_order_detail", pk=pk)
+
+
+def _current_draft_tx_id():
+    return ManualTransaction.objects.filter(status=STATUS_DRAFT).order_by("-id").values_list("transaction_id", flat=True).first()
+
+
+class ManualTransactionView(InventoryManageMixin, View):
+    template_name = "inventory/manual_transaction.html"
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        draft_tx_id = _current_draft_tx_id()
+        rows = ManualTransaction.objects.select_related("inventory_item").filter(transaction_id=draft_tx_id, status=STATUS_DRAFT) if draft_tx_id else ManualTransaction.objects.none()
+        used_item_ids = list(rows.values_list("inventory_item_id", flat=True))
+        items = InventoryItem.objects.select_related("uom").exclude(pk__in=used_item_ids).order_by("item_name")
+        batch_descr = rows.values_list("descr", flat=True).first() or ""
+        form = ManualTransactionForm(initial={"descr": batch_descr})
+        form.fields["inventory_item"].queryset = items
+        context = {
+            "title": "Manual Stock Transaction",
+            "form": form,
+            "rows": rows,
+            "transaction_id": draft_tx_id,
+            "item_price_map": {str(i.pk): {"price": str(i.price), "uom": i.uom.title} for i in items},
+        }
+        return render(request, self.template_name, context)
+
+
+class ManualTransactionAddView(InventoryManageMixin, View):
+    def post(self, request):
+        form = ManualTransactionForm(request.POST)
+        if form.is_valid():
+            draft_tx_id = _current_draft_tx_id() or generate_transaction_id("ADJ", ManualTransaction)
+            if draft_tx_id and ManualTransaction.objects.filter(transaction_id=draft_tx_id, status=STATUS_DRAFT, inventory_item=form.cleaned_data["inventory_item"]).exists():
+                messages.error(request, "This item is already added to the current batch.")
+                return redirect("inventory:manual_transaction")
+            row = form.save(commit=False)
+            row.transaction_id = draft_tx_id
+            row.status = STATUS_DRAFT
+            row.created_by = request.user
+            row.updated_by = request.user
+            row.save()
+            if row.descr:
+                ManualTransaction.objects.filter(transaction_id=draft_tx_id, status=STATUS_DRAFT).update(descr=row.descr)
+            messages.success(request, "Entry added to draft.")
+        else:
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
+        return redirect("inventory:manual_transaction")
+
+
+class ManualTransactionToggleView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        row = get_object_or_404(ManualTransaction, pk=pk, status=STATUS_DRAFT)
+        row.selected = NO if row.selected == YES else YES
+        row.updated_by = request.user
+        row.save(update_fields=["selected", "updated_by", "updated_at"])
+        return redirect("inventory:manual_transaction")
+
+
+class ManualTransactionSubmitView(InventoryManageMixin, View):
+    def post(self, request):
+        draft_tx_id = _current_draft_tx_id()
+        if not draft_tx_id:
+            messages.error(request, "No draft entries to submit.")
+            return redirect("inventory:manual_transaction")
+        try:
+            count = finalize_manual_transaction(transaction_id=draft_tx_id, user=request.user)
+            messages.success(request, f"{count} entries posted to ledger and stock updated.")
+        except ValidationError as exc:
+            messages.error(request, exc)
+        return redirect("inventory:manual_transaction")
 
 
 class CustomerListView(BaseSimpleListView):

@@ -41,10 +41,11 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, YES
+from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, STATUS_SUBMITTED, YES
 
 from .models import (
     ItemLedger,
+    ManualTransaction,
     POSMaster,
     POSReturnMaster,
     PurchaseMaster,
@@ -83,6 +84,38 @@ def create_ledger_entry(*, stock, inventory_item, transaction_id, transaction_no
         created_by=user,
         updated_by=user,
     )
+
+
+@transaction.atomic
+def finalize_manual_transaction(*, transaction_id, user):
+    rows = list(ManualTransaction.objects.select_related("inventory_item").filter(transaction_id=transaction_id, status=STATUS_DRAFT, selected=YES))
+    if not rows:
+        raise ValidationError("No selected draft entries to submit. Toggle at least one entry on.")
+
+    today = timezone.localdate()
+    for row in rows:
+        stock = Stock.objects.select_for_update().get(inventory_item=row.inventory_item)
+        old_quantity = stock.current_quantity
+        old_price = stock.current_price
+        new_quantity = old_quantity + row.qty
+        if new_quantity > 0:
+            weighted_price = ((old_quantity * old_price) + (row.qty * row.price)) / new_quantity
+        else:
+            weighted_price = row.price
+        weighted_price = weighted_price.quantize(Decimal("0.01"))
+
+        stock.last_price = old_price
+        stock.current_price = weighted_price
+        stock.current_quantity = new_quantity
+        stock.updated_by = user
+        stock.save(update_fields=["last_price", "current_price", "current_quantity", "updated_by", "updated_at"])
+
+        create_ledger_entry(stock=stock, inventory_item=row.inventory_item, transaction_id=transaction_id, transaction_no=transaction_id, transaction_type=LEDGER_ADJUSTMENT, transaction_date=today, ref_table="inv_manual_transaction", ref_id=row.pk, ref_no=transaction_id, quantity=row.qty, old_quantity=old_quantity, new_quantity=new_quantity, old_price=old_price, current_price=weighted_price, remarks=row.descr, user=user)
+
+        row.status = STATUS_SUBMITTED
+        row.updated_by = user
+        row.save(update_fields=["status", "updated_by", "updated_at"])
+    return len(rows)
 
 
 @transaction.atomic

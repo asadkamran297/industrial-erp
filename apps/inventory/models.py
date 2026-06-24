@@ -17,6 +17,8 @@ from apps.core.constants import (
     RECORD_STATUS_CHOICES,
     STATUS_ACTIVE,
     STATUS_CREATED,
+    STATUS_DRAFT,
+    STATUS_SUBMITTED,
     YES,
     YES_NO_CHOICES,
 )
@@ -552,3 +554,33 @@ class PurchaseReturnDetail(BaseModel):
         self.total_price = ((self.quantity or 0) * (self.rate or 0)).quantize(TWO_DP)
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+MANUAL_TRANSACTION_STATUS_CHOICES = (
+    (STATUS_DRAFT, "Draft"),
+    (STATUS_SUBMITTED, "Submitted"),
+)
+
+
+class ManualTransaction(BaseModel):
+    transaction_id = models.CharField(max_length=60, db_index=True)
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    item_code = models.CharField(max_length=60)
+    item_name = models.CharField(max_length=180)
+    qty = models.DecimalField(max_digits=18, decimal_places=4)
+    price = models.DecimalField(max_digits=18, decimal_places=2)
+    descr = models.CharField(max_length=255, blank=True)
+    selected = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=YES)
+    status = models.CharField(max_length=20, choices=MANUAL_TRANSACTION_STATUS_CHOICES, default=STATUS_DRAFT)
+
+    class Meta:
+        db_table = "inv_manual_transaction"
+        ordering = ["-id"]
+
+    def save(self, *args, **kwargs):
+        self.item_code = self.inventory_item.code
+        self.item_name = self.inventory_item.item_name
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.transaction_id} - {self.item_name}"
