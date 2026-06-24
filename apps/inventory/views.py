@@ -6,6 +6,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from decimal import Decimal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_CREATED, STATUS_FULLY_RECEIVED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
@@ -227,7 +228,21 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
     filter_fields = {"status": "status"}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["create_form"] = PurchaseOrderForm()
+        for order in context["orders"]:
+            form = PurchaseOrderItemForm()
+            used_item_ids = order.items.values_list("inventory_item_id", flat=True)
+            available_items = form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom")
+            form.fields["inventory_item"].queryset = available_items
+            order.uom_map_id = f"uom-map-{order.pk}"
+            form.fields["inventory_item"].widget.attrs["data-uom-source"] = order.uom_map_id
+            order.add_form = form
+            order.uom_map = {str(i.pk): {"uom": i.uom.title} for i in available_items}
+        return context
 
 
 class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
@@ -239,15 +254,16 @@ class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
     extra_context = {"title": "Purchase Order"}
 
 
-class PurchaseOrderUpdateView(PurchaseOrderCreateView, UpdateView):
-    success_message = "Purchase order updated."
+class PurchaseOrderUpdateView(InventoryManageMixin, View):
+    def get(self, request, pk):
+        return self._blocked(request, pk)
 
-    def dispatch(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        if self.object.status == STATUS_FULLY_RECEIVED:
-            messages.error(request, "Fully received purchase order cannot be updated.")
-            return redirect("inventory:purchase_order_detail", pk=self.object.pk)
-        return super().dispatch(request, *args, **kwargs)
+    def post(self, request, pk):
+        return self._blocked(request, pk)
+
+    def _blocked(self, request, pk):
+        messages.error(request, "A purchase order cannot be edited once it is created.")
+        return redirect("inventory:purchase_order_detail", pk=pk)
 
 
 class PurchaseOrderDetailView(InventoryListMixin, DetailView):
@@ -269,6 +285,15 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         return context
 
 
+def redirect_after_item(request, pk):
+    """Redirect back to the originating page with the PO collapsible auto-opened."""
+    ref = request.META.get("HTTP_REFERER") or str(reverse_lazy("inventory:purchase_order_list"))
+    parts = urlsplit(ref)
+    query = [(key, value) for key, value in parse_qsl(parts.query) if key != "open"]
+    query.append(("open", str(pk)))
+    return redirect(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), "")))
+
+
 class PurchaseOrderItemCreateView(InventoryManageMixin, View):
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
@@ -282,17 +307,16 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
             item.uom = item.inventory_item.uom
             item.created_by = request.user
             item.updated_by = request.user
-            try:
+            if item.is_duplicate_in_order():
+                messages.error(request, "This item is already added to this purchase order.")
+            else:
                 item.save()
                 messages.success(request, "Purchase order item saved.")
-            except ValidationError as exc:
-                for error in exc.messages:
-                    messages.error(request, error)
         else:
             for errors in form.errors.values():
                 for error in errors:
                     messages.error(request, error)
-        return redirect("inventory:purchase_order_detail", pk=pk)
+        return redirect_after_item(request, pk)
 
 
 class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
@@ -319,13 +343,13 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
         item = form.save(commit=False)
         item.uom = item.inventory_item.uom
         item.updated_by = self.request.user
-        try:
-            item.save()
-        except ValidationError as exc:
-            form.add_error("inventory_item", exc)
+        if item.is_duplicate_in_order():
+            form.add_error("inventory_item", "This item is already added to this purchase order.")
             return self.form_invalid(form)
+        item.save()
         messages.success(self.request, "Purchase order item updated.")
-        return redirect("inventory:purchase_order_detail", pk=item.purchase_order_id)
+        list_url = str(reverse_lazy("inventory:purchase_order_list"))
+        return redirect(f"{list_url}?open={item.purchase_order_id}")
 
 
 class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
@@ -335,7 +359,7 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        items = list(self.object.items.all())
+        items = list(self.object.items.filter(status=YES))
         context["items"] = items
         context["total_qty"] = sum((i.quantity or Decimal("0")) for i in items)
         context["total_discount"] = sum((i.discount_amount or Decimal("0")) for i in items)
@@ -352,7 +376,7 @@ class PurchaseOrderItemToggleStatusView(InventoryManageMixin, View):
         item.status = NO if item.status == YES else YES
         item.updated_by = request.user
         item.save()
-        return redirect("inventory:purchase_order_detail", pk=item.purchase_order_id)
+        return redirect_after_item(request, item.purchase_order_id)
 
 
 class PurchaseReceiveView(InventoryManageMixin, View):

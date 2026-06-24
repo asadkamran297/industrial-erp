@@ -214,11 +214,10 @@ class PurchaseOrderItem(BaseModel):
     def total_amount(self):
         return (self.quantity or Decimal("0")) * (self.rate or Decimal("0")) - (self.discount_amount or Decimal("0"))
 
-    def clean(self):
-        if self.purchase_order_id and self.inventory_item_id:
-            duplicate = PurchaseOrderItem.objects.filter(purchase_order_id=self.purchase_order_id, inventory_item_id=self.inventory_item_id).exclude(pk=self.pk)
-            if duplicate.exists():
-                raise ValidationError({"inventory_item": "This item is already added to this purchase order."})
+    def is_duplicate_in_order(self):
+        if not (self.purchase_order_id and self.inventory_item_id):
+            return False
+        return PurchaseOrderItem.objects.filter(purchase_order_id=self.purchase_order_id, inventory_item_id=self.inventory_item_id).exclude(pk=self.pk).exists()
 
     def save(self, *args, **kwargs):
         if not self.seq_num:

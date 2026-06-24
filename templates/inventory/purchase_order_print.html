@@ -37,7 +37,7 @@
     <tbody>
       {% for item in items %}
       <tr>
-        <td>{{ item.seq_num }}</td>
+        <td>{{ forloop.counter }}</td>
         <td>{{ item.descr }}</td>
         <td>{{ item.uom.title }}</td>
         <td class="num">{{ item.quantity }}</td>

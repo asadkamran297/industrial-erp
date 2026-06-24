@@ -17,17 +17,23 @@ def _three_digits(n):
     return " ".join(parts)
 
 
+def _indian_words(n):
+    if n <= 0:
+        return ""
+    if n < 1000:
+        return _three_digits(n)
+    if n < 100000:
+        return (_three_digits(n // 1000) + " Thousand " + _indian_words(n % 1000)).strip()
+    if n < 10000000:
+        return (_three_digits(n // 100000) + " Lac " + _indian_words(n % 100000)).strip()
+    return (_indian_words(n // 10000000) + " Crore " + _indian_words(n % 10000000)).strip()
+
+
 def amount_in_words(amount):
     n = int(Decimal(amount or 0))
     if n == 0:
         return "Zero Only"
-    words = []
-    for value, name in ((10000000, "Crore"), (100000, "Lac"), (1000, "Thousand"), (1, "")):
-        if n >= value:
-            chunk = n // value
-            n %= value
-            words.append(_three_digits(chunk) + (" " + name if name else ""))
-    return " ".join(w for w in words if w).strip() + " Only"
+    return _indian_words(n) + " Only"
 
 
 from django.core.exceptions import ValidationError
