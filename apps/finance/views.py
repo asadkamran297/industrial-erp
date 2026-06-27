@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
-from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, YES_NO_CHOICES
+from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
 from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
@@ -124,6 +124,7 @@ class AccountVoucherDetailView(PortalPermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["line_form"] = AccountVoucherLineForm()
+        context["active_accounts"] = AccountConfiguration.objects.filter(status=STATUS_ACTIVE).order_by("account_no")
         context["balance_difference"] = self.object.balance_difference
         return context
 
@@ -137,25 +138,73 @@ class AccountVoucherLineCreateView(PortalPermissionRequiredMixin, View):
         if voucher.posted == "Y":
             messages.error(request, "Posted voucher cannot be updated.")
             return redirect("finance:account_voucher_detail", pk=voucher.pk)
-        form = AccountVoucherLineForm(request.POST)
-        if form.is_valid():
-            line = form.save(commit=False)
-            line.voucher = voucher
-            line.line_number = (voucher.lines.order_by("-line_number").values_list("line_number", flat=True).first() or 0) + 1
-            line.voucher_no = voucher.voucher_no
-            line.voucher_date = voucher.voucher_date
-            line.created_by = request.user
-            line.updated_by = request.user
-            line.save()
-            if voucher.is_balanced:
-                messages.success(request, "Voucher line saved. Voucher is balanced.")
-            else:
-                messages.success(request, "Voucher line saved.")
-                messages.warning(request, "Voucher totals are not balanced yet. Debit and credit must match before submission or posting.")
+
+        raw_accounts = request.POST.getlist("account_no[]") or request.POST.getlist("line_account[]") or request.POST.getlist("account_no")
+        raw_remarks = request.POST.getlist("remarks[]") or request.POST.getlist("description[]") or request.POST.getlist("line_description[]") or request.POST.getlist("remarks")
+        raw_debits = request.POST.getlist("debit_amount[]") or request.POST.getlist("line_debit[]") or request.POST.getlist("debit[]")
+        raw_credits = request.POST.getlist("credit_amount[]") or request.POST.getlist("line_credit[]") or request.POST.getlist("credit[]")
+
+        created_any = False
+        if raw_accounts or raw_debits or raw_credits or raw_remarks:
+            rows = list(zip(raw_accounts, raw_remarks, raw_debits, raw_credits))
+            for account_no, remarks, debit_amount, credit_amount in rows:
+                account_no = (account_no or "").strip()
+                remarks = (remarks or "").strip()
+                debit_amount = debit_amount or "0"
+                credit_amount = credit_amount or "0"
+                if not account_no and not remarks and Decimal(debit_amount or "0") == 0 and Decimal(credit_amount or "0") == 0:
+                    continue
+
+                form = AccountVoucherLineForm(
+                    {
+                        "account_no": account_no,
+                        "remarks": remarks,
+                        "debit_amount": debit_amount,
+                        "credit_amount": credit_amount,
+                    }
+                )
+                if form.is_valid():
+                    line = form.save(commit=False)
+                    line.voucher = voucher
+                    line.line_number = (voucher.lines.order_by("-line_number").values_list("line_number", flat=True).first() or 0) + 1
+                    line.voucher_no = voucher.voucher_no
+                    line.voucher_date = voucher.voucher_date
+                    line.created_by = request.user
+                    line.updated_by = request.user
+                    line.save()
+                    created_any = True
+                else:
+                    for errors in form.errors.values():
+                        for error in errors:
+                            messages.error(request, error)
+            if created_any:
+                if voucher.is_balanced:
+                    messages.success(request, "Voucher lines saved. Voucher is balanced.")
+                else:
+                    messages.success(request, "Voucher lines saved.")
+                    messages.warning(request, "Voucher totals are not balanced yet. Debit and credit must match before submission or posting.")
         else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
+            form = AccountVoucherLineForm(request.POST)
+            if form.is_valid():
+                line = form.save(commit=False)
+                line.voucher = voucher
+                line.line_number = (voucher.lines.order_by("-line_number").values_list("line_number", flat=True).first() or 0) + 1
+                line.voucher_no = voucher.voucher_no
+                line.voucher_date = voucher.voucher_date
+                line.created_by = request.user
+                line.updated_by = request.user
+                line.save()
+                created_any = True
+                if voucher.is_balanced:
+                    messages.success(request, "Voucher line saved. Voucher is balanced.")
+                else:
+                    messages.success(request, "Voucher line saved.")
+                    messages.warning(request, "Voucher totals are not balanced yet. Debit and credit must match before submission or posting.")
+            else:
+                for errors in form.errors.values():
+                    for error in errors:
+                        messages.error(request, error)
+
         return redirect("finance:account_voucher_detail", pk=voucher.pk)
 
 

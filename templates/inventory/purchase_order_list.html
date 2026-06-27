@@ -1,32 +1,84 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<section class="space-y-4" x-data="{ openPo: (new URLSearchParams(location.search).get('open') ? Number(new URLSearchParams(location.search).get('open')) : null), showAdd: false }">
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Orders</h1>
-    </div>
-    <button type="button" @click="showAdd = !showAdd" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">
-      <span x-text="showAdd ? '-' : '+'"></span><span>New PO</span>
-    </button>
-  </div>
+{{ items_json|json_script:"po-items" }}
+{{ po_summaries|json_script:"po-summaries" }}
+<section class="space-y-4"
+  x-data="poTerminal()">
 
-  <div x-show="showAdd" x-cloak class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-    <form method="post" action="{% url 'inventory:purchase_order_create' %}">{% csrf_token %}
-      <div class="flex flex-wrap items-end gap-3">
-        {% for field in create_form %}
-          <div class="flex-1 min-w-[150px]">
-            <label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}
-          </div>
-        {% endfor %}
-        <div class="flex items-end">
-          <button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save PO</button>
+  <form x-ref="poForm" method="post" action="{% url 'inventory:purchase_order_quick_create' %}" @submit.prevent="submitPO($event)">{% csrf_token %}
+
+    <!-- Top: title + header fields + totals -->
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Orders</h1>
+        <div class="flex flex-wrap items-end gap-3">
+          {% for field in create_form %}
+            <div class="min-w-[150px]"><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>
+          {% endfor %}
         </div>
       </div>
-    </form>
-  </div>
+      <div class="mt-4 flex gap-3">
+        <div class="flex-1 rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-900/30"><p class="text-xs font-medium text-violet-700 dark:text-violet-300">Total Items</p><p class="text-xl font-bold text-violet-800 dark:text-violet-200" x-text="openPo ? (poSum(openPo).items) : lines.length"></p></div>
+        <div class="flex-1 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-900/30"><p class="text-xs font-medium text-sky-700 dark:text-sky-300">Purchase Order Amount</p><p class="text-xl font-bold text-sky-800 dark:text-sky-200" x-text="openPo ? fmt(poSum(openPo).amount) : fmt(totalAmount)"></p></div>
+        <div class="flex-1 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/30"><p class="text-xs font-medium text-amber-700 dark:text-amber-300">Discount Amount</p><p class="text-xl font-bold text-amber-800 dark:text-amber-200" x-text="openPo ? fmt(poSum(openPo).discount) : fmt(discountAmount)"></p></div>
+        <div class="flex-1 rounded-lg border border-emerald-300 bg-emerald-100 p-3 dark:border-emerald-700 dark:bg-emerald-900/40"><p class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total Payable</p><p class="text-2xl font-extrabold text-emerald-800 dark:text-emerald-200" x-text="openPo ? fmt(poSum(openPo).amount - poSum(openPo).discount) : fmt(netTotal)"></p></div>
+      </div>
+    </div>
+
+    <!-- Add item selector -->
+    <div x-show="vendorSelected && !openPo" x-cloak class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <label class="mb-1 block text-xs font-medium">Add Item</label>
+      <select class="form-select max-w-md" x-model="picker" @change="addItem()">
+        <option value="">-- Select item to add --</option>
+        {% for it in items_json %}<option value="{{ it.id }}">{{ it.name }} ({{ it.uom }})</option>{% endfor %}
+      </select>
+    </div>
+
+    <!-- Vendor not selected message -->
+    <div x-show="!vendorSelected && !openPo" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      Please select a vendor first to add items.
+    </div>
+
+    <!-- PO expanded — block new PO item entry -->
+    <div x-show="openPo" x-cloak class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
+      Close the selected PO below to add items to a new purchase order.
+    </div>
+
+    <!-- Items grid -->
+    <div x-show="vendorSelected && !openPo" x-cloak class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr><th class="px-3 py-3 w-10">#</th><th class="px-3 py-3">Item</th><th class="px-3 py-3 w-20">UOM</th><th class="px-3 py-3 w-28">Qty</th><th class="px-3 py-3 w-32">Rate</th><th class="px-3 py-3 w-32">Discount</th><th class="px-3 py-3 w-32">Net</th><th class="px-3 py-3 w-12"></th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          <template x-for="(line, i) in lines" :key="line.uid">
+            <tr>
+              <td class="px-3 py-2" x-text="i + 1"></td>
+              <td class="px-3 py-2 font-medium max-w-[200px] truncate whitespace-nowrap" x-text="line.name" :title="line.name"></td>
+              <td class="px-3 py-2 text-slate-500" x-text="line.uom"></td>
+              <td class="px-3 py-2"><input type="number" step="1" min="1" class="form-input" x-model.number="line.qty" @input="line.qty = Math.max(1, Math.floor(line.qty || 1))"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.rate" @input="line.rate = round2(line.rate)"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.discount" @input="line.discount = round2(line.discount)"></td>
+              <td class="px-3 py-2 font-medium" x-text="fmt(lineNet(line))"></td>
+              <td class="px-3 py-2 text-right"><button type="button" @click="removeLine(i)" class="text-rose-600 hover:text-rose-700">&times;</button></td>
+            </tr>
+          </template>
+          <tr x-show="lines.length === 0"><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items. Select an item above to add.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- hidden inputs synced on submit -->
+    <div x-ref="hidden"></div>
+
+    <div x-show="vendorSelected && !openPo" x-cloak class="flex justify-end">
+      <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">&#10003; Save Purchase Order</button>
+    </div>
+  </form>
 
   {% include "components/table/search_filters.html" %}
 
+  <!-- Existing POs list -->
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
@@ -60,7 +112,7 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-2">
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_order_detail' order.pk %}">&#128065;</a>
+                  <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View">&#128065;</a>
                 </div>
               </td>
             </tr>
@@ -75,35 +127,24 @@
                     <div><p class="text-xs text-slate-500">Date</p><p class="font-semibold">{{ order.purchase_date }}</p></div>
                   </div>
 
-                  {% if order.status != 'fully_received' %}
-                  <form method="post" action="{% url 'inventory:purchase_order_item_create' order.pk %}" class="po-item-form rounded-lg border border-slate-200 p-3 dark:border-slate-800">{% csrf_token %}
-                    <div class="flex flex-wrap items-end gap-3">
-                      {% for field in order.add_form %}
-                        <div class="flex-1 min-w-[120px]"><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>
-                      {% endfor %}
-                      <div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Item</button></div>
-                    </div>
-                  </form>
-                  {{ order.uom_map|json_script:order.uom_map_id }}
-                  {% endif %}
-
-                  <div>
+                  <div x-data="poInlineAdd('{% url 'inventory:purchase_order_item_create' order.pk %}', [{% for item in order.items.all %}{{ item.inventory_item_id }}{% if not forloop.last %},{% endif %}{% endfor %}])">
                     <div class="mb-2 flex items-center justify-between">
                       <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">PO Items</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ order.items.count }} item{{ order.items.count|pluralize }} in this purchase order</p>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ order.items.count }} item{{ order.items.count|pluralize }}</p>
                     </div>
                     <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
                       <table class="w-full text-left text-xs sm:text-sm">
                         <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
                           <tr>
                             <th class="px-4 py-3">Seq #</th>
-                            <th class="px-4 py-3">Item Description</th>
+                            <th class="px-4 py-3">Item</th>
                             <th class="px-4 py-3">UOM</th>
-                            <th class="px-4 py-3">Price</th>
-                            <th class="px-4 py-3">PO Qty</th>
+                            <th class="px-4 py-3">Rate</th>
+                            <th class="px-4 py-3">Qty</th>
                             <th class="px-4 py-3">Discount</th>
+                            <th class="px-4 py-3">Amount</th>
                             <th class="px-4 py-3">Status</th>
-                            {% if order.status == 'created' %}<th class="px-4 py-3"></th>{% endif %}
+                            <th class="px-4 py-3"></th>
                           </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -115,6 +156,7 @@
                               <td class="px-4 py-3">{{ item.rate }}</td>
                               <td class="px-4 py-3">{{ item.quantity }}</td>
                               <td class="px-4 py-3">{{ item.discount_amount }}</td>
+                              <td class="px-4 py-3 font-medium">{{ item.total_amount|floatformat:2 }}</td>
                               <td class="px-4 py-3">
                                 <form method="post" action="{% url 'inventory:purchase_order_item_toggle_status' item.pk %}">{% csrf_token %}
                                   <label class="relative inline-flex cursor-pointer items-center">
@@ -123,19 +165,57 @@
                                   </label>
                                 </form>
                               </td>
-                              {% if order.status == 'created' %}<td class="px-4 py-3"><a href="{% url 'inventory:purchase_order_item_update' item.pk %}" class="text-sm font-medium text-[var(--primary-color)]">Edit</a></td>{% endif %}
+                              <td class="px-4 py-3 whitespace-nowrap">
+                                {% if order.status == 'created' %}
+                                <a href="{% url 'inventory:purchase_order_item_update' item.pk %}" class="text-xs font-medium text-[var(--primary-color)]">Edit</a>
+                                {% if forloop.last %}<button type="button" @click="showRow = !showRow" class="ml-2 text-xs font-medium text-emerald-600 hover:text-emerald-700">+ Add</button>{% endif %}
+                                {% endif %}
+                              </td>
                             </tr>
                           {% empty %}
-                            <tr><td colspan="{% if order.status == 'created' %}8{% else %}7{% endif %}" class="px-4 py-8 text-center text-slate-500">No items added yet.</td></tr>
+                            <tr x-show="!showRow"><td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet.</td></tr>
                           {% endfor %}
+                          <!-- Inline add row -->
+                          {% if order.status != 'fully_received' %}
+                          <tr x-show="showRow" x-cloak class="bg-emerald-50/60 dark:bg-emerald-900/10">
+                            <td class="px-2 py-2 text-slate-400">—</td>
+                            <td class="px-2 py-2">
+                              <select class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] dark:border-slate-600 dark:bg-slate-800" x-model="sel" @change="fill()">
+                                <option value="">-- Item --</option>
+                                <template x-for="it in items" :key="it.id">
+                                  <option :value="it.id" x-text="it.name"></option>
+                                </template>
+                              </select>
+                            </td>
+                            <td class="px-2 py-2 text-slate-500 text-xs" x-text="uom"></td>
+                            <td class="px-2 py-2"><input type="number" step="0.01" min="0" class="form-input text-xs w-24" x-model.number="rate"></td>
+                            <td class="px-2 py-2"><input type="number" step="1" min="1" class="form-input text-xs w-20" x-model.number="qty" @input="qty = Math.max(1, Math.floor(qty||1))"></td>
+                            <td class="px-2 py-2"><input type="number" step="0.01" min="0" class="form-input text-xs w-24" x-model.number="discount"></td>
+                            <td class="px-2 py-2 text-xs font-medium" x-text="fmt(qty*rate - discount)"></td>
+                            <td class="px-2 py-2"></td>
+                            <td class="px-2 py-2 whitespace-nowrap">
+                              <button type="button" @click="save()" :disabled="!sel" class="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40">&#10003;</button>
+                              <button type="button" @click="showRow=false; reset()" class="ml-1 rounded bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">✕</button>
+                            </td>
+                          </tr>
+                          {% endif %}
                         </tbody>
                       </table>
                     </div>
+                    <div class="mt-3 flex justify-end">
+                      <a href="javascript:void(0)" onclick="(function(url){var w=window.open(url,'_blank','width=900,height=700');w.onload=function(){w.print();w.onafterprint=function(){w.close();};};}('{% url 'inventory:purchase_order_print' order.pk %}'));" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
+                    </div>
+                    <!-- hidden CSRF form for inline save -->
+                    <form x-ref="addForm" method="post" :action="addUrl" style="display:none">{% csrf_token %}
+                      <input type="hidden" name="inventory_item" x-model="sel">
+                      <input type="hidden" name="uom_title" x-model="uom">
+                      <input type="hidden" name="quantity" x-model="qty">
+                      <input type="hidden" name="rate" x-model="rate">
+                      <input type="hidden" name="discount_amount" x-model="discount">
+                      <input type="hidden" name="status" value="Y">
+                    </form>
                   </div>
 
-                  <div class="flex justify-end">
-                    <a href="{% url 'inventory:purchase_order_print' order.pk %}" class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Print</a>
-                  </div>
                 </div>
               </td>
             </tr>
@@ -151,7 +231,86 @@
 
   {% include "components/table/pagination.html" %}
 </section>
+
 <script>
+  function poTerminal() {
+    var items = JSON.parse(document.getElementById("po-items").textContent);
+    var openParam = new URLSearchParams(location.search).get("open");
+    return {
+      openPo: openParam ? Number(openParam) : null,
+      poSummaries: JSON.parse(document.getElementById("po-summaries").textContent),
+      poSum(pk) { return this.poSummaries[pk] || {items: 0, amount: 0, discount: 0}; },
+      items: items,
+      map: Object.fromEntries(items.map(it => [String(it.id), it])),
+      uidSeq: 1,
+      picker: "",
+      vendorSelected: false,
+      lines: [],
+      init() {
+        var vendorEl = this.$el.querySelector("select[name=vendor]");
+        if (vendorEl) {
+          this.vendorSelected = !!vendorEl.value;
+          vendorEl.addEventListener("change", () => { this.vendorSelected = !!vendorEl.value; });
+        }
+      },
+      addItem() {
+        var it = this.map[String(this.picker)];
+        this.picker = "";
+        if (!it) return;
+        var existing = this.lines.find(l => String(l.item) === String(it.id));
+        if (existing) { existing.qty = (Number(existing.qty) || 0) + 1; return; }
+        this.lines.push({ uid: this.uidSeq++, item: it.id, name: it.name, uom: it.uom, qty: 1, rate: it.price, discount: 0 });
+      },
+      removeLine(i) { this.lines.splice(i, 1); },
+      lineSub(l) { return (Number(l.qty) || 0) * (Number(l.rate) || 0); },
+      lineNet(l) { return this.lineSub(l) - (Number(l.discount) || 0); },
+      get totalAmount() { return this.lines.reduce((s, l) => s + this.lineSub(l), 0); },
+      get discountAmount() { return this.lines.reduce((s, l) => s + (Number(l.discount) || 0), 0); },
+      get netTotal() { return this.totalAmount - this.discountAmount; },
+      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+      round2(v) { var n = Number(v); return isNaN(n) ? 0 : Math.round(n * 100) / 100; },
+      round4(v) { var n = Number(v); return isNaN(n) ? 0 : Math.round(n * 10000) / 10000; },
+      submitPO(event) {
+        if (this.lines.length === 0) { alert("Add at least one item before saving."); return; }
+        this.syncHidden();
+        this.$refs.poForm.submit();
+      },
+      syncHidden() {
+        var box = this.$refs.hidden; box.innerHTML = "";
+        this.lines.filter(l => l.item && Number(l.qty) > 0).forEach(l => {
+          [["item_id", l.item], ["qty", l.qty], ["rate", l.rate], ["discount", l.discount]].forEach(([n, v]) => {
+            var inp = document.createElement("input"); inp.type = "hidden"; inp.name = n; inp.value = v; box.appendChild(inp);
+          });
+        });
+      },
+    };
+  }
+
+  function poInlineAdd(addUrl, usedIds) {
+    var allItems = JSON.parse(document.getElementById("po-items").textContent);
+    var used = new Set((usedIds || []).map(String));
+    var items = allItems.filter(it => !used.has(String(it.id)));
+    return {
+      items: items,
+      map: Object.fromEntries(allItems.map(it => [String(it.id), it])),
+      addUrl: addUrl,
+      showRow: false,
+      sel: "", uom: "", rate: 0, qty: 1, discount: 0,
+      fill() {
+        var it = this.map[String(this.sel)];
+        if (!it) { this.uom = ""; this.rate = 0; return; }
+        this.uom = it.uom;
+        this.rate = it.price;
+      },
+      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+      reset() { this.sel = ""; this.uom = ""; this.rate = 0; this.qty = 1; this.discount = 0; },
+      save() {
+        if (!this.sel) return;
+        this.$refs.addForm.submit();
+      },
+    };
+  }
+
   document.addEventListener("change", function (e) {
     var sel = e.target;
     if (!sel.matches("select[data-uom-source]")) return;

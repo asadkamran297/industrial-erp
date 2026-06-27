@@ -1,3 +1,5 @@
+import json
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -222,6 +224,55 @@ class LedgerListView(InventoryListMixin, ListView):
     search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
 
 
+class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
+    def post(self, request):
+        item_ids = request.POST.getlist("item_id")
+        qtys = request.POST.getlist("qty")
+        rates = request.POST.getlist("rate")
+        discounts = request.POST.getlist("discount")
+
+        lines = []
+        for i, item_id in enumerate(item_ids):
+            if not item_id:
+                continue
+            qty = Decimal(int(float(qtys[i] or "0")))
+            if qty <= 0:
+                continue
+            lines.append((int(item_id), qty, Decimal(rates[i] or "0").quantize(Decimal("0.01")), Decimal(discounts[i] or "0").quantize(Decimal("0.01"))))
+
+        form = PurchaseOrderForm(request.POST)
+        if not form.is_valid():
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
+            return redirect("inventory:purchase_order_list")
+
+        if not lines:
+            messages.error(request, "Add at least one item before saving.")
+            return redirect("inventory:purchase_order_list")
+
+        with transaction.atomic():
+            order = form.save(commit=False)
+            order.created_by = request.user
+            order.updated_by = request.user
+            order.save()
+            for item_id, qty, rate, discount in lines:
+                inv_item = InventoryItem.objects.get(pk=item_id)
+                PurchaseOrderItem.objects.create(
+                    purchase_order=order,
+                    inventory_item=inv_item,
+                    uom=inv_item.uom,
+                    quantity=qty,
+                    rate=rate,
+                    discount_amount=discount,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+
+        messages.success(request, f"Purchase order {order.purchase_num} created with {len(lines)} item(s).")
+        return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+
+
 class PurchaseOrderListView(InventoryListMixin, ListView):
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
@@ -235,15 +286,33 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["create_form"] = PurchaseOrderForm()
+        po_summaries = {}
+        for order in context["orders"]:
+            items = list(order.items.all())
+            po_summaries[order.pk] = {
+                "items": len(items),
+                "amount": float(sum(i.total_amount for i in items)),
+                "discount": float(sum(i.discount_amount or 0 for i in items)),
+            }
+        context["po_summaries"] = po_summaries
+        context["items_json"] = [
+            {"id": i.pk, "name": i.item_name, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price), "uom": i.uom.title}
+            for i in InventoryItem.objects.select_related("uom", "stock").filter(status=STATUS_ACTIVE).order_by("item_name")
+        ]
         for order in context["orders"]:
             form = PurchaseOrderItemForm()
             used_item_ids = order.items.values_list("inventory_item_id", flat=True)
-            available_items = form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom")
+            available_items = form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom", "stock")
             form.fields["inventory_item"].queryset = available_items
             order.uom_map_id = f"uom-map-{order.pk}"
             form.fields["inventory_item"].widget.attrs["data-uom-source"] = order.uom_map_id
             order.add_form = form
             order.uom_map = {str(i.pk): {"uom": i.uom.title} for i in available_items}
+            order.avail_items_json = [
+                {"id": i.pk, "name": i.item_name, "uom": i.uom.title, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price)}
+                for i in available_items
+            ]
+            order.avail_items_json_id = f"avail-items-{order.pk}"
         return context
 
 

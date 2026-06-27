@@ -74,6 +74,7 @@ class PurchaseOrderForm(StyledModelForm):
     class Meta:
         model = PurchaseOrder
         fields = ("vendor", "descr", "purchase_date", "quot_num", "quot_date")
+        labels = {"descr": "Comments"}
         widgets = {"descr": forms.TextInput(), "purchase_date": forms.DateInput(attrs={"type": "date"}), "quot_date": forms.DateInput(attrs={"type": "date"})}
 
 

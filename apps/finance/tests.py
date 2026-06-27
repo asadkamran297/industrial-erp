@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 
 from apps.configurations.models import Bank, PaymentMethod
 from apps.core.constants import (
@@ -25,6 +27,7 @@ from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, Fi
 
 class FinanceModelTests(TestCase):
     def setUp(self):
+        self.user = get_user_model().objects.create_user(username="financeuser", password="pass12345", is_superuser=True)
         self.cash_method = PaymentMethod.objects.create(title="Cash")
         self.card_method = PaymentMethod.objects.create(title="Card")
         self.bank = Bank.objects.create(title="MCB")
@@ -169,3 +172,43 @@ class FinanceModelTests(TestCase):
 
         with self.assertRaises(ValidationError):
             line.full_clean()
+
+    def test_account_voucher_line_create_accepts_inline_rows(self):
+        self.client.force_login(self.user)
+        expense_account = self.create_account(
+            title="Office Expense",
+            code="E002",
+            account_no="2002",
+            nature=ACCOUNT_TYPE_EXPENSE,
+            account_type=ACCOUNT_TYPE_EXPENSE,
+            balance_income=BALANCE_INCOME_INCOME_STATEMENT,
+        )
+        cash_account = self.create_account(
+            title="Cash in Hand",
+            code="A002",
+            account_no="1002",
+            nature=ACCOUNT_TYPE_ASSET,
+            account_type=ACCOUNT_TYPE_ASSET,
+            balance_income=BALANCE_INCOME_BALANCE_SHEET,
+        )
+        voucher = AccountVoucher.objects.create(
+            account_no=expense_account.account_no,
+            voucher_type=VOUCHER_TYPE_PAYMENT,
+            payment_method=self.cash_method,
+        )
+
+        response = self.client.post(
+            reverse("finance:account_voucher_line_create", args=[voucher.pk]),
+            {
+                "line_account[]": [expense_account.account_no, cash_account.account_no],
+                "line_description[]": ["Expense entry", "Cash entry"],
+                "line_debit[]": ["100.00", "0.00"],
+                "line_credit[]": ["0.00", "100.00"],
+            },
+        )
+
+        self.assertRedirects(response, reverse("finance:account_voucher_detail", args=[voucher.pk]))
+        voucher.refresh_from_db()
+        self.assertEqual(voucher.lines.count(), 2)
+        self.assertEqual(voucher.debit_amount, Decimal("100.00"))
+        self.assertEqual(voucher.credit_amount, Decimal("100.00"))

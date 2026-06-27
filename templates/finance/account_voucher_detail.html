@@ -1,53 +1,141 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title=voucher.voucher_no subtitle="Voucher lines and posting detail." %}
-<section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Date</p><p class="font-medium">{{ voucher.voucher_date }}</p></div>
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Type</p><p class="font-medium">{{ voucher.get_voucher_type_display }}</p></div>
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Status</p><p class="font-medium">{{ voucher.get_status_display }}</p></div>
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Posted</p><p class="font-medium">{{ voucher.get_posted_display }}</p></div>
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Debit Total</p><p class="font-medium">{{ voucher.debit_amount }}</p></div>
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Credit Total</p><p class="font-medium">{{ voucher.credit_amount }}</p></div>
-</section>
-<div class="mt-4 rounded-lg border {% if voucher.is_balanced %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %} px-4 py-3 text-sm">
-  {% if voucher.is_balanced %}Voucher is balanced and ready for the next workflow step.{% else %}Current difference: {{ balance_difference }}. Debit and credit totals must be equal before submission or posting.{% endif %}
-</div>
-<form method="post" action="{% url 'finance:account_voucher_line_create' voucher.pk %}" class="mt-6 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
-  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    {% for field in line_form %}
-      <div {% if field.name == "remarks" or field.name == "person_organization_title" %}class="lg:col-span-2"{% endif %}>
-        <label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}
-        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+<section class="space-y-4" x-data="journalVoucher()">
+  <form method="post" action="{% url 'finance:account_voucher_line_create' voucher.pk %}" @submit.prevent="submitLines($event)">{% csrf_token %}
+    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">JV</h2>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label class="mb-1 block text-xs font-medium">Date</label>
+            <input class="form-input min-w-[140px]" type="text" value="{{ voucher.voucher_date }}" disabled>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium">Voucher Type</label>
+            <input class="form-input min-w-[140px]" type="text" value="Journal Voucher" disabled>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium">Debit Amount</label>
+            <input class="form-input min-w-[140px]" type="text" :value="fmt(debitTotal)" disabled>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium">Credit Amount</label>
+            <input class="form-input min-w-[140px]" type="text" :value="fmt(creditTotal)" disabled>
+          </div>
+        </div>
       </div>
-    {% endfor %}
-    <div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Line</button></div>
-  </div>
-</form>
-<div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  <table class="w-full text-left text-sm">
-    <thead class="bg-slate-50 dark:bg-slate-800">
-      <tr><th class="px-4 py-3">#</th><th class="px-4 py-3">Account</th><th class="px-4 py-3">Debit</th><th class="px-4 py-3">Credit</th><th class="px-4 py-3">Party</th><th class="px-4 py-3">Receipt</th><th class="px-4 py-3">Bank</th><th class="px-4 py-3 text-right">Action</th></tr>
-    </thead>
-    <tbody>
-      {% for line in voucher.lines.all %}
-      <tr>
-        <td class="px-4 py-3">{{ line.line_number }}</td>
-        <td class="px-4 py-3">{{ line.account_no }}</td>
-        <td class="px-4 py-3">{{ line.debit_amount }}</td>
-        <td class="px-4 py-3">{{ line.credit_amount }}</td>
-        <td class="px-4 py-3">{{ line.person_organization_title|default:"-" }}</td>
-        <td class="px-4 py-3">{{ line.receipt_no|default:"-" }}</td>
-        <td class="px-4 py-3">{{ line.bank|default:"-" }}</td>
-        <td class="px-4 py-3">
-          <form class="flex justify-end" method="post" action="{% url 'finance:account_voucher_line_delete' voucher.pk line.pk %}">{% csrf_token %}
-            <button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50"><span>&#128465;</span></button>
-          </form>
-        </td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No lines found.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-900/30">
+          <p class="text-xs font-medium text-sky-700 dark:text-sky-300">Debit Total</p>
+          <p class="text-xl font-bold text-sky-800 dark:text-sky-200" x-text="fmt(debitTotal)"></p>
+        </div>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/30">
+          <p class="text-xs font-medium text-amber-700 dark:text-amber-300">Credit Total</p>
+          <p class="text-xl font-bold text-amber-800 dark:text-amber-200" x-text="fmt(creditTotal)"></p>
+        </div>
+        <div :class="balanceStatusClass" class="rounded-lg border p-3">
+          <p class="text-xs font-semibold uppercase tracking-wide" x-text="balanceStatusLabel"></p>
+          <p class="text-2xl font-extrabold" x-text="balanceLabel"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-3 py-3 w-10">#</th>
+            <th class="px-3 py-3">Account</th>
+            <th class="px-3 py-3 w-36">Description</th>
+            <th class="px-3 py-3 w-32">Debit</th>
+            <th class="px-3 py-3 w-32">Credit</th>
+            <th class="px-3 py-3 w-12"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          <template x-for="(line, i) in lines" :key="line.uid">
+            <tr>
+              <td class="px-3 py-2" x-text="i + 1"></td>
+              <td class="px-3 py-2">
+                <select class="form-select" :name="`account_no[]`">
+                  <option value="">-- Select account --</option>
+                  {% for account in active_accounts %}
+                    <option value="{{ account.account_no }}">{{ account.account_no }} - {{ account.title }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="px-3 py-2"><input type="text" class="form-input" :name="`remarks[]`" placeholder="Description"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" :name="`debit_amount[]`" x-model.number="line.debit" @input="line.debit = round2(line.debit); recompute()"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" :name="`credit_amount[]`" x-model.number="line.credit" @input="line.credit = round2(line.credit); recompute()"></td>
+              <td class="px-3 py-2 text-right"><button type="button" @click="removeLine(i)" class="text-rose-600 hover:text-rose-700">&times;</button></td>
+            </tr>
+          </template>
+          <tr x-show="lines.length === 0"><td colspan="6" class="px-4 py-8 text-center text-slate-500">No lines yet. Add a row to begin.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
+      <button type="button" @click="addLine()" class="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">+ Add Line</button>
+      <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">Create JV</button>
+    </div>
+  </form>
+</section>
+
+<script>
+  function journalVoucher() {
+    return {
+      uidSeq: 1,
+      lines: [],
+      get debitTotal() {
+        return this.lines.reduce((sum, line) => sum + (Number(line.debit) || 0), 0);
+      },
+      get creditTotal() {
+        return this.lines.reduce((sum, line) => sum + (Number(line.credit) || 0), 0);
+      },
+      get balanceLabel() {
+        var diff = this.debitTotal - this.creditTotal;
+        return diff === 0 ? 'Balanced' : (diff > 0 ? `+${this.fmt(diff)}` : this.fmt(diff));
+      },
+      get balanceStatusLabel() {
+        var diff = this.debitTotal - this.creditTotal;
+        return diff === 0 ? 'Balanced' : 'Unbalanced';
+      },
+      get balanceStatusClass() {
+        var diff = this.debitTotal - this.creditTotal;
+        return diff === 0
+          ? 'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+          : 'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+      },
+      addLine() {
+        this.lines.push({ uid: this.uidSeq++, debit: 0, credit: 0 });
+      },
+      removeLine(i) {
+        this.lines.splice(i, 1);
+      },
+      recompute() {
+        this.lines.forEach(line => {
+          line.debit = this.round2(line.debit || 0);
+          line.credit = this.round2(line.credit || 0);
+        });
+      },
+      fmt(v) {
+        return (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+      round2(v) {
+        var n = Number(v);
+        return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+      },
+      submitLines(event) {
+        if (this.lines.length === 0) {
+          event.preventDefault();
+          return;
+        }
+      }
+    };
+  }
+</script>
 {% endblock %}

@@ -3,7 +3,7 @@ from datetime import timedelta
 from django import forms
 from django.core.exceptions import ValidationError
 
-from apps.core.constants import ACCOUNT_LEDGER_GENERAL, STATUS_ACTIVE
+from apps.core.constants import ACCOUNT_LEDGER_GENERAL, NO, STATUS_ACTIVE
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
@@ -137,6 +137,19 @@ class AccountVoucherLineForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
             "receipt_no": forms.TextInput(attrs={"class": "form-input"}),
             "bank": forms.Select(attrs={"class": "form-select"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["payment_method"].required = False
+        self.fields["remarks"].required = False
+        self.fields["person_organization"].required = False
+        self.fields["person_organization_title"].required = False
+        self.fields["credit_card_payment"].required = False
+        self.fields["credit_card_no"].required = False
+        self.fields["credit_card_expiry"].required = False
+        self.fields["receipt_no"].required = False
+        self.fields["bank"].required = False
+        self.fields["credit_card_payment"].initial = NO
 
     def clean_account_no(self):
         account_no = self.cleaned_data["account_no"].strip()
