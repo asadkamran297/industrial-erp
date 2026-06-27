@@ -18,6 +18,7 @@ from apps.core.constants import (
     STATUS_ACTIVE,
     STATUS_CREATED,
     STATUS_DRAFT,
+    STATUS_RAISED,
     STATUS_SUBMITTED,
     YES,
     YES_NO_CHOICES,
@@ -162,7 +163,7 @@ class PurchaseOrder(BaseModel):
     purchase_date = models.DateField(default=timezone.localdate)
     quot_num = models.CharField(max_length=80, blank=True)
     quot_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_CREATED)
+    status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_RAISED)
 
     class Meta:
         db_table = "inv_purchase_orders"

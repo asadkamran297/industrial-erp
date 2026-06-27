@@ -1,0 +1,55 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Goods Receipt Notes (GRN)</h1>
+      <p class="text-xs text-slate-500 dark:text-slate-400">All received items against purchase orders.</p>
+    </div>
+    <button onclick="printSection('grn-table','Goods Receipt Notes')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
+  </div>
+
+  {% include "components/table/search_filters.html" %}
+
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table id="grn-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">GRN #</th>
+            <th class="px-4 py-3">PO #</th>
+            <th class="px-4 py-3">Item</th>
+            <th class="px-4 py-3">Receive Date</th>
+            <th class="px-4 py-3 text-right">Qty</th>
+            <th class="px-4 py-3 text-right">Retail Price</th>
+            <th class="px-4 py-3">Invoice #</th>
+            <th class="px-4 py-3">Invoice Date</th>
+            <th class="px-4 py-3">RV #</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for grn in grns %}
+          <tr>
+            <td class="px-4 py-3 font-medium">{{ grn.grn_number }}</td>
+            <td class="px-4 py-3">
+              <a href="{% url 'inventory:purchase_order_detail' grn.purchase_order_item.purchase_order_id %}"
+                 class="text-[var(--primary-color)] hover:underline">{{ grn.purchase_num }}</a>
+            </td>
+            <td class="px-4 py-3">{{ grn.descr }}</td>
+            <td class="px-4 py-3">{{ grn.receive_date|date:"d-m-Y" }}</td>
+            <td class="px-4 py-3 text-right">{{ grn.quantity|floatformat:"-4" }}</td>
+            <td class="px-4 py-3 text-right">{{ grn.retail_price|floatformat:2 }}</td>
+            <td class="px-4 py-3">{{ grn.invoice_num|default:"—" }}</td>
+            <td class="px-4 py-3">{{ grn.invoice_date|date:"d-m-Y"|default:"—" }}</td>
+            <td class="px-4 py-3">{{ grn.rv_number|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

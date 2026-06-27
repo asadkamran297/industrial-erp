@@ -12,6 +12,7 @@ STATUS_ARCHIVED: Final = "archived"
 STATUS_COMPLETED: Final = "completed"
 STATUS_ONGOING: Final = "ongoing"
 STATUS_CREATED: Final = "created"
+STATUS_RAISED: Final = "raised"
 STATUS_SUBMITTED: Final = "submitted"
 STATUS_VERIFIED: Final = "verified"
 STATUS_DOUBLE_VERIFIED: Final = "double_verified"
@@ -148,7 +149,8 @@ INV_POS_STATUS_CHOICES: Final[StatusChoices] = (
 )
 
 INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
-    (STATUS_CREATED, "Created"),
+    (STATUS_DRAFT, "Draft"),
+    (STATUS_RAISED, "Raised"),
     (STATUS_PARTIAL_RECEIVED, "Partial Received"),
     (STATUS_FULLY_RECEIVED, "Fully Received"),
     (STATUS_CANCELLED, "Cancelled"),

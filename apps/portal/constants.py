@@ -32,6 +32,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Current Stock", permission="inventory.view", url_name="inventory:stock_list"),
         NavigationItem("Item Ledger", permission="inventory.view", url_name="inventory:ledger_list"),
         NavigationItem("Purchase Orders", permission="inventory.view", url_name="inventory:purchase_order_list"),
+        NavigationItem("GRN", permission="inventory.view", url_name="inventory:grn_list"),
         NavigationItem("Manual Transaction", permission="inventory.view", url_name="inventory:manual_transaction"),
         NavigationItem("Customers", permission="inventory.view", url_name="inventory:customer_list"),
         NavigationItem("POS Sales", permission="inventory.view", url_name="inventory:pos_list"),

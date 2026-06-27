@@ -12,12 +12,12 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_RAISED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -279,6 +279,7 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
 
         with transaction.atomic():
             order = form.save(commit=False)
+            order.status = STATUS_DRAFT
             order.created_by = request.user
             order.updated_by = request.user
             order.save()
@@ -296,6 +297,76 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
                 )
 
         messages.success(request, f"Purchase order {order.purchase_num} created with {len(lines)} item(s).")
+        return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+
+
+class PurchaseOrderDraftInitView(InventoryManageMixin, View):
+    """AJAX: create draft PO header, return pk."""
+    def post(self, request):
+        from django.http import JsonResponse
+        form = PurchaseOrderForm(request.POST)
+        if not form.is_valid():
+            return JsonResponse({"error": str(form.errors)}, status=400)
+        order = form.save(commit=False)
+        order.status = STATUS_DRAFT
+        order.created_by = request.user
+        order.updated_by = request.user
+        order.save()
+        return JsonResponse({"pk": order.pk, "purchase_num": order.purchase_num})
+
+
+class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
+    """Add items to existing draft PO and raise it."""
+    def post(self, request):
+        draft_pk = request.POST.get("draft_pk")
+        order = get_object_or_404(PurchaseOrder, pk=draft_pk, status=STATUS_DRAFT)
+
+        item_ids = request.POST.getlist("item_id")
+        qtys = request.POST.getlist("qty")
+        rates = request.POST.getlist("rate")
+        discounts = request.POST.getlist("discount")
+
+        lines = []
+        for i, item_id in enumerate(item_ids):
+            if not item_id:
+                continue
+            qty = Decimal(int(float(qtys[i] or "0")))
+            if qty <= 0:
+                continue
+            lines.append((int(item_id), qty, Decimal(rates[i] or "0").quantize(Decimal("0.01")), Decimal(discounts[i] or "0").quantize(Decimal("0.01"))))
+
+        if not lines:
+            messages.error(request, "Add at least one item before saving.")
+            return redirect("inventory:purchase_order_list")
+
+        with transaction.atomic():
+            for item_id, qty, rate, discount in lines:
+                inv_item = InventoryItem.objects.get(pk=item_id)
+                PurchaseOrderItem.objects.create(
+                    purchase_order=order,
+                    inventory_item=inv_item,
+                    uom=inv_item.uom,
+                    quantity=qty,
+                    rate=rate,
+                    discount_amount=discount,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+            order.status = STATUS_RAISED
+            order.updated_by = request.user
+            order.save(update_fields=["status", "updated_by", "updated_at"])
+
+        messages.success(request, f"Purchase order {order.purchase_num} raised with {len(lines)} item(s).")
+        return redirect("inventory:purchase_order_print", pk=order.pk)
+
+
+class PurchaseOrderRaiseView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk, status=STATUS_DRAFT)
+        order.status = STATUS_RAISED
+        order.updated_by = request.user
+        order.save(update_fields=["status", "updated_by", "updated_at"])
+        messages.success(request, f"{order.purchase_num} raised.")
         return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
 
 
@@ -423,7 +494,7 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if self.object.purchase_order.status != STATUS_CREATED:
+        if self.object.purchase_order.status != STATUS_RAISED:
             messages.error(request, "Only items of a created purchase order can be edited.")
             return redirect("inventory:purchase_order_detail", pk=self.object.purchase_order_id)
         return super().dispatch(request, *args, **kwargs)
@@ -463,7 +534,7 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         grand_total = sum((i.total_amount for i in items), Decimal("0"))
         context["grand_total"] = grand_total
         context["amount_in_words"] = amount_in_words(grand_total)
-        context["print_back_url"] = reverse_lazy("inventory:purchase_order_detail", kwargs={"pk": self.object.pk})
+        context["print_back_url"] = f"{reverse_lazy('inventory:purchase_order_list')}?open={self.object.pk}"
         return context
 
 
@@ -932,6 +1003,13 @@ class POSReturnPostView(InventoryManageMixin, View):
         except ValidationError as exc:
             messages.error(request, exc)
         return redirect("inventory:pos_return_detail", pk=pk)
+
+
+class GRNListView(InventoryListMixin, ListView):
+    template_name = "inventory/grn_list.html"
+    context_object_name = "grns"
+    queryset = PurchaseOrderItemReceived.objects.select_related("purchase_order_item__purchase_order", "inventory_item").order_by("-receive_date", "-id")
+    search_fields = ("grn_number", "purchase_num", "descr", "invoice_num", "rv_number")
 
 
 class PurchaseReturnListView(InventoryListMixin, ListView):
