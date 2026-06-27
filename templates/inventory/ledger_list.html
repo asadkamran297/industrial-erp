@@ -26,7 +26,7 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {% for row in ledgers %}
             <tr>
-              <td class="px-4 py-3">{{ forloop.counter }}</td>
+              <td class="px-4 py-3">{{ row.pk }}</td>
               <td class="px-4 py-3">{{ row.transaction_date }}</td>
               <td class="px-4 py-3">{{ row.get_transaction_type_display }}</td>
               <td class="px-4 py-3">{{ row.item_name }}</td>

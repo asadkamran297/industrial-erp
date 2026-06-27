@@ -17,7 +17,7 @@ from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, S
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -762,11 +762,116 @@ class POSDetailView(InventoryListMixin, DetailView):
         return context
 
 
+class POSReturnQuickCreateView(InventoryManageMixin, View):
+    def post(self, request):
+        sale_id = request.POST.get("pos_master")
+        if not sale_id:
+            messages.error(request, "Select a sale first.")
+            return redirect("inventory:pos_return_list")
+
+        sale = get_object_or_404(POSMaster, pk=sale_id, posted=YES)
+        detail_ids = request.POST.getlist("detail_id")
+        return_qtys = request.POST.getlist("return_qty")
+
+        lines = []
+        for i, detail_id in enumerate(detail_ids):
+            if not detail_id:
+                continue
+            qty = Decimal(return_qtys[i] or "0").quantize(Decimal("0.0001"))
+            if qty <= 0:
+                continue
+            lines.append((int(detail_id), qty))
+
+        if not lines:
+            messages.error(request, "Select at least one item with return quantity.")
+            return redirect("inventory:pos_return_list")
+
+        pay_mode = request.POST.get("pay_mode") or "cash"
+        adjusted_amount = Decimal(request.POST.get("adjusted_amount") or "0").quantize(Decimal("0.01"))
+        return_date = request.POST.get("return_date") or timezone.localdate()
+
+        with transaction.atomic():
+            sale_return = POSReturnMaster.objects.create(
+                transaction_id=generate_transaction_id("SRT", POSReturnMaster),
+                pos_master=sale,
+                return_date=return_date,
+                pay_mode=pay_mode,
+                adjusted_amount=adjusted_amount,
+                created_by=request.user,
+                updated_by=request.user,
+            )
+            for detail_id, qty in lines:
+                pos_detail = get_object_or_404(POSDetail, pk=detail_id, pos_master=sale)
+                if qty > pos_detail.quantity:
+                    messages.error(request, f"{pos_detail.item_name}: return qty ({qty}) cannot exceed sale qty ({pos_detail.quantity}).")
+                    return redirect("inventory:pos_return_list")
+                POSReturnDetail.objects.create(
+                    pos_return_master=sale_return,
+                    pos_detail=pos_detail,
+                    quantity=qty,
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+
+        try:
+            post_sale_return(sale_return=sale_return, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, str(exc))
+            return redirect("inventory:pos_return_list")
+
+        messages.success(request, f"Sale return {sale_return.return_num} posted — stock updated.")
+        return redirect("inventory:pos_return_receipt", pk=sale_return.pk)
+
+
+class POSReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    model = POSReturnMaster
+    template_name = "inventory/pos_return_receipt.html"
+    context_object_name = "sale_return"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        items = self.object.items.all()
+        context["items"] = items
+        context["total_qty"] = sum((i.quantity or Decimal("0") for i in items), Decimal("0"))
+        context["total_return"] = sum((i.net_total or Decimal("0") for i in items), Decimal("0"))
+        return context
+
+
 class POSReturnListView(InventoryListMixin, ListView):
     template_name = "inventory/pos_return_list.html"
     context_object_name = "returns"
-    queryset = POSReturnMaster.objects.select_related("pos_master", "customer").order_by("-return_date", "-id")
+    queryset = POSReturnMaster.objects.select_related("pos_master", "customer").filter(posted=YES).order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "sale_num")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        returned_sale_ids = POSReturnMaster.objects.filter(posted=YES).values_list("pos_master_id", flat=True)
+        sales = POSMaster.objects.filter(posted=YES).exclude(pk__in=returned_sale_ids).prefetch_related("items__inventory_item").order_by("-sale_date", "-id")
+        sales_json = []
+        sale_items_json = {}
+        for sale in sales:
+            sales_json.append({
+                "id": sale.pk,
+                "sale_num": sale.sale_num,
+                "customer": sale.customer.customer_name if sale.customer_id else "",
+                "date": str(sale.sale_date),
+                "net_amount": float(sale.net_amount),
+            })
+            sale_items_json[sale.pk] = [
+                {
+                    "id": item.pk,
+                    "item_name": item.item_name,
+                    "item_code": item.item_code,
+                    "qty": float(item.quantity),
+                    "price": float(item.price),
+                    "net_total": float(item.net_total),
+                }
+                for item in sale.items.all()
+            ]
+        context["sales_json"] = sales_json
+        context["sale_items_json"] = sale_items_json
+        context["today"] = timezone.localdate()
+        return context
 
 
 class POSReturnCreateView(InventoryManageMixin, CreateView):

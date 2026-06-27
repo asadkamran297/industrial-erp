@@ -238,7 +238,7 @@ def post_sale_return(*, sale_return, user):
         raise ValidationError("Posted return cannot be changed.")
     total_return = Decimal("0.00")
     for item in sale_return.items.all():
-        already_returned = sale_return.pos_master.returns.exclude(pk=sale_return.pk).filter(items__pos_detail=item.pos_detail).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
+        already_returned = sale_return.pos_master.returns.filter(posted=YES).exclude(pk=sale_return.pk).filter(items__pos_detail=item.pos_detail).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
         allowed = item.pos_detail.quantity - already_returned
         if item.quantity > allowed:
             raise ValidationError(f"Return quantity exceeds sold quantity for {item.item_name}.")
@@ -248,7 +248,7 @@ def post_sale_return(*, sale_return, user):
         stock.current_quantity += item.quantity
         stock.updated_by = user
         stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
-        create_ledger_entry(stock=stock, inventory_item=item.inventory_item, transaction_id=sale_return.transaction_id, transaction_no=sale_return.return_num, transaction_type=LEDGER_SALE_RETURN, transaction_date=sale_return.return_date, ref_table="inv_pos_return_details", ref_id=item.pk, ref_no=sale_return.return_num, quantity=item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=sale_return.remarks, user=user)
+        create_ledger_entry(stock=stock, inventory_item=item.inventory_item, transaction_id=sale_return.transaction_id, transaction_no=sale_return.return_num, transaction_type=LEDGER_SALE_RETURN, transaction_date=sale_return.return_date, ref_table="inv_pos_return_details", ref_id=item.pk, ref_no=f"Sale Return | {sale_return.sale_num}", quantity=item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=f"Sale Return {sale_return.return_num} against {sale_return.sale_num}", user=user)
         total_return += item.net_total
 
     sale_return.returned_amount = total_return
