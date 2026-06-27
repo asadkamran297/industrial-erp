@@ -276,7 +276,7 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
 class PurchaseOrderListView(InventoryListMixin, ListView):
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").order_by("-purchase_date", "-id")
+    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "vendor__name", "quot_num")
     filter_fields = {"status": "status"}
 
