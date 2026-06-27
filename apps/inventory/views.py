@@ -481,16 +481,16 @@ class ManualTransactionView(InventoryManageMixin, View):
         draft_tx_id = _current_draft_tx_id()
         rows = ManualTransaction.objects.select_related("inventory_item").filter(transaction_id=draft_tx_id, status=STATUS_DRAFT) if draft_tx_id else ManualTransaction.objects.none()
         used_item_ids = list(rows.values_list("inventory_item_id", flat=True))
-        items = InventoryItem.objects.select_related("uom").exclude(pk__in=used_item_ids).order_by("item_name")
+        items = InventoryItem.objects.select_related("uom", "stock").exclude(pk__in=used_item_ids).order_by("item_name")
         batch_descr = rows.values_list("descr", flat=True).first() or ""
-        form = ManualTransactionForm(initial={"descr": batch_descr})
+        form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1})
         form.fields["inventory_item"].queryset = items
         context = {
             "title": "Manual Stock Transaction",
             "form": form,
             "rows": rows,
             "transaction_id": draft_tx_id,
-            "item_price_map": {str(i.pk): {"price": str(i.price), "uom": i.uom.title} for i in items},
+            "item_price_map": {str(i.pk): {"price": str(getattr(i, "stock", None) and i.stock.current_price or i.price), "qty": str(getattr(i, "stock", None) and i.stock.current_quantity or 0), "uom": i.uom.title} for i in items},
         }
         return render(request, self.template_name, context)
 
@@ -525,6 +525,14 @@ class ManualTransactionToggleView(InventoryManageMixin, View):
         row.selected = NO if row.selected == YES else YES
         row.updated_by = request.user
         row.save(update_fields=["selected", "updated_by", "updated_at"])
+        return redirect("inventory:manual_transaction")
+
+
+class ManualTransactionDeleteView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        row = get_object_or_404(ManualTransaction, pk=pk, status=STATUS_DRAFT)
+        row.delete()
+        messages.success(request, "Entry removed.")
         return redirect("inventory:manual_transaction")
 
 
