@@ -1,0 +1,37 @@
+{% extends "layouts/print_base.html" %}
+{% block title %}Item Ledger{% endblock %}
+
+{% block print_content %}
+  <h1 class="doc-title">Item Ledger</h1>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Transaction</th>
+        <th>Item</th>
+        <th class="num">Opening Qty</th>
+        <th class="num">Movement Qty</th>
+        <th class="num">Closing Qty</th>
+        <th>Ref</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in ledgers %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ row.transaction_date }}</td>
+        <td>{{ row.get_transaction_type_display }}</td>
+        <td>{{ row.item_name }}</td>
+        <td class="num">{{ row.old_quantity }}</td>
+        <td class="num">{{ row.quantity }}</td>
+        <td class="num">{{ row.new_quantity }}</td>
+        <td>{{ row.ref_no }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" style="text-align:center">No ledger entries.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

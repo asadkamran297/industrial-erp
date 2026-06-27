@@ -224,6 +224,32 @@ class LedgerListView(InventoryListMixin, ListView):
     search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
 
 
+class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):
+    template_name = "inventory/stock_print.html"
+    context_object_name = "stocks"
+    queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
+    search_fields = ("item_code", "item_name", "inventory_item__code")
+    paginate_by = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["print_back_url"] = reverse_lazy("inventory:stock_list")
+        return context
+
+
+class LedgerPrintView(PrintContextMixin, InventoryListMixin, ListView):
+    template_name = "inventory/ledger_print.html"
+    context_object_name = "ledgers"
+    queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
+    search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
+    paginate_by = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["print_back_url"] = reverse_lazy("inventory:ledger_list")
+        return context
+
+
 class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
     def post(self, request):
         item_ids = request.POST.getlist("item_id")

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
+{% load static %}{% block extra_head %}<script src="{% static 'js/print.js' %}" defer></script>{% endblock %}
 {% block title %}Portal | {{ system_setting.company_name }}{% endblock %}
 {% block body %}
+<script id="__org_print_data__" type="application/json">{"name":"{{ org.title|default:system_setting.company_name|escapejs }}","branch":"{{ branch.title|default:''|escapejs }}","address":"{{ org.address|default:''|escapejs }}","phone":"{{ org.phone|default:''|escapejs }}","cell":"{{ org.cell|default:''|escapejs }}","fax":"{{ org.fax|default:''|escapejs }}","email":"{{ org.email|default:''|escapejs }}","website":"{{ org.website|default:''|escapejs }}","logo":"{% if org.logo %}{{ org.logo }}{% endif %}"}</script>
 <div class="min-h-screen" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('portal-sidebar-collapsed') === 'true', profileOpen: false, notificationsOpen: false, toggleSidebarCollapse() { this.sidebarCollapsed = !this.sidebarCollapsed; localStorage.setItem('portal-sidebar-collapsed', this.sidebarCollapsed); } }">
   <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 

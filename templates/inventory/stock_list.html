@@ -1,1 +1,42 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-4">{% include "components/ui/page_header.html" with title="Current Stock" %}{% include "components/table/search_filters.html" %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Item</th><th class="px-4 py-3">Code</th><th class="px-4 py-3">Quantity</th><th class="px-4 py-3">Current Price</th><th class="px-4 py-3">Last Price</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for stock in stocks %}<tr><td class="px-4 py-3">{{ stock.item_name }}</td><td class="px-4 py-3">{{ stock.item_code }}</td><td class="px-4 py-3">{{ stock.current_quantity }}</td><td class="px-4 py-3">{{ stock.current_price }}</td><td class="px-4 py-3">{{ stock.last_price }}</td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}{% block content %}
+<section class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Current Stock</h1>
+    </div>
+    <button onclick="printSection('stock-table','Current Stock')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
+  </div>
+  {% include "components/table/search_filters.html" %}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table id="stock-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">#</th>
+            <th class="px-4 py-3">Item</th>
+            <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Quantity</th>
+            <th class="px-4 py-3">Current Price</th>
+            <th class="px-4 py-3">Last Price</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for stock in stocks %}
+            <tr>
+              <td class="px-4 py-3">{{ forloop.counter }}</td>
+              <td class="px-4 py-3">{{ stock.item_name }}</td>
+              <td class="px-4 py-3">{{ stock.item_code }}</td>
+              <td class="px-4 py-3">{{ stock.current_quantity }}</td>
+              <td class="px-4 py-3">{{ stock.current_price }}</td>
+              <td class="px-4 py-3">{{ stock.last_price }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}
