@@ -7,7 +7,7 @@
       <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">GRN — Goods Receipt Notes</h1>
       <p class="text-xs text-slate-500 dark:text-slate-400">Purchase orders and their received items.</p>
     </div>
-    <button onclick="printSection('grn-table','Goods Receipt Notes')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
+    <span class="text-xs text-slate-400 dark:text-slate-500">Use &#128438; Print on each GRN row</span>
   </div>
 
   {% include "components/table/search_filters.html" %}
@@ -27,6 +27,7 @@
             <th class="px-4 py-3">Date</th>
             <th class="px-4 py-3 text-right">Amount</th>
             <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -51,10 +52,16 @@
                 {{ order.get_status_display }}
               </span>
             </td>
+            <td class="px-4 py-3">
+              <a href="{% url 'inventory:grn_print' order.pk %}" target="_blank"
+                class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200">
+                &#128438; GRN
+              </a>
+            </td>
           </tr>
           {# Expandable GRN rows #}
           <tr x-show="open === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
-            <td colspan="5" class="px-6 py-4" x-data="{ confirm: false }">
+            <td colspan="6" class="px-6 py-4" x-data="{ confirm: false }">
               <form method="post" action="{% url 'inventory:grn_bulk_receive' order.pk %}" x-ref="recvForm_{{ order.pk }}">
               {% csrf_token %}
               {% with poi_list=order.items.all %}
@@ -151,7 +158,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
+          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

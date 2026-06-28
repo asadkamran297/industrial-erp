@@ -2,7 +2,7 @@
 {% block title %}GRN — {{ order.purchase_num }}{% endblock %}
 
 {% block extra_style %}
-  .grn-badge { display:inline-block; border:2px solid #7a0000; padding:6px 18px; font-size:18px; font-weight:800; letter-spacing:1px; color:#7a0000; text-transform:uppercase; margin-bottom:4px; }
+  .grn-badge { display:inline-block; border:2px solid #1e3a5f; padding:6px 18px; font-size:18px; font-weight:800; letter-spacing:1px; color:#1e3a5f; text-transform:uppercase; margin-bottom:4px; }
   .grn-ref { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
   .grn-ref-left, .grn-ref-right { width:48%; }
   .ref-table { width:100%; border-collapse:collapse; }
@@ -10,23 +10,20 @@
   .ref-table .lbl { font-weight:700; width:38%; color:#444; border-right:1px solid #ddd; }
   .ref-table tr { border-bottom:1px solid #f0f0f0; }
   .vendor-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
-  .vendor-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#7a0000; text-transform:uppercase; letter-spacing:.5px; }
+  .vendor-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#1e3a5f; text-transform:uppercase; letter-spacing:.5px; }
   .vendor-box .vrow { font-size:11px; color:#333; margin:1px 0; }
-  table.items th { background:#7a0000; color:#fff; font-size:10px; }
-  table.items td { font-size:11px; }
-  table.items tfoot td, table.items tfoot th { background:#f0f0f0; font-weight:700; border-top:2px solid #7a0000; }
+  table.items tfoot td, table.items tfoot th { background:#f0f0f0; font-weight:700; border-top:2px solid #1e3a5f; }
   .totals-box { display:flex; justify-content:flex-end; margin-top:10px; }
   .totals-inner { border:1px solid #ccc; padding:8px 16px; min-width:280px; }
   .totals-inner .trow { display:flex; justify-content:space-between; padding:2px 0; font-size:12px; border-bottom:1px solid #eee; }
-  .totals-inner .trow.grand { font-weight:800; font-size:14px; border-top:2px solid #7a0000; border-bottom:none; padding-top:4px; }
-  .words-box { margin-top:8px; font-size:11px; font-style:italic; color:#444; border-left:3px solid #7a0000; padding-left:8px; }
+  .totals-inner .trow.grand { font-weight:800; font-size:14px; border-top:2px solid #1e3a5f; border-bottom:none; padding-top:4px; }
+  .words-box { margin-top:8px; font-size:11px; font-style:italic; color:#444; border-left:3px solid #1e3a5f; padding-left:8px; }
   .sign { display:flex; justify-content:space-between; margin-top:60px; gap:12px; }
   .sign div { text-align:center; border-top:2px solid #333; padding-top:6px; flex:1; font-weight:700; font-size:11px; }
   .sign div span { display:block; font-weight:400; color:#555; margin-top:2px; font-size:10px; }
   .status-stamp { position:absolute; top:60px; right:24px; border:3px solid; border-radius:4px; padding:4px 14px; font-size:15px; font-weight:900; letter-spacing:2px; opacity:.35; transform:rotate(-15deg); }
   .status-stamp.partial { border-color:orange; color:orange; }
   .status-stamp.full { border-color:green; color:green; }
-  .doc-subtitle { text-align:center; font-size:11px; color:#555; margin-top:-10px; margin-bottom:12px; }
 {% endblock %}
 
 {% block print_content %}

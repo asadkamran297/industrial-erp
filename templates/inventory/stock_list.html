@@ -4,7 +4,7 @@
     <div>
       <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Current Stock</h1>
     </div>
-    <button onclick="printSection('stock-table','Current Stock')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
+    <a href="{% url 'inventory:stock_print' %}" target="_blank" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
   </div>
   {% include "components/table/search_filters.html" %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

@@ -8,14 +8,23 @@ from apps.core.constants import STATUS_ACTIVE
 class PrintContextMixin:
     """Injects organization + branch (header/footer data) into any print view."""
 
-    def get_context_data(self, **kwargs):
+    def _build_print_context(self, request):
         from apps.organizations.models import Branch, Organization
+        return {
+            "org": Organization.objects.filter(status=STATUS_ACTIVE).order_by("id").first(),
+            "branch": Branch.objects.filter(status=STATUS_ACTIVE).select_related("city").order_by("id").first(),
+            "printed_by": request.user,
+        }
 
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.setdefault("org", Organization.objects.filter(status=STATUS_ACTIVE).order_by("id").first())
-        context.setdefault("branch", Branch.objects.filter(status=STATUS_ACTIVE).select_related("city").order_by("id").first())
-        context.setdefault("printed_by", self.request.user)
+        for key, val in self._build_print_context(self.request).items():
+            context.setdefault(key, val)
         return context
+
+    def get_print_context(self, request):
+        """For plain View subclasses that don't use get_context_data."""
+        return self._build_print_context(request)
 
 
 class PortalPermissionRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):

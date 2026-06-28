@@ -1,20 +1,7 @@
 {% extends "layouts/print_base.html" %}
 {% block title %}Stock Adjustment — {{ tx_id }}{% endblock %}
-{% block content %}
 
-<div class="org-header">
-  {% if org.logo %}<img src="{{ org.logo.url }}" alt="Logo">{% endif %}
-  <div class="org-name">{{ org.name }}</div>
-  {% if branch %}<div class="org-branch">{{ branch.name }}</div>{% endif %}
-  <div class="org-addr">{{ org.address }}{% if org.city %} — {{ org.city }}{% endif %}</div>
-  <div class="org-contact">
-    {% if org.phone %}<span><b>Tel:</b> {{ org.phone }}</span>{% endif %}
-    {% if org.email %}<span><b>Email:</b> {{ org.email }}</span>{% endif %}
-    {% if org.ntn %}<span><b>NTN:</b> {{ org.ntn }}</span>{% endif %}
-    <span class="org-printed">Printed: {% now "d-M-Y H:i" %}</span>
-  </div>
-</div>
-
+{% block print_content %}
 <h1 class="doc-title">STOCK ADJUSTMENT / MANUAL TRANSACTION</h1>
 
 <table class="meta">
@@ -68,5 +55,4 @@
   <div>Store In-Charge</div>
   <div>Approved By</div>
 </div>
-
 {% endblock %}

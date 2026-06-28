@@ -5,7 +5,7 @@
       <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Item Ledger</h1>
       <p class="text-xs text-slate-500 dark:text-slate-400">Opening and closing stock movement by transaction.</p>
     </div>
-    <button onclick="printSection('ledger-table','Item Ledger')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
+    <a href="{% url 'inventory:ledger_print' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" target="_blank" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
   </div>
   {% include "components/table/search_filters.html" %}
   <div id="ledger-print-area" class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
