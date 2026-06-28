@@ -1,119 +1,400 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title=employee.full_name subtitle="Employee profile, employment, education, and experience record." %}
 
-<div class="mt-6" x-data="{ tab: window.location.hash ? window.location.hash.substring(1) : 'profile', setTab(value) { this.tab = value; window.history.replaceState(null, '', '#' + value); } }">
-  <div class="mb-5 flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-    {% if employee.avatar %}
-      <img src="{{ employee.avatar.url }}" alt="" class="h-20 w-20 rounded-full object-cover">
-    {% else %}
-      <span class="grid h-20 w-20 place-items-center rounded-full bg-slate-100 text-xl font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ employee.full_name|slice:":2"|upper }}</span>
-    {% endif %}
-    <div>
-      <p class="text-lg font-semibold">{{ employee.full_name }}</p>
-      <p class="text-sm text-slate-500">{{ employee.designation|default:"No designation" }} · {{ employee.department|default:"No department" }}</p>
-    </div>
-  </div>
-  <div class="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'profile' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('profile')">Profile</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'employment' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('employment')">Employment</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'experience' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('experience')">Experience</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'qualification' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('qualification')">Qualifications</button>
-    <button class="px-4 py-2 text-sm font-medium" :class="tab === 'payroll' ? 'border-b-2 border-[var(--primary-color)] text-[var(--primary-color)]' : 'text-slate-500'" @click="setTab('payroll')">Payroll</button>
-  </div>
+<div class="space-y-6" x-data="{
+  tab: window.location.hash ? window.location.hash.substring(1) : 'profile',
+  setTab(v){ this.tab=v; window.history.replaceState(null,'','#'+v); }
+}">
 
-  <section class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" x-show="tab === 'profile'">
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">CNIC</p><p class="mt-1 font-medium">{{ employee.cnic }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Email</p><p class="mt-1 font-medium">{{ employee.email|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Contact</p><p class="mt-1 font-medium">{{ employee.contact|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Father/Husband</p><p class="mt-1 font-medium">{{ employee.father_husband_name|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">DOB</p><p class="mt-1 font-medium">{{ employee.dob|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Address</p><p class="mt-1 font-medium">{{ employee.address|default:"-" }}</p></div>
-  </section>
+  {# ── Hero Banner ── #}
+  <div style="background:linear-gradient(135deg,var(--primary-color) 0%,#1e293b 65%,#0f172a 100%);border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="padding:32px;">
 
-  <section class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" x-show="tab === 'employment'">
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Organization</p><p class="mt-1 font-medium">{{ employee.organization|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Branch</p><p class="mt-1 font-medium">{{ employee.branch|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Department</p><p class="mt-1 font-medium">{{ employee.department|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Designation</p><p class="mt-1 font-medium">{{ employee.designation|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Joining</p><p class="mt-1 font-medium">{{ employee.doj|default:employee.joining_date|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Salary</p><p class="mt-1 font-medium">{{ employee.salary }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Bank</p><p class="mt-1 font-medium">{{ employee.bank|default:"-" }}</p></div>
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Account No.</p><p class="mt-1 font-medium">{{ employee.account_number|default:"-" }}</p></div>
-  </section>
+      <a href="{% url 'hr:employee_list' %}"
+         style="display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,0.55);font-size:12px;font-weight:500;text-decoration:none;margin-bottom:24px;">
+        ← Back to Directory
+      </a>
 
-  <section class="mt-5" x-show="tab === 'experience'">
-    <form method="post" action="{% url 'hr:employee_experience_create' employee.pk %}" class="mb-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{% for field in experience_form %}<div {% if field.name == "leave_reason" %}class="lg:col-span-2"{% endif %}><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add</button></div></div></form>
-    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Organization</th><th class="px-4 py-3">From</th><th class="px-4 py-3">To</th><th class="px-4 py-3">Salary</th><th class="px-4 py-3 text-right">Action</th></tr></thead><tbody>{% for exp in employee.experiences.all %}<tr><td class="px-4 py-3">{{ exp.organization }}</td><td class="px-4 py-3">{{ exp.from_date|default:"-" }}</td><td class="px-4 py-3">{{ exp.to_date|default:"-" }}</td><td class="px-4 py-3">{{ exp.salary }}</td><td class="px-4 py-3"><form class="flex justify-end" method="post" action="{% url 'hr:employee_experience_delete' employee.pk exp.pk %}">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50" title="Delete"><span aria-hidden="true">&#128465;</span></button></form></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No experience found.</td></tr>{% endfor %}</tbody></table></div>
-  </section>
+      {# Top row: avatar + info + edit #}
+      <div style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;">
 
-  <section class="mt-5" x-show="tab === 'qualification'">
-    <form method="post" action="{% url 'hr:employee_qualification_create' employee.pk %}" class="mb-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{% for field in qualification_form %}<div><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add</button></div></div></form>
-    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Qualification</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Institute</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Action</th></tr></thead><tbody>{% for q in employee.qualifications.all %}<tr><td class="px-4 py-3">{{ q.qualification }}</td><td class="px-4 py-3">{{ q.get_qualification_type_display }}</td><td class="px-4 py-3">{{ q.institute|default:"-" }}</td><td class="px-4 py-3">{{ q.get_status_display }}</td><td class="px-4 py-3"><form class="flex justify-end" method="post" action="{% url 'hr:employee_qualification_delete' employee.pk q.pk %}">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50" title="Delete"><span aria-hidden="true">&#128465;</span></button></form></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No qualification found.</td></tr>{% endfor %}</tbody></table></div>
-  </section>
+        {# Avatar #}
+        <div style="position:relative;flex-shrink:0;">
+          {% if employee.avatar %}
+            <img src="{{ employee.avatar.url }}" alt="{{ employee.full_name }}"
+                 style="width:112px;height:112px;border-radius:16px;object-fit:cover;box-shadow:0 8px 32px rgba(0,0,0,0.4);border:3px solid rgba(255,255,255,0.2);">
+          {% else %}
+            <div style="width:112px;height:112px;border-radius:16px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:3px solid rgba(255,255,255,0.15);">
+              {{ employee.full_name|slice:":2"|upper }}
+            </div>
+          {% endif %}
+          {% if employee.status == 'active' %}
+            <span style="position:absolute;bottom:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#34d399;border:3px solid #0f172a;"></span>
+          {% endif %}
+        </div>
 
-  <section class="mt-5 space-y-5" x-show="tab === 'payroll'">
-    <div class="grid gap-4 sm:grid-cols-3">
-      <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Profile Basic Salary</p><p class="mt-1 text-2xl font-bold">{{ employee.salary }}</p></div>
-      <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Salary Elements</p><p class="mt-1 text-2xl font-bold">{{ salary_items.count }}</p></div>
-      <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p class="text-xs text-slate-500">Payroll Records</p><p class="mt-1 text-2xl font-bold">{{ payrolls.count }}</p></div>
-    </div>
+        {# Name & meta #}
+        <div style="flex:1;min-width:200px;">
+          <h1 style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.5px;margin:0;">{{ employee.full_name }}</h1>
+          <p style="margin:6px 0 0;font-size:15px;color:rgba(255,255,255,0.6);font-weight:500;">
+            {{ employee.designation|default:"" }}{% if employee.designation and employee.department %} &nbsp;·&nbsp; {% endif %}{{ employee.department|default:"" }}
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;">
+            {% if employee.organization %}
+            <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:600;">🏢 {{ employee.organization }}</span>
+            {% endif %}
+            {% if employee.branch %}
+            <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:600;">📍 {{ employee.branch }}</span>
+            {% endif %}
+            {% if employee.job_type %}
+            <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:600;">💼 {{ employee.job_type }}</span>
+            {% endif %}
+            {% if employee.doj %}
+            <span style="background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border-radius:999px;padding:4px 12px;font-size:11px;font-weight:600;">📅 Joined {{ employee.doj|date:"d M Y" }}</span>
+            {% endif %}
+          </div>
+        </div>
 
-    <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <h3 class="font-semibold">Salary Elements</h3>
-        <p class="mt-1 text-xs text-slate-500">Basic salary comes from employee profile. Add each allowance/deduction only once.</p>
+        {# Edit #}
+        <div style="flex-shrink:0;align-self:flex-start;">
+          <a href="{% url 'hr:employee_update' employee.pk %}"
+             style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.18);color:#fff;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;text-decoration:none;">
+            ✏️ Edit Profile
+          </a>
+        </div>
       </div>
-      <form method="post" action="{% url 'hr:employee_salary_item_create' employee.pk %}" class="border-b border-slate-200 p-4 dark:border-slate-800">
+
+      {# Stats strip — 4 equal columns via CSS grid #}
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:28px;">
+        <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
+          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.45);margin:0;">Base Salary</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ employee.salary|floatformat:0 }}</p>
+          <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:0;">PKR / month</p>
+        </div>
+        <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
+          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.45);margin:0;">Payroll Records</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ payrolls.count }}</p>
+          <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:0;">Processed months</p>
+        </div>
+        <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
+          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.45);margin:0;">Experience</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ employee.experiences.count }}</p>
+          <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:0;">Previous jobs</p>
+        </div>
+        <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
+          <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.45);margin:0;">Qualifications</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ employee.qualifications.count }}</p>
+          <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:0;">Degrees / certs</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {# ── Tab Nav ── #}
+  <div class="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900">
+    <button @click="setTab('profile')"
+      :class="tab==='profile' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Profile</button>
+    <button @click="setTab('employment')"
+      :class="tab==='employment' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Employment</button>
+    <button @click="setTab('experience')"
+      :class="tab==='experience' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Experience</button>
+    <button @click="setTab('qualification')"
+      :class="tab==='qualification' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Qualifications</button>
+    <button @click="setTab('payroll')"
+      :class="tab==='payroll' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Payroll</button>
+  </div>
+
+  {# ── Profile ── #}
+  <section x-show="tab==='profile'" x-cloak>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {% include "hr/_info_card.html" with icon="🪪" label="CNIC" value=employee.cnic %}
+      {% include "hr/_info_card.html" with icon="📧" label="Email" value=employee.email|default:"—" %}
+      {% include "hr/_info_card.html" with icon="📱" label="Contact" value=employee.contact|default:"—" %}
+      {% include "hr/_info_card.html" with icon="👤" label="Father / Husband" value=employee.father_husband_name|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🎂" label="Date of Birth" value=employee.dob|date:"d M Y"|default:"—" %}
+      {% include "hr/_info_card.html" with icon="💍" label="Marital Status" value=employee.marital_status|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🩸" label="Blood Group" value=employee.blood_group|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🕌" label="Religion" value=employee.religion|default:"—" %}
+      {% include "hr/_info_card.html" with icon="⚧" label="Gender" value=employee.gender|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🆘" label="Emergency Contact" value=employee.emergency_contact|default:"—" %}
+      {% include "hr/_info_card.html" with icon="👨‍👩‍👧" label="Next of Kin" value=employee.nok|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🪪" label="NOK CNIC" value=employee.nok_cnic|default:"—" %}
+    </div>
+    {% if employee.address %}
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <p class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400">📍 Address</p>
+      <p class="text-sm text-slate-700 dark:text-slate-200">{{ employee.address }}</p>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ── Employment ── #}
+  <section x-show="tab==='employment'" x-cloak>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {% include "hr/_info_card.html" with icon="🏢" label="Organization" value=employee.organization|default:"—" %}
+      {% include "hr/_info_card.html" with icon="📍" label="Branch" value=employee.branch|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🗂️" label="Department" value=employee.department|default:"—" %}
+      {% include "hr/_info_card.html" with icon="💼" label="Designation" value=employee.designation|default:"—" %}
+      {% include "hr/_info_card.html" with icon="📋" label="Job Type" value=employee.job_type|default:"—" %}
+      {% include "hr/_info_card.html" with icon="📅" label="Date of Joining" value=employee.doj|date:"d M Y"|default:"—" %}
+      {% include "hr/_info_card.html" with icon="💰" label="Base Salary (PKR)" value=employee.salary %}
+      {% include "hr/_info_card.html" with icon="🏦" label="Bank" value=employee.bank|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🔢" label="Account Number" value=employee.account_number|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🤖" label="Attendance Code" value=employee.att_machine_code|default:"—" %}
+    </div>
+  </section>
+
+  {# ── Experience ── #}
+  <section x-show="tab==='experience'" x-cloak class="space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Add Experience</h3>
+      <form method="post" action="{% url 'hr:employee_experience_create' employee.pk %}">
         {% csrf_token %}
-        <div class="grid gap-3 sm:grid-cols-[1fr_12rem_auto]">
-          <div>
-            <label class="mb-1 block text-xs font-medium">Element</label>
-            {{ salary_item_form.allowance_deduction }}
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {% for field in experience_form %}
+          <div {% if field.name == "leave_reason" %}class="lg:col-span-2"{% endif %}>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">{{ field.label }}</label>
+            {{ field }}
           </div>
-          <div>
-            <label class="mb-1 block text-xs font-medium">Amount</label>
-            {{ salary_item_form.amount }}
-          </div>
+          {% endfor %}
           <div class="flex items-end">
-            <button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white" type="submit">Add</button>
+            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Add</button>
           </div>
         </div>
       </form>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-          <thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Element</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Amount</th><th class="px-4 py-3 text-right">Actions</th></tr></thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-            {% for item in salary_items %}
-              <tr>
-                <td class="px-4 py-3 font-medium">{{ item.allowance_deduction }}</td>
-                <td class="px-4 py-3">{{ item.get_allowance_deduction_type_display }}</td>
-                <td class="px-4 py-3">
-                  <form id="salary-item-update-{{ item.pk }}" method="post" action="{% url 'hr:employee_salary_item_update' employee.pk item.pk %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="allowance_deduction" value="{{ item.allowance_deduction_id }}">
-                    <input class="form-input max-w-40" type="number" min="0" step="0.01" name="amount" value="{{ item.amount }}">
-                  </form>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-2">
-                    <button class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" type="submit" form="salary-item-update-{{ item.pk }}" title="Update" aria-label="Update"><span aria-hidden="true">&#10003;</span></button>
-                    <form method="post" action="{% url 'hr:employee_salary_item_delete' employee.pk item.pk %}" onsubmit="return confirm('Delete this salary element?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>
-                  </div>
-                </td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No salary elements found.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    </div>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">Work History</h3>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
+          <tr>
+            <th class="px-5 py-3">Organization</th>
+            <th class="px-5 py-3">From</th>
+            <th class="px-5 py-3">To</th>
+            <th class="px-5 py-3">Salary</th>
+            <th class="px-5 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
+          {% for exp in employee.experiences.all %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ exp.organization }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ exp.from_date|date:"M Y"|default:"—" }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ exp.to_date|date:"M Y"|default:"Present" }}</td>
+            <td class="px-5 py-3 text-slate-600">{{ exp.salary|floatformat:0 }}</td>
+            <td class="px-5 py-3">
+              <form class="flex justify-end" method="post"
+                    action="{% url 'hr:employee_experience_delete' employee.pk exp.pk %}"
+                    onsubmit="return confirm('Remove?');">
+                {% csrf_token %}
+                <button class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="px-5 py-10 text-center text-slate-400">No experience records.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ── Qualifications ── #}
+  <section x-show="tab==='qualification'" x-cloak class="space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <h3 class="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Add Qualification</h3>
+      <form method="post" action="{% url 'hr:employee_qualification_create' employee.pk %}">
+        {% csrf_token %}
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {% for field in qualification_form %}
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">{{ field.label }}</label>
+            {{ field }}
+          </div>
+          {% endfor %}
+          <div class="flex items-end">
+            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Add</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">Academic Record</h3>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
+          <tr>
+            <th class="px-5 py-3">Qualification</th>
+            <th class="px-5 py-3">Type</th>
+            <th class="px-5 py-3">Institute</th>
+            <th class="px-5 py-3">Year</th>
+            <th class="px-5 py-3">Status</th>
+            <th class="px-5 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
+          {% for q in employee.qualifications.all %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ q.qualification }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ q.get_qualification_type_display }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ q.institute|default:"—" }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ q.to_date|date:"Y"|default:"—" }}</td>
+            <td class="px-5 py-3">
+              <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                {{ q.get_status_display }}
+              </span>
+            </td>
+            <td class="px-5 py-3">
+              <form class="flex justify-end" method="post"
+                    action="{% url 'hr:employee_qualification_delete' employee.pk q.pk %}"
+                    onsubmit="return confirm('Remove?');">
+                {% csrf_token %}
+                <button class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">No qualifications found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ── Payroll ── #}
+  <section x-show="tab==='payroll'" x-cloak class="space-y-5">
+    <div class="grid gap-4 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Base Salary</p>
+        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ employee.salary|floatformat:0 }}</p>
+        <p class="mt-1 text-xs text-slate-400">PKR / month</p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Salary Elements</p>
+        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ salary_items.count }}</p>
+        <p class="mt-1 text-xs text-slate-400">Allowances &amp; deductions</p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Payroll Records</p>
+        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ payrolls.count }}</p>
+        <p class="mt-1 text-xs text-slate-400">Total processed</p>
       </div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-200 px-4 py-3 dark:border-slate-800"><h3 class="font-semibold">Payroll History</h3></div>
-      <table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Period</th><th class="px-4 py-3">Base</th><th class="px-4 py-3">Allowances</th><th class="px-4 py-3">Deductions</th><th class="px-4 py-3">Net</th><th class="px-4 py-3">Status</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for payroll in payrolls %}<tr><td class="px-4 py-3">{{ payroll.month }}/{{ payroll.year }}</td><td class="px-4 py-3">{{ payroll.base_salary }}</td><td class="px-4 py-3">{{ payroll.total_allowances }}</td><td class="px-4 py-3">{{ payroll.total_deductions }}</td><td class="px-4 py-3 font-semibold">{{ payroll.net_salary }}</td><td class="px-4 py-3">{{ payroll.get_status_display }}</td></tr>{% empty %}<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No payroll history found.</td></tr>{% endfor %}</tbody></table>
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <h3 class="font-bold text-slate-800 dark:text-slate-100">Salary Elements</h3>
+        <p class="mt-0.5 text-xs text-slate-400">Base salary comes from the profile. Add each allowance/deduction once.</p>
+      </div>
+      <form method="post" action="{% url 'hr:employee_salary_item_create' employee.pk %}"
+            class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        {% csrf_token %}
+        <div class="grid gap-3 sm:grid-cols-[1fr_12rem_auto]">
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">Element</label>
+            {{ salary_item_form.allowance_deduction }}
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">Amount</label>
+            {{ salary_item_form.amount }}
+          </div>
+          <div class="flex items-end">
+            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90" type="submit">Add</button>
+          </div>
+        </div>
+      </form>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
+          <tr>
+            <th class="px-5 py-3">Element</th>
+            <th class="px-5 py-3">Type</th>
+            <th class="px-5 py-3">Amount</th>
+            <th class="px-5 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
+          {% for item in salary_items %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ item.allowance_deduction }}</td>
+            <td class="px-5 py-3">
+              {% if item.get_allowance_deduction_type_display == 'Allowance' %}
+                <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Allowance</span>
+              {% else %}
+                <span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">Deduction</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3">
+              <form id="sui-{{ item.pk }}" method="post" action="{% url 'hr:employee_salary_item_update' employee.pk item.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="allowance_deduction" value="{{ item.allowance_deduction_id }}">
+                <input class="form-input max-w-36" type="number" min="0" step="0.01" name="amount" value="{{ item.amount }}">
+              </form>
+            </td>
+            <td class="px-5 py-3">
+              <div class="flex justify-end gap-1">
+                <button form="sui-{{ item.pk }}" type="submit"
+                        class="grid h-8 w-8 place-items-center rounded-lg text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700"
+                        title="Save">✓</button>
+                <form method="post" action="{% url 'hr:employee_salary_item_delete' employee.pk item.pk %}"
+                      onsubmit="return confirm('Remove element?');">
+                  {% csrf_token %}
+                  <button type="submit" class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="px-5 py-10 text-center text-slate-400">No salary elements yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <h3 class="font-bold text-slate-800 dark:text-slate-100">Payroll History</h3>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
+          <tr>
+            <th class="px-5 py-3">Period</th>
+            <th class="px-5 py-3">Base</th>
+            <th class="px-5 py-3">Allowances</th>
+            <th class="px-5 py-3">Deductions</th>
+            <th class="px-5 py-3">Net</th>
+            <th class="px-5 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
+          {% for p in payrolls %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+            <td class="px-5 py-3 font-semibold text-slate-800 dark:text-slate-100">{{ p.month }}/{{ p.year }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ p.base_salary|floatformat:0 }}</td>
+            <td class="px-5 py-3 font-medium text-emerald-600">+{{ p.total_allowances|floatformat:0 }}</td>
+            <td class="px-5 py-3 font-medium text-rose-500">-{{ p.total_deductions|floatformat:0 }}</td>
+            <td class="px-5 py-3 text-base font-extrabold text-slate-900 dark:text-white">{{ p.net_salary|floatformat:0 }}</td>
+            <td class="px-5 py-3">
+              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {{ p.get_status_display }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">No payroll history.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
+
 </div>
 {% endblock %}
