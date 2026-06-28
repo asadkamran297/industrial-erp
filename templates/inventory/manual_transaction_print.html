@@ -1,0 +1,72 @@
+{% extends "layouts/print_base.html" %}
+{% block title %}Stock Adjustment — {{ tx_id }}{% endblock %}
+{% block content %}
+
+<div class="org-header">
+  {% if org.logo %}<img src="{{ org.logo.url }}" alt="Logo">{% endif %}
+  <div class="org-name">{{ org.name }}</div>
+  {% if branch %}<div class="org-branch">{{ branch.name }}</div>{% endif %}
+  <div class="org-addr">{{ org.address }}{% if org.city %} — {{ org.city }}{% endif %}</div>
+  <div class="org-contact">
+    {% if org.phone %}<span><b>Tel:</b> {{ org.phone }}</span>{% endif %}
+    {% if org.email %}<span><b>Email:</b> {{ org.email }}</span>{% endif %}
+    {% if org.ntn %}<span><b>NTN:</b> {{ org.ntn }}</span>{% endif %}
+    <span class="org-printed">Printed: {% now "d-M-Y H:i" %}</span>
+  </div>
+</div>
+
+<h1 class="doc-title">STOCK ADJUSTMENT / MANUAL TRANSACTION</h1>
+
+<table class="meta">
+  <tr>
+    <td class="lbl">Transaction ID:</td><td>{{ tx_id }}</td>
+    <td class="lbl">Date:</td><td>{{ tx_date|date:"d-M-Y H:i" }}</td>
+    <td class="lbl">Prepared By:</td><td>{{ prepared_by }}</td>
+  </tr>
+  {% if descr %}
+  <tr>
+    <td class="lbl">Description:</td><td colspan="5">{{ descr }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+<table class="items">
+  <thead>
+    <tr>
+      <th>Sr#</th>
+      <th>Item Code</th>
+      <th>Item Description</th>
+      <th>UOM</th>
+      <th class="num">Quantity</th>
+      <th class="num">Unit Price</th>
+      <th class="num">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ row.item_code }}</td>
+      <td>{{ row.item_name }}</td>
+      <td>{{ row.inventory_item.uom.title }}</td>
+      <td class="num">{{ row.qty|floatformat:4 }}</td>
+      <td class="num">{{ row.price|floatformat:2 }}</td>
+      <td class="num">{% widthratio row.qty 1 row.price %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="totals">
+  <b>Grand Total (PKR):</b> {{ grand_total|floatformat:2 }}
+</div>
+<div class="words">Amount in Words: {{ amount_in_words }}</div>
+
+<div class="sign">
+  <div>Prepared By<br><small style="font-weight:normal">{{ prepared_by }}</small></div>
+  <div>Verified By</div>
+  <div>Store In-Charge</div>
+  <div>Approved By</div>
+</div>
+
+{% endblock %}

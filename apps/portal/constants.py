@@ -41,9 +41,9 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Stock Report", permission="inventory.view", url_name="inventory:report_stock"),
         NavigationItem("Ledger Report", permission="inventory.view", url_name="inventory:report_ledger"),
         NavigationItem("Purchase Report", permission="inventory.view", url_name="inventory:report_purchase"),
-        NavigationItem("Sale Report", permission="inventory.view", url_name="inventory:report_sale"),
-        NavigationItem("Sale Return Report", permission="inventory.view", url_name="inventory:report_sale_return"),
-        NavigationItem("Purchase Return Report", permission="inventory.view", url_name="inventory:report_purchase_return"),
+        # NavigationItem("Sale Report", permission="inventory.view", url_name="inventory:report_sale"),
+        # NavigationItem("Sale Return Report", permission="inventory.view", url_name="inventory:report_sale_return"),
+        # NavigationItem("Purchase Return Report", permission="inventory.view", url_name="inventory:report_purchase_return"),
     )),
     NavigationItem("Finance", permission="finance.view", section=SECTION_OPERATIONS, icon="F", children=(
         NavigationItem("Fiscal Years", permission="finance.view", url_name="finance:fiscal_year_list"),

@@ -14,6 +14,7 @@ class PrintContextMixin:
         context = super().get_context_data(**kwargs)
         context.setdefault("org", Organization.objects.filter(status=STATUS_ACTIVE).order_by("id").first())
         context.setdefault("branch", Branch.objects.filter(status=STATUS_ACTIVE).select_related("city").order_by("id").first())
+        context.setdefault("printed_by", self.request.user)
         return context
 
 

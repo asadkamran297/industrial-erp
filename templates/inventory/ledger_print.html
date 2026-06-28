@@ -1,6 +1,13 @@
 {% extends "layouts/print_base.html" %}
 {% block title %}Item Ledger{% endblock %}
 
+{% block print_footer %}
+<div class="footer" style="display:flex;justify-content:space-between;align-items:center;">
+  <span>{{ org.title }}{% if org.website %} &middot; {{ org.website }}{% endif %} &middot; System generated document.</span>
+  <span><b>Printed By:</b> {{ printed_by.get_full_name|default:printed_by.username }} &nbsp;|&nbsp; {% now "d-m-Y, h:i A" %}</span>
+</div>
+{% endblock %}
+
 {% block print_content %}
   <h1 class="doc-title">Item Ledger</h1>
 

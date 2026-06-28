@@ -10,9 +10,14 @@
       <table class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           <tr>
+            <th class="px-4 py-3">Logo</th>
             <th class="px-4 py-3">Title</th>
             <th class="px-4 py-3">Code</th>
+            <th class="px-4 py-3">Phone / Cell</th>
+            <th class="px-4 py-3">Email</th>
+            <th class="px-4 py-3">Website</th>
             <th class="px-4 py-3">Parent</th>
+            <th class="px-4 py-3">Sub-Orgs</th>
             <th class="px-4 py-3">Status</th>
             <th class="px-4 py-3 text-right">Action</th>
           </tr>
@@ -20,21 +25,80 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {% for organization in organizations %}
             <tr>
-              <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">{{ organization.title }}</td>
-              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.code }}</td>
-              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.parent|default:"-" }}</td>
-              <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ organization.get_status_display }}</span></td>
+              <td class="px-4 py-3">
+                {% if organization.logo %}
+                  <img src="{{ organization.logo }}" alt="logo" class="h-10 w-auto max-w-[80px] rounded object-contain">
+                {% else %}
+                  <span class="inline-grid h-10 w-10 place-items-center rounded bg-slate-100 text-lg font-bold text-slate-400 dark:bg-slate-800">{{ organization.title|first|upper }}</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">
+                {{ organization.title }}
+                {% if organization.address %}<div class="text-xs text-slate-400 mt-0.5">{{ organization.address|truncatechars:50 }}</div>{% endif %}
+              </td>
+              <td class="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{{ organization.code }}</td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                {% if organization.phone %}<div>{{ organization.phone }}</div>{% endif %}
+                {% if organization.cell %}<div class="text-slate-400">{{ organization.cell }}</div>{% endif %}
+                {% if not organization.phone and not organization.cell %}—{% endif %}
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{{ organization.email|default:"—" }}</td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                {% if organization.website %}<a href="{{ organization.website }}" target="_blank" class="text-[var(--primary-color)] hover:underline">{{ organization.website|truncatechars:30 }}</a>{% else %}—{% endif %}
+              </td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.parent|default:"—" }}</td>
+              <td class="px-4 py-3">
+                {% with subs=organization.children.count %}
+                  {% if subs %}
+                    <span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">{{ subs }} sub-org{{ subs|pluralize }}</span>
+                  {% else %}—{% endif %}
+                {% endwith %}
+              </td>
+              <td class="px-4 py-3">
+                <span class="rounded-full px-2.5 py-1 text-xs font-medium
+                  {% if organization.status == 'active' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+                  {{ organization.get_status_display }}
+                </span>
+              </td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-3">
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:organization_update' organization.pk %}" title="Edit" aria-label="Edit">
-                    <span aria-hidden="true">&#9998;</span>
-                  </a>
-                  <form method="post" action="{% url 'organizations:organization_delete' organization.pk %}" onsubmit="return confirm('Delete this organization?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>
+                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:organization_update' organization.pk %}" title="Edit">&#9998;</a>
+                  <form method="post" action="{% url 'organizations:organization_delete' organization.pk %}" onsubmit="return confirm('Delete this organization?');">{% csrf_token %}
+                    <button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete">&#128465;</button>
+                  </form>
                 </div>
               </td>
             </tr>
+            {% for sub in organization.children.all %}
+            <tr class="bg-slate-50/50 dark:bg-slate-950/20">
+              <td class="px-4 py-2 pl-10">
+                {% if sub.logo %}<img src="{{ sub.logo }}" alt="logo" class="h-8 w-auto max-w-[60px] rounded object-contain">
+                {% else %}<span class="inline-grid h-8 w-8 place-items-center rounded bg-slate-100 text-sm font-bold text-slate-400">{{ sub.title|first|upper }}</span>{% endif %}
+              </td>
+              <td class="px-4 py-2 pl-10 text-sm text-slate-700 dark:text-slate-300">
+                <span class="text-slate-400 mr-1">↳</span>{{ sub.title }}
+              </td>
+              <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ sub.code }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.phone|default:"—" }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.email|default:"—" }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">—</td>
+              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.parent.title }}</td>
+              <td class="px-4 py-2">—</td>
+              <td class="px-4 py-2">
+                <span class="rounded-full px-2 py-0.5 text-xs font-medium
+                  {% if sub.status == 'active' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+                  {{ sub.get_status_display }}
+                </span>
+              </td>
+              <td class="px-4 py-2">
+                <div class="flex justify-end gap-2">
+                  <a class="grid h-7 w-7 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'organizations:organization_update' sub.pk %}" title="Edit">&#9998;</a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
           {% empty %}
-            <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No organizations found.</td></tr>
+            <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No organizations found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

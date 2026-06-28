@@ -12,7 +12,7 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_RAISED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
@@ -413,6 +413,24 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
         return context
 
 
+class PurchaseReportView(InventoryListMixin, ListView):
+    template_name = "inventory/purchase_report.html"
+    context_object_name = "orders"
+    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items").order_by("-purchase_date", "-id")
+    search_fields = ("purchase_num", "vendor__name", "quot_num")
+    filter_fields = {"status": "status"}
+
+    def get_filter_specs(self):
+        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        for order in context["orders"]:
+            items = list(order.items.all())
+            order.po_total = sum(i.total_amount for i in items)
+        return context
+
+
 class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
     model = PurchaseOrder
     form_class = PurchaseOrderForm
@@ -582,12 +600,26 @@ class ManualTransactionView(InventoryManageMixin, View):
         batch_descr = rows.values_list("descr", flat=True).first() or ""
         form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1})
         form.fields["inventory_item"].queryset = items
+        # group posted transactions by transaction_id for history table
+        from itertools import groupby as _groupby
+        posted_qs = ManualTransaction.objects.filter(status=STATUS_POSTED).order_by("transaction_id", "id")
+        history = {}
+        for tx_id, grp in _groupby(posted_qs, key=lambda r: r.transaction_id):
+            rows_list = list(grp)
+            history[tx_id] = {
+                "rows": rows_list,
+                "date": rows_list[0].created_at,
+                "descr": rows_list[0].descr,
+                "total_qty": sum(r.qty for r in rows_list),
+                "total_amount": sum(r.qty * r.price for r in rows_list),
+            }
         context = {
             "title": "Manual Stock Transaction",
             "form": form,
             "rows": rows,
             "transaction_id": draft_tx_id,
             "item_price_map": {str(i.pk): {"price": str(getattr(i, "stock", None) and i.stock.current_price or i.price), "qty": str(getattr(i, "stock", None) and i.stock.current_quantity or 0), "uom": i.uom.title} for i in items},
+            "history": history,
         }
         return render(request, self.template_name, context)
 
@@ -645,6 +677,29 @@ class ManualTransactionSubmitView(InventoryManageMixin, View):
         except ValidationError as exc:
             messages.error(request, exc)
         return redirect("inventory:manual_transaction")
+
+
+class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
+    template_name = "inventory/manual_transaction_print.html"
+
+    def get(self, request, tx_id):
+        from django.shortcuts import render
+        rows = ManualTransaction.objects.filter(transaction_id=tx_id, status=STATUS_POSTED).select_related("inventory_item__uom").order_by("id")
+        if not rows.exists():
+            messages.error(request, "Transaction not found.")
+            return redirect("inventory:manual_transaction")
+        grand_total = sum(r.qty * r.price for r in rows)
+        context = self.get_print_context(request)
+        context.update({
+            "tx_id": tx_id,
+            "rows": rows,
+            "grand_total": grand_total,
+            "amount_in_words": amount_in_words(grand_total),
+            "tx_date": rows[0].created_at,
+            "descr": rows[0].descr,
+            "prepared_by": rows[0].created_by,
+        })
+        return render(request, self.template_name, context)
 
 
 class CustomerListView(BaseSimpleListView):

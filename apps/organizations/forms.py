@@ -9,11 +9,18 @@ from .models import Branch, Organization
 class OrganizationForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = Organization
-        fields = ("parent", "title", "code", "status")
+        fields = ("parent", "title", "code", "logo", "phone", "cell", "fax", "email", "website", "address", "status")
         widgets = {
             "parent": forms.Select(attrs={"class": "form-select"}),
             "title": forms.TextInput(attrs={"class": "form-input", "placeholder": "Organization title"}),
-            "code": forms.TextInput(attrs={"class": "form-input", "placeholder": "Organization code"}),
+            "code": forms.TextInput(attrs={"class": "form-input", "placeholder": "Unique code e.g. MAIN"}),
+            "logo": forms.TextInput(attrs={"class": "form-input", "placeholder": "Logo URL (https://...)"}),
+            "phone": forms.TextInput(attrs={"class": "form-input", "placeholder": "+92-42-XXXXXXX"}),
+            "cell": forms.TextInput(attrs={"class": "form-input", "placeholder": "+92-3XX-XXXXXXX"}),
+            "fax": forms.TextInput(attrs={"class": "form-input", "placeholder": "Fax number"}),
+            "email": forms.EmailInput(attrs={"class": "form-input", "placeholder": "info@company.pk"}),
+            "website": forms.TextInput(attrs={"class": "form-input", "placeholder": "https://www.company.pk"}),
+            "address": forms.Textarea(attrs={"class": "form-input", "rows": 3, "placeholder": "Registered address"}),
             "status": forms.Select(attrs={"class": "form-select"}),
         }
 
