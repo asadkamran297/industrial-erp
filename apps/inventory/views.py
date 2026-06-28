@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -12,12 +12,12 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_RAISED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_RAISED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -1102,8 +1102,123 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
 class PurchaseReturnListView(InventoryListMixin, ListView):
     template_name = "inventory/purchase_return_list.html"
     context_object_name = "returns"
-    queryset = PurchaseReturnMaster.objects.select_related("purchase_order", "vendor").order_by("-return_date", "-id")
+    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "vendor").order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "purchase_order__purchase_num")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        all_orders = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").filter(
+            status__in=[STATUS_PARTIAL_RECEIVED, STATUS_FULLY_RECEIVED]
+        ).order_by("-purchase_date", "-id")
+        returnable_pks = []
+        for o in all_orders:
+            for item in o.items.all():
+                if (item.total_receive_qty or Decimal("0")) <= 0:
+                    continue
+                already = PurchaseReturnDetail.objects.filter(
+                    purchase_return_master__purchase_order=o,
+                    purchase_return_master__posted=YES,
+                    inventory_item=item.inventory_item,
+                ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
+                if item.total_receive_qty > already:
+                    returnable_pks.append(o.pk)
+                    break
+        orders = all_orders.filter(pk__in=returnable_pks)
+        pos_json = [
+            {"id": o.pk, "purchase_num": o.purchase_num, "vendor": o.vendor.name, "date": str(o.purchase_date)}
+            for o in orders
+        ]
+        items_json = {}
+        for o in orders:
+            rows = []
+            for i in o.items.all():
+                if (i.total_receive_qty or Decimal("0")) <= 0:
+                    continue
+                already = PurchaseReturnDetail.objects.filter(
+                    purchase_return_master__purchase_order=o,
+                    purchase_return_master__posted=YES,
+                    inventory_item=i.inventory_item,
+                ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
+                returnable = i.total_receive_qty - already
+                if returnable <= 0:
+                    continue
+                rows.append({
+                    "poi_pk": i.pk,
+                    "inventory_item_pk": i.inventory_item_id,
+                    "item_name": i.descr,
+                    "item_code": i.inventory_item.code,
+                    "recv_qty": float(returnable),
+                    "rate": float(i.rate),
+                    "total": float(returnable * i.rate),
+                    "uom": i.uom.title,
+                })
+            items_json[str(o.pk)] = rows
+        context["po_json"] = pos_json
+        context["po_items_json"] = items_json
+        context["today"] = timezone.localdate()
+        return context
+
+
+class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
+    def post(self, request):
+        po_pk = request.POST.get("purchase_order")
+        order = get_object_or_404(PurchaseOrder, pk=po_pk)
+        purchase_master = order.purchase_masters.first()
+        if not purchase_master:
+            messages.error(request, "No purchase master found for this PO.")
+            return redirect("inventory:purchase_return_list")
+        poi_pks = request.POST.getlist("poi_pk")
+        return_qtys = request.POST.getlist("return_qty")
+        if not poi_pks:
+            messages.error(request, "No items selected.")
+            return redirect("inventory:purchase_return_list")
+        try:
+            with transaction.atomic():
+                pr = PurchaseReturnMaster(
+                    transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster),
+                    purchase_master=purchase_master,
+                    return_date=timezone.localdate(),
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+                pr.save()
+                for poi_pk, qty_raw in zip(poi_pks, return_qtys):
+                    try:
+                        qty = Decimal(qty_raw)
+                    except Exception:
+                        continue
+                    if qty <= 0:
+                        continue
+                    poi = get_object_or_404(PurchaseOrderItem, pk=poi_pk)
+                    PurchaseReturnDetail.objects.create(
+                        purchase_return_master=pr,
+                        inventory_item=poi.inventory_item,
+                        quantity=qty,
+                        rate=poi.rate,
+                        created_by=request.user,
+                        updated_by=request.user,
+                    )
+                post_purchase_return(purchase_return=pr, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, exc)
+            return redirect("inventory:purchase_return_list")
+        return redirect(f"{reverse_lazy('inventory:purchase_return_receipt', kwargs={'pk': pr.pk})}?po={po_pk}")
+
+
+class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    model = PurchaseReturnMaster
+    template_name = "inventory/purchase_return_receipt.html"
+    context_object_name = "pr"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        items = list(self.object.items.select_related("inventory_item").all())
+        context["items"] = items
+        context["total_qty"] = sum(i.quantity for i in items)
+        context["total_return"] = self.object.returned_amount
+        context["amount_in_words"] = amount_in_words(self.object.returned_amount)
+        context["print_back_url"] = f"{reverse_lazy('inventory:purchase_return_list')}?po={self.request.GET.get('po', '')}"
+        return context
 
 
 class PurchaseReturnCreateView(InventoryManageMixin, CreateView):

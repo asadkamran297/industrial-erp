@@ -1,0 +1,105 @@
+{% extends "layouts/print_base.html" %}
+{% block title %}Purchase Return {{ pr.return_num }}{% endblock %}
+
+{% block extra_style %}
+  .pr-badge { display:inline-block; border:2px solid #7a0000; padding:6px 18px; font-size:18px; font-weight:800; letter-spacing:1px; color:#7a0000; text-transform:uppercase; margin-bottom:4px; }
+  .pr-ref { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+  .pr-ref-left, .pr-ref-right { width:48%; }
+  .ref-table { width:100%; border-collapse:collapse; }
+  .ref-table td { padding:3px 5px; font-size:11px; vertical-align:top; }
+  .ref-table .lbl { font-weight:700; width:38%; color:#444; border-right:1px solid #ddd; }
+  .ref-table tr { border-bottom:1px solid #f0f0f0; }
+  .vendor-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
+  .vendor-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#7a0000; text-transform:uppercase; letter-spacing:.5px; }
+  .vendor-box .vrow { font-size:11px; color:#333; margin:1px 0; }
+  table.items th { background:#7a0000; color:#fff; font-size:10px; }
+  table.items td { font-size:11px; }
+  table.items tfoot td { background:#f0f0f0; font-weight:700; border-top:2px solid #7a0000; }
+  .totals-box { display:flex; justify-content:flex-end; margin-top:10px; }
+  .totals-inner { border:1px solid #ccc; padding:8px 16px; min-width:260px; }
+  .totals-inner .trow { display:flex; justify-content:space-between; padding:2px 0; font-size:12px; border-bottom:1px solid #eee; }
+  .totals-inner .trow.grand { font-weight:800; font-size:14px; border-top:2px solid #7a0000; border-bottom:none; padding-top:4px; }
+  .words-box { margin-top:8px; font-size:11px; font-style:italic; color:#444; border-left:3px solid #7a0000; padding-left:8px; }
+  .sign { display:flex; justify-content:space-between; margin-top:60px; gap:12px; }
+  .sign div { text-align:center; border-top:2px solid #333; padding-top:6px; flex:1; font-weight:700; font-size:11px; }
+  .sign div span { display:block; font-weight:400; color:#555; margin-top:2px; font-size:10px; }
+{% endblock %}
+
+{% block print_content %}
+  <div style="text-align:center; margin-bottom:10px;">
+    <div class="pr-badge">Purchase Return</div>
+  </div>
+
+  <div class="pr-ref">
+    <div class="pr-ref-left">
+      <table class="ref-table">
+        <tr><td class="lbl">Return #</td><td><b>{{ pr.return_num }}</b></td></tr>
+        <tr><td class="lbl">Return Date</td><td>{{ pr.return_date }}</td></tr>
+        <tr><td class="lbl">Against PO</td><td>{{ pr.purchase_order.purchase_num }}</td></tr>
+        <tr><td class="lbl">PO Date</td><td>{{ pr.purchase_order.purchase_date }}</td></tr>
+        <tr><td class="lbl">Transaction ID</td><td>{{ pr.transaction_id }}</td></tr>
+      </table>
+    </div>
+    <div class="pr-ref-right">
+      <div class="vendor-box">
+        <div class="vtitle">Vendor</div>
+        <div class="vrow"><b>{{ pr.vendor.name }}</b></div>
+        {% if pr.vendor.addr1 %}<div class="vrow">{{ pr.vendor.addr1 }}{% if pr.vendor.addr2 %}, {{ pr.vendor.addr2 }}{% endif %}</div>{% endif %}
+        {% if pr.vendor.tel1 %}<div class="vrow"><b>Tel:</b> {{ pr.vendor.tel1 }}{% if pr.vendor.tel2 %} / {{ pr.vendor.tel2 }}{% endif %}</div>{% endif %}
+        {% if pr.vendor.email %}<div class="vrow"><b>Email:</b> {{ pr.vendor.email }}</div>{% endif %}
+        {% if pr.vendor.ntn_number %}<div class="vrow"><b>NTN:</b> {{ pr.vendor.ntn_number }}</div>{% endif %}
+        {% if pr.vendor.sale_tax_num %}<div class="vrow"><b>Sales Tax Reg#:</b> {{ pr.vendor.sale_tax_num }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Sr#</th>
+        <th>Item Code</th>
+        <th>Item Description</th>
+        <th class="num">Return Qty</th>
+        <th class="num">Rate</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ item.item_code }}</td>
+        <td>{{ item.item_name }}</td>
+        <td class="num">{{ item.quantity|floatformat:"-4" }}</td>
+        <td class="num">{{ item.rate|floatformat:2 }}</td>
+        <td class="num">{{ item.total_price|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center;padding:12px;">No items.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3" style="text-align:right;font-weight:700;">Totals:</td>
+        <td class="num">{{ total_qty|floatformat:"-4" }}</td>
+        <td></td>
+        <td class="num">{{ total_return|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="totals-box">
+    <div class="totals-inner">
+      <div class="trow"><span>Total Return Qty</span><span>{{ total_qty|floatformat:"-4" }}</span></div>
+      <div class="trow grand"><span>Return Amount (PKR)</span><span>{{ total_return|floatformat:2 }}</span></div>
+    </div>
+  </div>
+
+  <div class="words-box">Amount in Words: <b>{{ amount_in_words }}</b></div>
+
+  <div class="sign">
+    <div>Prepared By<span>Accounts</span></div>
+    <div>Checked By<span>Store Incharge</span></div>
+    <div>Approved By<span>Management</span></div>
+  </div>
+{% endblock %}

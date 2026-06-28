@@ -1,1 +1,178 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-4">{% include "components/ui/page_header.html" with title="Purchase Returns" action_label="New Return" action_url="/inventory/purchase-returns/new/" %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Return</th><th class="px-4 py-3">PO</th><th class="px-4 py-3">Vendor</th><th class="px-4 py-3">Amount</th><th class="px-4 py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for row in returns %}<tr><td class="px-4 py-3">{{ row.return_num }}</td><td class="px-4 py-3">{{ row.purchase_order.purchase_num }}</td><td class="px-4 py-3">{{ row.vendor }}</td><td class="px-4 py-3">{{ row.returned_amount }}</td><td class="px-4 py-3"><div class="flex justify-end"><a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_return_detail' row.pk %}">&#128065;</a></div></td></tr>{% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase returns found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% block content %}
+{{ po_json|json_script:"prt-pos" }}
+{{ po_items_json|json_script:"prt-items" }}
+
+<section class="space-y-4" x-data="purchaseReturn()">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Returns</h1>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Select a received PO to process a return.</p>
+    </div>
+  </div>
+
+  {# ── New Return Form ── #}
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <form method="post" action="{% url 'inventory:purchase_return_quick_create' %}" @submit.prevent="submit($event)">
+      {% csrf_token %}
+
+      <div class="mb-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Purchase Order *</label>
+          <select name="purchase_order" class="form-select w-full" x-model="poId" @change="loadItems()" required>
+            <option value="">— Select PO —</option>
+            {% for p in po_json %}
+            <option value="{{ p.id }}">{{ p.purchase_num }} — {{ p.vendor }} ({{ p.date }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Return Date</label>
+          <input type="date" name="return_date" value="{{ today|date:'Y-m-d' }}" class="form-input w-full">
+        </div>
+      </div>
+
+      <div x-show="!poId" class="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+        Select a PO above to load its received items.
+      </div>
+      <div x-show="poId && !items.length" x-cloak class="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800">
+        No received items found for this PO.
+      </div>
+
+      <div x-show="poId && items.length" x-cloak>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+              <tr>
+                <th class="px-3 py-2">Item</th>
+                <th class="px-3 py-2">Code</th>
+                <th class="px-3 py-2">UOM</th>
+                <th class="px-3 py-2 text-right">Recv Qty</th>
+                <th class="px-3 py-2 text-right">Rate</th>
+                <th class="px-3 py-2 text-right">Amount</th>
+                <th class="px-3 py-2 w-28">Return Qty</th>
+                <th class="px-3 py-2">&#10003;</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+              <template x-for="(it, i) in items" :key="it.poi_pk">
+                <tr :class="selected[i] ? 'bg-rose-50 dark:bg-rose-900/10' : ''">
+                  <td class="px-3 py-2 font-medium" x-text="it.item_name"></td>
+                  <td class="px-3 py-2 text-xs text-slate-500" x-text="it.item_code"></td>
+                  <td class="px-3 py-2 text-xs" x-text="it.uom"></td>
+                  <td class="px-3 py-2 text-right" x-text="fmt(it.recv_qty)"></td>
+                  <td class="px-3 py-2 text-right" x-text="fmt(it.rate)"></td>
+                  <td class="px-3 py-2 text-right" x-text="fmt(it.total)"></td>
+                  <td class="px-3 py-2">
+                    <input type="number" step="0.0001" min="0"
+                      :max="it.recv_qty"
+                      x-model.number="returnQtys[i]"
+                      :disabled="!selected[i]"
+                      class="form-input w-full disabled:opacity-40">
+                  </td>
+                  <td class="px-3 py-2">
+                    <input type="checkbox" x-model="selected[i]">
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex gap-6 text-sm text-slate-600 dark:text-slate-300">
+            <span>Selected: <strong x-text="selectedCount()"></strong></span>
+            <span>Return Total: <strong x-text="fmt(returnTotal())"></strong></span>
+          </div>
+          <button type="submit" :disabled="selectedCount() === 0"
+            class="min-h-10 rounded-lg bg-rose-600 px-5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-40">
+            Return &amp; Print
+          </button>
+        </div>
+      </div>
+
+      <div id="pr-hidden-inputs"></div>
+    </form>
+  </div>
+
+  {# ── Posted Returns ── #}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Posted Returns</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Return #</th>
+            <th class="px-4 py-3">PO #</th>
+            <th class="px-4 py-3">Vendor</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in returns %}
+          <tr>
+            <td class="px-4 py-3 font-medium">{{ row.return_num }}</td>
+            <td class="px-4 py-3">{{ row.purchase_order.purchase_num }}</td>
+            <td class="px-4 py-3">{{ row.vendor.name }}</td>
+            <td class="px-4 py-3">{{ row.return_date|date:"d-m-Y" }}</td>
+            <td class="px-4 py-3 text-right">{{ row.returned_amount|floatformat:2 }}</td>
+            <td class="px-4 py-3">
+              <div class="flex justify-end gap-1">
+                <a href="{% url 'inventory:purchase_return_receipt' row.pk %}"
+                   class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" title="Print">&#128438;</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No posted returns yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+
+</section>
+
+<script>
+function purchaseReturn() {
+  var allItems = JSON.parse(document.getElementById("prt-items").textContent);
+  return {
+    poId: new URLSearchParams(location.search).get("po") || "",
+    items: [],
+    selected: [],
+    returnQtys: [],
+    init() { if (this.poId) this.loadItems(); },
+    loadItems() {
+      if (!this.poId) { this.items = []; this.selected = []; this.returnQtys = []; return; }
+      this.items = allItems[String(this.poId)] || [];
+      this.selected = this.items.map(() => false);
+      this.returnQtys = this.items.map(it => it.recv_qty);
+    },
+    selectedCount() { return this.selected.filter(Boolean).length; },
+    returnTotal() {
+      return this.items.reduce((s, it, i) =>
+        this.selected[i] ? s + (Number(this.returnQtys[i]) || 0) * it.rate : s, 0);
+    },
+    fmt(v) { return (Number(v)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); },
+    submit(e) {
+      var form = e.target;
+      var container = form.querySelector("#pr-hidden-inputs");
+      container.innerHTML = "";
+      this.items.forEach((it, i) => {
+        if (!this.selected[i] || !(Number(this.returnQtys[i]) > 0)) return;
+        container.innerHTML +=
+          "<input type='hidden' name='poi_pk' value='" + it.poi_pk + "'>" +
+          "<input type='hidden' name='return_qty' value='" + Number(this.returnQtys[i]) + "'>";
+      });
+      if (!container.innerHTML) return;
+      form.submit();
+    },
+  };
+}
+</script>
+{% endblock %}
