@@ -4,6 +4,7 @@ from django.views.generic import TemplateView
 
 from apps.finance.models import AccountConfiguration, AccountVoucher
 from apps.hr.models import Employee
+from apps.inventory.models import POSDetail, PurchaseOrderItem
 from apps.organizations.models import Branch, Organization
 from apps.payroll.models import Payroll
 
@@ -50,6 +51,23 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             for item in Payroll.objects.values("month", "year").annotate(net=Sum("net_salary")).order_by("year", "month")
         ]
 
+        from apps.inventory.models import POSMaster, PurchaseMaster
+        from apps.core.constants import STATUS_POSTED, YES
+        total_sales = POSMaster.objects.filter(status=STATUS_POSTED).aggregate(t=Sum("net_amount"))["t"] or 0
+        total_purchases = PurchaseMaster.objects.aggregate(t=Sum("total_amount"))["t"] or 0
+        trending_sale_items = (
+            POSDetail.objects.filter(pos_master__status=STATUS_POSTED)
+            .values("item_name", "item_code")
+            .annotate(total_qty=Sum("quantity"), total_amt=Sum("net_total"))
+            .order_by("-total_qty")[:8]
+        )
+        trending_purchase_items = (
+            PurchaseOrderItem.objects.filter(total_receive_qty__gt=0)
+            .values("descr", "inventory_item__code")
+            .annotate(total_qty=Sum("total_receive_qty"), total_amt=Sum("retail_price"))
+            .order_by("-total_qty")[:8]
+        )
+
         context.update(
             {
                 "breadcrumbs": [("Dashboard", "")],
@@ -79,6 +97,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     {"title": "Vouchers", "description": "Payment and receipt voucher flow", "url": "/finance/vouchers/"},
                     {"title": "Payroll", "description": "Monthly salary generation and approval", "url": "/payroll/payrolls/"},
                 ],
+                "total_sales": total_sales,
+                "total_purchases": total_purchases,
+                "trending_sale_items": trending_sale_items,
+                "trending_purchase_items": trending_purchase_items,
                 "tasks": [
                     "Verify pending payrolls",
                     "Review unposted vouchers",

@@ -196,4 +196,85 @@
     });
   });
 </script>
+
+{# ── Inventory Reporting ── #}
+<section class="mt-6 space-y-4">
+  {# Summary cards #}
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Sales (Posted)</p>
+      <p class="mt-2 text-3xl font-bold text-emerald-600">{{ total_sales|floatformat:0 }}</p>
+      <p class="mt-1 text-xs text-slate-400">PKR — all posted POS sales</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Purchases (Received)</p>
+      <p class="mt-2 text-3xl font-bold text-blue-600">{{ total_purchases|floatformat:0 }}</p>
+      <p class="mt-1 text-xs text-slate-400">PKR — all received purchase orders</p>
+    </div>
+  </div>
+
+  {# Trending tables #}
+  <div class="grid gap-4 lg:grid-cols-2">
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">&#128200; Trending Sale Items</h2>
+        <p class="text-xs text-slate-400">Top items by quantity sold</p>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-2">#</th>
+            <th class="px-4 py-2">Item</th>
+            <th class="px-4 py-2">Code</th>
+            <th class="px-4 py-2 text-right">Qty Sold</th>
+            <th class="px-4 py-2 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for item in trending_sale_items %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-2 text-slate-400">{{ forloop.counter }}</td>
+            <td class="px-4 py-2 font-medium">{{ item.item_name }}</td>
+            <td class="px-4 py-2 text-xs text-slate-400">{{ item.item_code }}</td>
+            <td class="px-4 py-2 text-right font-semibold text-emerald-600">{{ item.total_qty|floatformat:"-4" }}</td>
+            <td class="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{{ item.total_amt|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No sales data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">&#128230; Trending Purchase Items</h2>
+        <p class="text-xs text-slate-400">Top items by quantity received</p>
+      </div>
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-2">#</th>
+            <th class="px-4 py-2">Item</th>
+            <th class="px-4 py-2">Code</th>
+            <th class="px-4 py-2 text-right">Qty Received</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for item in trending_purchase_items %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <td class="px-4 py-2 text-slate-400">{{ forloop.counter }}</td>
+            <td class="px-4 py-2 font-medium">{{ item.descr }}</td>
+            <td class="px-4 py-2 text-xs text-slate-400">{{ item.inventory_item__code }}</td>
+            <td class="px-4 py-2 text-right font-semibold text-blue-600">{{ item.total_qty|floatformat:"-4" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No purchase data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 {% endblock %}
