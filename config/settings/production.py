@@ -2,6 +2,8 @@ from .base import *  # noqa: F403
 
 DEBUG = False
 
+ALLOWED_HOSTS = [".railway.app", "localhost"]
+
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=True)  # noqa: F405
