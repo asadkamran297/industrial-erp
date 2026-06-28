@@ -247,7 +247,7 @@ class PurchaseOrderItemReceived(BaseModel):
     receive_date = models.DateField(default=timezone.localdate)
     invoice_num = models.CharField(max_length=80, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
-    grn_number = models.CharField(max_length=80)
+    grn_number = models.CharField(max_length=80, blank=True)
     rv_number = models.CharField(max_length=80, blank=True)
     extra_qty_tag = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))

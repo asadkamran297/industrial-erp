@@ -1007,9 +1007,96 @@ class POSReturnPostView(InventoryManageMixin, View):
 
 class GRNListView(InventoryListMixin, ListView):
     template_name = "inventory/grn_list.html"
-    context_object_name = "grns"
-    queryset = PurchaseOrderItemReceived.objects.select_related("purchase_order_item__purchase_order", "inventory_item").order_by("-receive_date", "-id")
-    search_fields = ("grn_number", "purchase_num", "descr", "invoice_num", "rv_number")
+    context_object_name = "orders"
+    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
+    search_fields = ("purchase_num", "vendor__name", "quot_num")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["grns"] = PurchaseOrderItemReceived.objects.select_related("purchase_order_item__purchase_order", "inventory_item").order_by("-receive_date", "-id")
+        for order in context["orders"]:
+            items = list(order.items.all())
+            order.po_total = sum(i.total_amount for i in items)
+            for item in items:
+                remaining = (item.quantity or Decimal("0")) - (item.total_receive_qty or Decimal("0"))
+                item.remaining_qty = remaining if remaining > 0 else Decimal("0")
+        return context
+
+
+class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):
+    model = PurchaseOrder
+    template_name = "inventory/grn_print.html"
+    context_object_name = "order"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        receipt_pks_raw = self.request.GET.get("receipts", "")
+        if receipt_pks_raw:
+            pks = [p for p in receipt_pks_raw.split(",") if p.isdigit()]
+            receipts = list(PurchaseOrderItemReceived.objects.filter(pk__in=pks).select_related("purchase_order_item"))
+        else:
+            receipts = []
+            for item in self.object.items.prefetch_related("receipts").filter(status=YES):
+                last = item.receipts.order_by("-id").first()
+                if last:
+                    receipts.append(last)
+        for r in receipts:
+            r.line_total = r.quantity * r.retail_price
+        context["receipts"] = receipts
+        context["total_qty"] = sum(r.quantity for r in receipts)
+        context["grand_total"] = sum(r.line_total for r in receipts)
+        context["po_total_qty"] = sum(r.purchase_order_item.quantity for r in receipts)
+        context["receive_date"] = receipts[0].receive_date if receipts else timezone.localdate()
+        context["prepared_by"] = self.request.user.get_full_name() or self.request.user.username
+        context["is_reprint"] = self.request.GET.get("reprint") == "1"
+        context["amount_in_words"] = amount_in_words(context["grand_total"])
+        context["print_back_url"] = reverse_lazy("inventory:grn_list")
+        return context
+
+
+class GRNBulkReceiveView(InventoryManageMixin, View):
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        today = timezone.localdate()
+        errors = []
+        receipt_pks = []
+        try:
+            with transaction.atomic():
+                for item in order.items.filter(status=YES):
+                    raw = request.POST.get(f"recv_qty_{item.pk}", "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        qty = Decimal(raw)
+                    except Exception:
+                        continue
+                    if qty <= 0:
+                        continue
+                    try:
+                        receipt = receive_purchase_order_item(
+                            purchase_order_item=item,
+                            quantity=qty,
+                            extra_qty=Decimal("0"),
+                            retail_price=item.retail_price or item.rate,
+                            receive_date=today,
+                            invoice_num="",
+                            invoice_date=None,
+                            rv_number="",
+                            remarks="",
+                            user=request.user,
+                        )
+                        receipt_pks.append(str(receipt.pk))
+                    except ValidationError as exc:
+                        errors.append(str(exc))
+                if errors:
+                    raise ValidationError(errors)
+        except ValidationError as exc:
+            for msg in exc.messages:
+                messages.error(request, msg)
+            return redirect("inventory:grn_list")
+        if receipt_pks:
+            messages.success(request, f"{len(receipt_pks)} item(s) received for {order.purchase_num}.")
+        return redirect(f"{reverse_lazy('inventory:grn_print', kwargs={'pk': pk})}?receipts={','.join(receipt_pks)}")
 
 
 class PurchaseReturnListView(InventoryListMixin, ListView):

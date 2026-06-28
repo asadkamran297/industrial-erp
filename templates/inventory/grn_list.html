@@ -1,17 +1,168 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<section class="space-y-4">
+<section class="space-y-6" x-data="{ open: new URLSearchParams(location.search).get('open') ? Number(new URLSearchParams(location.search).get('open')) : null }">
+
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Goods Receipt Notes (GRN)</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">All received items against purchase orders.</p>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">GRN — Goods Receipt Notes</h1>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Purchase orders and their received items.</p>
     </div>
     <button onclick="printSection('grn-table','Goods Receipt Notes')" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</button>
   </div>
 
   {% include "components/table/search_filters.html" %}
 
+  {# ── Purchase Orders ── #}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Purchase Orders</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="w-8 px-3 py-3"></th>
+            <th class="px-4 py-3">PO #</th>
+            <th class="px-4 py-3">Vendor</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for order in orders %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            <td class="px-3 py-3">
+              <button type="button" @click="open = (open === {{ order.pk }}) ? null : {{ order.pk }}"
+                class="grid h-6 w-6 place-items-center rounded-md border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300">
+                <span x-text="open === {{ order.pk }} ? '−' : '+'"></span>
+              </button>
+            </td>
+            <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
+            <td class="px-4 py-3">{{ order.vendor.name }}</td>
+            <td class="px-4 py-3">{{ order.purchase_date|date:"d-m-Y" }}</td>
+            <td class="px-4 py-3 text-right font-medium">{{ order.po_total|floatformat:2 }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full px-2.5 py-1 text-xs font-medium
+                {% if order.status == 'draft' %}bg-amber-100 text-amber-700
+                {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
+                {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ order.get_status_display }}
+              </span>
+            </td>
+          </tr>
+          {# Expandable GRN rows #}
+          <tr x-show="open === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
+            <td colspan="5" class="px-6 py-4" x-data="{ confirm: false }">
+              <form method="post" action="{% url 'inventory:grn_bulk_receive' order.pk %}" x-ref="recvForm_{{ order.pk }}">
+              {% csrf_token %}
+              {% with poi_list=order.items.all %}
+              {% if poi_list %}
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-100 text-slate-500 font-semibold uppercase dark:bg-slate-800">
+                  <tr>
+                    <th class="px-2 py-1.5">#</th>
+                    <th class="px-2 py-1.5">Item</th>
+                    <th class="px-2 py-1.5 text-right">PO Qty</th>
+                    <th class="px-2 py-1.5 text-right">Rate</th>
+                    <th class="px-2 py-1.5 text-right">Discount</th>
+                    <th class="px-2 py-1.5 text-right">Amount</th>
+                    <th class="px-2 py-1.5 text-right">Rem Qty</th>
+                    <th class="px-2 py-1.5 text-right">Last Recv</th>
+                    <th class="px-2 py-1.5 text-right">Curr Received Qty</th>
+                    <th class="px-2 py-1.5 text-right">Total Recv</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                  {% for poi in poi_list %}
+                  {% with poi_receipts=poi.receipts.all %}
+                  {% if poi_receipts %}
+                    {% for receipt in poi_receipts %}
+                    <tr class="bg-emerald-50/50 dark:bg-emerald-900/10">
+                      <td class="px-2 py-1.5 text-slate-400">{{ forloop.parentloop.counter }}</td>
+                      <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right {% if poi.pending_receive_qty == 0 %}text-slate-400{% else %}text-amber-600{% endif %}">{{ poi.pending_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right text-emerald-700">{{ poi.curr_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right">
+                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|floatformat:'-4' }}" min="0" step="0.0001"
+                          class="form-input w-24 text-right">
+                      </td>
+                      <td class="px-2 py-1.5 text-right font-semibold text-emerald-700">{{ poi.total_receive_qty|floatformat:"-4" }}</td>
+                    </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr class="bg-amber-50/50 dark:bg-amber-900/10">
+                      <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
+                      <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right text-amber-600">{{ poi.pending_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right text-slate-400">0</td>
+                      <td class="px-2 py-1.5 text-right">
+                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|floatformat:'-4' }}" min="0" step="0.0001"
+                          class="form-input w-24 text-right">
+                      </td>
+                      <td class="px-2 py-1.5 text-right text-slate-400">0</td>
+                      <td class="px-2 py-1.5"></td>
+                    </tr>
+                  {% endif %}
+                  {% endwith %}
+                  {% endfor %}
+                </tbody>
+              </table>
+              <div class="mt-3 flex justify-end">
+                <button type="button" @click="confirm = true"
+                  class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                  &#128230; Receive &amp; Print
+                </button>
+              </div>
+              {# Confirm modal #}
+              <div x-show="confirm" x-cloak @click.self="confirm = false"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div @click.stop class="w-96 rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-800">
+                  <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">Confirm Receive &amp; Print</h3>
+                  <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    Receive entered quantities for <strong>{{ order.purchase_num }}</strong> and print?
+                  </p>
+                  <div class="mt-5 flex justify-end gap-3">
+                    <button type="button" @click="confirm = false"
+                      class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">
+                      Cancel
+                    </button>
+                    <button type="submit"
+                      class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% else %}
+              <p class="text-sm text-slate-400">No items on this PO.</p>
+              {% endif %}
+              {% endwith %}
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── All GRN Records ── #}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">All Received Items</h2>
+    </div>
     <div class="overflow-x-auto">
       <table id="grn-table" class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
@@ -22,9 +173,7 @@
             <th class="px-4 py-3">Receive Date</th>
             <th class="px-4 py-3 text-right">Qty</th>
             <th class="px-4 py-3 text-right">Retail Price</th>
-            <th class="px-4 py-3">Invoice #</th>
-            <th class="px-4 py-3">Invoice Date</th>
-            <th class="px-4 py-3">RV #</th>
+            <th class="px-4 py-3"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -39,17 +188,21 @@
             <td class="px-4 py-3">{{ grn.receive_date|date:"d-m-Y" }}</td>
             <td class="px-4 py-3 text-right">{{ grn.quantity|floatformat:"-4" }}</td>
             <td class="px-4 py-3 text-right">{{ grn.retail_price|floatformat:2 }}</td>
-            <td class="px-4 py-3">{{ grn.invoice_num|default:"—" }}</td>
-            <td class="px-4 py-3">{{ grn.invoice_date|date:"d-m-Y"|default:"—" }}</td>
-            <td class="px-4 py-3">{{ grn.rv_number|default:"—" }}</td>
+            <td class="px-4 py-3">
+              <a href="{% url 'inventory:grn_print' grn.purchase_order_item.purchase_order_id %}?receipts={{ grn.pk }}&reprint=1"
+                 class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200" title="Reprint GRN">
+                &#128438; Print
+              </a>
+            </td>
           </tr>
           {% empty %}
-          <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
+          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
   {% include "components/table/pagination.html" %}
+
 </section>
 {% endblock %}
