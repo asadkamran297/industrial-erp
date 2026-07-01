@@ -12,7 +12,7 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView, V
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
+from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
@@ -222,6 +222,15 @@ class LedgerListView(InventoryListMixin, ListView):
     context_object_name = "ledgers"
     queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
     search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
+    filter_fields = {"item": "inventory_item_id", "type": "transaction_type"}
+    date_filters = [{"field": "transaction_date", "label": "Transaction date"}]
+
+    def get_filter_specs(self):
+        item_choices = list(InventoryItem.objects.order_by("item_name").values_list("id", "item_name"))
+        return [
+            {"name": "type", "label": "All types", "choices": INV_TRANSACTION_TYPE_CHOICES, "value": self.request.GET.get("type", "")},
+            {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
+        ]
 
 
 class CustomerLedgerListView(InventoryListMixin, ListView):
@@ -229,6 +238,12 @@ class CustomerLedgerListView(InventoryListMixin, ListView):
     context_object_name = "ledgers"
     queryset = CustomerLedger.objects.select_related("customer").order_by("-transaction_date", "-id")
     search_fields = ("transaction_no", "customer__customer_name", "customer__customer_code")
+    filter_fields = {"customer": "customer_id"}
+    date_filters = [{"field": "transaction_date", "label": "Transaction date"}]
+
+    def get_filter_specs(self):
+        customer_choices = list(Customer.objects.order_by("customer_name").values_list("id", "customer_name"))
+        return [{"name": "customer", "label": "All customers", "choices": customer_choices, "value": self.request.GET.get("customer", "")}]
 
 
 class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):
@@ -382,10 +397,20 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "vendor__name", "quot_num")
-    filter_fields = {"status": "status"}
+    filter_fields = {"status": "status", "vendor": "vendor_id", "item": "items__inventory_item_id"}
+    date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+
+    def get_queryset(self):
+        return super().get_queryset().distinct()
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        item_choices = list(InventoryItem.objects.filter(status=STATUS_ACTIVE).order_by("item_name").values_list("id", "item_name"))
+        return [
+            {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
+            {"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")},
+            {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
+        ]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -425,10 +450,20 @@ class PurchaseReportView(InventoryListMixin, ListView):
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items").order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "vendor__name", "quot_num")
-    filter_fields = {"status": "status"}
+    filter_fields = {"status": "status", "vendor": "vendor_id", "item": "items__inventory_item_id"}
+    date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+
+    def get_queryset(self):
+        return super().get_queryset().distinct()
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        item_choices = list(InventoryItem.objects.filter(status=STATUS_ACTIVE).order_by("item_name").values_list("id", "item_name"))
+        return [
+            {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
+            {"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")},
+            {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
+        ]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -975,6 +1010,7 @@ class POSReturnListView(InventoryListMixin, ListView):
     context_object_name = "returns"
     queryset = POSReturnMaster.objects.select_related("pos_master", "customer").filter(posted=YES).order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "sale_num")
+    date_filters = [{"field": "return_date", "label": "Return date"}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1072,6 +1108,12 @@ class GRNListView(InventoryListMixin, ListView):
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "vendor__name", "quot_num")
+    filter_fields = {"vendor": "vendor_id"}
+    date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+
+    def get_filter_specs(self):
+        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        return [{"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1166,6 +1208,12 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
     context_object_name = "returns"
     queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "vendor").order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "purchase_order__purchase_num")
+    filter_fields = {"vendor": "vendor_id"}
+    date_filters = [{"field": "return_date", "label": "Return date"}]
+
+    def get_filter_specs(self):
+        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        return [{"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

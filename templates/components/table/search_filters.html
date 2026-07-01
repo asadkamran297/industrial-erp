@@ -24,6 +24,16 @@
             </select>
           </div>
         {% endfor %}
+        {% for d in date_filter_specs %}
+          <div>
+            <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400" for="filter-{{ d.from_param }}">{{ d.label }} from</label>
+            <input id="filter-{{ d.from_param }}" type="date" name="{{ d.from_param }}" value="{{ d.from_value }}" class="form-input">
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400" for="filter-{{ d.to_param }}">{{ d.label }} to</label>
+            <input id="filter-{{ d.to_param }}" type="date" name="{{ d.to_param }}" value="{{ d.to_value }}" class="form-input">
+          </div>
+        {% endfor %}
       </div>
       <div class="flex items-center justify-end gap-2">
         <a href="{{ request.path }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium dark:border-slate-700">Reset</a>
