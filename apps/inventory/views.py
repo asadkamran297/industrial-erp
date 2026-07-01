@@ -17,7 +17,7 @@ from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, S
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -222,6 +222,13 @@ class LedgerListView(InventoryListMixin, ListView):
     context_object_name = "ledgers"
     queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
     search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
+
+
+class CustomerLedgerListView(InventoryListMixin, ListView):
+    template_name = "inventory/customer_ledger_list.html"
+    context_object_name = "ledgers"
+    queryset = CustomerLedger.objects.select_related("customer").order_by("-transaction_date", "-id")
+    search_fields = ("transaction_no", "customer__customer_name", "customer__customer_code")
 
 
 class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):

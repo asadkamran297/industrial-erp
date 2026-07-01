@@ -1,0 +1,48 @@
+{% extends "layouts/portal.html" %}{% block content %}
+<section class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Customer Ledger</h1>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Purchase, cash payment and return movement by customer.</p>
+    </div>
+  </div>
+  {% include "components/table/search_filters.html" %}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">#</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Transaction No</th>
+            <th class="px-4 py-3">Customer</th>
+            <th class="px-4 py-3">Transaction Type</th>
+            <th class="px-4 py-3">Opening Amount</th>
+            <th class="px-4 py-3">Running Amount</th>
+            <th class="px-4 py-3">Closing Balance</th>
+            <th class="px-4 py-3">Remarks</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in ledgers %}
+            <tr>
+              <td class="px-4 py-3">{{ row.pk }}</td>
+              <td class="px-4 py-3">{{ row.transaction_date }}</td>
+              <td class="px-4 py-3">{{ row.transaction_no }}</td>
+              <td class="px-4 py-3">{{ row.customer.customer_name }}</td>
+              <td class="px-4 py-3">{{ row.get_transaction_type_display }}</td>
+              <td class="px-4 py-3">{{ row.opening_amount }}</td>
+              <td class="px-4 py-3">{{ row.running_amount }}</td>
+              <td class="px-4 py-3 font-medium">{{ row.closing_balance }}</td>
+              <td class="px-4 py-3">{{ row.remarks }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No ledger entries found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

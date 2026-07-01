@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.constants import (
+    INV_CUSTOMER_LEDGER_TRANSACTION_TYPE_CHOICES,
     INV_IMPORTED_CHOICES,
     INV_ITEM_TYPE_CHOICES,
     INV_POS_STATUS_CHOICES,
@@ -358,6 +359,30 @@ class Customer(BaseModel):
 
     def __str__(self):
         return self.customer_name
+
+
+class CustomerLedger(BaseModel):
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column="inv_customer_id")
+    transaction_no = models.CharField(max_length=50)
+    transaction_type = models.CharField(max_length=50, choices=INV_CUSTOMER_LEDGER_TRANSACTION_TYPE_CHOICES)
+    transaction_date = models.DateField(default=timezone.localdate)
+    running_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    opening_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    closing_balance = models.DecimalField(max_digits=18, decimal_places=2)
+    remarks = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "inv_customer_ledgers"
+        ordering = ["-transaction_date", "-id"]
+        indexes = [models.Index(fields=["transaction_no"]), models.Index(fields=["customer"]), models.Index(fields=["transaction_date"])]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Ledger is insert-only. Use reversal entries instead of editing.")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.customer_id} - {self.transaction_no}"
 
 
 class POSMaster(BaseModel):
