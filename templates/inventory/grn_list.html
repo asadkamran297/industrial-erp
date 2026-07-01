@@ -89,31 +89,31 @@
                     <tr class="bg-emerald-50/50 dark:bg-emerald-900/10">
                       <td class="px-2 py-1.5 text-slate-400">{{ forloop.parentloop.counter }}</td>
                       <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
                       <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right {% if poi.pending_receive_qty == 0 %}text-slate-400{% else %}text-amber-600{% endif %}">{{ poi.pending_receive_qty|floatformat:"-4" }}</td>
-                      <td class="px-2 py-1.5 text-right text-emerald-700">{{ poi.curr_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right {% if poi.pending_receive_qty == 0 %}text-slate-400{% else %}text-amber-600{% endif %}">{{ poi.pending_receive_qty|qty }}</td>
+                      <td class="px-2 py-1.5 text-right text-emerald-700">{{ poi.curr_receive_qty|qty }}</td>
                       <td class="px-2 py-1.5 text-right">
-                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|floatformat:'-4' }}" min="0" step="0.0001"
+                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}" min="0" step="0.0001"
                           class="form-input w-24 text-right">
                       </td>
-                      <td class="px-2 py-1.5 text-right font-semibold text-emerald-700">{{ poi.total_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right font-semibold text-emerald-700">{{ poi.total_receive_qty|qty }}</td>
                     </tr>
                     {% endfor %}
                   {% else %}
                     <tr class="bg-amber-50/50 dark:bg-amber-900/10">
                       <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
                       <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
                       <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right text-amber-600">{{ poi.pending_receive_qty|floatformat:"-4" }}</td>
+                      <td class="px-2 py-1.5 text-right text-amber-600">{{ poi.pending_receive_qty|qty }}</td>
                       <td class="px-2 py-1.5 text-right text-slate-400">0</td>
                       <td class="px-2 py-1.5 text-right">
-                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|floatformat:'-4' }}" min="0" step="0.0001"
+                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}" min="0" step="0.0001"
                           class="form-input w-24 text-right">
                       </td>
                       <td class="px-2 py-1.5 text-right text-slate-400">0</td>
@@ -193,7 +193,7 @@
             </td>
             <td class="px-4 py-3">{{ grn.descr }}</td>
             <td class="px-4 py-3">{{ grn.receive_date|date:"d-m-Y" }}</td>
-            <td class="px-4 py-3 text-right">{{ grn.quantity|floatformat:"-4" }}</td>
+            <td class="px-4 py-3 text-right">{{ grn.quantity|qty }}</td>
             <td class="px-4 py-3 text-right">{{ grn.retail_price|floatformat:2 }}</td>
             <td class="px-4 py-3">
               <a href="{% url 'inventory:grn_print' grn.purchase_order_item.purchase_order_id %}?receipts={{ grn.pk }}&reprint=1"

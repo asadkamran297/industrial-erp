@@ -90,6 +90,9 @@ TEMPLATES = [
                 "apps.core.context_processors.system_settings",
                 "apps.portal.context_processors.portal_navigation",
             ],
+            "builtins": [
+                "apps.core.templatetags.core_extras",
+            ],
         },
     },
 ]

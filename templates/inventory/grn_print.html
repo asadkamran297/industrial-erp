@@ -81,8 +81,8 @@
         <td>{{ r.inventory_item.code }}</td>
         <td>{{ r.descr }}</td>
         <td>{{ r.purchase_order_item.uom.title }}</td>
-        <td class="num">{{ r.purchase_order_item.quantity|floatformat:"-4" }}</td>
-        <td class="num"><b>{{ r.quantity|floatformat:"-4" }}</b></td>
+        <td class="num">{{ r.purchase_order_item.quantity|qty }}</td>
+        <td class="num"><b>{{ r.quantity|qty }}</b></td>
         <td class="num">{{ r.retail_price|floatformat:2 }}</td>
         <td class="num">{{ r.line_total|floatformat:2 }}</td>
       </tr>
@@ -93,8 +93,8 @@
     <tfoot>
       <tr>
         <td colspan="4" style="text-align:right;font-weight:700;">Totals:</td>
-        <td class="num">{{ po_total_qty|floatformat:"-4" }}</td>
-        <td class="num">{{ total_qty|floatformat:"-4" }}</td>
+        <td class="num">{{ po_total_qty|qty }}</td>
+        <td class="num">{{ total_qty|qty }}</td>
         <td></td>
         <td class="num">{{ grand_total|floatformat:2 }}</td>
       </tr>
@@ -103,7 +103,7 @@
 
   <div class="totals-box">
     <div class="totals-inner">
-      <div class="trow"><span>Total Received Qty</span><span>{{ total_qty|floatformat:"-4" }}</span></div>
+      <div class="trow"><span>Total Received Qty</span><span>{{ total_qty|qty }}</span></div>
       <div class="trow grand"><span>Grand Total (PKR)</span><span>{{ grand_total|floatformat:2 }}</span></div>
     </div>
   </div>

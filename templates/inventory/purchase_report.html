@@ -81,7 +81,7 @@
                     <td class="py-2">{{ forloop.counter }}</td>
                     <td class="py-2">{{ item.descr }}</td>
                     <td class="py-2">{{ item.uom.title }}</td>
-                    <td class="py-2 text-right">{{ item.quantity }}</td>
+                    <td class="py-2 text-right">{{ item.quantity|qty }}</td>
                     <td class="py-2 text-right">{{ item.rate }}</td>
                     <td class="py-2 text-right">{{ item.discount_amount }}</td>
                     <td class="py-2 text-right font-medium">{{ item.total_amount|floatformat:2 }}</td>

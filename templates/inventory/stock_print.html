@@ -21,7 +21,7 @@
         <td>{{ forloop.counter }}</td>
         <td>{{ stock.item_name }}</td>
         <td>{{ stock.item_code }}</td>
-        <td class="num">{{ stock.current_quantity }}</td>
+        <td class="num">{{ stock.current_quantity|qty }}</td>
         <td class="num">{{ stock.current_price }}</td>
         <td class="num">{{ stock.last_price }}</td>
       </tr>

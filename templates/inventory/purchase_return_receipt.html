@@ -70,7 +70,7 @@
         <td>{{ forloop.counter }}</td>
         <td>{{ item.item_code }}</td>
         <td>{{ item.item_name }}</td>
-        <td class="num">{{ item.quantity|floatformat:"-4" }}</td>
+        <td class="num">{{ item.quantity|qty }}</td>
         <td class="num">{{ item.rate|floatformat:2 }}</td>
         <td class="num">{{ item.total_price|floatformat:2 }}</td>
       </tr>
@@ -81,7 +81,7 @@
     <tfoot>
       <tr>
         <td colspan="3" style="text-align:right;font-weight:700;">Totals:</td>
-        <td class="num">{{ total_qty|floatformat:"-4" }}</td>
+        <td class="num">{{ total_qty|qty }}</td>
         <td></td>
         <td class="num">{{ total_return|floatformat:2 }}</td>
       </tr>
@@ -90,7 +90,7 @@
 
   <div class="totals-box">
     <div class="totals-inner">
-      <div class="trow"><span>Total Return Qty</span><span>{{ total_qty|floatformat:"-4" }}</span></div>
+      <div class="trow"><span>Total Return Qty</span><span>{{ total_qty|qty }}</span></div>
       <div class="trow grand"><span>Return Amount (PKR)</span><span>{{ total_return|floatformat:2 }}</span></div>
     </div>
   </div>

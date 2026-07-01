@@ -30,9 +30,9 @@
               <td class="px-4 py-3">{{ row.transaction_date }}</td>
               <td class="px-4 py-3">{{ row.get_transaction_type_display }}</td>
               <td class="px-4 py-3">{{ row.item_name }}</td>
-              <td class="px-4 py-3">{{ row.old_quantity }}</td>
-              <td class="px-4 py-3">{{ row.quantity }}</td>
-              <td class="px-4 py-3 font-medium">{{ row.new_quantity }}</td>
+              <td class="px-4 py-3">{{ row.old_quantity|qty }}</td>
+              <td class="px-4 py-3">{{ row.quantity|qty }}</td>
+              <td class="px-4 py-3 font-medium">{{ row.new_quantity|qty }}</td>
               <td class="px-4 py-3">{{ row.ref_no }}</td>
             </tr>
           {% empty %}

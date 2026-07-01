@@ -24,9 +24,9 @@
         <td>{{ row.transaction_date }}</td>
         <td>{{ row.get_transaction_type_display }}</td>
         <td>{{ row.item_name }}</td>
-        <td class="num">{{ row.old_quantity }}</td>
-        <td class="num">{{ row.quantity }}</td>
-        <td class="num">{{ row.new_quantity }}</td>
+        <td class="num">{{ row.old_quantity|qty }}</td>
+        <td class="num">{{ row.quantity|qty }}</td>
+        <td class="num">{{ row.new_quantity|qty }}</td>
         <td>{{ row.ref_no }}</td>
       </tr>
       {% empty %}
