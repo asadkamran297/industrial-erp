@@ -2,7 +2,7 @@
 {% load inventory_extras %}
 {% block content %}
 <section class="space-y-4">
-  {% include "components/ui/page_header.html" with title=title action_label="New" action_url=create_url %}
+  {% if can_add %}{% include "components/ui/page_header.html" with title=title action_label="New" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title=title %}{% endif %}
   {% include "components/table/search_filters.html" %}
 
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

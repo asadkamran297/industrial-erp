@@ -44,6 +44,10 @@ def build_navigation_item(
         if child is not None
     ]
 
+    # A parent that declares children but has none visible is hidden entirely.
+    if item.children and not children:
+        return None
+
     if not user_can_view_item(item, permission_codes) and not children:
         return None
 

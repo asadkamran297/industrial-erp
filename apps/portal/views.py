@@ -1,6 +1,7 @@
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Sum
 from django.views.generic import TemplateView
+
+from apps.core.mixins import PagePermissionRequiredMixin
 
 from apps.finance.models import AccountConfiguration, AccountVoucher
 from apps.hr.models import Employee
@@ -9,7 +10,8 @@ from apps.organizations.models import Branch, Organization
 from apps.payroll.models import Payroll
 
 
-class DashboardView(LoginRequiredMixin, TemplateView):
+class DashboardView(PagePermissionRequiredMixin, TemplateView):
+    page = "dashboard"
     template_name = "portal/dashboard.html"
 
     def get_context_data(self, **kwargs):

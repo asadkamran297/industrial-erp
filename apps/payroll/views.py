@@ -4,15 +4,15 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from apps.core.constants import ALLOWANCE_DEDUCTION_TYPE_CHOICES, WORKFLOW_STATUS_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from .forms import EmployeeSalaryForm, PayrollForm
 from .models import EmployeeSalary, Payroll
 from apps.hr.models import Employee
 
 
-class EmployeeSalaryListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "payroll.view"
+class EmployeeSalaryListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "payroll.salary_items"
     template_name = "payroll/employee_salary_list.html"
     context_object_name = "salary_items"
     queryset = EmployeeSalary.objects.select_related("employee", "allowance_deduction").order_by("employee__full_name")
@@ -28,8 +28,8 @@ class EmployeeSalaryListView(SearchFilterPaginationMixin, PortalPermissionRequir
         return context
 
 
-class EmployeeSalaryCreateView(PortalPermissionRequiredMixin, CreateView):
-    permission_required = "payroll.generate"
+class EmployeeSalaryCreateView(PagePermissionRequiredMixin, CreateView):
+    page = "payroll.salary_items"
     model = EmployeeSalary
     form_class = EmployeeSalaryForm
     template_name = "payroll/employee_salary_form.html"
@@ -58,8 +58,9 @@ class EmployeeSalaryUpdateView(EmployeeSalaryCreateView, UpdateView):
         return super().form_valid(form)
 
 
-class EmployeeSalaryDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "payroll.generate"
+class EmployeeSalaryDeleteView(PagePermissionRequiredMixin, View):
+    page = "payroll.salary_items"
+    action = "delete"
 
     def post(self, request, pk):
         EmployeeSalary.objects.get(pk=pk).soft_delete(request.user)
@@ -67,8 +68,8 @@ class EmployeeSalaryDeleteView(PortalPermissionRequiredMixin, View):
         return redirect("payroll:employee_salary_list")
 
 
-class PayrollListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "payroll.view"
+class PayrollListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "payroll.runs"
     template_name = "payroll/payroll_list.html"
     context_object_name = "payrolls"
     queryset = Payroll.objects.select_related("employee").order_by("-year", "-month", "employee__full_name")
@@ -84,8 +85,8 @@ class PayrollListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin
         return context
 
 
-class PayrollCreateView(PortalPermissionRequiredMixin, CreateView):
-    permission_required = "payroll.generate"
+class PayrollCreateView(PagePermissionRequiredMixin, CreateView):
+    page = "payroll.runs"
     model = Payroll
     form_class = PayrollForm
     template_name = "payroll/payroll_form.html"
@@ -111,8 +112,9 @@ class PayrollUpdateView(PayrollCreateView, UpdateView):
         return super().form_valid(form)
 
 
-class PayrollDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "payroll.generate"
+class PayrollDeleteView(PagePermissionRequiredMixin, View):
+    page = "payroll.runs"
+    action = "delete"
 
     def post(self, request, pk):
         Payroll.objects.get(pk=pk).soft_delete(request.user)

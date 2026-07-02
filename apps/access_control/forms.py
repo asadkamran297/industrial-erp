@@ -30,6 +30,41 @@ class RoleForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
         if self.instance.pk:
             self.fields["permissions"].initial = Permission.objects.filter(role_links__role=self.instance)
 
+    def _selected_permission_ids(self) -> set[str]:
+        if self.is_bound:
+            return set(self.data.getlist("permissions"))
+        if self.instance.pk:
+            return {
+                str(pk)
+                for pk in Permission.objects.filter(role_links__role=self.instance).values_list("id", flat=True)
+            }
+        return set()
+
+    def permission_sections(self):
+        """Permissions grouped by module/page for a scannable role editor.
+
+        Returns ``[{"group", "pages": [{"key", "label", "perms": [...]}]}]``
+        where each perm is ``{"id", "action", "checked"}``.
+        """
+        from collections import OrderedDict
+
+        from apps.access_control.pages import PAGE_MAP
+
+        selected = self._selected_permission_ids()
+        sections: "OrderedDict[str, OrderedDict]" = OrderedDict()
+        for permission in self.fields["permissions"].queryset:
+            page_key, _, action = permission.code.rpartition(".")
+            page = PAGE_MAP.get(page_key)
+            group = page.group if page else "Other"
+            label = page.label if page else page_key
+            pages = sections.setdefault(group, OrderedDict())
+            row = pages.setdefault(page_key, {"key": page_key, "label": label, "perms": []})
+            row["perms"].append({"id": permission.id, "action": action, "checked": str(permission.id) in selected})
+        return [
+            {"group": group, "pages": list(pages.values())}
+            for group, pages in sections.items()
+        ]
+
     def clean_title(self):
         title = self.cleaned_data["title"].strip()
         qs = Role.all_objects.filter(title__iexact=title, deleted_at__isnull=True)

@@ -5,7 +5,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
@@ -20,8 +20,8 @@ class AuditSaveMixin:
         return super().form_valid(form)
 
 
-class FiscalYearListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "finance.view"
+class FiscalYearListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "finance.fiscal_years"
     template_name = "finance/fiscal_year_list.html"
     context_object_name = "fiscal_years"
     queryset = FiscalYear.objects.order_by("-start_date")
@@ -32,8 +32,8 @@ class FiscalYearListView(SearchFilterPaginationMixin, PortalPermissionRequiredMi
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class FiscalYearCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "finance.manage"
+class FiscalYearCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "finance.fiscal_years"
     model = FiscalYear
     form_class = FiscalYearForm
     template_name = "finance/fiscal_year_form.html"
@@ -50,8 +50,8 @@ class FiscalYearUpdateView(FiscalYearCreateView, UpdateView):
     success_message = "Fiscal year updated."
 
 
-class AccountConfigurationListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "finance.view"
+class AccountConfigurationListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "finance.accounts"
     template_name = "finance/account_configuration_list.html"
     context_object_name = "accounts"
     queryset = AccountConfiguration.objects.select_related("post_to_account").order_by("account_no")
@@ -66,8 +66,8 @@ class AccountConfigurationListView(SearchFilterPaginationMixin, PortalPermission
         ]
 
 
-class AccountConfigurationCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "finance.manage"
+class AccountConfigurationCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "finance.accounts"
     model = AccountConfiguration
     form_class = AccountConfigurationForm
     template_name = "finance/account_configuration_form.html"
@@ -79,8 +79,8 @@ class AccountConfigurationUpdateView(AccountConfigurationCreateView, UpdateView)
     success_message = "Account updated."
 
 
-class AccountVoucherListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "finance.view"
+class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "finance.vouchers"
     template_name = "finance/account_voucher_list.html"
     context_object_name = "vouchers"
     queryset = AccountVoucher.objects.select_related("payment_method").order_by("-voucher_date", "-id")
@@ -95,8 +95,8 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PortalPermissionRequir
         ]
 
 
-class AccountVoucherCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "finance.manage"
+class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "finance.vouchers"
     model = AccountVoucher
     form_class = AccountVoucherForm
     template_name = "finance/account_voucher_form.html"
@@ -115,8 +115,8 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
         return super().dispatch(request, *args, **kwargs)
 
 
-class AccountVoucherDetailView(PortalPermissionRequiredMixin, DetailView):
-    permission_required = "finance.view"
+class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
+    page = "finance.vouchers"
     model = AccountVoucher
     template_name = "finance/account_voucher_detail.html"
     context_object_name = "voucher"
@@ -129,8 +129,9 @@ class AccountVoucherDetailView(PortalPermissionRequiredMixin, DetailView):
         return context
 
 
-class AccountVoucherLineCreateView(PortalPermissionRequiredMixin, View):
-    permission_required = "finance.manage"
+class AccountVoucherLineCreateView(PagePermissionRequiredMixin, View):
+    page = "finance.vouchers"
+    action = "edit"
 
     @transaction.atomic
     def post(self, request, voucher_pk):
@@ -208,8 +209,9 @@ class AccountVoucherLineCreateView(PortalPermissionRequiredMixin, View):
         return redirect("finance:account_voucher_detail", pk=voucher.pk)
 
 
-class AccountVoucherLineDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "finance.manage"
+class AccountVoucherLineDeleteView(PagePermissionRequiredMixin, View):
+    page = "finance.vouchers"
+    action = "edit"
 
     @transaction.atomic
     def post(self, request, voucher_pk, pk):

@@ -1,40 +1,45 @@
 from apps.access_control.models import Permission
+from apps.access_control.pages import iter_page_permissions
 from apps.core.constants import STATUS_ACTIVE
 
-
-PERMISSIONS = [
-    ("dashboard.view", "View Dashboard"),
-    ("operations.view", "View Operations"),
-    ("inventory.view", "View Inventory"),
-    ("inventory.manage", "Manage Inventory"),
-    ("configurations.view", "View Configuration Masters"),
-    ("configurations.manage", "Manage Configuration Masters"),
-    ("organizations.view", "View Organizations"),
-    ("organizations.manage", "Manage Organizations"),
-    ("access_control.view", "View Access Control"),
-    ("access_control.manage", "Manage Access Control"),
-    ("hr.view", "View HR"),
-    ("hr.manage", "Manage HR"),
-    ("employees.view", "View Employees"),
-    ("employees.manage", "Manage Employees"),
-    ("payroll.view", "View Payroll"),
-    ("payroll.generate", "Generate Payroll"),
-    ("payroll.approve", "Approve Payroll"),
-    ("finance.view", "View Finance"),
-    ("finance.manage", "Manage Finance"),
-    ("reports.view", "View Reports"),
-    ("settings.view", "View Settings"),
-    ("settings.manage", "Manage Settings"),
-    ("help.view", "View Help"),
+# Coarse module-level codes replaced by page-level codes. Pruned on reseed so the
+# switch to page-level access control is clean. User-created custom permissions
+# (any code outside this list) are left untouched.
+LEGACY_CODES = [
+    "dashboard.view",
+    "operations.view",
+    "inventory.view",
+    "inventory.manage",
+    "configurations.view",
+    "configurations.manage",
+    "organizations.view",
+    "organizations.manage",
+    "access_control.view",
+    "access_control.manage",
+    "hr.view",
+    "hr.manage",
+    "employees.view",
+    "employees.manage",
+    "payroll.view",
+    "payroll.generate",
+    "payroll.approve",
+    "finance.view",
+    "finance.manage",
+    "reports.view",
+    "settings.view",
+    "settings.manage",
+    "help.view",
 ]
 
 
 def seed_permissions() -> int:
+    Permission.all_objects.filter(code__in=LEGACY_CODES).delete()
+
     created_count = 0
-    for seq, (code, title) in enumerate(PERMISSIONS, start=10):
+    for code, title, seq in iter_page_permissions():
         _, created = Permission.objects.update_or_create(
             code=code,
-            defaults={"title": title, "seq": seq * 10, "status": STATUS_ACTIVE},
+            defaults={"title": title, "seq": seq, "status": STATUS_ACTIVE},
         )
         created_count += int(created)
     return created_count

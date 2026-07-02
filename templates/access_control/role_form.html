@@ -13,13 +13,35 @@
       {% for error in form.status.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
     </div>
   </div>
-  <div class="mt-5">
-    <p class="mb-3 text-sm font-medium">Permissions</p>
-    <div class="grid gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800 sm:grid-cols-2">
-      {% for choice in form.permissions %}
-        <label class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+  <div class="mt-5" x-data="{ q: '' }">
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <p class="text-sm font-medium">Permissions</p>
+      <input type="search" x-model="q" placeholder="Filter pages..." class="form-input max-w-xs">
+    </div>
+    <div class="space-y-5">
+      {% for section in form.permission_sections %}
+        <div>
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ section.group }}</p>
+          <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+            {% for page in section.pages %}
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2.5 last:border-b-0 dark:border-slate-800"
+                   x-show="q === '' || '{{ page.label|lower }}'.includes(q.toLowerCase())">
+                <span class="w-40 shrink-0 text-sm font-medium">{{ page.label }}</span>
+                <div class="flex flex-wrap gap-3">
+                  {% for perm in page.perms %}
+                    <label class="flex items-center gap-1.5 text-xs capitalize text-slate-600 dark:text-slate-300">
+                      <input type="checkbox" name="permissions" value="{{ perm.id }}" {% if perm.checked %}checked{% endif %}>
+                      {{ perm.action }}
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
       {% endfor %}
     </div>
+    {% for error in form.permissions.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
   </div>
   <div class="mt-6 flex justify-end gap-3">
     <a href="{% url 'access_control:role_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium dark:border-slate-700">Cancel</a>

@@ -13,7 +13,7 @@ from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
-from apps.core.mixins import PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
@@ -21,12 +21,12 @@ from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, Ite
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
-class InventoryListMixin(SearchFilterPaginationMixin, PortalPermissionRequiredMixin):
-    permission_required = "inventory.view"
+class InventoryListMixin(SearchFilterPaginationMixin, PagePermissionRequiredMixin):
+    pass
 
 
-class InventoryManageMixin(AuditSaveMixin, PortalPermissionRequiredMixin):
-    permission_required = "inventory.manage"
+class InventoryManageMixin(AuditSaveMixin, PagePermissionRequiredMixin):
+    pass
 
 
 class BaseSimpleListView(InventoryListMixin, ListView):
@@ -41,6 +41,7 @@ class BaseSimpleListView(InventoryListMixin, ListView):
 
 
 class InventoryClassListView(BaseSimpleListView):
+    page = "inventory.classes"
     model = InventoryClass
     queryset = InventoryClass.objects.order_by("title")
     search_fields = ("title", "class_code")
@@ -52,6 +53,7 @@ class InventoryClassListView(BaseSimpleListView):
 
 
 class InventoryClassCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.classes"
     model = InventoryClass
     form_class = InventoryClassForm
     template_name = "inventory/simple_form.html"
@@ -65,6 +67,7 @@ class InventoryClassUpdateView(InventoryClassCreateView, UpdateView):
 
 
 class UOMListView(BaseSimpleListView):
+    page = "inventory.uoms"
     model = UOM
     template_name = "inventory/uom_list.html"
     queryset = UOM.objects.order_by("title")
@@ -126,6 +129,7 @@ class UOMListView(BaseSimpleListView):
 
 
 class UOMCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.uoms"
     model = UOM
     form_class = UOMForm
     template_name = "inventory/simple_form.html"
@@ -139,6 +143,7 @@ class UOMUpdateView(UOMCreateView, UpdateView):
 
 
 class UOMConversionListView(BaseSimpleListView):
+    page = "inventory.uom_conversions"
     model = UOMConversion
     queryset = UOMConversion.objects.select_related("uom_from", "uom_to").order_by("uom_from__title")
     search_fields = ("uom_from__title", "uom_to__title")
@@ -150,6 +155,7 @@ class UOMConversionListView(BaseSimpleListView):
 
 
 class UOMConversionCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.uom_conversions"
     model = UOMConversion
     form_class = UOMConversionForm
     template_name = "inventory/simple_form.html"
@@ -163,6 +169,7 @@ class UOMConversionUpdateView(UOMConversionCreateView, UpdateView):
 
 
 class VendorListView(BaseSimpleListView):
+    page = "inventory.vendors"
     model = Vendor
     queryset = Vendor.objects.select_related("city").order_by("name")
     search_fields = ("name", "code", "email", "tel1")
@@ -174,6 +181,7 @@ class VendorListView(BaseSimpleListView):
 
 
 class VendorCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.vendors"
     model = Vendor
     form_class = VendorForm
     template_name = "inventory/simple_form.html"
@@ -187,6 +195,7 @@ class VendorUpdateView(VendorCreateView, UpdateView):
 
 
 class ItemListView(BaseSimpleListView):
+    page = "inventory.items"
     model = InventoryItem
     queryset = InventoryItem.objects.select_related("uom", "item_class").order_by("item_name")
     search_fields = ("item_name", "code", "item_bar_code")
@@ -198,6 +207,7 @@ class ItemListView(BaseSimpleListView):
 
 
 class ItemCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.items"
     model = InventoryItem
     form_class = InventoryItemForm
     template_name = "inventory/simple_form.html"
@@ -211,6 +221,7 @@ class ItemUpdateView(ItemCreateView, UpdateView):
 
 
 class StockListView(InventoryListMixin, ListView):
+    page = "inventory.stock"
     template_name = "inventory/stock_list.html"
     context_object_name = "stocks"
     queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
@@ -218,6 +229,7 @@ class StockListView(InventoryListMixin, ListView):
 
 
 class LedgerListView(InventoryListMixin, ListView):
+    page = "inventory.item_ledger"
     template_name = "inventory/ledger_list.html"
     context_object_name = "ledgers"
     queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
@@ -234,6 +246,7 @@ class LedgerListView(InventoryListMixin, ListView):
 
 
 class CustomerLedgerListView(InventoryListMixin, ListView):
+    page = "inventory.customer_ledger"
     template_name = "inventory/customer_ledger_list.html"
     context_object_name = "ledgers"
     queryset = CustomerLedger.objects.select_related("customer").order_by("-transaction_date", "-id")
@@ -247,6 +260,8 @@ class CustomerLedgerListView(InventoryListMixin, ListView):
 
 
 class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):
+    page = "inventory.stock"
+    action = "view"
     template_name = "inventory/stock_print.html"
     context_object_name = "stocks"
     queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
@@ -260,6 +275,8 @@ class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):
 
 
 class LedgerPrintView(PrintContextMixin, InventoryListMixin, ListView):
+    page = "inventory.item_ledger"
+    action = "view"
     template_name = "inventory/ledger_print.html"
     context_object_name = "ledgers"
     queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
@@ -273,6 +290,8 @@ class LedgerPrintView(PrintContextMixin, InventoryListMixin, ListView):
 
 
 class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "add"
     def post(self, request):
         item_ids = request.POST.getlist("item_id")
         qtys = request.POST.getlist("qty")
@@ -323,6 +342,8 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
 
 
 class PurchaseOrderDraftInitView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "add"
     """AJAX: create draft PO header, return pk."""
     def post(self, request):
         from django.http import JsonResponse
@@ -338,6 +359,8 @@ class PurchaseOrderDraftInitView(InventoryManageMixin, View):
 
 
 class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "add"
     """Add items to existing draft PO and raise it."""
     def post(self, request):
         draft_pk = request.POST.get("draft_pk")
@@ -383,6 +406,8 @@ class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
 
 
 class PurchaseOrderRaiseView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "edit"
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk, status=STATUS_DRAFT)
         order.status = STATUS_RAISED
@@ -393,6 +418,7 @@ class PurchaseOrderRaiseView(InventoryManageMixin, View):
 
 
 class PurchaseOrderListView(InventoryListMixin, ListView):
+    page = "inventory.purchase_orders"
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
@@ -446,6 +472,7 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
 
 
 class PurchaseReportView(InventoryListMixin, ListView):
+    page = "inventory.purchase_report"
     template_name = "inventory/purchase_report.html"
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items").order_by("-purchase_date", "-id")
@@ -474,6 +501,7 @@ class PurchaseReportView(InventoryListMixin, ListView):
 
 
 class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.purchase_orders"
     model = PurchaseOrder
     form_class = PurchaseOrderForm
     template_name = "inventory/simple_form.html"
@@ -483,6 +511,8 @@ class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
 
 
 class PurchaseOrderUpdateView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "edit"
     def get(self, request, pk):
         return self._blocked(request, pk)
 
@@ -495,6 +525,7 @@ class PurchaseOrderUpdateView(InventoryManageMixin, View):
 
 
 class PurchaseOrderDetailView(InventoryListMixin, DetailView):
+    page = "inventory.purchase_orders"
     model = PurchaseOrder
     template_name = "inventory/purchase_order_detail.html"
     context_object_name = "order"
@@ -523,6 +554,8 @@ def redirect_after_item(request, pk):
 
 
 class PurchaseOrderItemCreateView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "add"
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
         if order.status == STATUS_FULLY_RECEIVED:
@@ -548,6 +581,7 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
 
 
 class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
+    page = "inventory.purchase_orders"
     model = PurchaseOrderItem
     form_class = PurchaseOrderItemForm
     template_name = "inventory/simple_form.html"
@@ -581,6 +615,7 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
 
 
 class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
+    page = "inventory.purchase_orders"
     model = PurchaseOrder
     template_name = "inventory/purchase_order_print.html"
     context_object_name = "order"
@@ -599,6 +634,8 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
 
 
 class PurchaseOrderItemToggleStatusView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "edit"
     def post(self, request, pk):
         item = get_object_or_404(PurchaseOrderItem, pk=pk)
         item.status = NO if item.status == YES else YES
@@ -608,6 +645,8 @@ class PurchaseOrderItemToggleStatusView(InventoryManageMixin, View):
 
 
 class PurchaseReceiveView(InventoryManageMixin, View):
+    page = "inventory.purchase_orders"
+    action = "edit"
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
         form = ReceivePOForm(request.POST)
@@ -630,6 +669,8 @@ def _current_draft_tx_id():
 
 
 class ManualTransactionView(InventoryManageMixin, View):
+    page = "inventory.manual_transaction"
+    action = "index"
     template_name = "inventory/manual_transaction.html"
 
     def get(self, request):
@@ -667,6 +708,8 @@ class ManualTransactionView(InventoryManageMixin, View):
 
 
 class ManualTransactionAddView(InventoryManageMixin, View):
+    page = "inventory.manual_transaction"
+    action = "add"
     def post(self, request):
         form = ManualTransactionForm(request.POST)
         if form.is_valid():
@@ -691,6 +734,8 @@ class ManualTransactionAddView(InventoryManageMixin, View):
 
 
 class ManualTransactionToggleView(InventoryManageMixin, View):
+    page = "inventory.manual_transaction"
+    action = "edit"
     def post(self, request, pk):
         row = get_object_or_404(ManualTransaction, pk=pk, status=STATUS_DRAFT)
         row.selected = NO if row.selected == YES else YES
@@ -700,6 +745,8 @@ class ManualTransactionToggleView(InventoryManageMixin, View):
 
 
 class ManualTransactionDeleteView(InventoryManageMixin, View):
+    page = "inventory.manual_transaction"
+    action = "delete"
     def post(self, request, pk):
         row = get_object_or_404(ManualTransaction, pk=pk, status=STATUS_DRAFT)
         row.delete()
@@ -708,6 +755,8 @@ class ManualTransactionDeleteView(InventoryManageMixin, View):
 
 
 class ManualTransactionSubmitView(InventoryManageMixin, View):
+    page = "inventory.manual_transaction"
+    action = "add"
     def post(self, request):
         draft_tx_id = _current_draft_tx_id()
         if not draft_tx_id:
@@ -722,6 +771,8 @@ class ManualTransactionSubmitView(InventoryManageMixin, View):
 
 
 class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
+    page = "inventory.manual_transaction"
+    action = "view"
     template_name = "inventory/manual_transaction_print.html"
 
     def get(self, request, tx_id):
@@ -745,6 +796,7 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
 
 
 class CustomerListView(BaseSimpleListView):
+    page = "inventory.customers"
     model = Customer
     queryset = Customer.objects.select_related("city").order_by("customer_name")
     search_fields = ("customer_name", "customer_code", "customer_cell_no")
@@ -756,6 +808,8 @@ class CustomerListView(BaseSimpleListView):
 
 
 class CustomerToggleStatusView(InventoryManageMixin, View):
+    page = "inventory.customers"
+    action = "edit"
     def post(self, request, pk):
         customer = get_object_or_404(Customer, pk=pk)
         customer.status = STATUS_INACTIVE if customer.status == STATUS_ACTIVE else STATUS_ACTIVE
@@ -769,6 +823,8 @@ class CustomerToggleStatusView(InventoryManageMixin, View):
 
 
 class CustomerToggleDefaultView(InventoryManageMixin, View):
+    page = "inventory.customers"
+    action = "edit"
     def post(self, request, pk):
         customer = get_object_or_404(Customer, pk=pk)
         if not customer.is_default and customer.status != STATUS_ACTIVE:
@@ -781,6 +837,7 @@ class CustomerToggleDefaultView(InventoryManageMixin, View):
 
 
 class CustomerCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.customers"
     model = Customer
     form_class = CustomerForm
     template_name = "inventory/simple_form.html"
@@ -794,6 +851,8 @@ class CustomerUpdateView(CustomerCreateView, UpdateView):
 
 
 class POSListView(InventoryManageMixin, View):
+    page = "inventory.pos_sales"
+    action = "index"
     template_name = "inventory/pos_list.html"
 
     def get(self, request):
@@ -812,6 +871,8 @@ class POSListView(InventoryManageMixin, View):
 
 
 class POSCheckoutView(InventoryManageMixin, View):
+    page = "inventory.pos_sales"
+    action = "add"
     def post(self, request):
         item_ids = request.POST.getlist("item_id")
         qtys = request.POST.getlist("qty")
@@ -869,6 +930,7 @@ class POSCheckoutView(InventoryManageMixin, View):
 
 
 class POSReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    page = "inventory.pos_sales"
     model = POSMaster
     template_name = "inventory/pos_receipt.html"
     context_object_name = "sale"
@@ -883,6 +945,7 @@ class POSReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
 
 
 class POSCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.pos_sales"
     model = POSMaster
     form_class = POSMasterForm
     template_name = "inventory/simple_form.html"
@@ -910,6 +973,7 @@ class POSUpdateView(POSCreateView, UpdateView):
 
 
 class POSDetailView(InventoryListMixin, DetailView):
+    page = "inventory.pos_sales"
     model = POSMaster
     template_name = "inventory/pos_detail.html"
     context_object_name = "sale"
@@ -931,6 +995,8 @@ class POSDetailView(InventoryListMixin, DetailView):
 
 
 class POSReturnQuickCreateView(InventoryManageMixin, View):
+    page = "inventory.pos_returns"
+    action = "add"
     def post(self, request):
         sale_id = request.POST.get("pos_master")
         if not sale_id:
@@ -992,6 +1058,7 @@ class POSReturnQuickCreateView(InventoryManageMixin, View):
 
 
 class POSReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    page = "inventory.pos_returns"
     model = POSReturnMaster
     template_name = "inventory/pos_return_receipt.html"
     context_object_name = "sale_return"
@@ -1006,6 +1073,7 @@ class POSReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
 
 
 class POSReturnListView(InventoryListMixin, ListView):
+    page = "inventory.pos_returns"
     template_name = "inventory/pos_return_list.html"
     context_object_name = "returns"
     queryset = POSReturnMaster.objects.select_related("pos_master", "customer").filter(posted=YES).order_by("-return_date", "-id")
@@ -1044,6 +1112,7 @@ class POSReturnListView(InventoryListMixin, ListView):
 
 
 class POSReturnCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.pos_returns"
     model = POSReturnMaster
     form_class = POSReturnMasterForm
     template_name = "inventory/simple_form.html"
@@ -1058,6 +1127,7 @@ class POSReturnCreateView(InventoryManageMixin, CreateView):
 
 
 class POSReturnDetailView(InventoryListMixin, DetailView):
+    page = "inventory.pos_returns"
     model = POSReturnMaster
     template_name = "inventory/pos_return_detail.html"
     context_object_name = "sale_return"
@@ -1071,6 +1141,8 @@ class POSReturnDetailView(InventoryListMixin, DetailView):
 
 
 class POSReturnItemCreateView(InventoryManageMixin, View):
+    page = "inventory.pos_returns"
+    action = "add"
     def post(self, request, pk):
         sale_return = get_object_or_404(POSReturnMaster, pk=pk)
         if sale_return.posted == YES:
@@ -1093,6 +1165,8 @@ class POSReturnItemCreateView(InventoryManageMixin, View):
 
 
 class POSReturnPostView(InventoryManageMixin, View):
+    page = "inventory.pos_returns"
+    action = "edit"
     def post(self, request, pk):
         record = get_object_or_404(POSReturnMaster, pk=pk)
         try:
@@ -1104,6 +1178,7 @@ class POSReturnPostView(InventoryManageMixin, View):
 
 
 class GRNListView(InventoryListMixin, ListView):
+    page = "inventory.grn"
     template_name = "inventory/grn_list.html"
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
@@ -1128,6 +1203,7 @@ class GRNListView(InventoryListMixin, ListView):
 
 
 class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):
+    page = "inventory.grn"
     model = PurchaseOrder
     template_name = "inventory/grn_print.html"
     context_object_name = "order"
@@ -1159,6 +1235,8 @@ class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):
 
 
 class GRNBulkReceiveView(InventoryManageMixin, View):
+    page = "inventory.grn"
+    action = "edit"
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
         today = timezone.localdate()
@@ -1204,6 +1282,7 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
 
 
 class PurchaseReturnListView(InventoryListMixin, ListView):
+    page = "inventory.purchase_returns"
     template_name = "inventory/purchase_return_list.html"
     context_object_name = "returns"
     queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "vendor").order_by("-return_date", "-id")
@@ -1270,6 +1349,8 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
 
 
 class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
+    page = "inventory.purchase_returns"
+    action = "add"
     def post(self, request):
         po_pk = request.POST.get("purchase_order")
         order = get_object_or_404(PurchaseOrder, pk=po_pk)
@@ -1316,6 +1397,7 @@ class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
 
 
 class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
+    page = "inventory.purchase_returns"
     model = PurchaseReturnMaster
     template_name = "inventory/purchase_return_receipt.html"
     context_object_name = "pr"
@@ -1332,6 +1414,7 @@ class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailVie
 
 
 class PurchaseReturnCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.purchase_returns"
     model = PurchaseReturnMaster
     form_class = PurchaseReturnMasterForm
     template_name = "inventory/simple_form.html"
@@ -1346,6 +1429,7 @@ class PurchaseReturnCreateView(InventoryManageMixin, CreateView):
 
 
 class PurchaseReturnDetailView(InventoryListMixin, DetailView):
+    page = "inventory.purchase_returns"
     model = PurchaseReturnMaster
     template_name = "inventory/purchase_return_detail.html"
     context_object_name = "purchase_return"
@@ -1357,6 +1441,8 @@ class PurchaseReturnDetailView(InventoryListMixin, DetailView):
 
 
 class PurchaseReturnItemCreateView(InventoryManageMixin, View):
+    page = "inventory.purchase_returns"
+    action = "add"
     def post(self, request, pk):
         record = get_object_or_404(PurchaseReturnMaster, pk=pk)
         if record.posted == YES:
@@ -1378,6 +1464,8 @@ class PurchaseReturnItemCreateView(InventoryManageMixin, View):
 
 
 class PurchaseReturnPostView(InventoryManageMixin, View):
+    page = "inventory.purchase_returns"
+    action = "edit"
     def post(self, request, pk):
         record = get_object_or_404(PurchaseReturnMaster, pk=pk)
         try:

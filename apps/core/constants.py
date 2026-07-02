@@ -211,3 +211,27 @@ COMMON_STATUS_LABELS: Final[dict[str, str]] = {
     value: label
     for value, label in WORKFLOW_STATUS_CHOICES + RECORD_STATUS_CHOICES + COMPLETION_STATUS_CHOICES
 }
+
+
+# --- Page-level access-control actions ---
+ACTION_INDEX: Final[str] = "index"
+ACTION_VIEW: Final[str] = "view"
+ACTION_ADD: Final[str] = "add"
+ACTION_EDIT: Final[str] = "edit"
+ACTION_DELETE: Final[str] = "delete"
+
+PAGE_ACTIONS: Final[tuple[str, ...]] = (
+    ACTION_INDEX,
+    ACTION_VIEW,
+    ACTION_ADD,
+    ACTION_EDIT,
+    ACTION_DELETE,
+)
+
+ACTION_LABELS: Final[dict[str, str]] = {
+    ACTION_INDEX: "List",
+    ACTION_VIEW: "View",
+    ACTION_ADD: "Add",
+    ACTION_EDIT: "Edit",
+    ACTION_DELETE: "Delete",
+}

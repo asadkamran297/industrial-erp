@@ -1,8 +1,10 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Q
+from django.views.generic.edit import CreateView, DeleteView, UpdateView
+from django.views.generic.detail import DetailView
 
 from apps.access_control.selectors import user_has_permission
-from apps.core.constants import STATUS_ACTIVE
+from apps.core.constants import ACTION_ADD, ACTION_DELETE, ACTION_EDIT, ACTION_INDEX, ACTION_VIEW, STATUS_ACTIVE
 
 
 class PrintContextMixin:
@@ -30,8 +32,60 @@ class PrintContextMixin:
 class PortalPermissionRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     permission_required: str | None = None
 
+    def get_permission_required(self) -> str | None:
+        return self.permission_required
+
     def test_func(self):
-        return user_has_permission(self.request.user, self.permission_required)
+        return user_has_permission(self.request.user, self.get_permission_required())
+
+
+class PagePermissionRequiredMixin(PortalPermissionRequiredMixin):
+    """Page-level access control.
+
+    Set ``page`` (e.g. ``"inventory.items"``) on a view and the required
+    permission code is ``<page>.<action>`` where the action is inferred from the
+    generic view type (Create->add, Update->edit, Delete->delete, Detail->view,
+    otherwise index). Override ``action`` for non-CRUD verbs, or set
+    ``permission_required`` directly as an escape hatch.
+    """
+
+    page: str | None = None
+    action: str | None = None
+
+    def _infer_action(self) -> str:
+        # Order matters: update views commonly subclass create views
+        # (``class FooUpdateView(FooCreateView, UpdateView)``), so check the more
+        # specific verbs first.
+        if isinstance(self, DeleteView):
+            return ACTION_DELETE
+        if isinstance(self, UpdateView):
+            return ACTION_EDIT
+        if isinstance(self, CreateView):
+            return ACTION_ADD
+        if isinstance(self, DetailView):
+            return ACTION_VIEW
+        return ACTION_INDEX
+
+    def get_permission_required(self) -> str | None:
+        if self.permission_required:
+            return self.permission_required
+        if not self.page:
+            return None
+        return f"{self.page}.{self.action or self._infer_action()}"
+
+    def get_page_key(self) -> str | None:
+        return self.page
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        page = self.get_page_key()
+        if page:
+            user = self.request.user
+            context.setdefault("can_view", user_has_permission(user, f"{page}.view"))
+            context.setdefault("can_add", user_has_permission(user, f"{page}.add"))
+            context.setdefault("can_edit", user_has_permission(user, f"{page}.edit"))
+            context.setdefault("can_delete", user_has_permission(user, f"{page}.delete"))
+        return context
 
 
 class SearchFilterPaginationMixin:

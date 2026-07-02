@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin
 
 from .forms import build_master_form
 from .registry import MASTER_CONFIGS, MASTER_CONFIG_MAP
@@ -14,6 +14,12 @@ class MasterConfigMixin:
     def dispatch(self, request, *args, **kwargs):
         self.master_config = get_object_or_404_config(kwargs["slug"])
         return super().dispatch(request, *args, **kwargs)
+
+    def get_page_key(self):
+        return f"configurations.{get_object_or_404_config(self.kwargs['slug']).slug.replace('-', '_')}"
+
+    def get_permission_required(self):
+        return f"{self.get_page_key()}.{self.action or self._infer_action()}"
 
     def get_success_url(self):
         return reverse("configurations:master_list", kwargs={"slug": self.master_config.slug})
@@ -35,8 +41,8 @@ def get_object_or_404_config(slug):
     return config
 
 
-class MasterListView(MasterConfigMixin, SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "configurations.view"
+class MasterListView(MasterConfigMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    action = "index"
     template_name = "configurations/master_list.html"
     context_object_name = "records"
     search_fields = ("title", "code")
@@ -50,8 +56,8 @@ class MasterListView(MasterConfigMixin, SearchFilterPaginationMixin, PortalPermi
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class MasterCreateView(MasterConfigMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "configurations.manage"
+class MasterCreateView(MasterConfigMixin, PagePermissionRequiredMixin, CreateView):
+    action = "add"
     template_name = "configurations/master_form.html"
 
     def get_form_class(self):
@@ -65,6 +71,8 @@ class MasterCreateView(MasterConfigMixin, PortalPermissionRequiredMixin, CreateV
 
 
 class MasterUpdateView(MasterCreateView, UpdateView):
+    action = "edit"
+
     def get_queryset(self):
         return self.master_config.model.objects.all()
 
@@ -74,8 +82,8 @@ class MasterUpdateView(MasterCreateView, UpdateView):
         return super().form_valid(form)
 
 
-class MasterDeleteView(MasterConfigMixin, PortalPermissionRequiredMixin, View):
-    permission_required = "configurations.manage"
+class MasterDeleteView(MasterConfigMixin, PagePermissionRequiredMixin, View):
+    action = "delete"
 
     def post(self, request, slug, pk):
         record = get_object_or_404(self.master_config.model, pk=pk)

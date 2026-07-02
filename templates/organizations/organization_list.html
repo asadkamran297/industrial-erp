@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url "organizations:organization_create" as create_url %}
-{% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." action_label="New Organization" action_url=create_url %}
+{% if can_add %}{% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." action_label="New Organization" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." %}{% endif %}
 
 <section class="mt-6">
   {% include "components/table/search_filters.html" with search_placeholder="Search organizations..." %}
@@ -62,10 +62,10 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-3">
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:organization_update' organization.pk %}" title="Edit">&#9998;</a>
-                  <form method="post" action="{% url 'organizations:organization_delete' organization.pk %}" onsubmit="return confirm('Delete this organization?');">{% csrf_token %}
+                  {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:organization_update' organization.pk %}" title="Edit">&#9998;</a>{% endif %}
+                  {% if can_delete %}<form method="post" action="{% url 'organizations:organization_delete' organization.pk %}" onsubmit="return confirm('Delete this organization?');">{% csrf_token %}
                     <button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete">&#128465;</button>
-                  </form>
+                  </form>{% endif %}
                 </div>
               </td>
             </tr>
@@ -92,7 +92,7 @@
               </td>
               <td class="px-4 py-2">
                 <div class="flex justify-end gap-2">
-                  <a class="grid h-7 w-7 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'organizations:organization_update' sub.pk %}" title="Edit">&#9998;</a>
+                  {% if can_edit %}<a class="grid h-7 w-7 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'organizations:organization_update' sub.pk %}" title="Edit">&#9998;</a>{% endif %}
                 </div>
               </td>
             </tr>

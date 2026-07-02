@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url "organizations:branch_create" as create_url %}
-{% include "components/ui/page_header.html" with title="Branches" subtitle="Manage plant, office, and site branch records." action_label="New Branch" action_url=create_url %}
+{% if can_add %}{% include "components/ui/page_header.html" with title="Branches" subtitle="Manage plant, office, and site branch records." action_label="New Branch" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Branches" subtitle="Manage plant, office, and site branch records." %}{% endif %}
 
 <section class="mt-6">
   {% include "components/table/search_filters.html" with search_placeholder="Search branches..." %}
@@ -30,10 +30,10 @@
               <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ branch.get_status_display }}</span></td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-3">
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:branch_update' branch.pk %}" title="Edit" aria-label="Edit">
+                  {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'organizations:branch_update' branch.pk %}" title="Edit" aria-label="Edit">
                     <span aria-hidden="true">&#9998;</span>
-                  </a>
-                  <form method="post" action="{% url 'organizations:branch_delete' branch.pk %}" onsubmit="return confirm('Delete this branch?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>
+                  </a>{% endif %}
+                  {% if can_delete %}<form method="post" action="{% url 'organizations:branch_delete' branch.pk %}" onsubmit="return confirm('Delete this branch?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>{% endif %}
                 </div>
               </td>
             </tr>

@@ -4,7 +4,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.organizations.models import Organization
 
 from .forms import PermissionForm, RoleForm, UserAssignmentForm
@@ -20,7 +20,7 @@ class AuditSaveMixin:
         return super().form_valid(form)
 
 
-class SoftDeleteView(PortalPermissionRequiredMixin, View):
+class SoftDeleteView(PagePermissionRequiredMixin, View):
     model = None
     success_url = None
     success_message = "Record deleted."
@@ -32,8 +32,8 @@ class SoftDeleteView(PortalPermissionRequiredMixin, View):
         return redirect(self.success_url)
 
 
-class RoleListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "access_control.view"
+class RoleListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "access_control.roles"
     model = Role
     template_name = "access_control/role_list.html"
     context_object_name = "roles"
@@ -50,8 +50,8 @@ class RoleListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, L
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class RoleCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "access_control.manage"
+class RoleCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "access_control.roles"
     model = Role
     form_class = RoleForm
     template_name = "access_control/role_form.html"
@@ -65,8 +65,8 @@ class RoleCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
         return context
 
 
-class RoleUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
-    permission_required = "access_control.manage"
+class RoleUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
+    page = "access_control.roles"
     model = Role
     form_class = RoleForm
     template_name = "access_control/role_form.html"
@@ -81,14 +81,15 @@ class RoleUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
 
 
 class RoleDeleteView(SoftDeleteView):
-    permission_required = "access_control.manage"
+    page = "access_control.roles"
+    action = "delete"
     model = Role
     success_url = reverse_lazy("access_control:role_list")
     success_message = "Role deleted."
 
 
-class PermissionListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "access_control.view"
+class PermissionListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "access_control.permissions"
     model = Permission
     template_name = "access_control/permission_list.html"
     context_object_name = "permissions"
@@ -105,8 +106,8 @@ class PermissionListView(SearchFilterPaginationMixin, PortalPermissionRequiredMi
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class PermissionCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "access_control.manage"
+class PermissionCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "access_control.permissions"
     model = Permission
     form_class = PermissionForm
     template_name = "access_control/permission_form.html"
@@ -120,8 +121,8 @@ class PermissionCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, Create
         return context
 
 
-class PermissionUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
-    permission_required = "access_control.manage"
+class PermissionUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
+    page = "access_control.permissions"
     model = Permission
     form_class = PermissionForm
     template_name = "access_control/permission_form.html"
@@ -136,14 +137,15 @@ class PermissionUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, Update
 
 
 class PermissionDeleteView(SoftDeleteView):
-    permission_required = "access_control.manage"
+    page = "access_control.permissions"
+    action = "delete"
     model = Permission
     success_url = reverse_lazy("access_control:permission_list")
     success_message = "Permission deleted."
 
 
-class UserAssignmentListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "access_control.view"
+class UserAssignmentListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "access_control.user_assignments"
     template_name = "access_control/user_assignment_list.html"
     context_object_name = "assignments"
     queryset = UserAssignment.objects.select_related("user", "role", "organization", "branch")
@@ -168,8 +170,8 @@ class UserAssignmentListView(SearchFilterPaginationMixin, PortalPermissionRequir
         ]
 
 
-class UserAssignmentCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "access_control.manage"
+class UserAssignmentCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "access_control.user_assignments"
     model = UserAssignment
     form_class = UserAssignmentForm
     template_name = "access_control/user_assignment_form.html"
@@ -183,8 +185,8 @@ class UserAssignmentCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, Cr
         return context
 
 
-class UserAssignmentUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
-    permission_required = "access_control.manage"
+class UserAssignmentUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
+    page = "access_control.user_assignments"
     model = UserAssignment
     form_class = UserAssignmentForm
     template_name = "access_control/user_assignment_form.html"
@@ -199,7 +201,8 @@ class UserAssignmentUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, Up
 
 
 class UserAssignmentDeleteView(SoftDeleteView):
-    permission_required = "access_control.manage"
+    page = "access_control.user_assignments"
+    action = "delete"
     model = UserAssignment
     success_url = reverse_lazy("access_control:user_assignment_list")
     success_message = "User assignment deleted."

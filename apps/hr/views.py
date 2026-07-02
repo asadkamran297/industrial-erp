@@ -5,7 +5,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from apps.organizations.models import Organization
 from apps.payroll.forms import EmployeeSalaryInlineForm
 from apps.payroll.models import EmployeeSalary, Payroll
@@ -14,8 +14,8 @@ from .forms import EmployeeExperienceForm, EmployeeForm, EmployeeQualificationFo
 from .models import Employee, EmployeeExperience, EmployeeQualification
 
 
-class EmployeeListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "employees.view"
+class EmployeeListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "hr.employees"
     template_name = "hr/employee_list.html"
     context_object_name = "employees"
     queryset = Employee.objects.select_related("organization", "branch", "department", "designation").order_by("full_name")
@@ -34,8 +34,8 @@ class EmployeeListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixi
         return context
 
 
-class EmployeeDetailView(PortalPermissionRequiredMixin, DetailView):
-    permission_required = "employees.view"
+class EmployeeDetailView(PagePermissionRequiredMixin, DetailView):
+    page = "hr.employees"
     model = Employee
     template_name = "hr/employee_detail.html"
     context_object_name = "employee"
@@ -69,8 +69,8 @@ class EmployeeDetailView(PortalPermissionRequiredMixin, DetailView):
         return context
 
 
-class EmployeeCreateView(PortalPermissionRequiredMixin, CreateView):
-    permission_required = "employees.manage"
+class EmployeeCreateView(PagePermissionRequiredMixin, CreateView):
+    page = "hr.employees"
     model = Employee
     form_class = EmployeeForm
     template_name = "hr/employee_form.html"
@@ -101,8 +101,9 @@ class EmployeeUpdateView(EmployeeCreateView, UpdateView):
         return context
 
 
-class EmployeeDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "employees.manage"
+class EmployeeDeleteView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "delete"
 
     def post(self, request, pk):
         Employee.objects.get(pk=pk).soft_delete(request.user)
@@ -110,8 +111,9 @@ class EmployeeDeleteView(PortalPermissionRequiredMixin, View):
         return redirect("hr:employee_list")
 
 
-class EmployeeExperienceCreateView(PortalPermissionRequiredMixin, View):
-    permission_required = "employees.manage"
+class EmployeeExperienceCreateView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk):
         employee = get_object_or_404(Employee, pk=employee_pk)
@@ -128,8 +130,9 @@ class EmployeeExperienceCreateView(PortalPermissionRequiredMixin, View):
         return redirect("hr:employee_detail", pk=employee.pk)
 
 
-class EmployeeExperienceDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "employees.manage"
+class EmployeeExperienceDeleteView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk, pk):
         experience = get_object_or_404(EmployeeExperience, pk=pk, employee_id=employee_pk)
@@ -138,8 +141,9 @@ class EmployeeExperienceDeleteView(PortalPermissionRequiredMixin, View):
         return redirect("hr:employee_detail", pk=employee_pk)
 
 
-class EmployeeQualificationCreateView(PortalPermissionRequiredMixin, View):
-    permission_required = "employees.manage"
+class EmployeeQualificationCreateView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk):
         employee = get_object_or_404(Employee, pk=employee_pk)
@@ -156,8 +160,9 @@ class EmployeeQualificationCreateView(PortalPermissionRequiredMixin, View):
         return redirect("hr:employee_detail", pk=employee.pk)
 
 
-class EmployeeQualificationDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "employees.manage"
+class EmployeeQualificationDeleteView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk, pk):
         qualification = get_object_or_404(EmployeeQualification, pk=pk, employee_id=employee_pk)
@@ -170,8 +175,9 @@ def employee_payroll_redirect(employee_pk: int):
     return HttpResponseRedirect(f"{reverse('hr:employee_detail', kwargs={'pk': employee_pk})}#payroll")
 
 
-class EmployeeSalaryItemCreateView(PortalPermissionRequiredMixin, View):
-    permission_required = "payroll.generate"
+class EmployeeSalaryItemCreateView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk):
         employee = get_object_or_404(Employee, pk=employee_pk)
@@ -187,8 +193,9 @@ class EmployeeSalaryItemCreateView(PortalPermissionRequiredMixin, View):
         return employee_payroll_redirect(employee.pk)
 
 
-class EmployeeSalaryItemUpdateView(PortalPermissionRequiredMixin, View):
-    permission_required = "payroll.generate"
+class EmployeeSalaryItemUpdateView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk, pk):
         employee = get_object_or_404(Employee, pk=employee_pk)
@@ -204,8 +211,9 @@ class EmployeeSalaryItemUpdateView(PortalPermissionRequiredMixin, View):
         return employee_payroll_redirect(employee.pk)
 
 
-class EmployeeSalaryItemDeleteView(PortalPermissionRequiredMixin, View):
-    permission_required = "payroll.generate"
+class EmployeeSalaryItemDeleteView(PagePermissionRequiredMixin, View):
+    page = "hr.employees"
+    action = "edit"
 
     def post(self, request, employee_pk, pk):
         employee = get_object_or_404(Employee, pk=employee_pk)

@@ -4,7 +4,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 from .forms import BranchForm, OrganizationForm
 from .models import Branch, Organization
 from .selectors import get_branches, get_organizations
@@ -19,7 +19,7 @@ class AuditSaveMixin:
         return super().form_valid(form)
 
 
-class SoftDeleteView(PortalPermissionRequiredMixin, View):
+class SoftDeleteView(PagePermissionRequiredMixin, View):
     model = None
     success_url = None
     success_message = "Record deleted."
@@ -32,8 +32,8 @@ class SoftDeleteView(PortalPermissionRequiredMixin, View):
         return redirect(self.success_url)
 
 
-class OrganizationListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "organizations.view"
+class OrganizationListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "organizations.organizations"
     template_name = "organizations/organization_list.html"
     context_object_name = "organizations"
     search_fields = ("title", "code", "parent__title")
@@ -51,8 +51,8 @@ class OrganizationListView(SearchFilterPaginationMixin, PortalPermissionRequired
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class OrganizationCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "organizations.manage"
+class OrganizationCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "organizations.organizations"
     model = Organization
     form_class = OrganizationForm
     template_name = "organizations/organization_form.html"
@@ -66,8 +66,8 @@ class OrganizationCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, Crea
         return context
 
 
-class OrganizationUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
-    permission_required = "organizations.manage"
+class OrganizationUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
+    page = "organizations.organizations"
     model = Organization
     form_class = OrganizationForm
     template_name = "organizations/organization_form.html"
@@ -85,11 +85,12 @@ class OrganizationDeleteView(SoftDeleteView):
     model = Organization
     success_url = reverse_lazy("organizations:organization_list")
     success_message = "Organization deleted."
-    permission_required = "organizations.manage"
+    page = "organizations.organizations"
+    action = "delete"
 
 
-class BranchListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin, ListView):
-    permission_required = "organizations.view"
+class BranchListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+    page = "organizations.branches"
     template_name = "organizations/branch_list.html"
     context_object_name = "branches"
     search_fields = ("title", "code", "phone", "email", "organization__title", "city__title")
@@ -115,8 +116,8 @@ class BranchListView(SearchFilterPaginationMixin, PortalPermissionRequiredMixin,
         ]
 
 
-class BranchCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView):
-    permission_required = "organizations.manage"
+class BranchCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+    page = "organizations.branches"
     model = Branch
     form_class = BranchForm
     template_name = "organizations/branch_form.html"
@@ -130,8 +131,8 @@ class BranchCreateView(AuditSaveMixin, PortalPermissionRequiredMixin, CreateView
         return context
 
 
-class BranchUpdateView(AuditSaveMixin, PortalPermissionRequiredMixin, UpdateView):
-    permission_required = "organizations.manage"
+class BranchUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
+    page = "organizations.branches"
     model = Branch
     form_class = BranchForm
     template_name = "organizations/branch_form.html"
@@ -149,4 +150,5 @@ class BranchDeleteView(SoftDeleteView):
     model = Branch
     success_url = reverse_lazy("organizations:branch_list")
     success_message = "Branch deleted."
-    permission_required = "organizations.manage"
+    page = "organizations.branches"
+    action = "delete"
