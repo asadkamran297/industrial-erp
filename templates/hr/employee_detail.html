@@ -68,7 +68,7 @@
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:28px;">
         <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
           <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,0.45);margin:0;">Base Salary</p>
-          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ employee.salary|floatformat:0 }}</p>
+          <p style="font-size:24px;font-weight:900;color:#fff;margin:6px 0 2px;">{{ employee.salary|amount }}</p>
           <p style="font-size:10px;color:rgba(255,255,255,0.35);margin:0;">PKR / month</p>
         </div>
         <div style="background:rgba(255,255,255,0.10);border-radius:12px;padding:16px;">
@@ -189,7 +189,7 @@
             <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ exp.organization }}</td>
             <td class="px-5 py-3 text-slate-500">{{ exp.from_date|date:"M Y"|default:"—" }}</td>
             <td class="px-5 py-3 text-slate-500">{{ exp.to_date|date:"M Y"|default:"Present" }}</td>
-            <td class="px-5 py-3 text-slate-600">{{ exp.salary|floatformat:0 }}</td>
+            <td class="px-5 py-3 text-slate-600">{{ exp.salary|amount }}</td>
             <td class="px-5 py-3">
               <form class="flex justify-end" method="post"
                     action="{% url 'hr:employee_experience_delete' employee.pk exp.pk %}"
@@ -275,7 +275,7 @@
     <div class="grid gap-4 sm:grid-cols-3">
       <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Base Salary</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ employee.salary|floatformat:0 }}</p>
+        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ employee.salary|amount }}</p>
         <p class="mt-1 text-xs text-slate-400">PKR / month</p>
       </div>
       <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

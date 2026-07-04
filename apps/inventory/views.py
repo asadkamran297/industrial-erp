@@ -681,8 +681,10 @@ class ManualTransactionView(InventoryManageMixin, View):
         used_item_ids = list(rows.values_list("inventory_item_id", flat=True))
         items = InventoryItem.objects.select_related("uom", "stock").exclude(pk__in=used_item_ids).order_by("item_name")
         batch_descr = rows.values_list("descr", flat=True).first() or ""
-        form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1})
+        batch_vendor = rows.values_list("vendor_id", flat=True).first()
+        form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1, "vendor": batch_vendor})
         form.fields["inventory_item"].queryset = items
+        form.fields["vendor"].queryset = Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name")
         # group posted transactions by transaction_id for history table
         from itertools import groupby as _groupby
         posted_qs = ManualTransaction.objects.filter(status=STATUS_POSTED).order_by("transaction_id", "id")
@@ -723,8 +725,10 @@ class ManualTransactionAddView(InventoryManageMixin, View):
             row.created_by = request.user
             row.updated_by = request.user
             row.save()
+            batch = ManualTransaction.objects.filter(transaction_id=draft_tx_id, status=STATUS_DRAFT)
+            batch.update(vendor=row.vendor)
             if row.descr:
-                ManualTransaction.objects.filter(transaction_id=draft_tx_id, status=STATUS_DRAFT).update(descr=row.descr)
+                batch.update(descr=row.descr)
             messages.success(request, "Entry added to draft.")
         else:
             for errors in form.errors.values():
@@ -765,6 +769,7 @@ class ManualTransactionSubmitView(InventoryManageMixin, View):
         try:
             count = finalize_manual_transaction(transaction_id=draft_tx_id, user=request.user)
             messages.success(request, f"{count} entries posted to ledger and stock updated.")
+            return redirect("inventory:manual_transaction_print", tx_id=draft_tx_id)
         except ValidationError as exc:
             messages.error(request, exc)
         return redirect("inventory:manual_transaction")
@@ -777,7 +782,7 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
 
     def get(self, request, tx_id):
         from django.shortcuts import render
-        rows = ManualTransaction.objects.filter(transaction_id=tx_id, status=STATUS_POSTED).select_related("inventory_item__uom").order_by("id")
+        rows = ManualTransaction.objects.filter(transaction_id=tx_id, status=STATUS_POSTED).select_related("inventory_item__uom", "vendor").order_by("id")
         if not rows.exists():
             messages.error(request, "Transaction not found.")
             return redirect("inventory:manual_transaction")
@@ -790,6 +795,7 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
             "amount_in_words": amount_in_words(grand_total),
             "tx_date": rows[0].created_at,
             "descr": rows[0].descr,
+            "vendor": rows[0].vendor,
             "prepared_by": rows[0].created_by,
         })
         return render(request, self.template_name, context)

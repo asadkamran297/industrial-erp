@@ -42,7 +42,7 @@
             <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
             <td class="px-4 py-3">{{ order.vendor.name }}</td>
             <td class="px-4 py-3">{{ order.purchase_date|date:"d-m-Y" }}</td>
-            <td class="px-4 py-3 text-right font-medium">{{ order.po_total|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>
             <td class="px-4 py-3">
               <span class="rounded-full px-2.5 py-1 text-xs font-medium
                 {% if order.status == 'draft' %}bg-amber-100 text-amber-700
@@ -90,9 +90,9 @@
                       <td class="px-2 py-1.5 text-slate-400">{{ forloop.parentloop.counter }}</td>
                       <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
+                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
                       <td class="px-2 py-1.5 text-right {% if poi.pending_receive_qty == 0 %}text-slate-400{% else %}text-amber-600{% endif %}">{{ poi.pending_receive_qty|qty }}</td>
                       <td class="px-2 py-1.5 text-right text-emerald-700">{{ poi.curr_receive_qty|qty }}</td>
                       <td class="px-2 py-1.5 text-right">
@@ -107,9 +107,9 @@
                       <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
                       <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
                       <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.rate|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|floatformat:2 }}</td>
-                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|floatformat:2 }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
+                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
+                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
                       <td class="px-2 py-1.5 text-right text-amber-600">{{ poi.pending_receive_qty|qty }}</td>
                       <td class="px-2 py-1.5 text-right text-slate-400">0</td>
                       <td class="px-2 py-1.5 text-right">
@@ -194,7 +194,7 @@
             <td class="px-4 py-3">{{ grn.descr }}</td>
             <td class="px-4 py-3">{{ grn.receive_date|date:"d-m-Y" }}</td>
             <td class="px-4 py-3 text-right">{{ grn.quantity|qty }}</td>
-            <td class="px-4 py-3 text-right">{{ grn.retail_price|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right">{{ grn.retail_price|amount }}</td>
             <td class="px-4 py-3">
               <a href="{% url 'inventory:grn_print' grn.purchase_order_item.purchase_order_id %}?receipts={{ grn.pk }}&reprint=1"
                  class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200" title="Reprint GRN">

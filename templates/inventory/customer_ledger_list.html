@@ -31,9 +31,9 @@
               <td class="px-4 py-3">{{ row.transaction_no }}</td>
               <td class="px-4 py-3">{{ row.customer.customer_name }}</td>
               <td class="px-4 py-3">{{ row.get_transaction_type_display }}</td>
-              <td class="px-4 py-3">{{ row.opening_amount }}</td>
-              <td class="px-4 py-3">{{ row.running_amount }}</td>
-              <td class="px-4 py-3 font-medium">{{ row.closing_balance }}</td>
+              <td class="px-4 py-3">{{ row.opening_amount|amount }}</td>
+              <td class="px-4 py-3">{{ row.running_amount|amount }}</td>
+              <td class="px-4 py-3 font-medium">{{ row.closing_balance|amount }}</td>
               <td class="px-4 py-3">{{ row.remarks }}</td>
             </tr>
           {% empty %}

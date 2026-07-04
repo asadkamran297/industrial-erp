@@ -64,8 +64,8 @@
     <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <div class="flex items-center justify-between"><h2 class="font-semibold">Finance Pulse</h2><a href="/finance/vouchers/" class="text-sm font-medium text-[var(--primary-color)]">Open vouchers</a></div>
       <div class="mt-5 grid gap-4 sm:grid-cols-3">
-        <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"><p class="text-xs text-slate-500">Debit</p><p class="mt-1 text-xl font-bold">{{ voucher_totals.debit|default:0 }}</p></div>
-        <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"><p class="text-xs text-slate-500">Credit</p><p class="mt-1 text-xl font-bold">{{ voucher_totals.credit|default:0 }}</p></div>
+        <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"><p class="text-xs text-slate-500">Debit</p><p class="mt-1 text-xl font-bold">{{ voucher_totals.debit|default:0|amount }}</p></div>
+        <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"><p class="text-xs text-slate-500">Credit</p><p class="mt-1 text-xl font-bold">{{ voucher_totals.credit|default:0|amount }}</p></div>
         <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"><p class="text-xs text-slate-500">Vouchers</p><p class="mt-1 text-xl font-bold">{{ voucher_count }}</p></div>
       </div>
       <div class="mt-5 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
@@ -73,7 +73,7 @@
           <thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Voucher</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Amount</th><th class="px-4 py-3">Status</th></tr></thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
             {% for voucher in recent_vouchers %}
-              <tr><td class="px-4 py-3 font-medium">{{ voucher.voucher_no }}</td><td class="px-4 py-3">{{ voucher.get_voucher_type_display }}</td><td class="px-4 py-3">{{ voucher.debit_amount|add:voucher.credit_amount }}</td><td class="px-4 py-3">{{ voucher.get_status_display }}</td></tr>
+              <tr><td class="px-4 py-3 font-medium">{{ voucher.voucher_no }}</td><td class="px-4 py-3">{{ voucher.get_voucher_type_display }}</td><td class="px-4 py-3">{{ voucher.debit_amount|add:voucher.credit_amount|amount }}</td><td class="px-4 py-3">{{ voucher.get_status_display }}</td></tr>
             {% empty %}
               <tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">No vouchers yet.</td></tr>
             {% endfor %}
@@ -97,7 +97,7 @@
       <h2 class="font-semibold">Payroll Snapshot</h2>
       <div class="mt-4 space-y-3">
         {% for payroll in recent_payrolls %}
-          <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800"><div><p class="text-sm font-medium">{{ payroll.employee.full_name }}</p><p class="text-xs text-slate-500">{{ payroll.month }}/{{ payroll.year }}</p></div><p class="text-sm font-semibold">{{ payroll.net_salary }}</p></div>
+          <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800"><div><p class="text-sm font-medium">{{ payroll.employee.full_name }}</p><p class="text-xs text-slate-500">{{ payroll.month }}/{{ payroll.year }}</p></div><p class="text-sm font-semibold">{{ payroll.net_salary|amount }}</p></div>
         {% empty %}
           <p class="text-sm text-slate-500">No payroll records yet.</p>
         {% endfor %}
@@ -203,12 +203,12 @@
   <div class="grid gap-4 sm:grid-cols-2">
     <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Sales (Posted)</p>
-      <p class="mt-2 text-3xl font-bold text-emerald-600">{{ total_sales|floatformat:0 }}</p>
+      <p class="mt-2 text-3xl font-bold text-emerald-600">{{ total_sales|amount }}</p>
       <p class="mt-1 text-xs text-slate-400">PKR — all posted POS sales</p>
     </div>
     <div class="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Purchases (Received)</p>
-      <p class="mt-2 text-3xl font-bold text-blue-600">{{ total_purchases|floatformat:0 }}</p>
+      <p class="mt-2 text-3xl font-bold text-blue-600">{{ total_purchases|amount }}</p>
       <p class="mt-1 text-xs text-slate-400">PKR — all received purchase orders</p>
     </div>
   </div>
@@ -237,7 +237,7 @@
             <td class="px-4 py-2 font-medium">{{ item.item_name }}</td>
             <td class="px-4 py-2 text-xs text-slate-400">{{ item.item_code }}</td>
             <td class="px-4 py-2 text-right font-semibold text-emerald-600">{{ item.total_qty|floatformat:"-4" }}</td>
-            <td class="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{{ item.total_amt|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{{ item.total_amt|amount }}</td>
           </tr>
           {% empty %}
           <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No sales data.</td></tr>

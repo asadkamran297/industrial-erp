@@ -102,8 +102,8 @@ class ReceivePOForm(forms.Form):
 class ManualTransactionForm(StyledModelForm):
     class Meta:
         model = ManualTransaction
-        fields = ("inventory_item", "qty", "price", "descr")
-        labels = {"inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
+        fields = ("vendor", "inventory_item", "qty", "price", "descr")
+        labels = {"vendor": "Vendor", "inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
         widgets = {"descr": forms.TextInput()}
 
 

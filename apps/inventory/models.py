@@ -600,6 +600,7 @@ MANUAL_TRANSACTION_STATUS_CHOICES = (
 
 class ManualTransaction(BaseModel):
     transaction_id = models.CharField(max_length=60, db_index=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, blank=False, db_column="inv_config_vendor_id")
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)

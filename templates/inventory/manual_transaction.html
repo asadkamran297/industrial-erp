@@ -49,7 +49,7 @@
             <td class="px-4 py-3">{{ row.item_code }}</td>
             <td class="px-4 py-3">{{ row.item_name }}</td>
             <td class="px-4 py-3">{{ row.qty|qty }}</td>
-            <td class="px-4 py-3">{{ row.price }}</td>
+            <td class="px-4 py-3">{{ row.price|amount }}</td>
             <td class="px-4 py-3">{{ row.descr }}</td>
             <td class="px-4 py-3">
               <form method="post" action="{% url 'inventory:manual_transaction_toggle' row.pk %}" class="flex justify-end">{% csrf_token %}
@@ -120,7 +120,7 @@
             <td class="px-4 py-3">{{ tx.date|date:"d-M-Y H:i" }}</td>
             <td class="px-4 py-3">{{ tx.descr|default:"—" }}</td>
             <td class="px-4 py-3 text-right">{{ tx.rows|length }}</td>
-            <td class="px-4 py-3 text-right">{{ tx.total_amount|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right">{{ tx.total_amount|amount }}</td>
             <td class="px-4 py-3 text-right">
               <a href="{% url 'inventory:manual_transaction_print' tx_id %}" target="_blank"
                  class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200">

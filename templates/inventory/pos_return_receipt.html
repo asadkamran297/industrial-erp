@@ -84,8 +84,8 @@
           <td>{{ forloop.counter }}</td>
           <td class="item-name">{{ item.item_name }}</td>
           <td class="r">{{ item.quantity|qty }}</td>
-          <td class="r">{{ item.price|floatformat:2|intcomma }}</td>
-          <td class="r">{{ item.net_total|floatformat:2|intcomma }}</td>
+          <td class="r">{{ item.price|amount }}</td>
+          <td class="r">{{ item.net_total|amount }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -94,13 +94,13 @@
           <td colspan="2">Total ({{ items|length }})</td>
           <td class="r">{{ total_qty|qty }}</td>
           <td></td>
-          <td class="r">{{ total_return|floatformat:2|intcomma }}</td>
+          <td class="r">{{ total_return|amount }}</td>
         </tr>
       </tfoot>
     </table>
 
     <div class="totals">
-      <div class="row grand"><span>TOTAL RETURNED</span><span>{{ total_return|floatformat:2|intcomma }}</span></div>
+      <div class="row grand"><span>TOTAL RETURNED</span><span>{{ total_return|amount }}</span></div>
     </div>
 
     <hr>

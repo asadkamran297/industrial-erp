@@ -79,9 +79,9 @@
           <td>{{ forloop.counter }}</td>
           <td class="item-name">{{ item.item_name }}</td>
           <td class="r">{{ item.quantity|qty }}</td>
-          <td class="r">{{ item.price|floatformat:2|intcomma }}</td>
-          <td class="r">{{ item.discount_amount|floatformat:2|intcomma }}</td>
-          <td class="r">{{ item.net_total|floatformat:2|intcomma }}</td>
+          <td class="r">{{ item.price|amount }}</td>
+          <td class="r">{{ item.discount_amount|amount }}</td>
+          <td class="r">{{ item.net_total|amount }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -90,17 +90,17 @@
           <td colspan="2">Total ({{ items|length }})</td>
           <td class="r">{{ total_qty|qty }}</td>
           <td></td>
-          <td class="r">{{ total_discount|floatformat:2|intcomma }}</td>
-          <td class="r">{{ sale.net_amount|floatformat:2|intcomma }}</td>
+          <td class="r">{{ total_discount|amount }}</td>
+          <td class="r">{{ sale.net_amount|amount }}</td>
         </tr>
       </tfoot>
     </table>
 
     <div class="totals">
-      <div class="row"><span>Total</span><span>{{ sale.total_amount|floatformat:2|intcomma }}</span></div>
-      <div class="row"><span>Discount</span><span>{{ sale.discount_amount|floatformat:2|intcomma }}</span></div>
-      {% if sale.tax_amount %}<div class="row"><span>Tax</span><span>{{ sale.tax_amount|floatformat:2|intcomma }}</span></div>{% endif %}
-      <div class="row grand"><span>NET PAYABLE</span><span>{{ sale.net_amount|floatformat:2|intcomma }}</span></div>
+      <div class="row"><span>Total</span><span>{{ sale.total_amount|amount }}</span></div>
+      <div class="row"><span>Discount</span><span>{{ sale.discount_amount|amount }}</span></div>
+      {% if sale.tax_amount %}<div class="row"><span>Tax</span><span>{{ sale.tax_amount|amount }}</span></div>{% endif %}
+      <div class="row grand"><span>NET PAYABLE</span><span>{{ sale.net_amount|amount }}</span></div>
     </div>
 
     <hr>

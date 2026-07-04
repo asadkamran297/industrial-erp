@@ -1,7 +1,7 @@
 from django import template
 
 from apps.access_control.selectors import user_has_permission
-from apps.core.formatting import format_qty
+from apps.core.formatting import format_amount, format_qty
 
 register = template.Library()
 
@@ -10,6 +10,12 @@ register = template.Library()
 def qty(value):
     """Render a quantity with the app-wide fixed decimal precision."""
     return format_qty(value)
+
+
+@register.filter(name="amount")
+def amount(value):
+    """Render an amount with thousands separators and fixed decimal precision."""
+    return format_amount(value)
 
 
 @register.simple_tag(takes_context=True)
