@@ -27,7 +27,10 @@ def get_user_permission_codes(user: User) -> set[str]:
 
 
 def user_has_permission(user: User, permission_code: str | None) -> bool:
+    # Fail closed: a view that cannot resolve a permission code must not be
+    # silently public. Every guarded view sets ``page``; a missing code is a
+    # configuration bug, so deny rather than grant.
     if not permission_code:
-        return True
+        return False
     permission_codes = get_user_permission_codes(user)
     return "*" in permission_codes or permission_code in permission_codes
