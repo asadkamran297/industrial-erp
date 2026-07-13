@@ -15,16 +15,27 @@ def env_bool(name: str, default: bool = False) -> bool:
     return default
 
 
-def postgres_database_from_url(url: str) -> dict[str, str]:
+def database_from_url(url: str) -> dict[str, str]:
     parsed = urlparse(url)
+    scheme = parsed.scheme.split("+", 1)[0]
+    if scheme in {"mysql", "mysql2"}:
+        engine = "django.db.backends.mysql"
+        default_port = 3306
+    else:
+        engine = "django.db.backends.postgresql"
+        default_port = 5432
     return {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": engine,
         "NAME": parsed.path.lstrip("/"),
         "USER": parsed.username or "",
         "PASSWORD": parsed.password or "",
         "HOST": parsed.hostname or "127.0.0.1",
-        "PORT": str(parsed.port or 5432),
+        "PORT": str(parsed.port or default_port),
     }
+
+
+# Backwards-compatible alias.
+postgres_database_from_url = database_from_url
 
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-change-me-in-env")
@@ -103,7 +114,7 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASE_URL = config("DATABASE_URL", default="")
 
 DATABASES = {
-    "default": postgres_database_from_url(DATABASE_URL)
+    "default": database_from_url(DATABASE_URL)
     if DATABASE_URL
     else {
         "ENGINE": config("DB_ENGINE", default="django.db.backends.postgresql"),
