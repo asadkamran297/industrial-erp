@@ -207,10 +207,21 @@ class VendorListView(BaseSimpleListView):
     queryset = Vendor.objects.select_related("city").order_by("name")
     search_fields = ("name", "code", "email", "tel1")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "columns": [("Name", "name"), ("Code", "code"), ("City", "city"), ("Status", "get_status_display")]}
+    extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status", "columns": [("Name", "name"), ("Code", "code"), ("City", "city"), ("Status", "status_toggle")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+
+
+class VendorToggleStatusView(InventoryManageMixin, View):
+    page = "inventory.vendors"
+    action = "edit"
+    def post(self, request, pk):
+        record = get_object_or_404(Vendor, pk=pk)
+        record.status = STATUS_INACTIVE if record.status == STATUS_ACTIVE else STATUS_ACTIVE
+        record.updated_by = request.user
+        record.save(update_fields=["status", "updated_by", "updated_at"])
+        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:vendor_list"))
 
 
 class VendorCreateView(InventoryManageMixin, CreateView):
