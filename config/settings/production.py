@@ -2,8 +2,14 @@ from .base import *  # noqa: F403
 
 DEBUG = False
 
-ALLOWED_HOSTS = [".railway.app", "localhost"]
-CSRF_TRUSTED_ORIGINS = ["https://*.railway.app"]
+ALLOWED_HOSTS = [".railway.app", ".onrender.com", "localhost"]
+CSRF_TRUSTED_ORIGINS = ["https://*.railway.app", "https://*.onrender.com"]
+
+# Render injects the external hostname at runtime.
+RENDER_EXTERNAL_HOSTNAME = config("RENDER_EXTERNAL_HOSTNAME", default="")  # noqa: F405
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
