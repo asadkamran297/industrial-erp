@@ -132,6 +132,7 @@ class CustomerForm(StyledModelForm):
         model = Customer
         fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "is_default", "status", "remarks")
         labels = {"is_default": "Set as default customer"}
+        widgets = {"remarks": forms.TextInput()}
 
 
 class POSMasterForm(StyledModelForm):
