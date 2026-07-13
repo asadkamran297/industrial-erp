@@ -23,7 +23,7 @@
                 <a class="font-medium text-slate-900 hover:text-[var(--primary-color)] dark:text-slate-100" href="?selected_uom={{ row.pk }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ row.title }}</a>
               </td>
               <td class="px-4 py-3">{{ row.code }}</td>
-              <td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ row.get_status_display }}</span></td>
+              <td class="px-4 py-3">{% if can_edit %}<form method="post" action="{% url 'inventory:uom_toggle_status' row.pk %}">{% csrf_token %}<label class="relative inline-flex cursor-pointer items-center"><input type="checkbox" class="peer sr-only" onchange="this.form.submit()" {% if row.status == 'active' %}checked{% endif %}><div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-5 dark:bg-slate-600"></div></label></form>{% else %}<span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ row.get_status_display }}</span>{% endif %}</td>
               <td class="px-4 py-3">
                 <div class="flex justify-end gap-2">
                   <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url edit_url_name row.pk %}" title="Edit"><span>&#9998;</span></a>
