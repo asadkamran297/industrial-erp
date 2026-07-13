@@ -24,6 +24,7 @@ from apps.core.constants import (
     RECORD_STATUS_CHOICES,
     STATUS_ACTIVE,
     STATUS_CREATED,
+    STATUS_INACTIVE,
     VOUCHER_TYPE_PAYMENT,
     YES,
     YES_NO_CHOICES,
@@ -56,14 +57,14 @@ class FiscalYear(BaseModel):
         FiscalPeriod.objects.get_or_create(
             fiscal_year=self,
             code=f"{self.code}-00",
-            defaults={"title": "Opening", "status": STATUS_ACTIVE},
+            defaults={"title": "Opening", "status": STATUS_INACTIVE},
         )
         current = self.start_date
         for index in range(1, 13):
             FiscalPeriod.objects.get_or_create(
                 fiscal_year=self,
                 code=f"{self.code}-{index:02d}",
-                defaults={"title": current.strftime("%B %Y"), "status": STATUS_ACTIVE},
+                defaults={"title": current.strftime("%B %Y"), "status": STATUS_INACTIVE},
             )
             year = current.year + (1 if current.month == 12 else 0)
             month = 1 if current.month == 12 else current.month + 1
@@ -71,7 +72,7 @@ class FiscalYear(BaseModel):
         FiscalPeriod.objects.get_or_create(
             fiscal_year=self,
             code=f"{self.code}-99",
-            defaults={"title": "Closing", "status": STATUS_ACTIVE},
+            defaults={"title": "Closing", "status": STATUS_INACTIVE},
         )
 
 
@@ -79,7 +80,7 @@ class FiscalPeriod(BaseModel):
     fiscal_year = models.ForeignKey(FiscalYear, related_name="periods", on_delete=models.CASCADE, db_column="fin_fiscal_year_id")
     title = models.CharField(max_length=120)
     code = models.CharField(max_length=40)
-    status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
+    status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_INACTIVE)
 
     class Meta:
         db_table = "fin_fiscal_periods"

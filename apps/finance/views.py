@@ -1,14 +1,18 @@
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
+from apps.core.constants import STATUS_INACTIVE
+
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
-from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
+from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalPeriod, FiscalYear
 
 
 class AuditSaveMixin:
@@ -24,7 +28,16 @@ class FiscalYearListView(SearchFilterPaginationMixin, PagePermissionRequiredMixi
     page = "finance.fiscal_years"
     template_name = "finance/fiscal_year_list.html"
     context_object_name = "fiscal_years"
-    queryset = FiscalYear.objects.order_by("-start_date")
+    queryset = (
+        FiscalYear.objects.prefetch_related("periods")
+        .annotate(
+            month_period_count=Count(
+                "periods",
+                filter=~Q(periods__code__endswith="-00") & ~Q(periods__code__endswith="-99"),
+            )
+        )
+        .order_by("-start_date")
+    )
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
 
@@ -48,6 +61,24 @@ class FiscalYearCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateVi
 
 class FiscalYearUpdateView(FiscalYearCreateView, UpdateView):
     success_message = "Fiscal year updated."
+
+
+class FiscalPeriodSetActiveView(PagePermissionRequiredMixin, View):
+    page = "finance.fiscal_years"
+    action = "edit"
+
+    def post(self, request, pk):
+        fiscal_year = get_object_or_404(FiscalYear, pk=pk)
+        period = get_object_or_404(FiscalPeriod, pk=request.POST.get("period"), fiscal_year=fiscal_year)
+        with transaction.atomic():
+            fiscal_year.periods.filter(status=STATUS_ACTIVE).exclude(pk=period.pk).update(
+                status=STATUS_INACTIVE, updated_by=request.user, updated_at=timezone.now()
+            )
+            period.status = STATUS_ACTIVE
+            period.updated_by = request.user
+            period.save(update_fields=["status", "updated_by", "updated_at"])
+        messages.success(request, f"{period.title} set active.")
+        return redirect("finance:fiscal_year_list")
 
 
 class AccountConfigurationListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
