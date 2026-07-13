@@ -119,7 +119,7 @@ def finalize_manual_transaction(*, transaction_id, user):
 
 
 @transaction.atomic
-def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user):
+def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, freight_amount=Decimal("0")):
     purchase_order_item = PurchaseOrderItem.objects.select_for_update().select_related("purchase_order", "inventory_item").get(pk=purchase_order_item.pk)
     allowed = purchase_order_item.quantity + purchase_order_item.extra_qty - purchase_order_item.total_receive_qty
     if quantity <= 0:
@@ -128,6 +128,10 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         raise ValidationError("PO item cannot receive more than ordered quantity unless extra quantity is available.")
 
     po = purchase_order_item.purchase_order
+
+    received_units = quantity + extra_qty
+    freight_per_unit = (freight_amount / received_units) if received_units > 0 else Decimal("0")
+    landed_price = (retail_price or Decimal("0")) + freight_per_unit
 
     receipt = PurchaseOrderItemReceived.objects.create(
         purchase_order_item=purchase_order_item,
@@ -153,7 +157,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     purchase_order_item.last_receive_qty = purchase_order_item.curr_receive_qty
     purchase_order_item.curr_receive_qty = quantity + extra_qty
     purchase_order_item.total_receive_qty = purchase_order_item.total_receive_qty + quantity + extra_qty
-    purchase_order_item.retail_price = retail_price
+    purchase_order_item.retail_price = landed_price
     purchase_order_item.updated_by = user
     purchase_order_item.save()
 
@@ -184,8 +188,8 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     stock = Stock.objects.select_for_update().get(inventory_item=purchase_order_item.inventory_item)
     old_quantity = stock.current_quantity
     old_price = stock.current_price
-    stock.last_price = retail_price if stock.current_quantity <= 0 and stock.current_price <= 0 else stock.current_price
-    stock.current_price = retail_price
+    stock.last_price = landed_price if stock.current_quantity <= 0 and stock.current_price <= 0 else stock.current_price
+    stock.current_price = landed_price
     stock.current_quantity = stock.current_quantity + quantity + extra_qty
     stock.updated_by = user
     stock.save()

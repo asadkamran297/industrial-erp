@@ -41,7 +41,16 @@
           <p class="text-2xl font-extrabold" x-text="balanceLabel"></p>
         </div>
       </div>
+
+      <div class="mt-4">
+        <label class="mb-1 block text-xs font-medium">Narration</label>
+        <input type="text" class="form-input w-full" x-model="narration" name="narration" placeholder="One-line narration for this voucher (applies to blank line descriptions)">
+      </div>
     </div>
+
+    <datalist id="account-options">
+      {% for account in active_accounts %}<option value="{{ account.account_no }}">{{ account.account_no }} - {{ account.title }}</option>{% endfor %}
+    </datalist>
 
     <div class="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <table class="w-full text-left text-sm">
@@ -60,16 +69,11 @@
             <tr>
               <td class="px-3 py-2" x-text="i + 1"></td>
               <td class="px-3 py-2">
-                <select class="form-select" :name="`account_no[]`">
-                  <option value="">-- Select account --</option>
-                  {% for account in active_accounts %}
-                    <option value="{{ account.account_no }}">{{ account.account_no }} - {{ account.title }}</option>
-                  {% endfor %}
-                </select>
+                <input type="text" class="form-input" :name="`account_no[]`" list="account-options" placeholder="Search account..." autocomplete="off">
               </td>
               <td class="px-3 py-2"><input type="text" class="form-input" :name="`remarks[]`" placeholder="Description"></td>
               <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" :name="`debit_amount[]`" x-model.number="line.debit" @input="line.debit = round2(line.debit); recompute()"></td>
-              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" :name="`credit_amount[]`" x-model.number="line.credit" @input="line.credit = round2(line.credit); recompute()"></td>
+              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" :name="`credit_amount[]`" x-model.number="line.credit" @input="line.credit = round2(line.credit); recompute()" @keydown.tab="if (i === lines.length - 1 && !$event.shiftKey) addLine()"></td>
               <td class="px-3 py-2 text-right"><button type="button" @click="removeLine(i)" class="text-rose-600 hover:text-rose-700">&times;</button></td>
             </tr>
           </template>
@@ -80,7 +84,7 @@
 
     <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
       <button type="button" @click="addLine()" class="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">+ Add Line</button>
-      <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">Create JV</button>
+      <button type="submit" :disabled="!canCreate" :class="canCreate ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300 cursor-not-allowed dark:bg-slate-700'" class="inline-flex min-h-11 items-center gap-2 rounded-lg px-6 text-sm font-semibold text-white shadow-sm" :title="canCreate ? '' : 'Debit and Credit must be equal and greater than zero'">Create JV</button>
     </div>
   </form>
 </section>
@@ -90,6 +94,10 @@
     return {
       uidSeq: 1,
       lines: [],
+      narration: '',
+      get canCreate() {
+        return this.debitTotal > 0 && this.round2(this.debitTotal) === this.round2(this.creditTotal);
+      },
       get debitTotal() {
         return this.lines.reduce((sum, line) => sum + (Number(line.debit) || 0), 0);
       },
@@ -130,10 +138,14 @@
         return isNaN(n) ? 0 : Math.round(n * 100) / 100;
       },
       submitLines(event) {
-        if (this.lines.length === 0) {
-          event.preventDefault();
-          return;
+        var form = event.target;
+        if (this.lines.length === 0 || !this.canCreate) return;
+        if (this.narration.trim()) {
+          form.querySelectorAll('input[name="remarks[]"]').forEach(function (inp) {
+            if (!inp.value.trim()) inp.value = this.narration;
+          }.bind(this));
         }
+        form.submit();
       }
     };
   }

@@ -299,6 +299,29 @@ class LedgerListView(InventoryListMixin, ListView):
             {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
         ]
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = list(context["ledgers"])
+
+        receive_ids = [r.ref_id for r in rows if r.ref_table == "inv_purchase_order_item_received"]
+        sale_ids = [r.ref_id for r in rows if r.ref_table == "inv_pos_details"]
+        receive_map = {
+            rec.pk: rec.purchase_order_item.purchase_order_id
+            for rec in PurchaseOrderItemReceived.objects.filter(pk__in=receive_ids).select_related("purchase_order_item")
+        }
+        sale_map = dict(POSDetail.objects.filter(pk__in=sale_ids).values_list("pk", "pos_master_id"))
+
+        for row in rows:
+            url = None
+            if row.ref_table == "inv_manual_transaction" and row.transaction_id:
+                url = reverse_lazy("inventory:manual_transaction_print", kwargs={"tx_id": row.transaction_id})
+            elif row.ref_table == "inv_purchase_order_item_received" and row.ref_id in receive_map:
+                url = f"{reverse_lazy('inventory:grn_print', kwargs={'pk': receive_map[row.ref_id]})}?receipts={row.ref_id}&reprint=1"
+            elif row.ref_table == "inv_pos_details" and row.ref_id in sale_map:
+                url = reverse_lazy("inventory:pos_receipt", kwargs={"pk": sale_map[row.ref_id]})
+            row.ref_url = url
+        return context
+
 
 class CustomerLedgerListView(InventoryListMixin, ListView):
     page = "inventory.customer_ledger"
@@ -1304,30 +1327,55 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
         today = timezone.localdate()
         errors = []
         receipt_pks = []
+
+        try:
+            freight_total = Decimal(request.POST.get("freight_charges", "").strip() or "0")
+        except Exception:
+            freight_total = Decimal("0")
+        if freight_total < 0:
+            freight_total = Decimal("0")
+
+        # First pass: collect valid receive lines and their cost value for freight allocation.
+        recv_lines = []
+        for item in order.items.filter(status=YES):
+            raw = request.POST.get(f"recv_qty_{item.pk}", "").strip()
+            if not raw:
+                continue
+            try:
+                qty = Decimal(raw)
+            except Exception:
+                continue
+            if qty <= 0:
+                continue
+            unit_cost = item.retail_price or item.rate or Decimal("0")
+            recv_lines.append((item, qty, unit_cost, qty * unit_cost))
+
+        total_value = sum((line[3] for line in recv_lines), Decimal("0"))
+
         try:
             with transaction.atomic():
-                for item in order.items.filter(status=YES):
-                    raw = request.POST.get(f"recv_qty_{item.pk}", "").strip()
-                    if not raw:
-                        continue
-                    try:
-                        qty = Decimal(raw)
-                    except Exception:
-                        continue
-                    if qty <= 0:
-                        continue
+                allocated = Decimal("0")
+                for idx, (item, qty, unit_cost, line_value) in enumerate(recv_lines):
+                    if freight_total <= 0 or total_value <= 0:
+                        freight_amount = Decimal("0")
+                    elif idx == len(recv_lines) - 1:
+                        freight_amount = (freight_total - allocated).quantize(Decimal("0.01"))
+                    else:
+                        freight_amount = (freight_total * line_value / total_value).quantize(Decimal("0.01"))
+                        allocated += freight_amount
                     try:
                         receipt = receive_purchase_order_item(
                             purchase_order_item=item,
                             quantity=qty,
                             extra_qty=Decimal("0"),
-                            retail_price=item.retail_price or item.rate,
+                            retail_price=unit_cost,
                             receive_date=today,
                             invoice_num="",
                             invoice_date=None,
                             rv_number="",
                             remarks="",
                             user=request.user,
+                            freight_amount=freight_amount,
                         )
                         receipt_pks.append(str(receipt.pk))
                     except ValidationError as exc:

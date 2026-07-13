@@ -33,7 +33,7 @@
               <td class="px-4 py-3">{{ row.old_quantity|qty }}</td>
               <td class="px-4 py-3">{{ row.quantity|qty }}</td>
               <td class="px-4 py-3 font-medium">{{ row.new_quantity|qty }}</td>
-              <td class="px-4 py-3">{{ row.ref_no }}</td>
+              <td class="px-4 py-3">{% if row.ref_url %}<a href="{{ row.ref_url }}" target="_blank" class="inline-flex items-center gap-1 font-medium text-[var(--primary-color)] hover:underline" title="Open source document">{{ row.ref_no|default:"View" }} &#8599;</a>{% else %}{{ row.ref_no }}{% endif %}</td>
             </tr>
           {% empty %}
             <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No ledger entries found.</td></tr>

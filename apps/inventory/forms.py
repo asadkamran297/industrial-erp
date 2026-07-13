@@ -72,6 +72,11 @@ class VendorForm(StyledModelForm):
         model = Vendor
         fields = ("name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num", "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["city"].required = True
+        self.fields["city"].empty_label = "-- Select city --"
+
 
 class InventoryItemForm(StyledModelForm):
     class Meta:
