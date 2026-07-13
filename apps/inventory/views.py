@@ -969,6 +969,7 @@ class POSCheckoutView(InventoryManageMixin, View):
     def _checkout(self, request, lines):
         sale = POSMaster.objects.create(
             transaction_id=generate_transaction_id("SAL", POSMaster),
+            sale_date=request.POST.get("sale_date") or timezone.localdate(),
             pay_mode=request.POST.get("pay_mode") or "cash",
             customer_id=request.POST.get("customer") or None,
             remarks=f"Walking customer {timezone.now():%Y-%m-%d %H:%M:%S}",

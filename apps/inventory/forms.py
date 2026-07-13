@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
@@ -131,11 +132,14 @@ class CustomerForm(StyledModelForm):
 class POSMasterForm(StyledModelForm):
     class Meta:
         model = POSMaster
-        fields = ("pay_mode", "customer")
+        fields = ("sale_date", "pay_mode", "customer")
+        widgets = {"sale_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+        labels = {"sale_date": "Sale Date"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["pay_mode"].initial = "cash"
+        self.fields["sale_date"].initial = timezone.localdate()
         if not self.instance.pk and not self.initial.get("customer"):
             default_customer = Customer.get_default()
             if default_customer:
