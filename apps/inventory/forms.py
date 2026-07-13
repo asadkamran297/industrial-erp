@@ -101,7 +101,7 @@ class PurchaseOrderItemForm(StyledModelForm):
 
     class Meta:
         model = PurchaseOrderItem
-        fields = ("inventory_item", "uom_title", "quantity", "rate", "discount_amount", "status")
+        fields = ("inventory_item", "uom_title", "quantity", "rate", "discount_amount", "remarks", "status")
         labels = {"inventory_item": "Inventory Name"}
 
 

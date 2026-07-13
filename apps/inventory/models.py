@@ -203,6 +203,7 @@ class PurchaseOrderItem(BaseModel):
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     descr = models.CharField(max_length=255)
+    remarks = models.CharField(max_length=255, blank=True, default="")
 
     class Meta:
         db_table = "inv_purchase_order_items"
