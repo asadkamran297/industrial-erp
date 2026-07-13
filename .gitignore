@@ -69,3 +69,6 @@ pnpm-debug.log*
 *.seed
 *.bak
 *.tmp
+
+.vercel
+.env*

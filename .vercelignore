@@ -1,0 +1,6 @@
+staticfiles
+!staticfiles
+db.sqlite3
+node_modules
+.venv
+media
