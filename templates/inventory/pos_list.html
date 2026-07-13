@@ -74,7 +74,7 @@
       <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Sale</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3">Net</th><th class="px-4 py-3 text-right">Actions</th></tr></thead>
       <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
         {% for s in recent_sales %}
-          <tr><td class="px-4 py-3">{{ s.sale_num }}</td><td class="px-4 py-3">{{ s.sale_date }}</td><td class="px-4 py-3">{{ s.customer|default:'Walk-in' }}</td><td class="px-4 py-3">{{ s.net_amount|amount }}</td><td class="px-4 py-3 text-right"><a class="text-[var(--primary-color)]" href="{% url 'inventory:pos_receipt' s.pk %}">Receipt</a> &middot; <a class="text-slate-500" href="{% url 'inventory:pos_detail' s.pk %}">View</a></td></tr>
+          <tr><td class="px-4 py-3">{{ s.sale_num }}</td><td class="px-4 py-3">{{ s.sale_date }}</td><td class="px-4 py-3">{{ s.customer|default:'Walk-in' }}</td><td class="px-4 py-3">{{ s.net_amount|amount }}</td><td class="px-4 py-3"><div class="flex justify-end gap-2"><a href="{% url 'inventory:pos_detail' s.pk %}" title="View" class="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">&#128065;</a><a href="{% url 'inventory:pos_receipt' s.pk %}" title="Receipt" class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800">&#129534;</a></div></td></tr>
         {% endfor %}
       </tbody>
     </table>

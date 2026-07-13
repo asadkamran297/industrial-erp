@@ -69,15 +69,9 @@ class FiscalYearToggleActiveView(PagePermissionRequiredMixin, View):
 
     def post(self, request, pk):
         fiscal_year = get_object_or_404(FiscalYear, pk=pk)
-        activate = fiscal_year.status != STATUS_ACTIVE
-        with transaction.atomic():
-            if activate:
-                FiscalYear.objects.filter(status=STATUS_ACTIVE).exclude(pk=fiscal_year.pk).update(
-                    status=STATUS_INACTIVE, updated_by=request.user, updated_at=timezone.now()
-                )
-            fiscal_year.status = STATUS_ACTIVE if activate else STATUS_INACTIVE
-            fiscal_year.updated_by = request.user
-            fiscal_year.save(update_fields=["status", "updated_by", "updated_at"])
+        fiscal_year.status = STATUS_INACTIVE if fiscal_year.status == STATUS_ACTIVE else STATUS_ACTIVE
+        fiscal_year.updated_by = request.user
+        fiscal_year.save(update_fields=["status", "updated_by", "updated_at"])
         messages.success(request, f"{fiscal_year.title} set to {fiscal_year.get_status_display()}.")
         return redirect("finance:fiscal_year_list")
 

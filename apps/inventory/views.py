@@ -244,10 +244,21 @@ class ItemListView(BaseSimpleListView):
     queryset = InventoryItem.objects.select_related("uom", "item_class").order_by("item_name")
     search_fields = ("item_name", "code", "item_bar_code")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Inventory Items", "create_url": reverse_lazy("inventory:item_create"), "edit_url_name": "inventory:item_update", "columns": [("Name", "item_name"), ("Code", "code"), ("UOM", "uom"), ("Price", "price"), ("Status", "get_status_display")]}
+    extra_context = {"title": "Inventory Items", "create_url": reverse_lazy("inventory:item_create"), "edit_url_name": "inventory:item_update", "status_toggle_url_name": "inventory:item_toggle_status", "columns": [("Name", "item_name"), ("Code", "code"), ("UOM", "uom"), ("Price", "price"), ("Status", "status_toggle")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+
+
+class ItemToggleStatusView(InventoryManageMixin, View):
+    page = "inventory.items"
+    action = "edit"
+    def post(self, request, pk):
+        record = get_object_or_404(InventoryItem, pk=pk)
+        record.status = STATUS_INACTIVE if record.status == STATUS_ACTIVE else STATUS_ACTIVE
+        record.updated_by = request.user
+        record.save(update_fields=["status", "updated_by", "updated_at"])
+        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:item_list"))
 
 
 class ItemCreateView(InventoryManageMixin, CreateView):
