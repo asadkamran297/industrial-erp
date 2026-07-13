@@ -24,6 +24,17 @@ from .models import (
 )
 
 
+class InventoryItemChoiceField(forms.ModelChoiceField):
+    """Item dropdown showing only item name (no code). Reuse everywhere."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("queryset", InventoryItem.objects.all())
+        super().__init__(*args, **kwargs)
+
+    def label_from_instance(self, obj):
+        return obj.item_name
+
+
 class StyledModelForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -105,6 +116,10 @@ class ManualTransactionForm(StyledModelForm):
         fields = ("vendor", "inventory_item", "qty", "price", "descr")
         labels = {"vendor": "Vendor", "inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
         widgets = {"descr": forms.TextInput()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["inventory_item"].label_from_instance = lambda obj: obj.item_name
 
 
 class CustomerForm(StyledModelForm):
