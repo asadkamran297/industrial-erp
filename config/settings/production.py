@@ -2,11 +2,18 @@ from .base import *  # noqa: F403
 
 DEBUG = False
 
-ALLOWED_HOSTS = [".railway.app", ".onrender.com", ".pythonanywhere.com", "localhost"]
+ALLOWED_HOSTS = [
+    ".railway.app",
+    ".onrender.com",
+    ".pythonanywhere.com",
+    ".vercel.app",
+    "localhost",
+]
 CSRF_TRUSTED_ORIGINS = [
     "https://*.railway.app",
     "https://*.onrender.com",
     "https://*.pythonanywhere.com",
+    "https://*.vercel.app",
 ]
 
 # Render injects the external hostname at runtime.
