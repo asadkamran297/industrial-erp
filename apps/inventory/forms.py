@@ -90,6 +90,7 @@ class PurchaseOrderForm(StyledModelForm):
 
 
 class PurchaseOrderItemForm(StyledModelForm):
+    inventory_item = InventoryItemChoiceField(label="Inventory Name")
     uom_title = forms.CharField(required=False, disabled=True, label="UOM", widget=forms.TextInput(attrs={"class": "form-input", "readonly": "readonly"}))
 
     class Meta:
@@ -111,15 +112,13 @@ class ReceivePOForm(forms.Form):
 
 
 class ManualTransactionForm(StyledModelForm):
+    inventory_item = InventoryItemChoiceField(label="Item")
+
     class Meta:
         model = ManualTransaction
         fields = ("vendor", "inventory_item", "qty", "price", "descr")
         labels = {"vendor": "Vendor", "inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
         widgets = {"descr": forms.TextInput()}
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["inventory_item"].label_from_instance = lambda obj: obj.item_name
 
 
 class CustomerForm(StyledModelForm):
@@ -144,6 +143,8 @@ class POSMasterForm(StyledModelForm):
 
 
 class POSDetailForm(StyledModelForm):
+    inventory_item = InventoryItemChoiceField(label="Item")
+
     class Meta:
         model = POSDetail
         fields = ("inventory_item", "quantity", "price", "discount_amount")
@@ -171,6 +172,8 @@ class PurchaseReturnMasterForm(StyledModelForm):
 
 
 class PurchaseReturnDetailForm(StyledModelForm):
+    inventory_item = InventoryItemChoiceField(label="Item")
+
     class Meta:
         model = PurchaseReturnDetail
         fields = ("inventory_item", "quantity", "rate", "status")
