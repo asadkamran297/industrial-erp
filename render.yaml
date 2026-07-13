@@ -25,3 +25,9 @@ services:
         fromDatabase:
           name: industrial-erp-db
           property: connectionString
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: "admin"
+      - key: DJANGO_SUPERUSER_PASSWORD
+        value: "Admin@12345"
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: "gedana5173@ezimb.com"
