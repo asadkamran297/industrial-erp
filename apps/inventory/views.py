@@ -288,7 +288,7 @@ class LedgerListView(InventoryListMixin, ListView):
     template_name = "inventory/ledger_list.html"
     context_object_name = "ledgers"
     queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
-    search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
+    search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no", "transaction_type", "transaction_date", "old_quantity", "quantity", "new_quantity")
     filter_fields = {"item": "inventory_item_id", "type": "transaction_type"}
     date_filters = [{"field": "transaction_date", "label": "Transaction date"}]
 

@@ -119,10 +119,11 @@ class SearchFilterPaginationMixin:
         queryset = super().get_queryset()
         query = self.request.GET.get("q", "").strip()
         if query and self.search_fields:
-            search_query = Q()
-            for field in self.search_fields:
-                search_query |= Q(**{f"{field}__icontains": query})
-            queryset = queryset.filter(search_query)
+            for term in query.split():
+                term_query = Q()
+                for field in self.search_fields:
+                    term_query |= Q(**{f"{field}__icontains": term})
+                queryset = queryset.filter(term_query)
 
         for param, field in self.filter_fields.items():
             value = self.request.GET.get(param, "").strip()

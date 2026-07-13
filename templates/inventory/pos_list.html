@@ -9,7 +9,7 @@
     <!-- Top: title + pay mode + customer + totals -->
     <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">POS Sales</h1>
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Cash Sale</h1>
         <div class="flex flex-wrap items-end gap-3">
           {% for field in master_form %}
             <div class="min-w-[160px]"><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>
@@ -40,9 +40,9 @@
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           <template x-for="(line, i) in lines" :key="line.uid">
-            <tr>
+            <tr class="bg-slate-100 dark:bg-slate-800/60">
               <td class="px-3 py-2" x-text="i + 1"></td>
-              <td class="px-3 py-2 font-medium max-w-[220px] truncate whitespace-nowrap" x-text="line.name" :title="line.name"></td>
+              <td class="px-3 py-2 font-medium max-w-[260px] whitespace-nowrap" :title="line.name"><span class="truncate" x-text="line.name"></span><span class="ml-2 text-xs font-semibold text-emerald-600" x-text="'Avail: ' + fmt(line.stock)"></span></td>
               <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.qty" @input="line.qty = round2(line.qty); distribute()"></td>
               <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.price" @input="line.price = round2(line.price); distribute()"></td>
               <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.discount" @input="line.discount = round2(line.discount)"></td>
@@ -98,7 +98,7 @@
         if (!it) return;
         var existing = this.lines.find(l => String(l.item) === String(it.id));
         if (existing) { existing.qty = (Number(existing.qty) || 0) + 1; }
-        else { this.lines.push({ uid: this.uidSeq++, item: it.id, name: it.name, qty: 1, price: it.price, discount: 0 }); }
+        else { this.lines.push({ uid: this.uidSeq++, item: it.id, name: it.name, qty: 1, price: it.price, discount: 0, stock: it.stock }); }
         this.distribute();
       },
       removeLine(i) { this.lines.splice(i, 1); this.distribute(); },
