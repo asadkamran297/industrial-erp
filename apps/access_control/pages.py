@@ -60,6 +60,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     # Finance
     Page("finance.fiscal_years", "Fiscal Years", "Finance", MASTER_NO_DELETE),
     Page("finance.accounts", "Chart of Accounts", "Finance", MASTER_NO_DELETE),
+    Page("finance.chart_of_accounts", "Chart of Accounts Tree", "Finance", MASTER),
     Page("finance.vouchers", "Vouchers", "Finance", CRUD),
     # Workforce
     Page("hr.employees", "Employees", "Workforce", CRUD),

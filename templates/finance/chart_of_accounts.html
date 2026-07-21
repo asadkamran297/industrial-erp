@@ -1,0 +1,492 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Chart of Accounts" subtitle="Five fixed roots. Use + on any row to add accounts under it; drag to reorder." %}
+
+{% csrf_token %}
+{{ coa_tree|json_script:"coa-tree-data" }}
+
+<style>
+  .coa-wrap{--coa-line:#e2e8f0;--coa-line-d:#334155;}
+  .coa-toolbar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap;}
+  .coa-btn{border:1px solid var(--coa-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;font-weight:600;color:#475569;cursor:pointer;}
+  .coa-btn:hover{background:#f8fafc;}
+  .dark .coa-btn{background:#0f172a;border-color:var(--coa-line-d);color:#cbd5e1;}
+  #coa-status{font-size:.75rem;color:#94a3b8;}
+  #coa-search{border:1px solid var(--coa-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;color:#0f172a;min-width:220px;}
+  #coa-search:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
+  .dark #coa-search{background:#0f172a;border-color:var(--coa-line-d);color:#e2e8f0;}
+  .coa-node.coa-hidden{display:none;}
+  .coa-title mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px;}
+
+  .coa-card{border:1px solid var(--coa-line);background:#fff;border-radius:14px;padding:.5rem;}
+  .dark .coa-card{background:#0b1220;border-color:var(--coa-line-d);}
+  .coa-list{list-style:none;margin:0;padding:0;}
+  .coa-children{margin:2px 0 2px 26px;padding-left:14px;border-left:1px dashed var(--coa-line);min-height:6px;}
+  .dark .coa-children{border-left-color:var(--coa-line-d);}
+  .coa-node.collapsed > .coa-children{display:none;}
+  /* empty groups become visible drop targets only while dragging */
+  .coa-wrap.coa-dragging .coa-children:empty{min-height:26px;border-radius:8px;border:1px dashed var(--coa-line);}
+  .coa-wrap.coa-dragging .coa-children:empty::before{content:"drop here";display:block;font-size:.65rem;color:#cbd5e1;padding:.3rem .5rem;}
+  .coa-children.coa-drop-hover{border-color:var(--primary-color)!important;background:rgba(99,102,241,.06);}
+
+  .coa-row{display:flex;align-items:center;gap:.55rem;padding:.45rem .6rem;border-radius:10px;border:1px solid transparent;transition:background .12s,border-color .12s;}
+  .coa-row:hover{background:#f8fafc;border-color:var(--coa-line);}
+  .dark .coa-row:hover{background:#111c33;border-color:var(--coa-line-d);}
+  .coa-row.is-root{background:#f1f5f9;font-weight:700;}
+  .dark .coa-row.is-root{background:#0f1b30;}
+  /* insertion-line ghost = clear same-level drop position */
+  .coa-sortable-ghost{opacity:1;}
+  .coa-sortable-ghost > .coa-row{position:relative;background:transparent;border-color:transparent;}
+  .coa-sortable-ghost > .coa-row::before{content:"";position:absolute;left:0;right:0;top:-2px;height:3px;border-radius:3px;background:var(--primary-color);}
+  .coa-sortable-ghost > .coa-children{display:none;}
+  .coa-sortable-chosen{background:#eef2ff;border-radius:10px;}
+  .coa-sortable-drag > .coa-row{background:#fff;border:1px solid var(--primary-color);border-radius:10px;box-shadow:0 8px 20px rgba(15,23,42,.15);}
+  .dark .coa-sortable-drag > .coa-row{background:#0b1220;}
+
+  .coa-handle{cursor:grab;color:#cbd5e1;font-size:.85rem;letter-spacing:-3px;user-select:none;}
+  .coa-caret{width:18px;height:18px;border:0;background:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;transition:transform .12s;}
+  .coa-node.collapsed > .coa-row .coa-caret{transform:rotate(-90deg);}
+  .coa-dot{width:8px;height:8px;border-radius:50%;background:var(--dot,#94a3b8);flex:0 0 auto;}
+  .coa-title{font-size:.9rem;color:#0f172a;}
+  .dark .coa-title{color:#e2e8f0;}
+  .coa-row.is-root .coa-title{font-size:.82rem;letter-spacing:.03em;text-transform:uppercase;}
+  .coa-code{font-size:.72rem;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dot,#64748b);background:var(--dot-bg,#f1f5f9);border-radius:6px;padding:.1rem .4rem;letter-spacing:.02em;}
+  .coa-count{font-size:.65rem;font-weight:700;color:#64748b;background:#e2e8f0;border-radius:999px;padding:0 .4rem;}
+  .dark .coa-count{background:#1e293b;color:#94a3b8;}
+  .coa-badge{margin-left:.35rem;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dot,#64748b);background:var(--dot-bg,#f1f5f9);border-radius:6px;padding:.1rem .4rem;}
+
+  .coa-actions{margin-left:auto;display:flex;align-items:center;gap:.2rem;opacity:0;transition:opacity .12s;}
+  .coa-row:hover .coa-actions{opacity:1;}
+  .coa-actions button{width:26px;height:26px;border:0;border-radius:7px;cursor:pointer;font-size:.9rem;background:transparent;display:grid;place-items:center;}
+  .coa-add{color:#059669;}.coa-add:hover{background:#d1fae5;}
+  .coa-rename{color:var(--primary-color);}.coa-rename:hover{background:#e2e8f0;}
+  .coa-delete{color:#e11d48;}.coa-delete:hover{background:#ffe4e6;}
+
+  /* modal */
+  .coa-modal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.5);padding:1rem;}
+  .coa-modal.open{display:flex;}
+  .coa-dialog{width:100%;max-width:420px;background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(15,23,42,.3);overflow:hidden;}
+  .dark .coa-dialog{background:#0b1220;border:1px solid var(--coa-line-d);}
+  .coa-dialog h3{margin:0;padding:1rem 1.25rem;font-size:1rem;font-weight:700;border-bottom:1px solid var(--coa-line);color:#0f172a;}
+  .dark .coa-dialog h3{color:#e2e8f0;border-color:var(--coa-line-d);}
+  .coa-dialog .body{padding:1.25rem;display:flex;flex-direction:column;gap:.85rem;}
+  .coa-field{display:flex;flex-direction:column;gap:.3rem;}
+  .coa-field label{font-size:.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.03em;}
+  .coa-field input[type=text]{border:1px solid var(--coa-line);border-radius:9px;padding:.5rem .7rem;font-size:.9rem;color:#0f172a;}
+  .coa-field input:focus,.coa-select:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
+  .dark .coa-field input{background:#0f172a;border-color:var(--coa-line-d);color:#e2e8f0;}
+  .coa-select{border:1px solid var(--coa-line);border-radius:9px;padding:.5rem .7rem;font-size:.9rem;color:#0f172a;background:#fff;width:100%;}
+  .dark .coa-select{background:#0f172a;border-color:var(--coa-line-d);color:#e2e8f0;}
+  .coa-seg{display:flex;gap:.4rem;}
+  .coa-seg label{flex:1;border:1px solid var(--coa-line);border-radius:9px;padding:.5rem;text-align:center;font-size:.78rem;font-weight:600;color:#475569;cursor:pointer;text-transform:none;letter-spacing:0;}
+  .coa-seg input{display:none;}
+  .coa-seg input:checked + span{color:var(--primary-color);}
+  .coa-seg label:has(input:checked){border-color:var(--primary-color);background:rgba(99,102,241,.08);}
+  .coa-hint{font-size:.78rem;color:#64748b;line-height:1.4;}
+  .coa-danger-name{font-weight:700;color:#e11d48;}
+  .coa-dialog .foot{display:flex;justify-content:flex-end;gap:.5rem;padding:.9rem 1.25rem;border-top:1px solid var(--coa-line);}
+  .dark .coa-dialog .foot{border-color:var(--coa-line-d);}
+  .coa-mbtn{border:0;border-radius:9px;padding:.5rem 1rem;font-size:.85rem;font-weight:700;cursor:pointer;}
+  .coa-mbtn.ghost{background:#f1f5f9;color:#475569;}.dark .coa-mbtn.ghost{background:#1e293b;color:#cbd5e1;}
+  .coa-mbtn.primary{background:var(--primary-color);color:#fff;}
+  .coa-mbtn.danger{background:#e11d48;color:#fff;}
+
+  /* account-type accent colors */
+  .coa-node[data-type="asset"]     {--dot:#059669;--dot-bg:#d1fae5;}
+  .coa-node[data-type="liability"] {--dot:#e11d48;--dot-bg:#ffe4e6;}
+  .coa-node[data-type="capital"]   {--dot:#7c3aed;--dot-bg:#ede9fe;}
+  .coa-node[data-type="revenue"]   {--dot:#2563eb;--dot-bg:#dbeafe;}
+  .coa-node[data-type="expense"]   {--dot:#d97706;--dot-bg:#fef3c7;}
+</style>
+
+<section class="coa-wrap mt-6">
+  <div class="coa-toolbar">
+    <input id="coa-search" type="search" placeholder="Search accounts…" autocomplete="off">
+    <button id="coa-expand" type="button" class="coa-btn">Expand all</button>
+    <button id="coa-collapse" type="button" class="coa-btn">Collapse all</button>
+    {% if can_add %}<button id="coa-add-new" type="button" class="coa-btn" style="border-color:var(--primary-color);color:var(--primary-color);">+ Add New</button>{% endif %}
+    <span id="coa-status"></span>
+  </div>
+
+  <div class="coa-card">
+    <ul id="coa-root" class="coa-list">
+      {% for node in coa_tree %}
+        {% include "finance/_coa_node.html" with node=node %}
+      {% empty %}
+        <li style="padding:2rem;text-align:center;color:#94a3b8;font-size:.85rem;">No accounts. Run <code>seed_chart_of_accounts</code>.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<div id="coa-modal" class="coa-modal" role="dialog" aria-modal="true">
+  <div class="coa-dialog">
+    <h3 id="coa-modal-title">Account</h3>
+    <div class="body">
+      <div id="coa-form-fields">
+        <div class="coa-field">
+          <label for="coa-f-name">Name</label>
+          <input id="coa-f-name" type="text" autocomplete="off" placeholder="Account name">
+        </div>
+        <div class="coa-field" id="coa-f-type-wrap">
+          <label>Type</label>
+          <div class="coa-seg">
+            <label><input type="radio" name="coa-isgroup" value="true"><span>Group / heading</span></label>
+            <label><input type="radio" name="coa-isgroup" value="false"><span>Postable account</span></label>
+          </div>
+        </div>
+      </div>
+      <p id="coa-del-text" class="coa-hint" style="display:none;"></p>
+    </div>
+    <div class="foot">
+      <button type="button" class="coa-mbtn ghost" data-close>Cancel</button>
+      <button type="button" class="coa-mbtn primary" id="coa-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="coa-new-modal" class="coa-modal" role="dialog" aria-modal="true">
+  <div class="coa-dialog">
+    <h3>Add New Account</h3>
+    <div class="body">
+      <div class="coa-field">
+        <label for="nm-title">Title</label>
+        <input id="nm-title" type="text" autocomplete="off" placeholder="New account name">
+      </div>
+      <div class="coa-field">
+        <label for="nm-type">Type</label>
+        <select id="nm-type" class="coa-select"><option value="">Select type…</option></select>
+      </div>
+      <div class="coa-field" id="nm-l2-wrap" style="display:none;">
+        <label for="nm-l2">Level 2</label>
+        <select id="nm-l2" class="coa-select"></select>
+      </div>
+      <div class="coa-field" id="nm-l3-wrap" style="display:none;">
+        <label for="nm-l3">Level 3</label>
+        <select id="nm-l3" class="coa-select"></select>
+      </div>
+      <div class="coa-field">
+        <label>Kind</label>
+        <div class="coa-seg">
+          <label><input type="radio" name="nm-isgroup" value="true" checked><span>Group / heading</span></label>
+          <label><input type="radio" name="nm-isgroup" value="false"><span>Postable account</span></label>
+        </div>
+      </div>
+      <p class="coa-hint" id="nm-target"></p>
+    </div>
+    <div class="foot">
+      <button type="button" class="coa-mbtn ghost" data-close>Cancel</button>
+      <button type="button" class="coa-mbtn primary" id="nm-save">Add</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/sortablejs@1.15.3/Sortable.min.js"></script>
+<script>
+(function () {
+  const canEdit = {% if can_edit %}true{% else %}false{% endif %};
+  const canAdd = {% if can_add %}true{% else %}false{% endif %};
+  const canDelete = {% if can_delete %}true{% else %}false{% endif %};
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  const status = document.getElementById('coa-status');
+  const root = document.getElementById('coa-root');
+  const urls = {
+    create: "{% url 'finance:coa_create' %}",
+    reorder: "{% url 'finance:coa_reorder' %}",
+    rename: (id) => `/finance/chart-of-accounts/${id}/rename/`,
+    del: (id) => `/finance/chart-of-accounts/${id}/delete/`,
+  };
+
+  function flash(msg, ok = true) {
+    if (!status) return;
+    status.textContent = msg;
+    status.style.color = ok ? '#059669' : '#e11d48';
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  }
+
+  async function post(url, body, json = false) {
+    const opts = { method: 'POST', headers: { 'X-CSRFToken': csrf } };
+    if (json) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    else { opts.body = body; }
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  function collectMoves() {
+    const moves = [];
+    (function walk(ul, parentId) {
+      [...ul.children].forEach((li, i) => {
+        if (!li.dataset.id) return;
+        moves.push({ id: parseInt(li.dataset.id), parent_id: parentId, sort_order: i + 1 });
+        const childUl = li.querySelector(':scope > ul.coa-list');
+        if (childUl) walk(childUl, parseInt(li.dataset.id));
+      });
+    })(root, null);
+    return moves;
+  }
+
+  function applyCodes(codes) {
+    if (!codes) return;
+    Object.entries(codes).forEach(([id, code]) => {
+      const li = root.querySelector(`.coa-node[data-id="${id}"]`);
+      if (!li) return;
+      const titleEl = li.querySelector(':scope > .coa-row .coa-title');
+      let codeEl = li.querySelector(':scope > .coa-row .coa-code');
+      if (!codeEl) { codeEl = document.createElement('span'); codeEl.className = 'coa-code'; titleEl.after(codeEl); }
+      codeEl.textContent = code;
+    });
+  }
+
+  async function persistOrder() {
+    if (!canEdit) return;
+    try { const d = await post(urls.reorder, { moves: collectMoves() }, true); applyCodes(d.codes); flash('Saved'); }
+    catch (e) { flash(e.message, false); location.reload(); }
+  }
+
+  if (canEdit) document.querySelectorAll('ul.coa-list').forEach(ul =>
+    Sortable.create(ul, {
+      group: 'coa', handle: '.coa-handle', animation: 150, fallbackOnBody: true,
+      swapThreshold: 0.75, invertSwap: true, emptyInsertThreshold: 14,
+      ghostClass: 'coa-sortable-ghost', chosenClass: 'coa-sortable-chosen', dragClass: 'coa-sortable-drag',
+      onStart() { document.querySelector('.coa-wrap').classList.add('coa-dragging'); },
+      onMove(evt) {
+        document.querySelectorAll('.coa-drop-hover').forEach(e => e.classList.remove('coa-drop-hover'));
+        if (evt.to && evt.to.children.length === 0) evt.to.classList.add('coa-drop-hover');
+        return true;
+      },
+      onEnd() {
+        document.querySelector('.coa-wrap').classList.remove('coa-dragging');
+        document.querySelectorAll('.coa-drop-hover').forEach(e => e.classList.remove('coa-drop-hover'));
+        persistOrder();
+      }
+    }));
+
+  // ---- Modal controller ----
+  const modal = document.getElementById('coa-modal');
+  const mTitle = document.getElementById('coa-modal-title');
+  const fName = document.getElementById('coa-f-name');
+  const typeWrap = document.getElementById('coa-f-type-wrap');
+  const fields = document.getElementById('coa-form-fields');
+  const delText = document.getElementById('coa-del-text');
+  const saveBtn = document.getElementById('coa-modal-save');
+  let ctx = null; // { mode, li }
+
+  function titleText(li) {
+    const el = li.querySelector(':scope > .coa-row .coa-title');
+    return (el.dataset.raw !== undefined ? el.dataset.raw : el.textContent).trim();
+  }
+  function setGroup(val) {
+    const r = modal.querySelector(`input[name=coa-isgroup][value="${val}"]`);
+    if (r) r.checked = true;
+  }
+  function getGroup() {
+    const r = modal.querySelector('input[name=coa-isgroup]:checked');
+    return r ? r.value : 'true';
+  }
+  function closeModal() { modal.classList.remove('open'); ctx = null; }
+  function openModal(mode, li) {
+    ctx = { mode, li };
+    const del = mode === 'delete';
+    fields.style.display = del ? 'none' : '';
+    delText.style.display = del ? '' : 'none';
+    saveBtn.className = 'coa-mbtn ' + (del ? 'danger' : 'primary');
+    saveBtn.textContent = del ? 'Delete' : 'Save';
+    if (mode === 'add') {
+      mTitle.textContent = 'Add account under “' + titleText(li) + '”';
+      fName.value = ''; typeWrap.style.display = ''; setGroup('true');
+    } else if (mode === 'edit') {
+      mTitle.textContent = 'Edit account';
+      fName.value = titleText(li);
+      const isRoot = li.dataset.root === '1';
+      typeWrap.style.display = isRoot ? 'none' : '';
+      setGroup(li.dataset.group === '1' ? 'true' : 'false');
+    } else {
+      mTitle.textContent = 'Delete account';
+      delText.innerHTML = 'Delete <span class="coa-danger-name">' + titleText(li) + '</span> and all of its child accounts? This cannot be undone.';
+    }
+    modal.classList.add('open');
+    if (!del) setTimeout(() => fName.focus(), 30);
+  }
+
+  modal.addEventListener('click', (e) => { if (e.target === modal || e.target.hasAttribute('data-close')) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('open')) closeModal(); });
+  fName.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveBtn.click(); });
+
+  saveBtn.addEventListener('click', async () => {
+    if (!ctx) return;
+    const { mode, li } = ctx;
+    const id = li.dataset.id;
+    saveBtn.disabled = true;
+    try {
+      if (mode === 'add') {
+        const name = fName.value.trim(); if (!name) { fName.focus(); saveBtn.disabled = false; return; }
+        const fd = new FormData();
+        fd.append('parent_id', id); fd.append('title', name); fd.append('is_group', getGroup());
+        await post(urls.create, fd); location.reload();
+      } else if (mode === 'edit') {
+        const name = fName.value.trim(); if (!name) { fName.focus(); saveBtn.disabled = false; return; }
+        const fd = new FormData();
+        fd.append('title', name);
+        if (li.dataset.root !== '1') fd.append('is_group', getGroup());
+        const data = await post(urls.rename(id), fd);
+        const titleEl = li.querySelector(':scope > .coa-row .coa-title');
+        titleEl.textContent = data.title; delete titleEl.dataset.raw;
+        li.dataset.group = data.is_group ? '1' : '0';
+        let codeEl = li.querySelector(':scope > .coa-row .coa-code');
+        if (data.code) {
+          if (!codeEl) { codeEl = document.createElement('span'); codeEl.className = 'coa-code';
+            titleEl.after(codeEl); }
+          codeEl.textContent = data.code;
+        } else if (codeEl) codeEl.remove();
+        closeModal(); flash('Saved');
+      } else {
+        const d = await post(urls.del(id), new FormData()); li.remove(); applyCodes(d.codes); closeModal(); flash('Deleted');
+      }
+    } catch (err) { flash(err.message, false); closeModal(); }
+    finally { saveBtn.disabled = false; }
+  });
+
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const li = btn.closest('.coa-node');
+    if (btn.classList.contains('coa-caret')) { li.classList.toggle('collapsed'); return; }
+    if (btn.classList.contains('coa-add') && canAdd) openModal('add', li);
+    else if (btn.classList.contains('coa-rename') && canEdit) openModal('edit', li);
+    else if (btn.classList.contains('coa-delete') && canDelete) openModal('delete', li);
+  });
+
+  document.getElementById('coa-expand').addEventListener('click', () =>
+    root.querySelectorAll('.coa-node').forEach(n => n.classList.remove('collapsed')));
+  document.getElementById('coa-collapse').addEventListener('click', () =>
+    root.querySelectorAll('.coa-node.has-children').forEach(n => n.classList.add('collapsed')));
+
+  // Live search: highlight matches, keep ancestors visible + expanded, hide the rest.
+  const search = document.getElementById('coa-search');
+  function clearHighlight(titleEl) {
+    if (titleEl.dataset.raw !== undefined) titleEl.textContent = titleEl.dataset.raw;
+  }
+  function highlight(titleEl, q) {
+    const raw = titleEl.dataset.raw !== undefined ? titleEl.dataset.raw : titleEl.textContent;
+    titleEl.dataset.raw = raw;
+    const i = raw.toLowerCase().indexOf(q);
+    titleEl.textContent = '';
+    if (i < 0) { titleEl.textContent = raw; return; }
+    titleEl.append(raw.slice(0, i));
+    const m = document.createElement('mark'); m.textContent = raw.slice(i, i + q.length);
+    titleEl.append(m, raw.slice(i + q.length));
+  }
+  function filterTree(q) {
+    const nodes = [...root.querySelectorAll('.coa-node')];
+    if (!q) {
+      nodes.forEach(n => { n.classList.remove('coa-hidden'); clearHighlight(n.querySelector(':scope > .coa-row .coa-title')); });
+      return;
+    }
+    // Bottom-up: a node stays if it matches or any descendant matched.
+    const keep = new Set();
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const title = n.querySelector(':scope > .coa-row .coa-title');
+      const self = title.textContent.toLowerCase().includes(q);
+      const childKept = [...n.querySelectorAll(':scope > ul > .coa-node')].some(c => keep.has(c));
+      if (self || childKept) { keep.add(n); n.classList.add('has-children'); }
+    }
+    nodes.forEach(n => {
+      const title = n.querySelector(':scope > .coa-row .coa-title');
+      if (keep.has(n)) { n.classList.remove('coa-hidden', 'collapsed'); highlight(title, q); }
+      else { n.classList.add('coa-hidden'); clearHighlight(title); }
+    });
+  }
+  let t;
+  search.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => filterTree(search.value.trim().toLowerCase()), 120);
+  });
+
+  // ---- Guided "Add New" modal (cascading type -> L2 -> L3 -> title) ----
+  const addNewBtn = document.getElementById('coa-add-new');
+  if (addNewBtn) {
+    const tree = JSON.parse(document.getElementById('coa-tree-data').textContent);
+    const nm = document.getElementById('coa-new-modal');
+    const selType = document.getElementById('nm-type');
+    const selL2 = document.getElementById('nm-l2'), wrapL2 = document.getElementById('nm-l2-wrap');
+    const selL3 = document.getElementById('nm-l3'), wrapL3 = document.getElementById('nm-l3-wrap');
+    const nmTitle = document.getElementById('nm-title');
+    const nmTarget = document.getElementById('nm-target');
+    const nmSave = document.getElementById('nm-save');
+
+    function fill(sel, nodes, placeholder) {
+      sel.innerHTML = '';
+      const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = placeholder; sel.append(opt0);
+      nodes.forEach(n => { const o = document.createElement('option'); o.value = n.id; o.textContent = n.title; o._node = n; sel.append(o); });
+    }
+    function nodeOf(sel) { const o = sel.selectedOptions[0]; return o ? o._node : null; }
+
+    // Resolve chosen parent = deepest selected level; new node lands under it.
+    function resolveParent() {
+      const l3 = nodeOf(selL3); if (l3) return { node: l3, level: 3 };
+      const l2 = nodeOf(selL2); if (l2) return { node: l2, level: 2 };
+      const t1 = nodeOf(selType); if (t1) return { node: t1, level: 1 };
+      return null;
+    }
+    function updateTarget() {
+      const p = resolveParent();
+      if (!p) { nmTarget.textContent = ''; return; }
+      const newLevel = p.level + 1;
+      if (newLevel > 4) { nmTarget.innerHTML = '<span style="color:#e11d48;">Level 4 is the deepest — pick a shallower parent.</span>'; return; }
+      nmTarget.innerHTML = 'Will be added under <b>' + p.node.title + '</b> as level ' + newLevel + '.';
+    }
+
+    selType.addEventListener('change', () => {
+      const root = nodeOf(selType);
+      wrapL2.style.display = wrapL3.style.display = 'none';
+      selL2.innerHTML = selL3.innerHTML = '';
+      if (root && root.children && root.children.length) {
+        fill(selL2, root.children, '— add directly under ' + root.title + ' —');
+        wrapL2.style.display = '';
+      }
+      updateTarget();
+    });
+    selL2.addEventListener('change', () => {
+      const n = nodeOf(selL2);
+      wrapL3.style.display = 'none'; selL3.innerHTML = '';
+      if (n && n.children && n.children.length) {
+        fill(selL3, n.children, '— add directly under ' + n.title + ' —');
+        wrapL3.style.display = '';
+      }
+      updateTarget();
+    });
+    selL3.addEventListener('change', updateTarget);
+
+    function openNew() {
+      fill(selType, tree, 'Select type…');
+      selL2.innerHTML = selL3.innerHTML = ''; wrapL2.style.display = wrapL3.style.display = 'none';
+      nmTitle.value = ''; nmTarget.textContent = '';
+      nm.querySelector('input[name=nm-isgroup][value="true"]').checked = true;
+      nm.classList.add('open'); setTimeout(() => nmTitle.focus(), 30);
+    }
+    function closeNew() { nm.classList.remove('open'); }
+    addNewBtn.addEventListener('click', openNew);
+    nm.addEventListener('click', (e) => { if (e.target === nm || e.target.hasAttribute('data-close')) closeNew(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && nm.classList.contains('open')) closeNew(); });
+
+    nmSave.addEventListener('click', async () => {
+      const p = resolveParent();
+      if (!p) { selType.focus(); return; }
+      if (p.level + 1 > 4) { updateTarget(); return; }
+      const title = nmTitle.value.trim();
+      if (!title) { nmTitle.focus(); return; }
+      const isGroup = nm.querySelector('input[name=nm-isgroup]:checked').value;
+      nmSave.disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append('parent_id', p.node.id); fd.append('title', title); fd.append('is_group', isGroup);
+        await post(urls.create, fd); location.reload();
+      } catch (err) { flash(err.message, false); closeNew(); nmSave.disabled = false; }
+    });
+  }
+})();
+</script>
+{% endblock %}

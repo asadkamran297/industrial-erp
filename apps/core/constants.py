@@ -30,6 +30,7 @@ ACCOUNT_TYPE_ASSET: Final = "asset"
 ACCOUNT_TYPE_LIABILITY: Final = "liability"
 ACCOUNT_TYPE_REVENUE: Final = "revenue"
 ACCOUNT_TYPE_EXPENSE: Final = "expense"
+ACCOUNT_TYPE_CAPITAL: Final = "capital"
 
 ACCOUNT_LEDGER_GENERAL: Final = "G"
 ACCOUNT_LEDGER_SUBSIDIARY: Final = "S"
@@ -76,6 +77,15 @@ FIN_ACCOUNT_TYPE_CHOICES: Final[StatusChoices] = (
 FIN_ACCOUNT_LEDGER_CHOICES: Final[StatusChoices] = (
     (ACCOUNT_LEDGER_GENERAL, "General"),
     (ACCOUNT_LEDGER_SUBSIDIARY, "Subsidiary"),
+)
+
+# Chart of Accounts tree: five top-level roots (adds Capital over the 4 posting types).
+FIN_COA_ACCOUNT_TYPE_CHOICES: Final[StatusChoices] = (
+    (ACCOUNT_TYPE_ASSET, "Assets"),
+    (ACCOUNT_TYPE_LIABILITY, "Liabilities"),
+    (ACCOUNT_TYPE_REVENUE, "Revenue"),
+    (ACCOUNT_TYPE_EXPENSE, "Expenses"),
+    (ACCOUNT_TYPE_CAPITAL, "Capital"),
 )
 
 FIN_BALANCE_INCOME_CHOICES: Final[StatusChoices] = (

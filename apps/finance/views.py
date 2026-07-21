@@ -1,18 +1,21 @@
+import json
+
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
+from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
-from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalPeriod, FiscalYear
+from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
 
 
 class AuditSaveMixin:
@@ -267,3 +270,164 @@ class AccountVoucherLineDeleteView(PagePermissionRequiredMixin, View):
         line.soft_delete(request.user)
         messages.success(request, "Voucher line deleted.")
         return redirect("finance:account_voucher_detail", pk=voucher.pk)
+
+
+# ---------------------------------------------------------------------------
+# Chart of Accounts (hierarchical tree with drag-and-drop)
+# ---------------------------------------------------------------------------
+
+def _serialize_coa_node(node, children_map, depth=0):
+    return {
+        "id": node.id,
+        "title": node.title,
+        "code": node.code,
+        "is_group": node.is_group,
+        "is_root": depth == 0,
+        "account_type": node.account_type,
+        "account_type_display": node.get_account_type_display(),
+        "children": [_serialize_coa_node(child, children_map, depth + 1) for child in children_map.get(node.id, [])],
+    }
+
+
+def _build_coa_forest():
+    nodes = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE).order_by("sort_order", "id"))
+    children_map: dict[int, list] = {}
+    roots = []
+    for node in nodes:
+        if node.parent_id is None:
+            roots.append(node)
+        else:
+            children_map.setdefault(node.parent_id, []).append(node)
+    return [_serialize_coa_node(root, children_map) for root in roots]
+
+
+class ChartOfAccountTreeView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.chart_of_accounts"
+    template_name = "finance/chart_of_accounts.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["coa_tree"] = _build_coa_forest()
+        context["account_types"] = FIN_COA_ACCOUNT_TYPE_CHOICES
+        return context
+
+
+class ChartOfAccountCreateView(PagePermissionRequiredMixin, View):
+    page = "finance.chart_of_accounts"
+    action = "add"
+
+    @transaction.atomic
+    def post(self, request):
+        title = (request.POST.get("title") or "").strip()
+        if not title:
+            return JsonResponse({"ok": False, "error": "Title is required."}, status=400)
+        parent_id = request.POST.get("parent_id")
+        if not parent_id:
+            return JsonResponse({"ok": False, "error": "The five roots are fixed; a parent is required."}, status=400)
+        parent = get_object_or_404(ChartOfAccount, pk=parent_id)
+        if parent.depth >= ChartOfAccount.MAX_LEVELS:
+            return JsonResponse({"ok": False, "error": f"Maximum {ChartOfAccount.MAX_LEVELS} levels reached."}, status=400)
+        siblings = ChartOfAccount.objects.filter(parent=parent)
+        next_order = (siblings.order_by("-sort_order").values_list("sort_order", flat=True).first() or 0) + 1
+        node = ChartOfAccount(
+            parent=parent,
+            title=title,
+            account_type=parent.account_type,
+            is_group=request.POST.get("is_group", "true") != "false",
+            sort_order=next_order,
+            created_by=request.user,
+            updated_by=request.user,
+        )
+        node.save()  # code assigned by rebuild below
+        ChartOfAccount.rebuild_codes()
+        return JsonResponse({"ok": True, "id": node.id})
+
+
+class ChartOfAccountRenameView(PagePermissionRequiredMixin, View):
+    page = "finance.chart_of_accounts"
+    action = "edit"
+
+    def post(self, request, pk):
+        node = get_object_or_404(ChartOfAccount, pk=pk)
+        title = (request.POST.get("title") or "").strip()
+        if not title:
+            return JsonResponse({"ok": False, "error": "Title is required."}, status=400)
+        node.title = title
+        # Codes are auto-generated by position; only title/is_group are editable.
+        if node.parent_id is not None and "is_group" in request.POST:
+            node.is_group = request.POST.get("is_group") != "false"
+        node.updated_by = request.user
+        node.save()
+        return JsonResponse({"ok": True, "id": node.id, "title": node.title, "code": node.code, "is_group": node.is_group})
+
+
+class ChartOfAccountDeleteView(PagePermissionRequiredMixin, View):
+    page = "finance.chart_of_accounts"
+    action = "delete"
+
+    def post(self, request, pk):
+        node = get_object_or_404(ChartOfAccount, pk=pk)
+        if node.parent_id is None:
+            return JsonResponse({"ok": False, "error": "Root accounts cannot be deleted."}, status=400)
+        node.delete()  # cascades to descendants
+        codes = ChartOfAccount.rebuild_codes()  # siblings shift up
+        return JsonResponse({"ok": True, "codes": codes})
+
+
+class ChartOfAccountReorderView(PagePermissionRequiredMixin, View):
+    page = "finance.chart_of_accounts"
+    action = "edit"
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            moves = json.loads(request.body.decode("utf-8")).get("moves", [])
+        except (ValueError, AttributeError):
+            return JsonResponse({"ok": False, "error": "Invalid payload."}, status=400)
+
+        nodes = {n.id: n for n in ChartOfAccount.objects.all()}
+        root_ids = {n.id for n in nodes.values() if n.parent_id is None}
+        for move in moves:
+            node = nodes.get(move.get("id"))
+            if node is None:
+                continue
+            parent_id = move.get("parent_id")
+            # The five roots are fixed: they can be reordered but never re-parented.
+            node.parent_id = None if node.id in root_ids else (parent_id or None)
+            node.sort_order = move.get("sort_order", node.sort_order)
+            node.updated_at = timezone.now()
+
+        # Validate no cycles against the in-memory batch, then cascade
+        # account_type down from each node's resolved root.
+        def walk_to_root(node):
+            seen = set()
+            cursor = node
+            while cursor.parent_id is not None:
+                if cursor.id in seen or cursor.parent_id not in nodes:
+                    return None
+                seen.add(cursor.id)
+                cursor = nodes[cursor.parent_id]
+            return cursor
+
+        for node in nodes.values():
+            if node.parent_id is None and node.id not in root_ids:
+                return JsonResponse({"ok": False, "error": "Only the five fixed roots may sit at the top level."}, status=400)
+            if walk_to_root(node) is None:
+                return JsonResponse({"ok": False, "error": "Invalid move: would create a cycle."}, status=400)
+
+        # Enforce the 5-level cap after the moves are applied.
+        def level_of(node):
+            depth, cursor = 1, node
+            while cursor.parent_id is not None:
+                depth += 1
+                cursor = nodes[cursor.parent_id]
+            return depth
+
+        for node in nodes.values():
+            if level_of(node) > ChartOfAccount.MAX_LEVELS:
+                return JsonResponse({"ok": False, "error": f"Move exceeds the {ChartOfAccount.MAX_LEVELS}-level limit."}, status=400)
+            node.account_type = walk_to_root(node).account_type
+
+        ChartOfAccount.objects.bulk_update(nodes.values(), ["parent_id", "sort_order", "account_type", "updated_at"])
+        codes = ChartOfAccount.rebuild_codes()
+        return JsonResponse({"ok": True, "codes": codes})

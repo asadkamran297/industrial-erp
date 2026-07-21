@@ -18,6 +18,7 @@ from apps.core.constants import (
     FIN_ACCOUNT_TYPE_CHOICES,
     FIN_ACCOUNT_TYPE_CODE_MAP,
     FIN_BALANCE_INCOME_CHOICES,
+    FIN_COA_ACCOUNT_TYPE_CHOICES,
     FIN_VOUCHER_STATUS_CHOICES,
     FIN_VOUCHER_TYPE_CHOICES,
     NO,
@@ -149,6 +150,113 @@ class AccountConfiguration(BaseModel):
         self.code = (self.code or "").strip().upper()
         self.account_no = (self.account_no or "").strip()
         self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class ChartOfAccount(BaseModel):
+    """Hierarchical chart of accounts.
+
+    A self-referencing tree of unlimited depth. Top-level nodes (``parent`` is
+    null) are the five roots identified by ``account_type``; every descendant
+    inherits its root's ``account_type`` automatically on save. ``is_group``
+    marks a heading/folder node; leaves (``is_group=False``) are the postable
+    accounts. ``sort_order`` drives sibling ordering for drag-and-drop.
+    """
+
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        related_name="children",
+        on_delete=models.CASCADE,
+        db_column="parent_id",
+    )
+    title = models.CharField(max_length=180)
+    code = models.CharField(max_length=60, blank=True)
+    account_type = models.CharField(max_length=20, choices=FIN_COA_ACCOUNT_TYPE_CHOICES)
+    is_group = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
+
+    class Meta:
+        db_table = "fin_chart_of_accounts"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    # Segmented account-code mask: LL-LL-LLL-LLLL (one segment per level).
+    CODE_SEGMENT_WIDTHS = (2, 2, 3, 4)
+    CODE_SEPARATOR = "-"
+    MAX_LEVELS = len(CODE_SEGMENT_WIDTHS)
+
+    @property
+    def is_root(self) -> bool:
+        return self.parent_id is None
+
+    @property
+    def depth(self) -> int:
+        """1 for roots, +1 per level down."""
+        level, cursor = 1, self
+        while cursor.parent_id is not None:
+            level += 1
+            cursor = cursor.parent
+        return level
+
+    @classmethod
+    def format_code(cls, indices: list[int]) -> str:
+        """Build a ``LL-LL-LLL-LLLL`` code from 1-based indices per level.
+
+        Levels not yet reached are zero-filled, e.g. a level-1 node at
+        position 3 -> ``03-00-000-0000``; its 2nd child -> ``03-02-000-0000``.
+        """
+        parts = []
+        for level, width in enumerate(cls.CODE_SEGMENT_WIDTHS):
+            value = indices[level] if level < len(indices) else 0
+            parts.append(str(value).zfill(width))
+        return cls.CODE_SEPARATOR.join(parts)
+
+    @classmethod
+    def rebuild_codes(cls) -> dict[int, str]:
+        """Recompute every account's segmented code from its tree position.
+
+        Returns an ``{id: code}`` map of the nodes whose code changed.
+        """
+        nodes = list(cls.objects.filter(status=STATUS_ACTIVE).order_by("sort_order", "id"))
+        children_map: dict[int | None, list] = {}
+        for node in nodes:
+            children_map.setdefault(node.parent_id, []).append(node)
+
+        changed: dict[int, str] = {}
+        to_update: list = []
+
+        def walk(parent_id, indices):
+            for index, node in enumerate(children_map.get(parent_id, []), start=1):
+                node_indices = indices + [index]
+                code = cls.format_code(node_indices)
+                if node.code != code:
+                    node.code = code
+                    changed[node.id] = code
+                    to_update.append(node)
+                walk(node.id, node_indices)
+
+        walk(None, [])
+        if to_update:
+            cls.objects.bulk_update(to_update, ["code"])
+        return changed
+
+    def clean(self):
+        # A node cannot be its own ancestor (guards drag-drop reparenting).
+        ancestor = self.parent
+        while ancestor is not None:
+            if ancestor.pk == self.pk:
+                raise ValidationError({"parent": "An account cannot be moved under its own descendant."})
+            ancestor = ancestor.parent
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or "").strip().upper()
+        if self.parent_id:
+            self.account_type = self.parent.account_type
         super().save(*args, **kwargs)
 
 
