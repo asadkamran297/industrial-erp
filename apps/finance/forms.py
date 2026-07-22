@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from apps.core.constants import ACCOUNT_LEDGER_GENERAL, NO, STATUS_ACTIVE
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
-from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
+from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalYear
 
 
 class FiscalYearForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
@@ -153,6 +153,6 @@ class AccountVoucherLineForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
 
     def clean_account_no(self):
         account_no = self.cleaned_data["account_no"].strip()
-        if not AccountConfiguration.objects.filter(account_no=account_no, status=STATUS_ACTIVE).exists():
-            raise ValidationError("Active account number is required.")
+        if not ChartOfAccount.objects.filter(code=account_no, status=STATUS_ACTIVE, children__isnull=True).exists():
+            raise ValidationError("Active leaf chart-of-account is required.")
         return account_no

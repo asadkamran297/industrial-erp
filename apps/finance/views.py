@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import transaction
@@ -169,9 +170,56 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_accounts"] = ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code")
         return context
 
+    def _parse_line_rows(self):
+        """Read the entry-grid arrays; skip fully empty rows."""
+        accounts = self.request.POST.getlist("line_account[]")
+        descriptions = self.request.POST.getlist("line_description[]")
+        debits = self.request.POST.getlist("line_debit[]")
+        credits = self.request.POST.getlist("line_credit[]")
+        rows = []
+        for index in range(max(len(accounts), len(debits), len(credits), len(descriptions))):
+            account_no = (accounts[index] if index < len(accounts) else "").strip()
+            description = (descriptions[index] if index < len(descriptions) else "").strip()
+            try:
+                debit = Decimal((debits[index] if index < len(debits) else "") or "0")
+                credit = Decimal((credits[index] if index < len(credits) else "") or "0")
+            except InvalidOperation:
+                debit = credit = Decimal("0")
+            if not account_no and not description and debit == 0 and credit == 0:
+                continue
+            rows.append({"account_no": account_no, "remarks": description, "debit_amount": debit, "credit_amount": credit})
+        return rows
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            for number, row in enumerate(self._parse_line_rows(), start=1):
+                line_form = AccountVoucherLineForm(row)
+                if line_form.is_valid():
+                    line = line_form.save(commit=False)
+                    line.voucher = self.object
+                    line.line_number = number
+                    line.voucher_no = self.object.voucher_no
+                    line.voucher_date = self.object.voucher_date
+                    line.created_by = self.request.user
+                    line.updated_by = self.request.user
+                    line.save()
+                else:
+                    for errors in line_form.errors.values():
+                        for error in errors:
+                            messages.error(self.request, f"Line {number}: {error}")
+        self.object.refresh_from_db()
+        if self.object.lines.exists() and not self.object.is_balanced:
+            messages.warning(self.request, "Voucher totals are not balanced yet. Debit and credit must match before posting.")
+        return response
+
 
 class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
     success_message = "Voucher updated."
+
+    def form_valid(self, form):
+        # Header-only update; lines are managed on the detail page.
+        return super(AccountVoucherCreateView, self).form_valid(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

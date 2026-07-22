@@ -20,6 +20,55 @@
     </div>
   </div>
 
+  {% if not object %}
+  {# Voucher entry grid: one row per ledger line, totals must balance #}
+  <div class="mb-6 rounded-lg border border-slate-200 dark:border-slate-800">
+    <table class="w-full text-sm" id="line-grid">
+      <thead>
+        <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <th class="w-16 px-3 py-2">Line#</th>
+          <th class="w-64 px-3 py-2">Account</th>
+          <th class="px-3 py-2">Description</th>
+          <th class="w-36 px-3 py-2 text-right">Debit</th>
+          <th class="w-36 px-3 py-2 text-right">Credit</th>
+          <th class="w-10 px-2 py-2"></th>
+        </tr>
+      </thead>
+      <tbody id="line-rows">
+        {% for i in "12" %}
+        <tr class="line-row border-t border-slate-100 dark:border-slate-800">
+          <td class="px-3 py-1.5"><input type="text" class="form-input line-num w-14 bg-amber-50 text-center dark:bg-slate-800" value="{{ forloop.counter }}" readonly tabindex="-1"></td>
+          <td class="px-3 py-1.5">
+            <select name="line_account[]" class="form-select line-account">
+              <option value="">Select account…</option>
+              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-type="{{ acc.account_type }}">{{ acc.code }} — {{ acc.title }}</option>{% endfor %}
+            </select>
+          </td>
+          <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-2 py-1.5 text-center"><button type="button" class="line-remove text-lg font-bold leading-none text-slate-400 hover:text-rose-600" title="Remove line" tabindex="-1">&times;</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+          <td colspan="3" class="px-3 py-2 text-right text-sm font-semibold">Totals :</td>
+          <td class="px-3 py-2"><input type="text" id="total-debit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
+          <td class="px-3 py-2"><input type="text" id="total-credit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <div class="mb-6 flex items-center justify-between">
+    <button type="button" id="add-line-btn" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">
+      + Add Line
+    </button>
+  </div>
+  <p id="balance-hint" class="mb-6 hidden rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
+  {% endif %}
+
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {% for field in form %}{% if field.name != "voucher_type" %}
       <div {% if field.name == "remarks" %}class="lg:col-span-3"{% endif %}>
@@ -60,15 +109,86 @@
   // Keep full option list; rebuild on each change (option.hidden unreliable in Safari/mobile).
   const allOptions = acct ? [...acct.options].map(o => o.cloneNode(true)) : [];
 
-  function filterAccounts() {
-    if (!acct) return;
-    const allow = ALLOWED[hidden.value];
-    const prev = acct.value;
-    acct.innerHTML = '';
+  function filterSelect(select, allow) {
+    const prev = select.value;
+    select.innerHTML = '';
     allOptions.forEach(o => {
-      if (!o.value || !allow || allow.includes(o.dataset.type)) acct.appendChild(o.cloneNode(true));
+      if (!o.value || !allow || allow.includes(o.dataset.type)) select.appendChild(o.cloneNode(true));
     });
-    acct.value = [...acct.options].some(o => o.value === prev) ? prev : '';
+    select.value = [...select.options].some(o => o.value === prev) ? prev : '';
+  }
+
+  function filterAccounts() {
+    const allow = ALLOWED[hidden.value];
+    if (acct) filterSelect(acct, allow);
+    document.querySelectorAll('#line-grid .line-account').forEach(s => filterSelect(s, allow));
+  }
+
+  // ----- entry grid: totals + auto-grow rows -----
+  const grid = document.getElementById('line-grid');
+  if (grid) {
+    const rowsBody = document.getElementById('line-rows');
+    const totalDebit = document.getElementById('total-debit');
+    const totalCredit = document.getElementById('total-credit');
+    const hint = document.getElementById('balance-hint');
+
+    function recalc() {
+      let dr = 0, cr = 0, used = 0;
+      rowsBody.querySelectorAll('.line-row').forEach(row => {
+        const d = parseFloat(row.querySelector('.line-debit').value) || 0;
+        const c = parseFloat(row.querySelector('.line-credit').value) || 0;
+        dr += d; cr += c;
+        if (d || c || row.querySelector('.line-account').value) used++;
+      });
+      totalDebit.value = dr.toFixed(2);
+      totalCredit.value = cr.toFixed(2);
+      const balanced = dr === cr;
+      totalDebit.classList.toggle('text-rose-600', !balanced);
+      totalCredit.classList.toggle('text-rose-600', !balanced);
+      hint.classList.toggle('hidden', balanced || (dr === 0 && cr === 0));
+      return used;
+    }
+
+    function renumber() {
+      rowsBody.querySelectorAll('.line-row .line-num').forEach((input, index) => { input.value = index + 1; });
+    }
+
+    function addRow() {
+      const last = rowsBody.querySelector('.line-row:last-child');
+      const clone = last.cloneNode(true);
+      clone.querySelectorAll('input').forEach(i => { i.value = ''; });
+      clone.querySelector('.line-account').value = '';
+      rowsBody.appendChild(clone);
+      renumber();
+      return clone;
+    }
+
+    grid.addEventListener('input', (e) => {
+      if (!e.target.closest('.line-row')) return;
+      recalc();
+      const lastRow = rowsBody.querySelector('.line-row:last-child');
+      if (lastRow.contains(e.target)) addRow();  // always keep one empty row
+    });
+    grid.addEventListener('change', (e) => {
+      if (e.target.classList.contains('line-account')) recalc();
+    });
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('.line-remove');
+      if (!btn) return;
+      if (rowsBody.querySelectorAll('.line-row').length <= 1) {  // keep at least one row; just clear it
+        const row = btn.closest('.line-row');
+        row.querySelectorAll('input:not(.line-num)').forEach(i => { i.value = ''; });
+        row.querySelector('.line-account').value = '';
+      } else {
+        btn.closest('.line-row').remove();
+      }
+      renumber();
+      recalc();
+    });
+    document.getElementById('add-line-btn').addEventListener('click', () => {
+      addRow().querySelector('.line-account').focus();
+    });
+    recalc();
   }
 
   picker.addEventListener('click', (e) => {

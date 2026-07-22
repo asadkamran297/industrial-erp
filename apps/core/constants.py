@@ -112,13 +112,14 @@ FIN_VOUCHER_TYPE_CHOICES: Final[StatusChoices] = (
 )
 
 # Tally-style voucher shortcuts for the add-voucher picker: (code, label, F-key, prefix)
+# Payment listed first: it is the most common voucher and the default selection.
 FIN_VOUCHER_TYPE_META: Final = (
-    (VOUCHER_TYPE_CONTRA, "Contra", "F4", "C"),
     (VOUCHER_TYPE_PAYMENT, "Payment", "F5", "E"),
     (VOUCHER_TYPE_RECEIPT, "Receipt", "F6", "R"),
     (VOUCHER_TYPE_JOURNAL, "Journal", "F7", "J"),
     (VOUCHER_TYPE_SALES, "Sales", "F8", "S"),
     (VOUCHER_TYPE_PURCHASE, "Purchase", "F9", "P"),
+    (VOUCHER_TYPE_CONTRA, "Contra", "F4", "C"),
 )
 
 FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, _fkey, prefix in FIN_VOUCHER_TYPE_META}
