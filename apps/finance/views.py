@@ -9,7 +9,7 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
+from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from apps.core.constants import STATUS_INACTIVE
@@ -150,9 +150,33 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
     success_url = reverse_lazy("finance:account_voucher_list")
     success_message = "Voucher saved."
 
+    def _selected_type(self):
+        value = self.request.GET.get("type", "")
+        if value in dict(FIN_VOUCHER_TYPE_CHOICES):
+            return value
+        return FIN_VOUCHER_TYPE_META[0][0]  # default to first (Contra)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial["voucher_type"] = self._selected_type()
+        return initial
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["voucher_type_meta"] = FIN_VOUCHER_TYPE_META
+        context["selected_voucher_type"] = self._selected_type()
+        # Last (childless) nodes of the chart of accounts are the postable ones.
+        context["voucher_accounts"] = ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code")
+        return context
+
 
 class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
     success_message = "Voucher updated."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["selected_voucher_type"] = self.object.voucher_type
+        return context
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()

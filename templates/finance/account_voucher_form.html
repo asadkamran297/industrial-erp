@@ -1,5 +1,89 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Account Voucher" subtitle="Posted vouchers cannot be updated." %}
-<form method="post" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}{% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{% for field in form %}<div {% if field.name == "remarks" %}class="lg:col-span-3"{% endif %}><label class="mb-1.5 block text-sm font-medium">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}</div>{% endfor %}</div><div class="mt-6 flex justify-end gap-3"><a href="{% url 'finance:account_voucher_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a><button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save</button></div></form>
+{% include "components/ui/page_header.html" with title="Account Voucher" subtitle="Pick a voucher type, then fill the entry. Posted vouchers cannot be updated." %}
+
+<form method="post" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+  {% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
+
+  {# Single-select voucher-type picker (one active at a time) #}
+  <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
+  <div class="mb-6">
+    <p class="mb-2 text-sm font-medium">Voucher Type</p>
+    <div class="flex flex-wrap gap-2" id="voucher-type-picker">
+      {% for code, label, fkey, prefix in voucher_type_meta %}
+      <button type="button" data-code="{{ code }}"
+        class="vtype-btn inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition {% if code == selected_voucher_type %}border-[var(--primary-color)] bg-[var(--primary-color)] text-white{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}"
+        {% if object %}disabled{% endif %}>
+        {{ label }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for field in form %}{% if field.name != "voucher_type" %}
+      <div {% if field.name == "remarks" %}class="lg:col-span-3"{% endif %}>
+        <label class="mb-1.5 block text-sm font-medium">{{ field.label }}</label>
+        {% if field.name == "account_no" %}
+          <select name="account_no" id="id_account_no" class="form-select">
+            <option value="">Select account…</option>
+            {% for acc in voucher_accounts %}
+              <option value="{{ acc.code }}" data-type="{{ acc.account_type }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.code }} — {{ acc.title }}</option>
+            {% endfor %}
+          </select>
+        {% else %}{{ field }}{% endif %}
+        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}{% endfor %}
+  </div>
+
+  <div class="mt-6 flex justify-end gap-3">
+    <a href="{% url 'finance:account_voucher_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
+    <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  const picker = document.getElementById('voucher-type-picker');
+  const hidden = document.getElementById('id_voucher_type');
+  const acct = document.getElementById('id_account_no');
+  const active = 'border-[var(--primary-color)] bg-[var(--primary-color)] text-white';
+  const idle = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
+
+  // Allowed account_types per voucher type; absent => any (Contra/Journal/Other).
+  const ALLOWED = {
+    PV: ['expense', 'liability'], PU: ['expense', 'liability'],   // Payment / Purchase → vendor
+    RV: ['revenue'],              SV: ['revenue'],                // Receipt / Sales → revenue customer
+  };
+
+  // Keep full option list; rebuild on each change (option.hidden unreliable in Safari/mobile).
+  const allOptions = acct ? [...acct.options].map(o => o.cloneNode(true)) : [];
+
+  function filterAccounts() {
+    if (!acct) return;
+    const allow = ALLOWED[hidden.value];
+    const prev = acct.value;
+    acct.innerHTML = '';
+    allOptions.forEach(o => {
+      if (!o.value || !allow || allow.includes(o.dataset.type)) acct.appendChild(o.cloneNode(true));
+    });
+    acct.value = [...acct.options].some(o => o.value === prev) ? prev : '';
+  }
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.vtype-btn');
+    if (!btn || btn.disabled) return;
+    hidden.value = btn.dataset.code;
+    picker.querySelectorAll('.vtype-btn').forEach(b => {
+      const on = b === btn;
+      active.split(' ').forEach(c => b.classList.toggle(c, on));
+      idle.split(' ').forEach(c => b.classList.toggle(c, !on));
+    });
+    filterAccounts();
+  });
+
+  filterAccounts();  // initial
+})();
+</script>
 {% endblock %}

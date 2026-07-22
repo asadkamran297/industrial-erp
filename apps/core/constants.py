@@ -43,6 +43,10 @@ ACCOUNT_NATURE_CREDIT: Final = "C"
 
 VOUCHER_TYPE_PAYMENT: Final = "PV"
 VOUCHER_TYPE_RECEIPT: Final = "RV"
+VOUCHER_TYPE_CONTRA: Final = "CN"
+VOUCHER_TYPE_JOURNAL: Final = "JV"
+VOUCHER_TYPE_SALES: Final = "SV"
+VOUCHER_TYPE_PURCHASE: Final = "PU"
 
 YES: Final = "Y"
 NO: Final = "N"
@@ -99,9 +103,29 @@ FIN_ACCOUNT_NATURE_CHOICES: Final[StatusChoices] = (
 )
 
 FIN_VOUCHER_TYPE_CHOICES: Final[StatusChoices] = (
-    (VOUCHER_TYPE_PAYMENT, "Payment Voucher"),
-    (VOUCHER_TYPE_RECEIPT, "Receipt Voucher"),
+    (VOUCHER_TYPE_CONTRA, "Contra"),
+    (VOUCHER_TYPE_PAYMENT, "Payment"),
+    (VOUCHER_TYPE_RECEIPT, "Receipt"),
+    (VOUCHER_TYPE_JOURNAL, "Journal"),
+    (VOUCHER_TYPE_SALES, "Sales"),
+    (VOUCHER_TYPE_PURCHASE, "Purchase"),
 )
+
+# Tally-style voucher shortcuts for the add-voucher picker: (code, label, F-key, prefix)
+FIN_VOUCHER_TYPE_META: Final = (
+    (VOUCHER_TYPE_CONTRA, "Contra", "F4", "C"),
+    (VOUCHER_TYPE_PAYMENT, "Payment", "F5", "E"),
+    (VOUCHER_TYPE_RECEIPT, "Receipt", "F6", "R"),
+    (VOUCHER_TYPE_JOURNAL, "Journal", "F7", "J"),
+    (VOUCHER_TYPE_SALES, "Sales", "F8", "S"),
+    (VOUCHER_TYPE_PURCHASE, "Purchase", "F9", "P"),
+)
+
+FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, _fkey, prefix in FIN_VOUCHER_TYPE_META}
+
+# Account-nature groups: vendor (payable) vs customer (receivable) voucher types.
+VOUCHER_VENDOR_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
+VOUCHER_CUSTOMER_TYPES: Final = (VOUCHER_TYPE_RECEIPT, VOUCHER_TYPE_SALES)
 
 FIN_VOUCHER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_CREATED, "Created"),

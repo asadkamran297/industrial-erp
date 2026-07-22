@@ -9,7 +9,6 @@ from django.utils import timezone
 from apps.core.constants import (
     ACCOUNT_LEDGER_GENERAL,
     ACCOUNT_LEDGER_SUBSIDIARY,
-    ACCOUNT_TYPE_ASSET,
     ACCOUNT_TYPE_EXPENSE,
     ACCOUNT_TYPE_LIABILITY,
     ACCOUNT_TYPE_REVENUE,
@@ -19,6 +18,7 @@ from apps.core.constants import (
     FIN_ACCOUNT_TYPE_CODE_MAP,
     FIN_BALANCE_INCOME_CHOICES,
     FIN_COA_ACCOUNT_TYPE_CHOICES,
+    FIN_VOUCHER_PREFIX_MAP,
     FIN_VOUCHER_STATUS_CHOICES,
     FIN_VOUCHER_TYPE_CHOICES,
     NO,
@@ -26,7 +26,10 @@ from apps.core.constants import (
     STATUS_ACTIVE,
     STATUS_CREATED,
     STATUS_INACTIVE,
+    VOUCHER_CUSTOMER_TYPES,
+    VOUCHER_VENDOR_TYPES,
     VOUCHER_TYPE_PAYMENT,
+    VOUCHER_TYPE_RECEIPT,
     YES,
     YES_NO_CHOICES,
 )
@@ -297,13 +300,15 @@ class AccountVoucher(BaseModel):
     def clean(self):
         errors = {}
         self.account_no = (self.account_no or "").strip()
-        account = AccountConfiguration.objects.filter(account_no=self.account_no, status=STATUS_ACTIVE).first()
+        account = ChartOfAccount.objects.filter(code=self.account_no, status=STATUS_ACTIVE, children__isnull=True).first()
         if not account:
-            errors["account_no"] = "Active account number is required."
-        elif self.voucher_type == VOUCHER_TYPE_PAYMENT and account.account_type not in (ACCOUNT_TYPE_EXPENSE, ACCOUNT_TYPE_LIABILITY):
-            errors["account_no"] = "Payment voucher account must be expense or liability."
-        elif self.voucher_type != VOUCHER_TYPE_PAYMENT and account.account_type not in (ACCOUNT_TYPE_REVENUE, ACCOUNT_TYPE_ASSET):
-            errors["account_no"] = "Receipt voucher account must be revenue or asset."
+            errors["account_no"] = "Active leaf chart-of-account is required."
+        # Payment/Purchase hit vendor (payable) accounts; Receipt/Sales hit
+        # customer (receivable) accounts. Journal/Contra/Other allow any.
+        elif self.voucher_type in VOUCHER_VENDOR_TYPES and account.account_type not in (ACCOUNT_TYPE_EXPENSE, ACCOUNT_TYPE_LIABILITY):
+            errors["account_no"] = "Payment/Purchase voucher account must be expense or liability (vendor)."
+        elif self.voucher_type in VOUCHER_CUSTOMER_TYPES and account.account_type != ACCOUNT_TYPE_REVENUE:
+            errors["account_no"] = "Receipt/Sales voucher account must be revenue (customer)."
 
         if self.adj_entry == YES and not self.adj_voucher:
             errors["adj_voucher"] = "Adjustment voucher is required when adjustment entry is yes."
@@ -322,7 +327,7 @@ class AccountVoucher(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.voucher_no:
-            prefix = "E" if self.voucher_type == VOUCHER_TYPE_PAYMENT else "R"
+            prefix = FIN_VOUCHER_PREFIX_MAP.get(self.voucher_type, "V")
             last_id = AccountVoucher.all_objects.order_by("-id").values_list("id", flat=True).first() or 0
             self.voucher_no = f"{prefix}-{last_id + 1:06d}"
         self.full_clean()
@@ -382,9 +387,9 @@ class AccountVoucherLine(BaseModel):
     def clean(self):
         errors = {}
         self.account_no = (self.account_no or "").strip()
-        account = AccountConfiguration.objects.filter(account_no=self.account_no, status=STATUS_ACTIVE).first()
+        account = ChartOfAccount.objects.filter(code=self.account_no, status=STATUS_ACTIVE, children__isnull=True).first()
         if not account:
-            errors["account_no"] = "Active account number is required."
+            errors["account_no"] = "Active leaf chart-of-account is required."
 
         debit = self.debit_amount or Decimal("0.00")
         credit = self.credit_amount or Decimal("0.00")
