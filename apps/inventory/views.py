@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
+from apps.finance.services import create_customer_receivable_account
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
@@ -928,6 +929,13 @@ class CustomerCreateView(InventoryManageMixin, CreateView):
     success_url = reverse_lazy("inventory:customer_list")
     success_message = "Customer saved."
     extra_context = {"title": "Customer"}
+
+    def form_valid(self, form):
+        creating = self.object is None  # None on create, set on update
+        response = super().form_valid(form)
+        if creating:
+            create_customer_receivable_account(customer=self.object, user=self.request.user)
+        return response
 
 
 class CustomerUpdateView(CustomerCreateView, UpdateView):
