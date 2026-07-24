@@ -50,4 +50,27 @@ def create_customer_receivable_account(*, customer, user=None):
         updated_by=user,
     )
     ChartOfAccount.rebuild_codes()
+    node.refresh_from_db(fields=["code"])
+    if customer.customer_code != node.code:
+        customer.customer_code = node.code
+        customer.save(update_fields=["customer_code", "updated_at"])
     return node
+
+
+def sync_customer_from_coa(*, node, user=None):
+    """Reverse sync: a postable account added under Receivables auto-creates a Customer.
+
+    Only fires for leaf accounts whose parent is the Receivables group. Idempotent
+    by customer_name so editing the tree elsewhere never spawns duplicates.
+    """
+    from apps.inventory.models import Customer  # lazy: avoid circular import
+
+    receivables = get_receivables_group(user=user)
+    if node.parent_id != receivables.id:
+        return None
+    if Customer.all_objects.filter(customer_name=node.title).exists():
+        return None
+    node.refresh_from_db(fields=["code"])  # code assigned by rebuild_codes after node.save()
+    return Customer.objects.create(
+        customer_name=node.title, customer_code=node.code or None, created_by=user, updated_by=user
+    )

@@ -17,6 +17,7 @@ from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
+from .services import sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -412,6 +413,7 @@ class ChartOfAccountCreateView(PagePermissionRequiredMixin, View):
         )
         node.save()  # code assigned by rebuild below
         ChartOfAccount.rebuild_codes()
+        sync_customer_from_coa(node=node, user=request.user)
         return JsonResponse({"ok": True, "id": node.id})
 
 
