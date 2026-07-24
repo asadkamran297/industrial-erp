@@ -71,6 +71,7 @@ class VendorForm(StyledModelForm):
     class Meta:
         model = Vendor
         fields = ("name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num", "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status")
+        widgets = {"remarks": forms.TextInput()}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
