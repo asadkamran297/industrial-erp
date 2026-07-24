@@ -12,6 +12,10 @@
   .coa-btn:hover{background:#f8fafc;}
   .dark .coa-btn{background:#0f172a;border-color:var(--coa-line-d);color:#cbd5e1;}
   #coa-status{font-size:.75rem;color:#94a3b8;}
+  .coa-code-seg label{padding:.35rem .6rem;font-size:.75rem;}
+  /* codes hidden by default; hover row to peek */
+  .coa-wrap.coa-hide-codes .coa-code{display:none;}
+  .coa-wrap.coa-hide-codes .coa-row:hover .coa-code{display:inline;}
   #coa-search{border:1px solid var(--coa-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;color:#0f172a;min-width:220px;}
   #coa-search:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
   .dark #coa-search{background:#0f172a;border-color:var(--coa-line-d);color:#e2e8f0;}
@@ -99,12 +103,16 @@
   .coa-node[data-type="expense"]   {--dot:#d97706;--dot-bg:#fef3c7;}
 </style>
 
-<section class="coa-wrap mt-6">
+<section class="coa-wrap coa-hide-codes mt-6">
   <div class="coa-toolbar">
     <input id="coa-search" type="search" placeholder="Search accounts…" autocomplete="off">
     <button id="coa-expand" type="button" class="coa-btn">Expand all</button>
     <button id="coa-collapse" type="button" class="coa-btn">Collapse all</button>
     {% if can_add %}<button id="coa-add-new" type="button" class="coa-btn" style="border-color:var(--primary-color);color:var(--primary-color);">+ Add New</button>{% endif %}
+    <div class="coa-seg coa-code-seg">
+      <label><input type="radio" name="coa-codes" value="hide" checked><span>Hide numbers</span></label>
+      <label><input type="radio" name="coa-codes" value="show"><span>Show numbers</span></label>
+    </div>
     <span id="coa-status"></span>
   </div>
 
@@ -357,6 +365,12 @@
     else if (btn.classList.contains('coa-rename') && canEdit) openModal('edit', li);
     else if (btn.classList.contains('coa-delete') && canDelete) openModal('delete', li);
   });
+
+  // Show/hide account numbers. Off = text only (hover row to peek). On = always show.
+  const wrap = document.querySelector('.coa-wrap');
+  document.querySelectorAll('input[name=coa-codes]').forEach(r =>
+    r.addEventListener('change', () =>
+      wrap.classList.toggle('coa-hide-codes', r.value === 'hide')));
 
   document.getElementById('coa-expand').addEventListener('click', () =>
     root.querySelectorAll('.coa-node').forEach(n => n.classList.remove('collapsed')));
