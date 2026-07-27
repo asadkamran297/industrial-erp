@@ -9,27 +9,31 @@ from django.utils import timezone
 from apps.core.constants import (
     ACCOUNT_LEDGER_GENERAL,
     ACCOUNT_LEDGER_SUBSIDIARY,
-    ACCOUNT_TYPE_EXPENSE,
-    ACCOUNT_TYPE_LIABILITY,
-    ACCOUNT_TYPE_REVENUE,
     FIN_ACCOUNT_LEDGER_CHOICES,
     FIN_ACCOUNT_NATURE_CHOICES,
+    FIN_ACCOUNT_ROLE_LABELS,
     FIN_ACCOUNT_TYPE_CHOICES,
     FIN_ACCOUNT_TYPE_CODE_MAP,
     FIN_BALANCE_INCOME_CHOICES,
     FIN_COA_ACCOUNT_TYPE_CHOICES,
+    FIN_PAYMENT_CONDITIONAL_FIELDS,
+    FIN_PAYMENT_METHOD_FIELDS,
+    FIN_SETTLEMENT_HEADER_ROLES,
+    FIN_SETTLEMENT_MODE_CHOICES,
+    FIN_VOUCHER_HEADER_ROLES,
+    FIN_VOUCHER_LABELS,
+    FIN_VOUCHER_PARTY_ROLES,
     FIN_VOUCHER_PREFIX_MAP,
     FIN_VOUCHER_STATUS_CHOICES,
     FIN_VOUCHER_TYPE_CHOICES,
     NO,
     RECORD_STATUS_CHOICES,
+    SETTLEMENT_CASH,
+    SETTLEMENT_CREDIT,
     STATUS_ACTIVE,
     STATUS_CREATED,
     STATUS_INACTIVE,
-    VOUCHER_CUSTOMER_TYPES,
-    VOUCHER_VENDOR_TYPES,
-    VOUCHER_TYPE_PAYMENT,
-    VOUCHER_TYPE_RECEIPT,
+    VOUCHER_SETTLEMENT_TYPES,
     YES,
     YES_NO_CHOICES,
 )
@@ -179,6 +183,9 @@ class ChartOfAccount(BaseModel):
     account_type = models.CharField(max_length=20, choices=FIN_COA_ACCOUNT_TYPE_CHOICES)
     is_group = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
+    # Balance carried in before the first voucher, signed on the account's own
+    # natural side (debit-positive for assets/expenses, credit-positive for the rest).
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
     class Meta:
@@ -268,12 +275,19 @@ class AccountVoucher(BaseModel):
     account_no = models.CharField(max_length=80)
     voucher_date = models.DateField(default=timezone.localdate)
     voucher_type = models.CharField(max_length=2, choices=FIN_VOUCHER_TYPE_CHOICES)
+    settlement_mode = models.CharField(max_length=10, choices=FIN_SETTLEMENT_MODE_CHOICES, blank=True)
+    party_account_no = models.CharField(max_length=80, blank=True)
     payment_method = models.ForeignKey(
         "configurations.PaymentMethod", null=True, blank=True, on_delete=models.SET_NULL, db_column="conf_payment_method_id"
     )
     debit_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     credit_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     remarks = models.TextField(blank=True)
+    bank_name = models.CharField(max_length=120, blank=True)
+    cheque_no = models.CharField(max_length=60, blank=True)
+    cheque_date = models.DateField(null=True, blank=True)
+    wallet_operator = models.CharField(max_length=80, blank=True)
+    transaction_ref = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=20, choices=FIN_VOUCHER_STATUS_CHOICES, default=STATUS_CREATED)
     posted = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     adj_entry = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
@@ -297,18 +311,68 @@ class AccountVoucher(BaseModel):
     def balance_difference(self) -> Decimal:
         return (self.debit_amount or Decimal("0.00")) - (self.credit_amount or Decimal("0.00"))
 
+    def _account_role(self, code):
+        """Role of a postable account, or None when the code is not a usable account."""
+        from .services import account_role, money_account_codes, receivable_account_codes
+
+        account = ChartOfAccount.objects.filter(code=code, status=STATUS_ACTIVE, children__isnull=True).first()
+        if not account:
+            return None
+        return account_role(account, money_account_codes(), receivable_account_codes())
+
     def clean(self):
         errors = {}
+        self.settlement_mode = (self.settlement_mode or "").strip()
+        if self.voucher_type in VOUCHER_SETTLEMENT_TYPES:
+            if not self.settlement_mode:
+                errors["settlement_mode"] = "Choose whether this voucher settles in cash or on credit."
+        else:
+            self.settlement_mode = ""
+
+        # The header account's allowed roles depend on the voucher type and, for
+        # Sales/Purchase, on the settlement mode. Journal/Contra accept any role.
+        allowed_roles = FIN_SETTLEMENT_HEADER_ROLES.get(self.voucher_type, {}).get(
+            self.settlement_mode, FIN_VOUCHER_HEADER_ROLES.get(self.voucher_type)
+        )
         self.account_no = (self.account_no or "").strip()
-        account = ChartOfAccount.objects.filter(code=self.account_no, status=STATUS_ACTIVE, children__isnull=True).first()
-        if not account:
+        role = self._account_role(self.account_no)
+        if role is None:
             errors["account_no"] = "Active leaf chart-of-account is required."
-        # Payment/Purchase hit vendor (payable) accounts; Receipt/Sales hit
-        # customer (receivable) accounts. Journal/Contra/Other allow any.
-        elif self.voucher_type in VOUCHER_VENDOR_TYPES and account.account_type not in (ACCOUNT_TYPE_EXPENSE, ACCOUNT_TYPE_LIABILITY):
-            errors["account_no"] = "Payment/Purchase voucher account must be expense or liability (vendor)."
-        elif self.voucher_type in VOUCHER_CUSTOMER_TYPES and account.account_type != ACCOUNT_TYPE_REVENUE:
-            errors["account_no"] = "Receipt/Sales voucher account must be revenue (customer)."
+        elif allowed_roles and role not in allowed_roles:
+            wanted = ", ".join(FIN_ACCOUNT_ROLE_LABELS[name] for name in allowed_roles)
+            errors["account_no"] = f"This voucher needs a {wanted} account."
+
+        # A cash sale/purchase still names its counterparty; a credit one is already
+        # posted against it, so the extra party field must stay empty.
+        self.party_account_no = (self.party_account_no or "").strip()
+        party_roles = FIN_VOUCHER_PARTY_ROLES.get(self.voucher_type) if self.settlement_mode == SETTLEMENT_CASH else None
+        if not party_roles:
+            self.party_account_no = ""
+        elif not self.party_account_no:
+            errors["party_account_no"] = f"{FIN_VOUCHER_LABELS[self.voucher_type]['party']} is required."
+        elif self._account_role(self.party_account_no) not in party_roles:
+            wanted = ", ".join(FIN_ACCOUNT_ROLE_LABELS[name] for name in party_roles)
+            errors["party_account_no"] = f"Choose a {wanted} account."
+
+        # Credit vouchers move no money, so they carry no payment method at all.
+        if self.settlement_mode == SETTLEMENT_CREDIT:
+            self.payment_method = None
+
+        # Payment method drives which extra fields apply; the rest are cleared so a
+        # method switch never leaves a stale cheque no or transfer reference behind.
+        method_title = (self.payment_method.title if self.payment_method else "").strip().lower()
+        required_fields = FIN_PAYMENT_METHOD_FIELDS.get(method_title, ())
+        for name in FIN_PAYMENT_CONDITIONAL_FIELDS:
+            value = getattr(self, name)
+            if name not in required_fields:
+                setattr(self, name, None if name.endswith("_date") else "")
+                continue
+            if isinstance(value, str):
+                value = value.strip()
+                setattr(self, name, value)
+            if not value:
+                label = self._meta.get_field(name).verbose_name
+                errors[name] = f"{label.capitalize()} is required for {method_title} payments."
 
         if self.adj_entry == YES and not self.adj_voucher:
             errors["adj_voucher"] = "Adjustment voucher is required when adjustment entry is yes."

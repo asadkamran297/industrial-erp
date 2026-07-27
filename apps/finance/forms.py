@@ -77,12 +77,20 @@ class AccountConfigurationForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
 class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = AccountVoucher
+        # Order drives the on-screen layout: money account first, then its remarks.
         fields = (
             "voucher_date",
             "voucher_type",
+            "settlement_mode",
             "account_no",
-            "payment_method",
+            "party_account_no",
             "remarks",
+            "payment_method",
+            "bank_name",
+            "cheque_no",
+            "cheque_date",
+            "wallet_operator",
+            "transaction_ref",
             "status",
             "adj_entry",
             "adj_voucher",
@@ -90,9 +98,16 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
         widgets = {
             "voucher_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
             "voucher_type": forms.Select(attrs={"class": "form-select"}),
+            "settlement_mode": forms.Select(attrs={"class": "form-select"}),
             "account_no": forms.TextInput(attrs={"class": "form-input"}),
+            "party_account_no": forms.TextInput(attrs={"class": "form-input"}),
             "payment_method": forms.Select(attrs={"class": "form-select"}),
-            "remarks": forms.Textarea(attrs={"class": "form-input", "rows": 3}),
+            "remarks": forms.TextInput(attrs={"class": "form-input"}),
+            "bank_name": forms.TextInput(attrs={"class": "form-input", "placeholder": "Bank name"}),
+            "cheque_no": forms.TextInput(attrs={"class": "form-input", "placeholder": "Cheque no"}),
+            "cheque_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+            "wallet_operator": forms.TextInput(attrs={"class": "form-input", "placeholder": "JazzCash, EasyPaisa, …"}),
+            "transaction_ref": forms.TextInput(attrs={"class": "form-input", "placeholder": "Bank transaction / reference no"}),
             "status": forms.Select(attrs={"class": "form-select"}),
             "adj_entry": forms.Select(attrs={"class": "form-select"}),
             "adj_voucher": forms.Select(attrs={"class": "form-select"}),
@@ -101,9 +116,21 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["adj_voucher"].queryset = AccountVoucher.objects.order_by("-voucher_date", "-id")
+        self.fields["transaction_ref"].label = "Transaction Ref No"
+        self.fields["bank_name"].label = "Bank"
+        self.fields["cheque_no"].label = "Cheque No"
+        self.fields["cheque_date"].label = "Cheque Date"
+        self.fields["wallet_operator"].label = "Operator Name"
+        # Both are relabelled per voucher type in the template; required-ness is
+        # enforced in AccountVoucher.clean, which knows the type and settlement mode.
+        self.fields["settlement_mode"].required = False
+        self.fields["party_account_no"].required = False
 
     def clean_account_no(self):
         return self.cleaned_data["account_no"].strip()
+
+    def clean_party_account_no(self):
+        return self.cleaned_data["party_account_no"].strip()
 
 
 class AccountVoucherLineForm(AutoSelectSingleChoiceMixin, forms.ModelForm):

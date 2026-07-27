@@ -1,0 +1,134 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Opening Balances" subtitle="One opening amount per postable account. Movement and closing update with every voucher." %}
+
+<style>
+  .ob-wrap{--ob-line:#e2e8f0;--ob-line-d:#334155;
+    --type-asset:#0ea5e9;--type-liability:#f97316;--type-revenue:#10b981;--type-expense:#ef4444;--type-capital:#8b5cf6;}
+  .ob-toolbar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap;}
+  .ob-btn{border:1px solid var(--ob-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;font-weight:600;color:#475569;cursor:pointer;}
+  .ob-btn:hover{background:#f8fafc;}
+  .dark .ob-btn{background:#0f172a;border-color:var(--ob-line-d);color:#cbd5e1;}
+  #ob-search{border:1px solid var(--ob-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;color:#0f172a;min-width:220px;}
+  #ob-search:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
+  .dark #ob-search{background:#0f172a;border-color:var(--ob-line-d);color:#e2e8f0;}
+  .ob-node.ob-hidden{display:none;}
+
+  .ob-card{border:1px solid var(--ob-line);background:#fff;border-radius:14px;padding:.5rem;overflow-x:auto;}
+  .dark .ob-card{background:#0b1220;border-color:var(--ob-line-d);}
+  .ob-list{list-style:none;margin:0;padding:0;min-width:640px;}
+  .ob-children{margin:2px 0 2px 26px;padding-left:14px;border-left:1px dashed var(--ob-line);}
+  .dark .ob-children{border-left-color:var(--ob-line-d);}
+  .ob-node.collapsed > .ob-children{display:none;}
+
+  /* header + rows share one column track so the numbers line up at any depth */
+  .ob-row,.ob-head{display:flex;align-items:center;gap:.55rem;padding:.35rem .6rem;border-radius:10px;border:1px solid transparent;}
+  .ob-row:hover{background:#f8fafc;border-color:var(--ob-line);}
+  .dark .ob-row:hover{background:#111c33;border-color:var(--ob-line-d);}
+  .ob-row.is-root{background:#f1f5f9;font-weight:700;}
+  .dark .ob-row.is-root{background:#0f1b30;}
+  .ob-row.is-group .ob-title{font-weight:600;}
+
+  .ob-caret{width:18px;height:18px;border:0;background:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;transition:transform .12s;flex:0 0 auto;}
+  .ob-node.collapsed > .ob-row .ob-caret{transform:rotate(-90deg);}
+  .ob-dot{width:8px;height:8px;border-radius:50%;background:var(--dot,#94a3b8);flex:0 0 auto;}
+  .ob-title{font-size:.9rem;color:#0f172a;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dark .ob-title{color:#e2e8f0;}
+  .ob-row.is-root .ob-title{font-size:.82rem;letter-spacing:.03em;text-transform:uppercase;}
+  .ob-code{font-size:.72rem;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;background:#f1f5f9;border-radius:6px;padding:.1rem .4rem;flex:0 0 auto;}
+  .dark .ob-code{background:#1e293b;color:#94a3b8;}
+
+  .ob-input{width:130px;flex:0 0 auto;text-align:right;font-size:.8rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    border:1px solid var(--ob-line);border-radius:8px;padding:.25rem .5rem;background:#fffbeb;color:#0f172a;}
+  .ob-input:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
+  .dark .ob-input{background:#1c1917;border-color:var(--ob-line-d);color:#e2e8f0;}
+  .ob-rollup,.ob-num{width:130px;flex:0 0 auto;text-align:right;font-size:.78rem;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;padding:.25rem .5rem;}
+  .ob-rollup{font-weight:600;color:#475569;}
+  .dark .ob-rollup{color:#cbd5e1;}
+  .ob-num.is-negative{color:#e11d48;}
+
+  .ob-head{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid var(--ob-line);border-radius:0;}
+  .dark .ob-head{border-bottom-color:var(--ob-line-d);}
+  .ob-head .ob-head-account{flex:1 1 auto;}
+  .ob-head span:not(.ob-head-account){width:130px;flex:0 0 auto;text-align:right;padding:0 .5rem;}
+</style>
+
+<div class="ob-wrap">
+  <div class="ob-toolbar">
+    <input type="search" id="ob-search" placeholder="Search account or code…" autocomplete="off">
+    <button type="button" class="ob-btn" id="ob-expand">Expand all</button>
+    <button type="button" class="ob-btn" id="ob-collapse">Collapse all</button>
+  </div>
+
+  <form method="post">{% csrf_token %}
+    <div class="ob-card">
+      <div class="ob-head">
+        <span class="ob-head-account">Account</span>
+        <span>Opening</span>
+        <span>Movement</span>
+        <span>Closing</span>
+      </div>
+      <ul class="ob-list" id="ob-root">
+        {% for node in opening_tree %}
+          {% include "finance/_opening_node.html" with node=node %}
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="mt-4 flex items-center justify-between gap-3">
+      <p class="text-xs text-slate-500">
+        Amounts are on each account&rsquo;s natural side &mdash; a positive number means a debit balance for
+        assets and expenses, and a credit balance for liabilities, revenue and capital.
+      </p>
+      <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save Opening Balances</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function () {
+  const root = document.getElementById('ob-root');
+  if (!root) return;
+
+  root.addEventListener('click', (e) => {
+    const caret = e.target.closest('.ob-caret');
+    if (!caret) return;
+    caret.closest('.ob-node').classList.toggle('collapsed');
+  });
+
+  function setCollapsed(state) {
+    root.querySelectorAll('.ob-node.has-children').forEach(n => n.classList.toggle('collapsed', state));
+  }
+  document.getElementById('ob-expand').addEventListener('click', () => setCollapsed(false));
+  document.getElementById('ob-collapse').addEventListener('click', () => setCollapsed(true));
+
+  // Red out negative movement/closing figures.
+  root.querySelectorAll('.ob-num').forEach(el => {
+    el.classList.toggle('is-negative', parseFloat(el.textContent) < 0);
+  });
+
+  // Search: show a node when it matches, plus every ancestor that leads to it.
+  const search = document.getElementById('ob-search');
+  search.addEventListener('input', () => {
+    const term = search.value.trim().toLowerCase();
+    const nodes = root.querySelectorAll('.ob-node');
+    if (!term) {
+      nodes.forEach(n => n.classList.remove('ob-hidden'));
+      return;
+    }
+    nodes.forEach(n => n.classList.add('ob-hidden'));
+    nodes.forEach(node => {
+      const row = node.querySelector(':scope > .ob-row');
+      const title = row.querySelector('.ob-title').textContent.toLowerCase();
+      const code = (row.querySelector('.ob-code') || {}).textContent || '';
+      if (!title.includes(term) && !code.toLowerCase().includes(term)) return;
+      for (let el = node; el && el !== root; el = el.parentElement.closest('.ob-node')) {
+        el.classList.remove('ob-hidden', 'collapsed');
+        if (!el.parentElement) break;
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

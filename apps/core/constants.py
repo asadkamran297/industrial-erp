@@ -128,6 +128,109 @@ FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, 
 VOUCHER_VENDOR_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
 VOUCHER_CUSTOMER_TYPES: Final = (VOUCHER_TYPE_RECEIPT, VOUCHER_TYPE_SALES)
 
+# Simple-mode vouchers hide the debit/credit choice: the voucher type fixes both
+# sides. The header account is the money leg (Cash/Bank), every grid line is the
+# reason leg, and each line carries a single positive amount.
+# {voucher_type: (header_side, line_side)}
+VOUCHER_SIMPLE_SIDES: Final[dict[str, tuple[str, str]]] = {
+    VOUCHER_TYPE_PAYMENT: ("credit", "debit"),  # money out of Cash/Bank
+    VOUCHER_TYPE_RECEIPT: ("debit", "credit"),  # money into Cash/Bank
+    VOUCHER_TYPE_SALES: ("debit", "credit"),  # Dr money or customer, Cr revenue
+    VOUCHER_TYPE_PURCHASE: ("credit", "debit"),  # Dr expense, Cr money or vendor
+}
+
+# Sales and Purchase settle either on the spot (money account) or on account
+# (customer receivable / vendor payable). The mode picks the header account.
+SETTLEMENT_CASH: Final = "cash"
+SETTLEMENT_CREDIT: Final = "credit"
+
+FIN_SETTLEMENT_MODE_CHOICES: Final[StatusChoices] = (
+    (SETTLEMENT_CASH, "Cash"),
+    (SETTLEMENT_CREDIT, "Credit"),
+)
+
+VOUCHER_SETTLEMENT_TYPES: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE)
+
+# Extra voucher header fields each payment method needs, keyed by a lowercased
+# PaymentMethod.title. Methods missing here (Cash, …) collect nothing extra; the
+# listed fields are both shown and required, and everything else is blanked out.
+FIN_PAYMENT_METHOD_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "bank transfer": ("bank_name", "transaction_ref"),
+    "cheque": ("bank_name", "cheque_no", "cheque_date"),
+    "mobile wallet": ("wallet_operator", "transaction_ref"),
+}
+
+# Every conditional field, in on-screen order — the ones hidden for a method.
+FIN_PAYMENT_CONDITIONAL_FIELDS: Final = ("bank_name", "cheque_no", "cheque_date", "wallet_operator", "transaction_ref")
+
+# Business role of a postable account, and the optgroup caption it gets in the
+# voucher pickers. Roles come from the account's place in the chart of accounts,
+# not account_type alone: customer ledgers sit under Receivables, so their
+# account_type is "asset" and cannot be told apart from any other asset.
+FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
+    "cash": "Cash",
+    "bank": "Bank",
+    "customer": "Customers",
+    "vendor": "Vendors & Payables",
+    "expense": "Expenses",
+    "revenue": "Income",
+    "other": "Other Accounts",
+}
+
+# Fallback role by account_type, for accounts outside Cash/Bank/Receivables.
+FIN_ACCOUNT_TYPE_ROLES: Final[dict[str, str]] = {
+    ACCOUNT_TYPE_LIABILITY: "vendor",
+    ACCOUNT_TYPE_EXPENSE: "expense",
+    ACCOUNT_TYPE_REVENUE: "revenue",
+}
+
+# Which account roles each voucher type accepts, per side.
+# Absent voucher type (Journal/Contra) => every role allowed.
+FIN_VOUCHER_HEADER_ROLES: Final[dict[str, tuple[str, ...]]] = {
+    VOUCHER_TYPE_PAYMENT: ("cash", "bank"),
+    VOUCHER_TYPE_RECEIPT: ("cash", "bank"),
+}
+FIN_VOUCHER_LINE_ROLES: Final[dict[str, tuple[str, ...]]] = {
+    VOUCHER_TYPE_PAYMENT: ("vendor", "expense"),
+    VOUCHER_TYPE_RECEIPT: ("customer", "revenue"),
+    VOUCHER_TYPE_SALES: ("revenue",),
+    VOUCHER_TYPE_PURCHASE: ("expense", "other"),
+}
+
+# Settlement mode overrides the header roles for Sales and Purchase.
+FIN_SETTLEMENT_HEADER_ROLES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
+    VOUCHER_TYPE_SALES: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("customer",)},
+    VOUCHER_TYPE_PURCHASE: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("vendor",)},
+}
+
+# On a cash sale/purchase the header is a money account, so the counterparty is
+# recorded separately in party_account_no. On credit it *is* the header account.
+FIN_VOUCHER_PARTY_ROLES: Final[dict[str, tuple[str, ...]]] = {
+    VOUCHER_TYPE_SALES: ("customer",),
+    VOUCHER_TYPE_PURCHASE: ("vendor",),
+}
+
+# On-screen captions per voucher type. "header_credit" overrides "header" when
+# the voucher settles on credit; keys are read by the voucher form's JS too.
+FIN_VOUCHER_LABELS: Final[dict[str, dict[str, str]]] = {
+    VOUCHER_TYPE_PAYMENT: {"header": "Paid From", "line": "Paid To"},
+    VOUCHER_TYPE_RECEIPT: {"header": "Received In", "line": "Received From"},
+    VOUCHER_TYPE_SALES: {
+        "header": "Received In",
+        "header_credit": "Sold To",
+        "line": "Sales Account",
+        "party": "Sold To",
+        "settlement": "Receipt Method",
+    },
+    VOUCHER_TYPE_PURCHASE: {
+        "header": "Paid From",
+        "header_credit": "Purchase From",
+        "line": "Purchase Account",
+        "party": "Purchase From",
+        "settlement": "Payment Method",
+    },
+}
+
 FIN_VOUCHER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_CREATED, "Created"),
     (STATUS_SUBMITTED, "Submitted"),

@@ -27,57 +27,72 @@
       <thead>
         <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           <th class="w-16 px-3 py-2">Line#</th>
-          <th class="w-64 px-3 py-2">Account</th>
+          <th class="w-64 px-3 py-2" id="line-account-label">Account</th>
           <th class="px-3 py-2">Description</th>
-          <th class="w-36 px-3 py-2 text-right">Debit</th>
-          <th class="w-36 px-3 py-2 text-right">Credit</th>
+          <th class="w-36 px-3 py-2 text-right col-drcr">Debit</th>
+          <th class="w-36 px-3 py-2 text-right col-drcr">Credit</th>
+          <th class="w-36 px-3 py-2 text-right col-amount">Amount</th>
           <th class="w-10 px-2 py-2"></th>
         </tr>
       </thead>
       <tbody id="line-rows">
-        {% for i in "12" %}
+        {# Single entry line for now; multi-line grid re-enables with #add-line-btn below. #}
+        {% for i in "1" %}
         <tr class="line-row border-t border-slate-100 dark:border-slate-800">
           <td class="px-3 py-1.5"><input type="text" class="form-input line-num w-14 bg-amber-50 text-center dark:bg-slate-800" value="{{ forloop.counter }}" readonly tabindex="-1"></td>
           <td class="px-3 py-1.5">
             <select name="line_account[]" class="form-select line-account">
               <option value="">Select account…</option>
-              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-type="{{ acc.account_type }}">{{ acc.code }} — {{ acc.title }}</option>{% endfor %}
+              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}">{{ acc.code }} — {{ acc.title }}</option>{% endfor %}
             </select>
           </td>
           <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800"></td>
-          <td class="px-3 py-1.5"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
-          <td class="px-3 py-1.5"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5 col-amount"><input type="number" name="line_amount[]" min="0" step="0.01" class="form-input line-amount w-full bg-orange-50 text-right dark:bg-slate-800"></td>
           <td class="px-2 py-1.5 text-center"><button type="button" class="line-remove text-lg font-bold leading-none text-slate-400 hover:text-rose-600" title="Remove line" tabindex="-1">&times;</button></td>
         </tr>
         {% endfor %}
       </tbody>
+      {% comment %} Totals row hidden with the single-line grid; restores with multi-line entry.
       <tfoot>
         <tr class="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
           <td colspan="3" class="px-3 py-2 text-right text-sm font-semibold">Totals :</td>
-          <td class="px-3 py-2"><input type="text" id="total-debit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
-          <td class="px-3 py-2"><input type="text" id="total-credit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
+          <td class="px-3 py-2 col-drcr"><input type="text" id="total-debit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
+          <td class="px-3 py-2 col-drcr"><input type="text" id="total-credit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
+          <td class="px-3 py-2 col-amount"><input type="text" id="total-amount" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
           <td></td>
         </tr>
       </tfoot>
+      {% endcomment %}
     </table>
   </div>
+  {% comment %} Multi-line entry disabled: one line per voucher for now.
   <div class="mb-6 flex items-center justify-between">
     <button type="button" id="add-line-btn" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">
       + Add Line
     </button>
   </div>
+  {% endcomment %}
   <p id="balance-hint" class="mb-6 hidden rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
+  <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected below — the voucher always balances.</p>
   {% endif %}
 
+  {# Off-screen header fields: date is always today, workflow fields keep their defaults. #}
+  <input type="hidden" name="voucher_date" value="{{ form.voucher_date.value|date:'Y-m-d' }}">
+  <input type="hidden" name="status" value="{{ form.status.value }}">
+  <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
+
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {% for field in form %}{% if field.name != "voucher_type" %}
-      <div {% if field.name == "remarks" %}class="lg:col-span-3"{% endif %}>
-        <label class="mb-1.5 block text-sm font-medium">{{ field.label }}</label>
-        {% if field.name == "account_no" %}
-          <select name="account_no" id="id_account_no" class="form-select">
+    {% for field in form %}{% if field.name not in hidden_header_fields %}
+      <div id="field-{{ field.name }}">
+        <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span></label>
+        {# Both account pickers share the same option list; JS filters them by role. #}
+        {% if field.name == "account_no" or field.name == "party_account_no" %}
+          <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
             <option value="">Select account…</option>
             {% for acc in voucher_accounts %}
-              <option value="{{ acc.code }}" data-type="{{ acc.account_type }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.code }} — {{ acc.title }}</option>
+              <option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.code }} — {{ acc.title }}</option>
             {% endfor %}
           </select>
         {% else %}{{ field }}{% endif %}
@@ -92,6 +107,15 @@
   </div>
 </form>
 
+{{ simple_voucher_types|json_script:"simple-voucher-types" }}
+{{ voucher_header_roles|json_script:"voucher-header-roles" }}
+{{ voucher_line_roles|json_script:"voucher-line-roles" }}
+{{ settlement_header_roles|json_script:"settlement-header-roles" }}
+{{ voucher_party_roles|json_script:"voucher-party-roles" }}
+{{ voucher_labels|json_script:"voucher-labels" }}
+{{ settlement_voucher_types|json_script:"settlement-voucher-types" }}
+{{ payment_method_fields|json_script:"payment-method-fields" }}
+{{ payment_conditional_fields|json_script:"payment-conditional-fields" }}
 <script>
 (function () {
   const picker = document.getElementById('voucher-type-picker');
@@ -100,28 +124,101 @@
   const active = 'border-[var(--primary-color)] bg-[var(--primary-color)] text-white';
   const idle = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
-  // Allowed account_types per voucher type; absent => any (Contra/Journal/Other).
-  const ALLOWED = {
-    PV: ['expense', 'liability'], PU: ['expense', 'liability'],   // Payment / Purchase → vendor
-    RV: ['revenue'],              SV: ['revenue'],                // Receipt / Sales → revenue customer
-  };
+  // Allowed account roles per voucher type; absent => any role (Journal/Contra).
+  const HEADER_ROLES = JSON.parse(document.getElementById('voucher-header-roles').textContent);
+  const LINE_ROLES = JSON.parse(document.getElementById('voucher-line-roles').textContent);
+  const SETTLEMENT_HEADER_ROLES = JSON.parse(document.getElementById('settlement-header-roles').textContent);
+  const PARTY_ROLES = JSON.parse(document.getElementById('voucher-party-roles').textContent);
+  const LABELS = JSON.parse(document.getElementById('voucher-labels').textContent);
+  const SETTLEMENT_TYPES = JSON.parse(document.getElementById('settlement-voucher-types').textContent);
+  // Simple mode = no Debit/Credit columns, just an Amount per line.
+  const SIMPLE_TYPES = JSON.parse(document.getElementById('simple-voucher-types').textContent);
+
+  const party = document.getElementById('id_party_account_no');
+  const settlement = document.getElementById('id_settlement_mode');
+  const lineLabel = document.getElementById('line-account-label');
+  const simpleHint = document.getElementById('simple-hint');
+  const defaultLineLabel = lineLabel ? lineLabel.textContent : '';
+  let recalcGrid = () => {};
+
+  function settlementMode() {
+    return SETTLEMENT_TYPES.includes(hidden.value) && settlement ? settlement.value : '';
+  }
+
+  // Sales/Purchase swap the header account between a money account (cash) and the
+  // customer/vendor ledger (credit), so the roles depend on both type and mode.
+  function headerRoles() {
+    const bySettlement = SETTLEMENT_HEADER_ROLES[hidden.value];
+    const mode = settlementMode();
+    if (bySettlement) return mode ? bySettlement[mode] : [];  // no mode picked yet => nothing valid
+    return HEADER_ROLES[hidden.value];
+  }
+
+  function setLabel(fieldName, text) {
+    const el = document.getElementById('label-' + fieldName);
+    if (el && text) el.textContent = text;
+  }
 
   // Keep full option list; rebuild on each change (option.hidden unreliable in Safari/mobile).
   const allOptions = acct ? [...acct.options].map(o => o.cloneNode(true)) : [];
 
-  function filterSelect(select, allow) {
+  function filterSelect(select, roles) {
     const prev = select.value;
+    const groups = new Map();
     select.innerHTML = '';
     allOptions.forEach(o => {
-      if (!o.value || !allow || allow.includes(o.dataset.type)) select.appendChild(o.cloneNode(true));
+      if (!o.value) { select.appendChild(o.cloneNode(true)); return; }  // keep the placeholder
+      if (roles && !roles.includes(o.dataset.role)) return;
+      const label = o.dataset.group || 'Other';
+      if (!groups.has(label)) {
+        const group = document.createElement('optgroup');
+        group.label = label;
+        groups.set(label, group);
+        select.appendChild(group);
+      }
+      groups.get(label).appendChild(o.cloneNode(true));
     });
     select.value = [...select.options].some(o => o.value === prev) ? prev : '';
   }
 
   function filterAccounts() {
-    const allow = ALLOWED[hidden.value];
-    if (acct) filterSelect(acct, allow);
-    document.querySelectorAll('#line-grid .line-account').forEach(s => filterSelect(s, allow));
+    if (acct) filterSelect(acct, headerRoles());
+    if (party) filterSelect(party, PARTY_ROLES[hidden.value]);
+    const lineRoles = LINE_ROLES[hidden.value];
+    document.querySelectorAll('#line-grid .line-account').forEach(s => filterSelect(s, lineRoles));
+  }
+
+  // Simple mode hides the Debit/Credit pair behind a single Amount column; the
+  // voucher type fixes each side and the server posts the money leg itself.
+  function applyMode() {
+    const simple = SIMPLE_TYPES.includes(hidden.value);
+    const labels = LABELS[hidden.value] || {};
+    const mode = settlementMode();
+    document.querySelectorAll('.col-drcr').forEach(el => el.classList.toggle('hidden', simple));
+    document.querySelectorAll('.col-amount').forEach(el => el.classList.toggle('hidden', !simple));
+
+    // Credit sales/purchases post straight to the party ledger: the header already
+    // names it, so the extra party picker and the payment details drop away.
+    const showSettlement = SETTLEMENT_TYPES.includes(hidden.value);
+    const showParty = showSettlement && mode === 'cash';
+    toggleField('settlement_mode', showSettlement);
+    toggleField('party_account_no', showParty);
+    toggleField('payment_method', !showSettlement || mode === 'cash');
+
+    setLabel('settlement_mode', labels.settlement);
+    setLabel('party_account_no', labels.party);
+    setLabel('account_no', (mode === 'credit' && labels.header_credit) || labels.header);
+    if (lineLabel) lineLabel.textContent = labels.line || defaultLineLabel;
+    if (simpleHint) simpleHint.classList.toggle('hidden', !simple);
+    recalcGrid();
+  }
+
+  function toggleField(name, show) {
+    const wrapper = document.getElementById('field-' + name);
+    if (!wrapper) return;
+    wrapper.classList.toggle('hidden', !show);
+    const control = wrapper.querySelector('input, select');
+    if (control && !show) control.value = '';
   }
 
   // ----- entry grid: totals + auto-grow rows -----
@@ -130,30 +227,39 @@
     const rowsBody = document.getElementById('line-rows');
     const totalDebit = document.getElementById('total-debit');
     const totalCredit = document.getElementById('total-credit');
+    const totalAmount = document.getElementById('total-amount');
     const hint = document.getElementById('balance-hint');
 
     function recalc() {
-      let dr = 0, cr = 0, used = 0;
+      const simple = SIMPLE_TYPES.includes(hidden.value);
+      let dr = 0, cr = 0, amount = 0, used = 0;
       rowsBody.querySelectorAll('.line-row').forEach(row => {
         const d = parseFloat(row.querySelector('.line-debit').value) || 0;
         const c = parseFloat(row.querySelector('.line-credit').value) || 0;
-        dr += d; cr += c;
-        if (d || c || row.querySelector('.line-account').value) used++;
+        const a = parseFloat(row.querySelector('.line-amount').value) || 0;
+        dr += d; cr += c; amount += a;
+        if (d || c || a || row.querySelector('.line-account').value) used++;
       });
-      totalDebit.value = dr.toFixed(2);
-      totalCredit.value = cr.toFixed(2);
       const balanced = dr === cr;
-      totalDebit.classList.toggle('text-rose-600', !balanced);
-      totalCredit.classList.toggle('text-rose-600', !balanced);
-      hint.classList.toggle('hidden', balanced || (dr === 0 && cr === 0));
+      if (totalDebit) {  // totals row is hidden while the grid is single-line
+        totalDebit.value = dr.toFixed(2);
+        totalCredit.value = cr.toFixed(2);
+        totalAmount.value = amount.toFixed(2);
+        totalDebit.classList.toggle('text-rose-600', !balanced);
+        totalCredit.classList.toggle('text-rose-600', !balanced);
+      }
+      // Simple mode always balances: the money leg is generated from this total.
+      hint.classList.toggle('hidden', simple || balanced || (dr === 0 && cr === 0));
       return used;
     }
+    recalcGrid = recalc;
 
     function renumber() {
       rowsBody.querySelectorAll('.line-row .line-num').forEach((input, index) => { input.value = index + 1; });
     }
 
-    function addRow() {
+    // Unused while the grid is locked to a single line; kept for the multi-line mode.
+    function addRow() {  // eslint-disable-line no-unused-vars
       const last = rowsBody.querySelector('.line-row:last-child');
       const clone = last.cloneNode(true);
       clone.querySelectorAll('input').forEach(i => { i.value = ''; });
@@ -166,8 +272,9 @@
     grid.addEventListener('input', (e) => {
       if (!e.target.closest('.line-row')) return;
       recalc();
-      const lastRow = rowsBody.querySelector('.line-row:last-child');
-      if (lastRow.contains(e.target)) addRow();  // always keep one empty row
+      // Auto-grow disabled with the single-line grid:
+      // const lastRow = rowsBody.querySelector('.line-row:last-child');
+      // if (lastRow.contains(e.target)) addRow();  // always keep one empty row
     });
     grid.addEventListener('change', (e) => {
       if (e.target.classList.contains('line-account')) recalc();
@@ -185,9 +292,12 @@
       renumber();
       recalc();
     });
-    document.getElementById('add-line-btn').addEventListener('click', () => {
-      addRow().querySelector('.line-account').focus();
-    });
+    const addLineBtn = document.getElementById('add-line-btn');  // absent while single-line
+    if (addLineBtn) {
+      addLineBtn.addEventListener('click', () => {
+        addRow().querySelector('.line-account').focus();
+      });
+    }
     recalc();
   }
 
@@ -200,10 +310,34 @@
       active.split(' ').forEach(c => b.classList.toggle(c, on));
       idle.split(' ').forEach(c => b.classList.toggle(c, !on));
     });
-    filterAccounts();
+    if (settlement) settlement.value = '';  // a fresh type re-asks cash vs credit
+    refresh();
   });
 
-  filterAccounts();  // initial
+  if (settlement) settlement.addEventListener('change', refresh);
+
+  function refresh() {
+    filterAccounts();
+    applyMode();
+    toggleMethodFields();
+  }
+
+  // ----- payment-method driven fields: cheque no/date, bank, transfer reference -----
+  const METHOD_FIELDS = JSON.parse(document.getElementById('payment-method-fields').textContent);
+  const CONDITIONAL_FIELDS = JSON.parse(document.getElementById('payment-conditional-fields').textContent);
+  const methodSelect = document.getElementById('id_payment_method');
+
+  function toggleMethodFields() {
+    // A hidden payment method (credit sale/purchase) collects nothing extra.
+    const hiddenMethod = document.getElementById('field-payment_method');
+    const methodOff = hiddenMethod && hiddenMethod.classList.contains('hidden');
+    const wanted = (!methodOff && methodSelect && METHOD_FIELDS[methodSelect.value]) || [];
+    CONDITIONAL_FIELDS.forEach(name => toggleField(name, wanted.includes(name)));
+  }
+
+  if (methodSelect) methodSelect.addEventListener('change', toggleMethodFields);
+
+  refresh();  // initial
 })();
 </script>
 {% endblock %}

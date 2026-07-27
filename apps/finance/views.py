@@ -10,14 +10,15 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
+from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
+from apps.configurations.models import PaymentMethod
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import sync_customer_from_coa
+from .services import account_balances, account_role, cash_bank_account_codes, money_account_codes, receivable_account_codes, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -168,32 +169,96 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_type_meta"] = FIN_VOUCHER_TYPE_META
         context["selected_voucher_type"] = self._selected_type()
         # Last (childless) nodes of the chart of accounts are the postable ones.
-        context["voucher_accounts"] = ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code")
+        money_groups = money_account_codes()
+        customer_codes = receivable_account_codes()
+        accounts = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code"))
+        for account in accounts:
+            account.role = account_role(account, money_groups, customer_codes)
+            account.group_label = FIN_ACCOUNT_ROLE_LABELS[account.role]
+        context["voucher_accounts"] = accounts
+        context["simple_voucher_types"] = list(VOUCHER_SIMPLE_SIDES)
+        context["voucher_header_roles"] = FIN_VOUCHER_HEADER_ROLES
+        context["voucher_line_roles"] = FIN_VOUCHER_LINE_ROLES
+        context["settlement_header_roles"] = FIN_SETTLEMENT_HEADER_ROLES
+        context["voucher_party_roles"] = FIN_VOUCHER_PARTY_ROLES
+        context["voucher_labels"] = FIN_VOUCHER_LABELS
+        context["settlement_voucher_types"] = list(VOUCHER_SETTLEMENT_TYPES)
+        # Kept on the form but off the screen: date defaults to today and the
+        # workflow fields stay at their model defaults until the detail page.
+        context["hidden_header_fields"] = ["voucher_type", "voucher_date", "status", "adj_entry", "adj_voucher"]
+        # {payment_method_id: [extra field names]} — drives the conditional fields.
+        context["payment_method_fields"] = {
+            str(pk): list(FIN_PAYMENT_METHOD_FIELDS.get((title or "").strip().lower(), ()))
+            for pk, title in PaymentMethod.objects.values_list("id", "title")
+        }
+        context["payment_conditional_fields"] = list(FIN_PAYMENT_CONDITIONAL_FIELDS)
         return context
 
+    @staticmethod
+    def _decimal(values, index):
+        try:
+            return Decimal((values[index] if index < len(values) else "") or "0")
+        except InvalidOperation:
+            return Decimal("0")
+
     def _parse_line_rows(self):
-        """Read the entry-grid arrays; skip fully empty rows."""
+        """Read the entry-grid arrays; skip fully empty rows.
+
+        Simple-mode vouchers (Payment/Receipt) post one ``line_amount[]`` per row
+        instead of a debit/credit pair; the voucher type decides the side.
+        """
+        sides = VOUCHER_SIMPLE_SIDES.get(self.request.POST.get("voucher_type", ""))
         accounts = self.request.POST.getlist("line_account[]")
         descriptions = self.request.POST.getlist("line_description[]")
         debits = self.request.POST.getlist("line_debit[]")
         credits = self.request.POST.getlist("line_credit[]")
+        amounts = self.request.POST.getlist("line_amount[]")
         rows = []
-        for index in range(max(len(accounts), len(debits), len(credits), len(descriptions))):
+        for index in range(max(len(accounts), len(debits), len(credits), len(amounts), len(descriptions))):
             account_no = (accounts[index] if index < len(accounts) else "").strip()
             description = (descriptions[index] if index < len(descriptions) else "").strip()
-            try:
-                debit = Decimal((debits[index] if index < len(debits) else "") or "0")
-                credit = Decimal((credits[index] if index < len(credits) else "") or "0")
-            except InvalidOperation:
-                debit = credit = Decimal("0")
+            if sides:
+                amount = self._decimal(amounts, index)
+                debit = amount if sides[1] == "debit" else Decimal("0")
+                credit = amount if sides[1] == "credit" else Decimal("0")
+            else:
+                debit = self._decimal(debits, index)
+                credit = self._decimal(credits, index)
             if not account_no and not description and debit == 0 and credit == 0:
                 continue
             rows.append({"account_no": account_no, "remarks": description, "debit_amount": debit, "credit_amount": credit})
         return rows
 
+    def _append_money_line(self, line_number):
+        """Simple mode: the header Cash/Bank account is the contra leg, so post it for the user."""
+        sides = VOUCHER_SIMPLE_SIDES.get(self.object.voucher_type)
+        if not sides:
+            return
+        header_side = sides[0]
+        self.object.recalculate_totals()
+        # The reason lines all sit on one side; the money leg mirrors their total.
+        amount = self.object.debit_amount if header_side == "credit" else self.object.credit_amount
+        if amount <= 0:
+            return
+        AccountVoucherLine.objects.create(
+            voucher=self.object,
+            line_number=line_number,
+            voucher_no=self.object.voucher_no,
+            account_no=self.object.account_no,
+            voucher_date=self.object.voucher_date,
+            payment_method=self.object.payment_method,
+            debit_amount=amount if header_side == "debit" else Decimal("0"),
+            credit_amount=amount if header_side == "credit" else Decimal("0"),
+            remarks=self.object.remarks,
+            receipt_no=self.object.transaction_ref,
+            created_by=self.request.user,
+            updated_by=self.request.user,
+        )
+
     def form_valid(self, form):
         with transaction.atomic():
             response = super().form_valid(form)
+            number = 0
             for number, row in enumerate(self._parse_line_rows(), start=1):
                 line_form = AccountVoucherLineForm(row)
                 if line_form.is_valid():
@@ -209,6 +274,7 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
                     for errors in line_form.errors.values():
                         for error in errors:
                             messages.error(self.request, f"Line {number}: {error}")
+            self._append_money_line(number + 1)
         self.object.refresh_from_db()
         if self.object.lines.exists() and not self.object.is_balanced:
             messages.warning(self.request, "Voucher totals are not balanced yet. Debit and credit must match before posting.")
@@ -383,6 +449,82 @@ class ChartOfAccountTreeView(PagePermissionRequiredMixin, TemplateView):
         context["coa_tree"] = _build_coa_forest()
         context["account_types"] = FIN_COA_ACCOUNT_TYPE_CHOICES
         return context
+
+
+# ---------------------------------------------------------------------------
+# Opening balances (same tree, one amount field per postable account)
+# ---------------------------------------------------------------------------
+
+def _serialize_opening_node(node, children_map, balances, depth=0):
+    children = [_serialize_opening_node(child, children_map, balances, depth + 1) for child in children_map.get(node.id, [])]
+    zero = Decimal("0.00")
+    own = balances.get(node.code) or {"opening": zero, "movement": zero, "closing": zero}
+    data = {
+        "id": node.id,
+        "title": node.title,
+        "code": node.code,
+        "account_type": node.account_type,
+        "is_root": depth == 0,
+        "postable": not children,  # only leaves take an opening balance
+        "opening": own["opening"],
+        "movement": own["movement"],
+        "closing": own["closing"],
+        "children": children,
+    }
+    if children:  # headings roll their subtree up rather than holding a balance
+        for key in ("opening", "movement", "closing"):
+            data[key] = sum(child[key] for child in children)
+    return data
+
+
+def _build_opening_forest():
+    nodes = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE).order_by("sort_order", "id"))
+    balances = account_balances()
+    children_map: dict[int, list] = {}
+    roots = []
+    for node in nodes:
+        if node.parent_id is None:
+            roots.append(node)
+        else:
+            children_map.setdefault(node.parent_id, []).append(node)
+    return [_serialize_opening_node(root, children_map, balances) for root in roots]
+
+
+class OpeningBalanceView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.opening_balances"
+    template_name = "finance/opening_balances.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["opening_tree"] = _build_opening_forest()
+        return context
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        # Only leaves may carry an opening balance; headings roll their subtree up.
+        leaves = {node.id: node for node in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True)}
+        changed, rejected = [], 0
+        for key, raw in request.POST.items():
+            if not key.startswith("opening-"):
+                continue
+            node = leaves.get(int(key.removeprefix("opening-") or 0))
+            if node is None:
+                continue
+            try:
+                amount = Decimal((raw or "").strip() or "0")
+            except InvalidOperation:
+                rejected += 1
+                continue
+            if amount != node.opening_balance:
+                node.opening_balance = amount
+                node.updated_by = request.user
+                changed.append(node)
+        if changed:
+            ChartOfAccount.objects.bulk_update(changed, ["opening_balance", "updated_by", "updated_at"])
+        if rejected:
+            messages.error(request, f"{rejected} opening balance(s) were not a number and were skipped.")
+        messages.success(request, f"{len(changed)} opening balance(s) saved.")
+        return redirect("finance:opening_balances")
 
 
 class ChartOfAccountCreateView(PagePermissionRequiredMixin, View):
