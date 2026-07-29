@@ -47,6 +47,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Fiscal Years", permission="finance.fiscal_years.index", url_name="finance:fiscal_year_list"),
         NavigationItem("Chart of Accounts", permission="finance.accounts.index", url_name="finance:account_configuration_list"),
         NavigationItem("Chart of Accounts Tree", permission="finance.chart_of_accounts.index", url_name="finance:chart_of_accounts"),
+        NavigationItem("Opening Balances", permission="finance.opening_balances.index", url_name="finance:opening_balances"),
         NavigationItem("Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),
     )),
     NavigationItem("Employees", permission="hr.employees.index", section=SECTION_WORKFORCE, icon="E", url_name="hr:employee_list"),
