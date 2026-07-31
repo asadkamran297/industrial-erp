@@ -6,6 +6,7 @@
     </div>
     <a href="{% url 'inventory:stock_print' %}" target="_blank" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
   </div>
+  {% if control_account %}{% include "components/ui/control_account_banner.html" %}{% endif %}
   {% include "components/table/search_filters.html" %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">

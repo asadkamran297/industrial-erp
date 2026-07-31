@@ -248,7 +248,16 @@ class ItemListView(BaseSimpleListView):
     extra_context = {"title": "Inventory Items", "create_url": reverse_lazy("inventory:item_create"), "edit_url_name": "inventory:item_update", "status_toggle_url_name": "inventory:item_toggle_status", "columns": [("Name", "item_name"), ("Code", "code"), ("UOM", "uom"), ("Price", "price"), ("Status", "status_toggle")]}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+
+    def get_context_data(self, **kwargs):
+        # Items are the subsidiary ledger behind the balance sheet's Inventory
+        # account, so the page states whether the two currently agree.
+        from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
+
+        context = super().get_context_data(**kwargs)
+        context["control_account"] = inventory_control_summary()
+        return context
 
 
 class ItemToggleStatusView(InventoryManageMixin, View):
@@ -282,6 +291,15 @@ class StockListView(InventoryListMixin, ListView):
     context_object_name = "stocks"
     queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
     search_fields = ("item_code", "item_name", "inventory_item__code")
+
+    def get_context_data(self, **kwargs):
+        # Stock is the subsidiary ledger behind the balance sheet's Inventory
+        # account; the banner says whether the two currently agree.
+        from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
+
+        context = super().get_context_data(**kwargs)
+        context["control_account"] = inventory_control_summary()
+        return context
 
 
 class LedgerListView(InventoryListMixin, ListView):
