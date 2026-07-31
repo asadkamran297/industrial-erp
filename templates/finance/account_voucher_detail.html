@@ -177,7 +177,7 @@
     {# Postable leaves of the chart of accounts — the codes the line validator accepts. #}
     <datalist id="account-options">
       {% for account in active_accounts %}
-        <option value="{{ account.code }}">{{ account.code }} — {{ account.title }}</option>
+        <option value="{{ account.code }}">{{ account.title }}</option>
       {% endfor %}
     </datalist>
   {% endif %}

@@ -37,6 +37,28 @@
     </div>
   </div>
 
+  {# Workflow fields keep their defaults. #}
+  <input type="hidden" name="status" value="{{ form.status.value }}">
+  <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
+
+  <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for field in form %}{% if field.name not in hidden_header_fields %}
+      <div id="field-{{ field.name }}">
+        <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span></label>
+        {# Both account pickers share the same option list; JS filters them by role. #}
+        {% if field.name == "account_no" or field.name == "party_account_no" %}
+          <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
+            <option value="">Select account…</option>
+            {% for acc in voucher_accounts %}
+              <option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.title }}</option>
+            {% endfor %}
+          </select>
+        {% else %}{{ field }}{% endif %}
+        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}{% endfor %}
+  </div>
+
   {% if not object %}
   {# Voucher entry grid: one row per ledger line, totals must balance #}
   <div class="mb-6 rounded-lg border border-slate-200 dark:border-slate-800">
@@ -60,7 +82,7 @@
           <td class="px-3 py-1.5">
             <select name="line_account[]" class="form-select line-account">
               <option value="">Select account…</option>
-              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}">{{ acc.code }} — {{ acc.title }}</option>{% endfor %}
+              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}">{{ acc.title }}</option>{% endfor %}
             </select>
           </td>
           <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800"></td>
@@ -92,30 +114,8 @@
   </div>
   {% endcomment %}
   <p id="balance-hint" class="mb-6 hidden rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
-  <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected below — the voucher always balances.</p>
+  <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected above — the voucher always balances.</p>
   {% endif %}
-
-  {# Workflow fields keep their defaults. #}
-  <input type="hidden" name="status" value="{{ form.status.value }}">
-  <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
-
-  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {% for field in form %}{% if field.name not in hidden_header_fields %}
-      <div id="field-{{ field.name }}">
-        <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span></label>
-        {# Both account pickers share the same option list; JS filters them by role. #}
-        {% if field.name == "account_no" or field.name == "party_account_no" %}
-          <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
-            <option value="">Select account…</option>
-            {% for acc in voucher_accounts %}
-              <option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.code }} — {{ acc.title }}</option>
-            {% endfor %}
-          </select>
-        {% else %}{{ field }}{% endif %}
-        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
-      </div>
-    {% endif %}{% endfor %}
-  </div>
 
   <div class="mt-6 flex justify-end gap-3">
     <a href="{% url 'finance:account_voucher_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
