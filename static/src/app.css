@@ -127,13 +127,13 @@ body {
 }
 
 /* Inter's tabular figures: every digit takes the same width, so amount columns
- * line up on the decimal point and a number cannot shift as it updates. Applied
- * wherever figures are read in columns rather than in prose. */
+ * line up on the decimal point and a number cannot shift as it updates. Data
+ * tables and numeric inputs get this for free; elsewhere use Tailwind's
+ * `tabular-nums` utility. Figures are never set in a monospace face — Inter's
+ * tabular numerals align just as well and keep one typeface across the UI. */
 table,
 input[type="number"],
-input[type="date"],
-.font-mono,
-.tabular-nums {
+input[type="date"] {
   font-variant-numeric: tabular-nums;
 }
 

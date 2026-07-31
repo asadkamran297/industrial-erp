@@ -19,7 +19,7 @@
       {% endfor %}
       <div class="min-w-[120px]">
         <label class="mb-1 block text-xs font-medium text-slate-500">Available Qty</label>
-        <input type="text" readonly :value="availQty || '—'" class="form-input bg-slate-50 text-slate-500 cursor-default">
+        <input type="text" readonly :value="availQty || 'â€”'" class="form-input bg-slate-50 text-slate-500 cursor-default">
       </div>
       <div class="flex items-end">
         <button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add</button>
@@ -116,9 +116,9 @@
           {% for tx_id, tx in history.items %}
           <tr>
             <td class="px-4 py-3">{{ forloop.counter }}</td>
-            <td class="px-4 py-3 font-mono text-xs">{{ tx_id }}</td>
+            <td class="px-4 py-3 tabular-nums text-xs">{{ tx_id }}</td>
             <td class="px-4 py-3">{{ tx.date|date:"d-M-Y H:i" }}</td>
-            <td class="px-4 py-3">{{ tx.descr|default:"—" }}</td>
+            <td class="px-4 py-3">{{ tx.descr|default:"â€”" }}</td>
             <td class="px-4 py-3 text-right">{{ tx.rows|length }}</td>
             <td class="px-4 py-3 text-right">{{ tx.total_amount|amount }}</td>
             <td class="px-4 py-3 text-right">

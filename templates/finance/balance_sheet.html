@@ -20,8 +20,8 @@
   .bs-caret { width: .75rem; font-size: .625rem; color: rgb(100 116 139); transition: transform .15s; }
   details[open] > .bs-summary > .bs-caret { transform: rotate(90deg); }
   .bs-title { flex: 1; }
-  .bs-code { font-family: ui-monospace, monospace; font-size: .6875rem; color: rgb(100 116 139); }
-  .bs-amount { font-family: ui-monospace, monospace; text-align: right; min-width: 7rem; }
+  .bs-code { font-size: .6875rem; color: rgb(100 116 139); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .bs-amount { text-align: right; min-width: 7rem; font-variant-numeric: tabular-nums; }
 </style>
 
 <div class="mt-4 grid gap-4 md:grid-cols-2">
@@ -34,7 +34,7 @@
     {% endfor %}
     <div class="flex items-center justify-between border-t-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800">
       <span>Total Assets</span>
-      <span class="font-mono">{{ total_assets|floatformat:2 }}</span>
+      <span class="tabular-nums">{{ total_assets|floatformat:2 }}</span>
     </div>
   </section>
 
@@ -47,7 +47,7 @@
     {% endfor %}
     <div class="flex items-center justify-between border-t border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700">
       <span>Total Liabilities</span>
-      <span class="font-mono">{{ total_liabilities|floatformat:2 }}</span>
+      <span class="tabular-nums">{{ total_liabilities|floatformat:2 }}</span>
     </div>
 
     <header class="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Capital</header>
@@ -61,12 +61,12 @@
     </div>
     <div class="flex items-center justify-between border-t border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700">
       <span>Total Capital</span>
-      <span class="font-mono">{{ total_capital|floatformat:2 }}</span>
+      <span class="tabular-nums">{{ total_capital|floatformat:2 }}</span>
     </div>
 
     <div class="flex items-center justify-between border-t-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800">
       <span>Total Liabilities + Capital</span>
-      <span class="font-mono {% if total_assets != total_liabilities_and_capital %}text-rose-600{% endif %}">{{ total_liabilities_and_capital|floatformat:2 }}</span>
+      <span class="tabular-nums {% if total_assets != total_liabilities_and_capital %}text-rose-600{% endif %}">{{ total_liabilities_and_capital|floatformat:2 }}</span>
     </div>
   </section>
 </div>

@@ -19,14 +19,14 @@
     <tbody>
       {% for row in rows %}
       <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 font-mono text-xs text-slate-500">{{ row.code }}</td>
+        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
         <td class="px-3 py-1.5">{{ row.title }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.opening_dr|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.opening_cr|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.movement_dr|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.movement_cr|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.closing_dr|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.closing_cr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening_dr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening_cr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.movement_dr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.movement_cr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing_dr|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing_cr|floatformat:2 }}</td>
       </tr>
       {% empty %}
       <tr><td colspan="8" class="px-3 py-6 text-center text-sm text-slate-500">No postable accounts with a balance yet.</td></tr>
@@ -35,12 +35,12 @@
     <tfoot>
       <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
         <td class="px-3 py-2" colspan="2">Total</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_dr|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_cr|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_dr|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_cr|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_dr|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_cr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_dr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_cr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_dr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_cr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_dr|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_cr|floatformat:2 }}</td>
       </tr>
     </tfoot>
   </table>

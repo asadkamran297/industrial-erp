@@ -17,12 +17,12 @@
     <tbody>
       {% for row in rows %}
       <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 font-mono text-xs text-slate-500">{{ row.code }}</td>
+        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
         <td class="px-3 py-1.5">{{ row.title }}</td>
         <td class="px-3 py-1.5">{{ row.group }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.opening|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono {% if row.movement < 0 %}text-rose-600{% endif %}">{{ row.movement|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right font-mono">{{ row.closing|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums {% if row.movement < 0 %}text-rose-600{% endif %}">{{ row.movement|floatformat:2 }}</td>
+        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing|floatformat:2 }}</td>
       </tr>
       {% empty %}
       <tr><td colspan="6" class="px-3 py-6 text-center text-sm text-slate-500">No cash or bank accounts with a balance yet.</td></tr>
@@ -31,9 +31,9 @@
     <tfoot>
       <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
         <td class="px-3 py-2" colspan="3">Total</td>
-        <td class="px-3 py-2 text-right font-mono">{{ totals.opening|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono {% if totals.movement < 0 %}text-rose-600{% endif %}">{{ totals.movement|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right font-mono">{{ totals.closing|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums">{{ totals.opening|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement < 0 %}text-rose-600{% endif %}">{{ totals.movement|floatformat:2 }}</td>
+        <td class="px-3 py-2 text-right tabular-nums">{{ totals.closing|floatformat:2 }}</td>
       </tr>
     </tfoot>
   </table>

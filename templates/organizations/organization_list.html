@@ -36,22 +36,22 @@
                 {{ organization.title }}
                 {% if organization.address %}<div class="text-xs text-slate-400 mt-0.5">{{ organization.address|truncatechars:50 }}</div>{% endif %}
               </td>
-              <td class="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{{ organization.code }}</td>
+              <td class="px-4 py-3 tabular-nums text-xs text-slate-600 dark:text-slate-400">{{ organization.code }}</td>
               <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
                 {% if organization.phone %}<div>{{ organization.phone }}</div>{% endif %}
                 {% if organization.cell %}<div class="text-slate-400">{{ organization.cell }}</div>{% endif %}
-                {% if not organization.phone and not organization.cell %}—{% endif %}
+                {% if not organization.phone and not organization.cell %}â€”{% endif %}
               </td>
-              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{{ organization.email|default:"—" }}</td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{{ organization.email|default:"â€”" }}</td>
               <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
-                {% if organization.website %}<a href="{{ organization.website }}" target="_blank" class="text-[var(--primary-color)] hover:underline">{{ organization.website|truncatechars:30 }}</a>{% else %}—{% endif %}
+                {% if organization.website %}<a href="{{ organization.website }}" target="_blank" class="text-[var(--primary-color)] hover:underline">{{ organization.website|truncatechars:30 }}</a>{% else %}â€”{% endif %}
               </td>
-              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.parent|default:"—" }}</td>
+              <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ organization.parent|default:"â€”" }}</td>
               <td class="px-4 py-3">
                 {% with subs=organization.children.count %}
                   {% if subs %}
                     <span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">{{ subs }} sub-org{{ subs|pluralize }}</span>
-                  {% else %}—{% endif %}
+                  {% else %}â€”{% endif %}
                 {% endwith %}
               </td>
               <td class="px-4 py-3">
@@ -76,14 +76,14 @@
                 {% else %}<span class="inline-grid h-8 w-8 place-items-center rounded bg-slate-100 text-sm font-bold text-slate-400">{{ sub.title|first|upper }}</span>{% endif %}
               </td>
               <td class="px-4 py-2 pl-10 text-sm text-slate-700 dark:text-slate-300">
-                <span class="text-slate-400 mr-1">↳</span>{{ sub.title }}
+                <span class="text-slate-400 mr-1">â†³</span>{{ sub.title }}
               </td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ sub.code }}</td>
-              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.phone|default:"—" }}</td>
-              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.email|default:"—" }}</td>
-              <td class="px-4 py-2 text-xs text-slate-500">—</td>
+              <td class="px-4 py-2 tabular-nums text-xs text-slate-500">{{ sub.code }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.phone|default:"â€”" }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">{{ sub.email|default:"â€”" }}</td>
+              <td class="px-4 py-2 text-xs text-slate-500">â€”</td>
               <td class="px-4 py-2 text-xs text-slate-500">{{ sub.parent.title }}</td>
-              <td class="px-4 py-2">—</td>
+              <td class="px-4 py-2">â€”</td>
               <td class="px-4 py-2">
                 <span class="rounded-full px-2 py-0.5 text-xs font-medium
                   {% if sub.status == 'active' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
