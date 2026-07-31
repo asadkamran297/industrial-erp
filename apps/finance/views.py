@@ -18,7 +18,7 @@ from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, cash_bank_account_codes, money_account_codes, receivable_account_codes, sync_customer_from_coa
+from .services import account_balances, account_role, cash_bank_account_codes, dr_cr_to_signed, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -459,6 +459,9 @@ def _serialize_opening_node(node, children_map, balances, depth=0):
     children = [_serialize_opening_node(child, children_map, balances, depth + 1) for child in children_map.get(node.id, [])]
     zero = Decimal("0.00")
     own = balances.get(node.code) or {"opening": zero, "movement": zero, "closing": zero}
+    opening_dr, opening_cr = signed_to_dr_cr(own["opening"], node.account_type)
+    movement_dr, movement_cr = signed_to_dr_cr(own["movement"], node.account_type)
+    closing_dr, closing_cr = signed_to_dr_cr(own["closing"], node.account_type)
     data = {
         "id": node.id,
         "title": node.title,
@@ -467,12 +470,20 @@ def _serialize_opening_node(node, children_map, balances, depth=0):
         "is_root": depth == 0,
         "postable": not children,  # only leaves take an opening balance
         "opening": own["opening"],
+        "opening_dr": opening_dr,
+        "opening_cr": opening_cr,
         "movement": own["movement"],
+        "movement_dr": movement_dr,
+        "movement_cr": movement_cr,
         "closing": own["closing"],
+        "closing_dr": closing_dr,
+        "closing_cr": closing_cr,
         "children": children,
     }
     if children:  # headings roll their subtree up rather than holding a balance
         for key in ("opening", "movement", "closing"):
+            data[key] = sum(child[key] for child in children)
+        for key in ("opening_dr", "opening_cr", "movement_dr", "movement_cr", "closing_dr", "closing_cr"):
             data[key] = sum(child[key] for child in children)
     return data
 
@@ -496,25 +507,36 @@ class OpeningBalanceView(PagePermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["opening_tree"] = _build_opening_forest()
+        tree = _build_opening_forest()
+        context["opening_tree"] = tree
+        # Roots are ASSETS / LIABILITIES / CAPITAL / REVENUE / EXPENSE — summing their
+        # debit vs credit sides across the whole tree is the accounting-equation check:
+        # total debit-natured (assets, expenses) must equal total credit-natured
+        # (liabilities, capital, revenue) once opening balances are entered correctly.
+        keys = ("opening_dr", "opening_cr", "movement_dr", "movement_cr", "closing_dr", "closing_cr")
+        context["grand_totals"] = {key: sum((root[key] for root in tree), Decimal("0.00")) for key in keys}
         return context
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         # Only leaves may carry an opening balance; headings roll their subtree up.
         leaves = {node.id: node for node in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True)}
+
+        def parse(prefix, node_id):
+            raw = (request.POST.get(f"{prefix}-{node_id}") or "").strip()
+            return Decimal(raw) if raw else Decimal("0.00")
+
         changed, rejected = [], 0
-        for key, raw in request.POST.items():
-            if not key.startswith("opening-"):
+        for node_id in leaves:
+            if f"opening_dr-{node_id}" not in request.POST and f"opening_cr-{node_id}" not in request.POST:
                 continue
-            node = leaves.get(int(key.removeprefix("opening-") or 0))
-            if node is None:
-                continue
+            node = leaves[node_id]
             try:
-                amount = Decimal((raw or "").strip() or "0")
+                debit, credit = parse("opening_dr", node_id), parse("opening_cr", node_id)
             except InvalidOperation:
                 rejected += 1
                 continue
+            amount = dr_cr_to_signed(debit, credit, node.account_type)
             if amount != node.opening_balance:
                 node.opening_balance = amount
                 node.updated_by = request.user
@@ -525,6 +547,36 @@ class OpeningBalanceView(PagePermissionRequiredMixin, TemplateView):
             messages.error(request, f"{rejected} opening balance(s) were not a number and were skipped.")
         messages.success(request, f"{len(changed)} opening balance(s) saved.")
         return redirect("finance:opening_balances")
+
+
+class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.trial_balance"
+    template_name = "finance/trial_balance.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        balances = account_balances()
+        zero = Decimal("0.00")
+        rows, totals = [], {"opening_dr": zero, "opening_cr": zero, "movement_dr": zero, "movement_cr": zero, "closing_dr": zero, "closing_cr": zero}
+        accounts = ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code")
+        for account in accounts:
+            own = balances.get(account.code) or {"opening": zero, "movement": zero, "closing": zero}
+            opening_dr, opening_cr = signed_to_dr_cr(own["opening"], account.account_type)
+            movement_dr, movement_cr = signed_to_dr_cr(own["movement"], account.account_type)
+            closing_dr, closing_cr = signed_to_dr_cr(own["closing"], account.account_type)
+            if not any((opening_dr, opening_cr, movement_dr, movement_cr, closing_dr, closing_cr)):
+                continue
+            rows.append({
+                "code": account.code, "title": account.title, "account_type": account.account_type,
+                "opening_dr": opening_dr, "opening_cr": opening_cr,
+                "movement_dr": movement_dr, "movement_cr": movement_cr,
+                "closing_dr": closing_dr, "closing_cr": closing_cr,
+            })
+            for key in totals:
+                totals[key] += rows[-1][key]
+        context["rows"] = rows
+        context["totals"] = totals
+        return context
 
 
 class ChartOfAccountCreateView(PagePermissionRequiredMixin, View):

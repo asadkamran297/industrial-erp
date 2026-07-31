@@ -934,7 +934,11 @@ class CustomerCreateView(InventoryManageMixin, CreateView):
         creating = self.object is None  # None on create, set on update
         response = super().form_valid(form)
         if creating:
-            create_customer_receivable_account(customer=self.object, user=self.request.user)
+            node = create_customer_receivable_account(customer=self.object, user=self.request.user)
+            opening_balance = form.cleaned_data.get("opening_balance")
+            if node and opening_balance:
+                node.opening_balance = opening_balance
+                node.save(update_fields=["opening_balance", "updated_at"])
         return response
 
 

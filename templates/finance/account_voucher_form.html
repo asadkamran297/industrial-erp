@@ -154,6 +154,14 @@
     return HEADER_ROLES[hidden.value];
   }
 
+  // "Received In" (and similar header account pickers) need nothing extra when
+  // the chosen account is a Cash account — no payment method, no bank/cheque details.
+  function headerIsCash() {
+    if (!acct) return false;
+    const opt = acct.options[acct.selectedIndex];
+    return !!opt && opt.dataset.role === 'cash';
+  }
+
   function setLabel(fieldName, text) {
     const el = document.getElementById('label-' + fieldName);
     if (el && text) el.textContent = text;
@@ -203,7 +211,7 @@
     const showParty = showSettlement && mode === 'cash';
     toggleField('settlement_mode', showSettlement);
     toggleField('party_account_no', showParty);
-    toggleField('payment_method', !showSettlement || mode === 'cash');
+    toggleField('payment_method', (!showSettlement || mode === 'cash') && !headerIsCash());
 
     setLabel('settlement_mode', labels.settlement);
     setLabel('party_account_no', labels.party);
@@ -315,6 +323,7 @@
   });
 
   if (settlement) settlement.addEventListener('change', refresh);
+  if (acct) acct.addEventListener('change', refresh);
 
   function refresh() {
     filterAccounts();

@@ -1,6 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Opening Balances" subtitle="One opening amount per postable account. Movement and closing update with every voucher." %}
+{% include "components/ui/page_header.html" with title="Opening Balances" subtitle="Enter each account's opening balance on its Debit or Credit side. Movement and closing update with every voucher." %}
 
 <style>
   .ob-wrap{--ob-line:#e2e8f0;--ob-line-d:#334155;
@@ -46,7 +46,7 @@
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;padding:.25rem .5rem;}
   .ob-rollup{font-weight:600;color:#475569;}
   .dark .ob-rollup{color:#cbd5e1;}
-  .ob-num.is-negative{color:#e11d48;}
+  .ob-num.is-negative,.ob-rollup.is-negative{color:#e11d48;}
 
   .ob-head{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid var(--ob-line);border-radius:0;}
   .dark .ob-head{border-bottom-color:var(--ob-line-d);}
@@ -65,7 +65,8 @@
     <div class="ob-card">
       <div class="ob-head">
         <span class="ob-head-account">Account</span>
-        <span>Opening</span>
+        <span>Debit</span>
+        <span>Credit</span>
         <span>Movement</span>
         <span>Closing</span>
       </div>
@@ -74,12 +75,26 @@
           {% include "finance/_opening_node.html" with node=node %}
         {% endfor %}
       </ul>
+      <div class="ob-row ob-foot" style="border-top:1px solid var(--ob-line);font-weight:700;">
+        <span class="ob-title">Total (live, from the Debit/Credit inputs above)</span>
+        <span class="ob-rollup" id="ob-total-dr">0.00</span>
+        <span class="ob-rollup" id="ob-total-cr">0.00</span>
+        <span class="ob-num"></span>
+        <span class="ob-num"></span>
+      </div>
+      <div class="ob-row ob-foot" style="font-weight:700;">
+        <span class="ob-title">Total (saved, whole ledger)</span>
+        <span class="ob-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|floatformat:2 }}</span>
+        <span class="ob-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|floatformat:2 }}</span>
+        <span class="ob-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|floatformat:2 }} / {{ grand_totals.movement_cr|floatformat:2 }}</span>
+        <span class="ob-num {% if grand_totals.closing_dr != grand_totals.closing_cr %}is-negative{% endif %}">{{ grand_totals.closing_dr|floatformat:2 }} / {{ grand_totals.closing_cr|floatformat:2 }}</span>
+      </div>
     </div>
 
     <div class="mt-4 flex items-center justify-between gap-3">
-      <p class="text-xs text-slate-500">
-        Amounts are on each account&rsquo;s natural side &mdash; a positive number means a debit balance for
-        assets and expenses, and a credit balance for liabilities, revenue and capital.
+      <p class="text-xs" id="ob-tally-hint">
+        Receivable/asset opening balances go under Debit; payable/liability balances go under Credit.
+        Debit and Credit totals must match before saving.
       </p>
       <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save Opening Balances</button>
     </div>
@@ -107,6 +122,27 @@
   root.querySelectorAll('.ob-num').forEach(el => {
     el.classList.toggle('is-negative', parseFloat(el.textContent) < 0);
   });
+
+  // Debit/Credit totals must tally before the opening balances can be trusted.
+  const totalDr = document.getElementById('ob-total-dr');
+  const totalCr = document.getElementById('ob-total-cr');
+  const tallyHint = document.getElementById('ob-tally-hint');
+  function recalcTotals() {
+    let dr = 0, cr = 0;
+    root.querySelectorAll('.ob-dr-input').forEach(el => { dr += parseFloat(el.value) || 0; });
+    root.querySelectorAll('.ob-cr-input').forEach(el => { cr += parseFloat(el.value) || 0; });
+    totalDr.textContent = dr.toFixed(2);
+    totalCr.textContent = cr.toFixed(2);
+    const balanced = Math.abs(dr - cr) < 0.005;
+    totalDr.classList.toggle('is-negative', !balanced);
+    totalCr.classList.toggle('is-negative', !balanced);
+    if (tallyHint) tallyHint.classList.toggle('text-rose-600', !balanced);
+    if (tallyHint) tallyHint.classList.toggle('text-slate-500', balanced);
+  }
+  root.addEventListener('input', (e) => {
+    if (e.target.classList.contains('ob-dr-input') || e.target.classList.contains('ob-cr-input')) recalcTotals();
+  });
+  recalcTotals();
 
   // Search: show a node when it matches, plus every ancestor that leads to it.
   const search = document.getElementById('ob-search');

@@ -355,7 +355,8 @@ class AccountVoucher(BaseModel):
             errors["party_account_no"] = f"Choose a {wanted} account."
 
         # Credit vouchers move no money, so they carry no payment method at all.
-        if self.settlement_mode == SETTLEMENT_CREDIT:
+        # Same for a cash-account header: cash needs no cheque/bank/wallet details.
+        if self.settlement_mode == SETTLEMENT_CREDIT or role == "cash":
             self.payment_method = None
 
         # Payment method drives which extra fields apply; the rest are cleared so a

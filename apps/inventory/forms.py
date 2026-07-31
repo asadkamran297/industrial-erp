@@ -129,6 +129,8 @@ class ManualTransactionForm(StyledModelForm):
 
 
 class CustomerForm(StyledModelForm):
+    opening_balance = forms.DecimalField(max_digits=14, decimal_places=2, required=False, initial=0, label="Opening Balance")
+
     class Meta:
         model = Customer
         fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "is_default", "status", "remarks")

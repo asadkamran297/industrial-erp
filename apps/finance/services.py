@@ -65,6 +65,21 @@ def create_customer_receivable_account(*, customer, user=None):
     return node
 
 
+def signed_to_dr_cr(amount, account_type):
+    """Split a natural-side-signed amount into (debit, credit) display amounts."""
+    zero = Decimal("0.00")
+    debit_natured = account_type in DEBIT_NATURE_TYPES
+    if debit_natured:
+        return (amount, zero) if amount >= 0 else (zero, -amount)
+    return (zero, amount) if amount >= 0 else (-amount, zero)
+
+
+def dr_cr_to_signed(debit, credit, account_type):
+    """Inverse of signed_to_dr_cr: fold a (debit, credit) pair back to one signed amount."""
+    net = debit - credit
+    return net if account_type in DEBIT_NATURE_TYPES else -net
+
+
 def _descendant_leaf_codes(group):
     """Return codes of all postable (leaf) accounts under a group node."""
     codes = []
