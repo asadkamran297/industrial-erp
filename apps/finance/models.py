@@ -400,12 +400,27 @@ class AccountVoucher(BaseModel):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
-        if not self.voucher_no:
-            prefix = FIN_VOUCHER_PREFIX_MAP.get(self.voucher_type, "V")
-            last_id = AccountVoucher.all_objects.order_by("-id").values_list("id", flat=True).first() or 0
-            self.voucher_no = f"{prefix}-{last_id + 1:06d}"
-        self.full_clean()
-        super().save(*args, **kwargs)
+        from django.db import IntegrityError, transaction as db_transaction
+
+        from .services import next_voucher_number
+
+        if self.voucher_no:
+            self.full_clean()
+            return super().save(*args, **kwargs)
+
+        # Numbering is max-of-this-type + 1, so two simultaneous saves can
+        # derive the same number. voucher_no is unique, so the loser hits the
+        # constraint; re-derive and retry rather than surfacing an error.
+        self.full_clean(exclude=["voucher_no"])
+        for _attempt in range(5):
+            self.voucher_no = next_voucher_number(self.voucher_type)
+            try:
+                with db_transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.voucher_no = ""
+                self.pk = None
+        raise IntegrityError("Could not allocate a unique voucher number after several attempts.")
 
     def recalculate_totals(self, save=True):
         debit_total = Decimal("0.00")

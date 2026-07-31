@@ -5,18 +5,35 @@
 <form method="post" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
   {% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
 
-  {# Single-select voucher-type picker (one active at a time) #}
+  {% comment %}Voucher type, with the number and date it will carry sitting
+     beside it — the three facts that identify the voucher, read together
+     before any of the entry below is filled in.{% endcomment %}
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
-  <div class="mb-6">
-    <p class="mb-2 text-sm font-medium">Voucher Type</p>
-    <div class="flex flex-wrap gap-2" id="voucher-type-picker">
-      {% for code, label, fkey, prefix in voucher_type_meta %}
-      <button type="button" data-code="{{ code }}"
-        class="vtype-btn inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition {% if code == selected_voucher_type %}border-[var(--primary-color)] bg-[var(--primary-color)] text-white{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}"
-        {% if object %}disabled{% endif %}>
-        {{ label }}
-      </button>
-      {% endfor %}
+  <div class="mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+    <div>
+      <p class="mb-2 text-sm font-medium">Voucher Type</p>
+      <div class="flex flex-wrap gap-2" id="voucher-type-picker">
+        {% for code, label, fkey, prefix in voucher_type_meta %}
+        <button type="button" data-code="{{ code }}"
+          class="vtype-btn inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition {% if code == selected_voucher_type %}border-[var(--primary-color)] bg-[var(--primary-color)] text-white{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}"
+          {% if object %}disabled{% endif %}>
+          {{ label }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-start gap-4">
+      <div class="w-44">
+        <label class="mb-2 block text-sm font-medium" for="voucher-no-preview">Voucher No</label>
+        <input id="voucher-no-preview" class="form-input w-full tabular-nums font-semibold" type="text"
+               value="{{ next_voucher_no }}" readonly>
+      </div>
+      <div class="w-48">
+        <label class="mb-2 block text-sm font-medium" for="id_voucher_date">Voucher Date</label>
+        <input id="id_voucher_date" class="form-input w-full" type="date" name="voucher_date"
+               value="{{ form.voucher_date.value|date:'Y-m-d' }}">
+      </div>
     </div>
   </div>
 
@@ -78,8 +95,7 @@
   <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected below — the voucher always balances.</p>
   {% endif %}
 
-  {# Off-screen header fields: date is always today, workflow fields keep their defaults. #}
-  <input type="hidden" name="voucher_date" value="{{ form.voucher_date.value|date:'Y-m-d' }}">
+  {# Workflow fields keep their defaults. #}
   <input type="hidden" name="status" value="{{ form.status.value }}">
   <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
 
@@ -320,7 +336,35 @@
     });
     if (settlement) settlement.value = '';  // a fresh type re-asks cash vs credit
     refresh();
+    loadNextVoucherNo();
   });
+
+  // Each voucher type numbers itself, so the preview is re-fetched whenever
+  // the type changes. It is advisory: the number is finally allocated on save,
+  // which re-derives it and retries if someone else took it first.
+  const noField = document.getElementById('voucher-no-preview');
+  let noRequest = 0;
+
+  function loadNextVoucherNo() {
+    if (!noField || !hidden.value) return;
+    const ticket = ++noRequest;
+    const previous = noField.value;   // keep it, in case the request fails
+    noField.value = '…';
+    fetch('{% url "finance:next_voucher_number" %}?voucher_type=' + encodeURIComponent(hidden.value), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        if (ticket !== noRequest) return;   // a later type change already won
+        noField.value = data.voucher_no;
+      })
+      // Restore what was showing rather than blanking a good value. The real
+      // number is allocated on save either way.
+      .catch(() => { if (ticket === noRequest) noField.value = previous; });
+  }
+
+  // No fetch on load: the server already rendered the right number for the
+  // selected type. Fetching here would only risk replacing a good value.
 
   if (settlement) settlement.addEventListener('change', refresh);
   if (acct) acct.addEventListener('change', refresh);

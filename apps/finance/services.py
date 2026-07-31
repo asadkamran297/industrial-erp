@@ -27,6 +27,7 @@ from apps.core.constants import (
     GL_SALES_DISCOUNT_PATH,
     GL_SALES_RETURN_PATH,
     GL_SALES_REVENUE_PATH,
+    FIN_VOUCHER_PREFIX_MAP,
     GL_SALES_TAX_PAYABLE_PATH,
     INVENTORY_ADJUSTMENT_REASONS,
     SETTLEMENT_CASH,
@@ -898,6 +899,33 @@ _SOURCE_KINDS = (
     ("inventory_adjustment:", "Stock Adjustment"),
     ("period_close:", "Period Close"),
 )
+
+
+def next_voucher_number(voucher_type: str) -> str:
+    """The next number in this voucher type's own sequence.
+
+    Each type counts independently — payments run E-000001, E-000002 … while
+    receipts run R-000001 … — so a gap in one book does not shift another.
+    Numbering previously used the table's highest id, which meant the first
+    receipt could be numbered R-000015 simply because payments had been
+    entered first.
+
+    Advisory only when shown on a form: two people opening the form at once
+    would see the same number, so ``AccountVoucher.save()`` re-derives it and
+    retries on the unique constraint.
+    """
+    import re
+
+    prefix = FIN_VOUCHER_PREFIX_MAP.get(voucher_type, "V")
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
+    highest = 0
+    for number in AccountVoucher.all_objects.filter(voucher_type=voucher_type).values_list(
+        "voucher_no", flat=True
+    ):
+        match = pattern.match(number or "")
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"{prefix}-{highest + 1:06d}"
 
 
 def voucher_kind(voucher) -> str:

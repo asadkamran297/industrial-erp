@@ -21,7 +21,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa, voucher_kind
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class AuditSaveMixin:
@@ -165,12 +165,16 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
     def get_initial(self):
         initial = super().get_initial()
         initial["voucher_type"] = self._selected_type()
+        initial.setdefault("voucher_date", timezone.localdate())
         return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["voucher_type_meta"] = FIN_VOUCHER_TYPE_META
         context["selected_voucher_type"] = self._selected_type()
+        # Rendered server-side so the number is present before JavaScript runs;
+        # the fetch then keeps it in step as the type changes.
+        context["next_voucher_no"] = next_voucher_number(self._selected_type())
         # Last (childless) nodes of the chart of accounts are the postable ones.
         money_groups = money_account_codes()
         customer_codes = receivable_account_codes()
@@ -302,6 +306,22 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
             messages.error(request, "Posted voucher cannot be updated.")
             return redirect("finance:account_voucher_list")
         return super().dispatch(request, *args, **kwargs)
+
+
+class NextVoucherNumberView(PagePermissionRequiredMixin, View):
+    """Next number in a voucher type's sequence, for the entry form."""
+
+    page = "finance.vouchers"
+
+    def get(self, request):
+        voucher_type = (request.GET.get("voucher_type") or "").strip()
+        valid = {code for code, _label in FIN_VOUCHER_TYPE_CHOICES}
+        if voucher_type not in valid:
+            return JsonResponse({"error": "Unknown voucher type."}, status=400)
+        return JsonResponse({
+            "voucher_type": voucher_type,
+            "voucher_no": next_voucher_number(voucher_type),
+        })
 
 
 class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
