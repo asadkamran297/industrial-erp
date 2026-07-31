@@ -4,7 +4,7 @@
       <span class="tree-caret tree-caret--static" aria-hidden="true">&#9656;</span>
       <span class="tree-title">{{ node.title }}</span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
-      <span class="tree-amount">{{ node.amount|floatformat:2 }}</span>
+      <span class="tree-amount">{{ node.amount|amount }}</span>
     </summary>
     {% for child in node.children %}
       {% include "finance/_balance_sheet_node.html" with node=child %}
@@ -16,7 +16,7 @@
       <span class="tree-caret tree-caret--static" aria-hidden="true"></span>
       <span class="tree-title">{{ node.title }}</span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
-      <span class="tree-amount">{{ node.amount|floatformat:2 }}</span>
+      <span class="tree-amount">{{ node.amount|amount }}</span>
     </div>
     {% for child in node.children %}
       {% include "finance/_balance_sheet_node.html" with node=child %}

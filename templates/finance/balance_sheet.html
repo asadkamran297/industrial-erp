@@ -12,7 +12,7 @@
     {% endfor %}
     <div class="statement-total statement-total--grand">
       <span>Total Assets</span>
-      <span class="tree-amount">{{ total_assets|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_assets|amount }}</span>
     </div>
   </section>
 
@@ -25,7 +25,7 @@
     {% endfor %}
     <div class="statement-total">
       <span>Total Liabilities</span>
-      <span class="tree-amount">{{ total_liabilities|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_liabilities|amount }}</span>
     </div>
 
     <header class="statement-header statement-header--divided">Capital</header>
@@ -37,16 +37,16 @@
     <div class="tree-row tree-row--flat" style="--depth: 1">
       <span class="tree-caret tree-caret--static"></span>
       <span class="tree-title">Net Profit / Loss (life-to-date)</span>
-      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|floatformat:2 }}</span>
+      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|amount }}</span>
     </div>
     <div class="statement-total">
       <span>Total Capital</span>
-      <span class="tree-amount">{{ total_capital|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_capital|amount }}</span>
     </div>
 
     <div class="statement-total statement-total--grand">
       <span>Total Liabilities + Capital</span>
-      <span class="tree-amount{% if total_assets != total_liabilities_and_capital %} is-negative{% endif %}">{{ total_liabilities_and_capital|floatformat:2 }}</span>
+      <span class="tree-amount{% if total_assets != total_liabilities_and_capital %} is-negative{% endif %}">{{ total_liabilities_and_capital|amount }}</span>
     </div>
   </section>
 </div>

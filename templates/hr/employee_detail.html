@@ -110,7 +110,7 @@
       {% include "hr/_info_card.html" with icon="💼" label="Designation" value=employee.designation|default:"—" %}
       {% include "hr/_info_card.html" with icon="📋" label="Job Type" value=employee.job_type|default:"—" %}
       {% include "hr/_info_card.html" with icon="📅" label="Date of Joining" value=employee.doj|date:"d M Y"|default:"—" %}
-      {% include "hr/_info_card.html" with icon="💰" label="Base Salary (PKR)" value=employee.salary %}
+      {% include "hr/_info_card.html" with icon="💰" label="Base Salary (PKR)" value=employee.salary|amount %}
       {% include "hr/_info_card.html" with icon="🏦" label="Bank" value=employee.bank|default:"—" %}
       {% include "hr/_info_card.html" with icon="🔢" label="Account Number" value=employee.account_number|default:"—" %}
       {% include "hr/_info_card.html" with icon="🤖" label="Attendance Code" value=employee.att_machine_code|default:"—" %}
@@ -345,10 +345,10 @@
           {% for p in payrolls %}
           <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
             <td class="px-5 py-3 font-semibold text-slate-800 dark:text-slate-100">{{ p.month }}/{{ p.year }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ p.base_salary|floatformat:0 }}</td>
-            <td class="px-5 py-3 font-medium text-emerald-600">+{{ p.total_allowances|floatformat:0 }}</td>
-            <td class="px-5 py-3 font-medium text-rose-500">-{{ p.total_deductions|floatformat:0 }}</td>
-            <td class="px-5 py-3 text-base font-extrabold text-slate-900 dark:text-white">{{ p.net_salary|floatformat:0 }}</td>
+            <td class="px-5 py-3 text-slate-500">{{ p.base_salary|amount }}</td>
+            <td class="px-5 py-3 font-medium text-emerald-600">+{{ p.total_allowances|amount }}</td>
+            <td class="px-5 py-3 font-medium text-rose-500">-{{ p.total_deductions|amount }}</td>
+            <td class="px-5 py-3 text-base font-extrabold text-slate-900 dark:text-white">{{ p.net_salary|amount }}</td>
             <td class="px-5 py-3">
               <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 {{ p.get_status_display }}

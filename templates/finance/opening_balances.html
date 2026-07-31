@@ -33,10 +33,10 @@
       </div>
       <div class="tree-row tree-foot tree-foot--last">
         <span class="tree-title">Total (saved, whole ledger)</span>
-        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|floatformat:2 }}</span>
-        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|floatformat:2 }}</span>
-        <span class="tree-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|floatformat:2 }} / {{ grand_totals.movement_cr|floatformat:2 }}</span>
-        <span class="tree-num {% if grand_totals.closing_dr != grand_totals.closing_cr %}is-negative{% endif %}">{{ grand_totals.closing_dr|floatformat:2 }} / {{ grand_totals.closing_cr|floatformat:2 }}</span>
+        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|amount }}</span>
+        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|amount }}</span>
+        <span class="tree-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|amount }} / {{ grand_totals.movement_cr|amount }}</span>
+        <span class="tree-num {% if grand_totals.closing_dr != grand_totals.closing_cr %}is-negative{% endif %}">{{ grand_totals.closing_dr|amount }} / {{ grand_totals.closing_cr|amount }}</span>
       </div>
     </div>
 

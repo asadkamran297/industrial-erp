@@ -6,18 +6,20 @@
     {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
 
     {% if node.postable %}
+      {# Raw, unseparated values: <input type="number"> rejects "1,234.00" and
+         would silently blank the field, losing the balance on save. #}
       <input type="number" step="0.01" name="opening_dr-{{ node.id }}" value="{{ node.opening_dr|floatformat:2 }}"
              class="tree-input tree-dr-input" aria-label="Opening debit for {{ node.title }}">
       <input type="number" step="0.01" name="opening_cr-{{ node.id }}" value="{{ node.opening_cr|floatformat:2 }}"
              class="tree-input tree-cr-input" aria-label="Opening credit for {{ node.title }}">
     {% else %}
       {# Headings hold no balance of their own — this is the subtree total. #}
-      <span class="tree-rollup">{{ node.opening_dr|floatformat:2 }}</span>
-      <span class="tree-rollup">{{ node.opening_cr|floatformat:2 }}</span>
+      <span class="tree-rollup">{{ node.opening_dr|amount }}</span>
+      <span class="tree-rollup">{{ node.opening_cr|amount }}</span>
     {% endif %}
 
-    <span class="tree-num">{{ node.movement|floatformat:2 }}</span>
-    <span class="tree-num">{{ node.closing|floatformat:2 }}</span>
+    <span class="tree-num">{{ node.movement|amount }}</span>
+    <span class="tree-num">{{ node.closing|amount }}</span>
   </div>
   {% if node.children %}
     <ul class="tree-list tree-children">

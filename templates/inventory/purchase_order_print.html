@@ -57,13 +57,13 @@
         <th></th>
         <th class="num">{{ total_discount|amount }}</th>
         <th></th>
-        <th class="num">{{ grand_total|floatformat:2 }}</th>
+        <th class="num">{{ grand_total|amount }}</th>
       </tr>
     </tfoot>
   </table>
 
   <div class="totals">
-    <div><b>Total Amount:</b> {{ grand_total|floatformat:2 }}</div>
+    <div><b>Total Amount:</b> {{ grand_total|amount }}</div>
     <div class="words">Total in Words: {{ amount_in_words }}</div>
   </div>
 

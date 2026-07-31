@@ -9,14 +9,14 @@
       <div class="tree-row tree-row--flat" style="--depth: 2">
         <span class="tree-title">{{ row.title }}</span>
         <span class="tree-code">{{ row.code }}</span>
-        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|amount }}</span>
       </div>
     {% endfor %}
     {% for row in expense %}
       <div class="tree-row tree-row--flat" style="--depth: 2">
         <span class="tree-title">{{ row.title }}</span>
         <span class="tree-code">{{ row.code }}</span>
-        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|amount }}</span>
       </div>
     {% endfor %}
     {% if not has_balances %}
@@ -24,7 +24,7 @@
     {% endif %}
     <div class="statement-total statement-total--grand">
       <span>{% if net_profit >= 0 %}Profit{% else %}Loss{% endif %} to Retained Earnings</span>
-      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|floatformat:2 }}</span>
+      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|amount }}</span>
     </div>
   </section>
 

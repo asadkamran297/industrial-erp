@@ -10,35 +10,35 @@
         <div class="tree-row tree-row--flat" style="--depth: 2">
           <span class="tree-title">{{ row.title }}</span>
           <span class="tree-code">{{ row.code }}</span>
-          <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+          <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|amount }}</span>
         </div>
       {% empty %}
         <p class="statement-empty">No cash movement from {{ section.label|lower }}.</p>
       {% endfor %}
       <div class="statement-total">
         <span>Net cash from {{ section.label|lower }}</span>
-        <span class="tree-amount{% if section.subtotal < 0 %} is-negative{% endif %}">{{ section.subtotal|floatformat:2 }}</span>
+        <span class="tree-amount{% if section.subtotal < 0 %} is-negative{% endif %}">{{ section.subtotal|amount }}</span>
       </div>
     {% endfor %}
 
     {# Opening + movement = closing. This is the statement's own proof. #}
     <div class="statement-total statement-total--grand">
       <span>Cash at start of period</span>
-      <span class="tree-amount">{{ opening|floatformat:2 }}</span>
+      <span class="tree-amount">{{ opening|amount }}</span>
     </div>
     <div class="statement-total">
       <span>Net increase / (decrease) in cash</span>
-      <span class="tree-amount{% if net_movement < 0 %} is-negative{% endif %}">{{ net_movement|floatformat:2 }}</span>
+      <span class="tree-amount{% if net_movement < 0 %} is-negative{% endif %}">{{ net_movement|amount }}</span>
     </div>
     <div class="statement-total statement-total--grand">
       <span>Cash at end of period</span>
-      <span class="tree-amount">{{ closing|floatformat:2 }}</span>
+      <span class="tree-amount">{{ closing|amount }}</span>
     </div>
   </section>
 
   {% if not reconciles %}
     <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
-      Cash moved by <span class="tabular-nums font-semibold">{{ difference|floatformat:2 }}</span> that these activities do not
+      Cash moved by <span class="tabular-nums font-semibold">{{ difference|amount }}</span> that these activities do not
       explain. That gap means a cash entry has no counterpart to attribute it to — check for one-sided or unbalanced vouchers.
     </p>
   {% endif %}
