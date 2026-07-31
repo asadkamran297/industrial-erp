@@ -17,7 +17,12 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.inventory.models import InventoryItem, Stock
+from apps.inventory.models import (
+    InventoryItem,
+    PurchaseOrderItem,
+    PurchaseOrderItemReceived,
+    Stock,
+)
 
 # item_code -> (unit cost, selling price)
 MARKET_PRICES: dict[str, tuple[Decimal, Decimal]] = {
@@ -77,6 +82,17 @@ class Command(BaseCommand):
             if item:
                 item.price = price
                 item.save(update_fields=["price", "updated_at"])
+
+            # The purchase trail carries its own copy of the price. Left alone,
+            # the bad figure keeps driving the purchase report and the
+            # dashboard trend even after stock has been corrected.
+            if item:
+                PurchaseOrderItem.all_objects.filter(inventory_item=item).update(
+                    rate=cost, retail_price=cost
+                )
+                PurchaseOrderItemReceived.all_objects.filter(inventory_item=item).update(
+                    retail_price=cost
+                )
             changed += 1
 
         after_value = before_value if dry_run else self._stock_value()

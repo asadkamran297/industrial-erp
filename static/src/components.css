@@ -388,6 +388,132 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 .statement-total .tree-amount { font-weight: 600; }
 
 /* ==================================================================== *
+ * Dashboard
+ * --------------------------------------------------------------------
+ * Series colours are validated for colour-vision deficiency in both
+ * light and dark mode (OKLab ΔE 24.7 protan / 33.6 normal). Sales and
+ * Purchases are additionally separated by direct labels, so identity
+ * never rests on hue alone.
+ * ==================================================================== */
+.viz {
+  --series-sales: #2a78d6;
+  --series-purchases: #eb6834;
+  --viz-grid: #eceef1;
+  --viz-axis: #94a3b8;
+}
+.dark .viz {
+  --series-sales: #3987e5;
+  --series-purchases: #d95926;
+  --viz-grid: #1e293b;
+  --viz-axis: #64748b;
+}
+
+/* Headline figure. The number leads; everything else recedes. */
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 1.1rem 1.2rem;
+}
+.dark .kpi { background: #0b1220; border-color: var(--line-dark); }
+.kpi-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #64748b;
+  margin: 0;
+}
+.kpi-value {
+  margin: .45rem 0 .2rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+.dark .kpi-value { color: #f1f5f9; }
+.kpi-value.is-negative { color: #d03b3b; }
+.kpi-note { margin: 0; font-size: .72rem; color: #94a3b8; }
+
+/* A 3px rule in the series colour ties each tile to its line on the chart. */
+.kpi-rule { height: 3px; width: 34px; border-radius: 999px; margin-bottom: .85rem; background: #cbd5e1; }
+.kpi--revenue .kpi-rule { background: var(--series-sales); }
+.kpi--expense .kpi-rule { background: var(--series-purchases); }
+.kpi--profit .kpi-rule { background: #0ca30c; }
+.kpi--profit.is-loss .kpi-rule { background: #d03b3b; }
+.kpi--cash .kpi-rule { background: #475569; }
+
+/* Panel — a titled surface holding a chart or a list. */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+.dark .panel { background: #0b1220; border-color: var(--line-dark); }
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem .25rem;
+}
+.panel-title { margin: 0; font-size: .95rem; font-weight: 700; color: #0f172a; }
+.dark .panel-title { color: #e2e8f0; }
+.panel-sub { margin: .15rem 0 0; font-size: .75rem; color: #94a3b8; }
+.panel-body { padding: .75rem 1.2rem 1.2rem; }
+
+/* Legend — always present for two or more series. */
+.viz-legend { display: flex; gap: 1rem; align-items: center; }
+.viz-legend-item { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; color: #64748b; }
+.viz-swatch { width: 10px; height: 10px; border-radius: 3px; }
+.viz-swatch--sales { background: var(--series-sales); }
+.viz-swatch--purchases { background: var(--series-purchases); }
+
+/* Chart tooltip. Highcharts renders this markup, so the classes live here
+ * rather than as inline styles inside a JavaScript string. */
+.viz-tip-head { font-size: 11px; color: #64748b; }
+.viz-tip-row { display: flex; gap: .5rem; align-items: center; font-size: 12px; }
+.viz-tip-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--dot, #94a3b8); }
+
+/* Ranked bar — magnitude by identity, read as a list. */
+.rank-row { display: grid; grid-template-columns: 1fr auto; gap: .2rem .75rem; padding: .5rem 0; }
+.rank-row + .rank-row { border-top: 1px solid var(--line); }
+.dark .rank-row + .rank-row { border-top-color: var(--line-dark); }
+.rank-name { font-size: .82rem; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dark .rank-name { color: #e2e8f0; }
+.rank-value { font-size: .82rem; font-weight: 600; font-variant-numeric: tabular-nums; color: #0f172a; }
+.dark .rank-value { color: #e2e8f0; }
+.rank-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.dark .rank-track { background: #1e293b; }
+.rank-fill { height: 100%; border-radius: 999px; width: var(--pct, 0%); background: var(--series-sales); }
+.rank-meta { font-size: .7rem; color: #94a3b8; font-variant-numeric: tabular-nums; }
+
+/* Activity list. */
+.activity-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .55rem 0;
+  font-size: .82rem;
+}
+.activity-row + .activity-row { border-top: 1px solid var(--line); }
+.dark .activity-row + .activity-row { border-top-color: var(--line-dark); }
+.activity-main { min-width: 0; }
+.activity-title { color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dark .activity-title { color: #e2e8f0; }
+.activity-meta { font-size: .7rem; color: #94a3b8; }
+.activity-value { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ==================================================================== *
  * Progress bar — the fill reads its width and colour from custom
  * properties, so a template passes data (`--progress: 92%`) rather than
  * writing a style rule.

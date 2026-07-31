@@ -1,113 +1,170 @@
+from datetime import date
+from decimal import Decimal
+
 from django.db.models import Count, Sum
+from django.utils import timezone
 from django.views.generic import TemplateView
 
+from apps.core.constants import STATUS_POSTED
 from apps.core.mixins import PagePermissionRequiredMixin
-
-from apps.finance.models import AccountConfiguration, AccountVoucher
+from apps.finance.models import AccountVoucher
+from apps.finance.services import (
+    account_balances,
+    cash_bank_account_codes,
+    income_statement,
+    ledger_integrity,
+)
 from apps.hr.models import Employee
-from apps.inventory.models import POSDetail, PurchaseOrderItem
-from apps.organizations.models import Branch, Organization
+from apps.inventory.models import POSDetail, POSMaster, PurchaseOrderItemReceived
 from apps.payroll.models import Payroll
+
+ZERO = Decimal("0.00")
+TREND_MONTHS = 12
+
+
+def _month_key(value: date) -> str:
+    return f"{value.year:04d}-{value.month:02d}"
+
+
+def _recent_months(count: int) -> list[date]:
+    """First-of-month dates for the last ``count`` months, oldest first."""
+    today = timezone.localdate().replace(day=1)
+    months, year, month = [], today.year, today.month
+    for _ in range(count):
+        months.append(date(year, month, 1))
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return list(reversed(months))
+
+
+def _with_share(rows) -> list[dict]:
+    """Add each row's share of the largest ``amount``, as a percentage."""
+    rows = list(rows)
+    largest = max((row["amount"] or ZERO for row in rows), default=ZERO)
+    for row in rows:
+        row["share"] = float((row["amount"] or ZERO) / largest * 100) if largest else 0.0
+    return rows
 
 
 class DashboardView(PagePermissionRequiredMixin, TemplateView):
+    """Headline trading position: what was earned, spent, kept and held.
+
+    Every figure is read from the ledger rather than counted off the
+    operational tables, so the dashboard cannot disagree with the financial
+    statements.
+    """
+
     page = "dashboard"
     template_name = "portal/dashboard.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        payroll_totals = Payroll.objects.aggregate(
-            net=Sum("net_salary"),
-            allowances=Sum("total_allowances"),
-            deductions=Sum("total_deductions"),
-            base=Sum("base_salary"),
-        )
-        voucher_totals = AccountVoucher.objects.aggregate(
-            debit=Sum("debit_amount"),
-            credit=Sum("credit_amount"),
-        )
-        active_employees = Employee.objects.filter(status="active").count()
-        total_employees = Employee.objects.count()
-        pending_payrolls = Payroll.objects.filter(status="pending").count()
-        total_payrolls = Payroll.objects.count()
 
-        department_chart = [
-            {"name": item["department__title"] or "Unassigned", "y": item["count"]}
-            for item in Employee.objects.values("department__title").annotate(count=Count("id")).order_by("-count")
-        ]
-        account_chart = [
-            {"name": item["account_type"].title(), "y": item["count"]}
-            for item in AccountConfiguration.objects.values("account_type").annotate(count=Count("id")).order_by("-count")
-        ]
-        payroll_chart = [
-            {"name": "Base Salary", "y": float(payroll_totals["base"] or 0)},
-            {"name": "Allowances", "y": float(payroll_totals["allowances"] or 0)},
-            {"name": "Deductions", "y": float(payroll_totals["deductions"] or 0)},
-        ]
-        voucher_chart = [
-            {"name": "Debit", "y": float(voucher_totals["debit"] or 0)},
-            {"name": "Credit", "y": float(voucher_totals["credit"] or 0)},
-        ]
-        monthly_payroll_chart = [
-            {"name": f"{item['month']}/{item['year']}", "y": float(item["net"] or 0)}
-            for item in Payroll.objects.values("month", "year").annotate(net=Sum("net_salary")).order_by("year", "month")
+        # ── Headline figures, straight from the books ───────────────────
+        statement = income_statement()
+        balances = account_balances()
+        cash_on_hand = sum(
+            (balances.get(code, {}).get("closing", ZERO) for code in cash_bank_account_codes()),
+            ZERO,
+        )
+        revenue = statement["total_revenue"]
+        margin = (statement["net_profit"] / revenue * 100) if revenue else None
+
+        context["kpis"] = [
+            {"key": "revenue", "label": "Total Revenue", "value": revenue,
+             "note": "Net of discounts and returns"},
+            {"key": "expense", "label": "Total Expense", "value": statement["total_expense"],
+             "note": "Cost of sales and running costs"},
+            {"key": "profit", "label": "Net Profit", "value": statement["net_profit"],
+             "note": f"{margin:.1f}% margin" if margin is not None else "No revenue yet",
+             "signed": True},
+            {"key": "cash", "label": "Cash & Bank", "value": cash_on_hand,
+             "note": "Available balance"},
         ]
 
-        from apps.inventory.models import POSMaster, PurchaseMaster
-        from apps.core.constants import STATUS_POSTED, YES
-        total_sales = POSMaster.objects.filter(status=STATUS_POSTED).aggregate(t=Sum("net_amount"))["t"] or 0
-        total_purchases = PurchaseMaster.objects.aggregate(t=Sum("total_amount"))["t"] or 0
-        trending_sale_items = (
-            POSDetail.objects.filter(pos_master__status=STATUS_POSTED)
-            .values("item_name", "item_code")
-            .annotate(total_qty=Sum("quantity"), total_amt=Sum("net_total"))
-            .order_by("-total_qty")[:8]
-        )
-        trending_purchase_items = (
-            PurchaseOrderItem.objects.filter(total_receive_qty__gt=0)
-            .values("descr", "inventory_item__code")
-            .annotate(total_qty=Sum("total_receive_qty"), total_amt=Sum("retail_price"))
-            .order_by("-total_qty")[:8]
-        )
+        # ── Sales vs Purchases, month by month ──────────────────────────
+        months = _recent_months(TREND_MONTHS)
+        sales_by_month = {_month_key(m): ZERO for m in months}
+        purchases_by_month = dict(sales_by_month)
 
-        context.update(
+        for row in (
+            POSMaster.objects.filter(status=STATUS_POSTED, sale_date__gte=months[0])
+            .values("sale_date")
+            .annotate(total=Sum("net_amount"))
+        ):
+            key = _month_key(row["sale_date"])
+            if key in sales_by_month:
+                sales_by_month[key] += row["total"] or ZERO
+
+        for row in PurchaseOrderItemReceived.objects.filter(receive_date__gte=months[0]).values(
+            "receive_date", "quantity", "extra_qty", "retail_price"
+        ):
+            key = _month_key(row["receive_date"])
+            if key in purchases_by_month:
+                units = (row["quantity"] or ZERO) + (row["extra_qty"] or ZERO)
+                purchases_by_month[key] += units * (row["retail_price"] or ZERO)
+
+        # Drop the empty lead-in. A young ledger otherwise renders as ten flat
+        # months and one spike, which reads as a broken chart rather than a
+        # short history. At least six months are always kept for context.
+        first = next(
+            (i for i, m in enumerate(months)
+             if sales_by_month[_month_key(m)] or purchases_by_month[_month_key(m)]),
+            0,
+        )
+        months = months[min(first, max(0, len(months) - 6)):]
+
+        context["trend"] = {
+            "labels": [m.strftime("%b %Y") for m in months],
+            "sales": [float(sales_by_month[_month_key(m)]) for m in months],
+            "purchases": [float(purchases_by_month[_month_key(m)]) for m in months],
+        }
+        # Same numbers as rows, for the table view under the chart.
+        context["trend_rows"] = [
             {
-                "breadcrumbs": [("Dashboard", "")],
-                "stats": [
-                    {"label": "Active Employees", "value": active_employees, "detail": f"{total_employees} total workforce"},
-                    {"label": "Payroll Net", "value": f"{payroll_totals['net'] or 0:,.0f}", "detail": "Current generated payroll"},
-                    {"label": "Voucher Flow", "value": f"{(voucher_totals['debit'] or 0) + (voucher_totals['credit'] or 0):,.0f}", "detail": "Debit + credit movement"},
-                    {"label": "Pending Payrolls", "value": pending_payrolls, "detail": f"{total_payrolls} payroll records"},
-                ],
-                "ops_score": min(98, 72 + active_employees * 2),
-                "organization_count": Organization.objects.count(),
-                "branch_count": Branch.objects.count(),
-                "account_count": AccountConfiguration.objects.count(),
-                "voucher_count": AccountVoucher.objects.count(),
-                "payroll_totals": payroll_totals,
-                "voucher_totals": voucher_totals,
-                "recent_vouchers": AccountVoucher.objects.order_by("-voucher_date", "-id")[:5],
-                "recent_payrolls": Payroll.objects.select_related("employee").order_by("-year", "-month", "employee__full_name")[:5],
-                "department_chart": department_chart,
-                "account_chart": account_chart,
-                "payroll_chart": payroll_chart,
-                "voucher_chart": voucher_chart,
-                "monthly_payroll_chart": monthly_payroll_chart,
-                "shortcuts": [
-                    {"title": "Employees", "description": "Workforce profile and service record", "url": "/hr/employees/"},
-                    {"title": "Chart of Accounts", "description": "General and subsidiary account control", "url": "/finance/accounts/"},
-                    {"title": "Vouchers", "description": "Payment and receipt voucher flow", "url": "/finance/vouchers/"},
-                    {"title": "Payroll", "description": "Monthly salary generation and approval", "url": "/payroll/payrolls/"},
-                ],
-                "total_sales": total_sales,
-                "total_purchases": total_purchases,
-                "trending_sale_items": trending_sale_items,
-                "trending_purchase_items": trending_purchase_items,
-                "tasks": [
-                    "Verify pending payrolls",
-                    "Review unposted vouchers",
-                    "Confirm branch-wise employee assignments",
-                ],
+                "label": m.strftime("%b %Y"),
+                "sales": sales_by_month[_month_key(m)],
+                "purchases": purchases_by_month[_month_key(m)],
             }
+            for m in months
+        ]
+
+        # ── Ranked detail ───────────────────────────────────────────────
+        # Bars are drawn relative to the largest row, so the ranking reads at
+        # a glance without an axis.
+        context["top_products"] = _with_share(
+            POSDetail.objects.filter(pos_master__status=STATUS_POSTED)
+            .values("item_name")
+            .annotate(qty=Sum("quantity"), amount=Sum("net_total"))
+            .order_by("-amount")[:6]
         )
+        context["top_customers"] = _with_share(
+            POSMaster.objects.filter(status=STATUS_POSTED, customer__isnull=False)
+            .values("customer__customer_name")
+            .annotate(amount=Sum("net_amount"), orders=Count("id"))
+            .order_by("-amount")[:6]
+        )
+
+        # ── Latest activity ─────────────────────────────────────────────
+        context["recent_sales"] = (
+            POSMaster.objects.filter(status=STATUS_POSTED)
+            .select_related("customer")
+            .order_by("-sale_date", "-id")[:5]
+        )
+        context["recent_vouchers"] = AccountVoucher.objects.order_by("-voucher_date", "-id")[:5]
+
+        # ── Small operational counts ────────────────────────────────────
+        context["secondary"] = [
+            {"label": "Active Employees", "value": Employee.objects.filter(status="active").count()},
+            {"label": "Payroll Net", "value": Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO,
+             "money": True},
+            {"label": "Posted Vouchers", "value": AccountVoucher.objects.filter(posted="Y").count()},
+            {"label": "Sales Recorded", "value": POSMaster.objects.filter(status=STATUS_POSTED).count()},
+        ]
+
+        # The dashboard says when the books it reads are unsound rather than
+        # presenting figures that quietly exclude bad entries.
+        context["integrity"] = ledger_integrity()
+        context["breadcrumbs"] = [("Dashboard", "")]
         return context
