@@ -1,11 +1,20 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>{% block title %}Print{% endblock %}</title>
 <style>
+  /* Print pages are standalone documents and never load app.css, so Inter is
+     declared here too. Latin subset only — printouts are Latin-script. */
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("{% static 'fonts/inter-latin.woff2' %}") format('woff2');
+  }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; }
+  body { font-family: Inter, Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; font-variant-numeric: tabular-nums; }
 
   /* ── Org Header ─────────────────────────────────────────────── */
   .org-header {

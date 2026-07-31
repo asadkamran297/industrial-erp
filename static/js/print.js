@@ -23,8 +23,12 @@ window.printSection = function (elementId, title) {
   var logoHtml = org.logo ? "<img src='" + org.logo + "' alt='logo'>" : "";
 
   var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + title + "</title><style>" +
+    // The print window is a fresh document with no stylesheet, so Inter is
+    // declared inline. Latin subset only — printouts are Latin-script.
+    "@font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;" +
+    " src: url('/static/fonts/inter-latin.woff2') format('woff2'); }" +
     "* { box-sizing: border-box; }" +
-    "body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; }" +
+    "body { font-family: Inter, Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; font-variant-numeric: tabular-nums; }" +
     ".org-header { position: relative; text-align: center; border-bottom: 3px double #7a0000; padding-bottom: 12px; margin-bottom: 6px; }" +
     ".org-header img { height: 72px; width: auto; object-fit: contain; margin-bottom: 6px; }" +
     ".org-name { font-size: 26px; font-weight: 800; letter-spacing: .5px; color: #7a0000; text-transform: uppercase; }" +
