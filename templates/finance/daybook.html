@@ -1,0 +1,133 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Daybook" subtitle="Every transaction posted on a single day, in the order it was entered." %}
+
+{# ── Single-line filter. The date defaults to today. ── #}
+<form method="get" class="toolbar mt-4">
+  <a href="?day={{ previous_day|date:'Y-m-d' }}{% if selected_type %}&voucher_type={{ selected_type }}{% endif %}"
+     class="toolbar-btn" title="Previous day">&lsaquo;</a>
+  <input type="date" name="day" value="{{ day|date:'Y-m-d' }}" class="toolbar-search" onchange="this.form.submit()">
+  <a href="?day={{ next_day|date:'Y-m-d' }}{% if selected_type %}&voucher_type={{ selected_type }}{% endif %}"
+     class="toolbar-btn" title="Next day">&rsaquo;</a>
+
+  <select name="voucher_type" class="toolbar-search" onchange="this.form.submit()">
+    <option value="">All transactions</option>
+    {% for value, label in voucher_types %}
+      <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+
+  {% if not is_today or selected_type %}
+    <a href="{% url 'finance:daybook' %}" class="toolbar-btn">Today</a>
+  {% endif %}
+  <span class="toolbar-status">{{ day|date:"l, d M Y" }}</span>
+</form>
+
+{# ── What kind of day it was, at a glance ── #}
+<section class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <div class="kpi"><div class="kpi-rule"></div>
+    <p class="kpi-label">Entries</p>
+    <p class="kpi-value">{{ entries|length }}</p>
+    <p class="kpi-note">Vouchers posted this day</p>
+  </div>
+  <div class="kpi kpi--revenue"><div class="kpi-rule"></div>
+    <p class="kpi-label">Cash In</p>
+    <p class="kpi-value">{{ totals.cash_in|amount }}</p>
+    <p class="kpi-note">Received into cash and bank</p>
+  </div>
+  <div class="kpi kpi--expense"><div class="kpi-rule"></div>
+    <p class="kpi-label">Cash Out</p>
+    <p class="kpi-value">{{ totals.cash_out|amount }}</p>
+    <p class="kpi-note">Paid out of cash and bank</p>
+  </div>
+  <div class="kpi kpi--profit{% if net_cash < 0 %} is-loss{% endif %}"><div class="kpi-rule"></div>
+    <p class="kpi-label">Net Cash</p>
+    <p class="kpi-value{% if net_cash < 0 %} is-negative{% endif %}">{{ net_cash|amount }}</p>
+    <p class="kpi-note">Movement on the day</p>
+  </div>
+</section>
+
+{% if summary %}
+  <div class="mt-3 flex flex-wrap gap-2">
+    {% for row in summary %}
+      <span class="rounded-full border border-slate-200 px-3 py-1 text-xs dark:border-slate-700">
+        <span class="font-semibold">{{ row.kind }}</span>
+        <span class="text-slate-500">&times;{{ row.count }}</span>
+        <span class="ml-1 tabular-nums font-semibold">{{ row.amount|amount }}</span>
+      </span>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{# ── The day's entries ── #}
+<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+  <table class="w-full min-w-[860px] text-sm">
+    <thead>
+      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <th class="px-3 py-2">Voucher</th>
+        <th class="px-3 py-2">Type</th>
+        <th class="px-3 py-2">Account</th>
+        <th class="px-3 py-2">Narration</th>
+        <th class="px-3 py-2 text-right">Debit</th>
+        <th class="px-3 py-2 text-right">Credit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+        {% comment %}Voucher header, then one row per leg — the shape of a journal entry.
+           The whole header row opens the voucher, so the hit target is the row
+           rather than just the number.{% endcomment %}
+        <tr class="row-link border-t-2 border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40"
+            data-href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}">
+          <td class="px-3 py-2 font-semibold">
+            <a href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}" class="hover:underline">{{ entry.voucher.voucher_no }}</a>
+          </td>
+          <td class="px-3 py-2">{{ entry.kind }}</td>
+          <td class="px-3 py-2">{{ entry.party }}</td>
+          <td class="px-3 py-2 text-slate-500">{{ entry.voucher.remarks|default:"—" }}</td>
+          <td class="px-3 py-2 text-right tabular-nums font-semibold">{{ entry.debit|amount }}</td>
+          <td class="px-3 py-2 text-right tabular-nums font-semibold">{{ entry.credit|amount }}</td>
+        </tr>
+        {% for line in entry.lines %}
+          <tr class="border-t border-slate-100 dark:border-slate-800">
+            <td class="px-3 py-1.5"></td>
+            <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ line.account_no }}</td>
+            <td class="px-3 py-1.5 {% if not line.known %}text-rose-600{% endif %}">{{ line.title }}</td>
+            <td class="px-3 py-1.5 text-slate-500">{{ line.remarks|default:"" }}</td>
+            <td class="px-3 py-1.5 text-right tabular-nums">{% if line.debit %}{{ line.debit|amount }}{% endif %}</td>
+            <td class="px-3 py-1.5 text-right tabular-nums">{% if line.credit %}{{ line.credit|amount }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        {% if not entry.balanced %}
+          <tr><td colspan="6" class="px-3 py-1 text-xs text-rose-600">
+            This voucher does not balance — debit and credit differ.
+          </td></tr>
+        {% endif %}
+      {% empty %}
+        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-slate-500">
+          No transactions posted on {{ day|date:"d M Y" }}.
+        </td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
+        <td class="px-3 py-2" colspan="4">Day total</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if not balanced %}text-rose-600{% endif %}">{{ totals.debit|amount }}</td>
+        <td class="px-3 py-2 text-right tabular-nums {% if not balanced %}text-rose-600{% endif %}">{{ totals.credit|amount }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+<script>
+  // Whole-row navigation. The row still contains a real link, so keyboard and
+  // middle-click behaviour keep working; this only widens the hit target.
+  document.querySelectorAll('.row-link').forEach(function (row) {
+    row.addEventListener('click', function (event) {
+      if (event.target.closest('a, button, input, select')) return;
+      if (window.getSelection().toString()) return;  // don't hijack text selection
+      window.location.href = row.dataset.href;
+    });
+  });
+</script>
+{% endblock %}

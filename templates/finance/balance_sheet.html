@@ -32,8 +32,8 @@
     {% for node in capital %}
       {% include "finance/_balance_sheet_node.html" with node=node %}
     {% endfor %}
-    {# Revenue and expense never close into retained earnings yet, so the
-       life-to-date result is shown as its own Capital line. #}
+    {% comment %}Revenue and expense never close into retained earnings yet, so the
+       life-to-date result is shown as its own Capital line.{% endcomment %}
     <div class="tree-row tree-row--flat" style="--depth: 1">
       <span class="tree-caret tree-caret--static"></span>
       <span class="tree-title">Net Profit / Loss (life-to-date)</span>

@@ -59,8 +59,8 @@
       </button>
     </form>
 
-    {# One mispriced item can dominate the total, so the biggest holdings are
-       shown here — that is where a data-entry slip becomes obvious. #}
+    {% comment %}One mispriced item can dominate the total, so the biggest holdings are
+       shown here — that is where a data-entry slip becomes obvious.{% endcomment %}
     <section class="statement-section">
       <header class="statement-header">Largest holdings</header>
       {% for row in largest %}

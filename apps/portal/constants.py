@@ -15,6 +15,7 @@ class NavigationItem:
 SECTION_WORKSPACE = "Workspace"
 SECTION_OPERATIONS = "Day to Day"
 SECTION_FINANCE = "Accounts"
+SECTION_REPORTS = "Reports"
 SECTION_WORKFORCE = "People"
 SECTION_SETUP = "Setup"
 SECTION_SUPPORT = "Support"
@@ -73,6 +74,13 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Fiscal Years", permission="finance.fiscal_years.index", url_name="finance:fiscal_year_list"),
     )),
     NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close", section=SECTION_FINANCE, icon="L"),
+
+    # ── Reports ─────────────────────────────────────────────────────────
+    # Cross-module registers. The daybook is the book of original entry, so
+    # it leads: it is the one place the whole day can be read at once.
+    NavigationItem("Reports", permission=None, section=SECTION_REPORTS, icon="R", children=(
+        NavigationItem("Daybook", permission="reports.daybook.index", url_name="finance:daybook"),
+    )),
 
     # ── People ──────────────────────────────────────────────────────────
     NavigationItem("Employees", permission="hr.employees.index", url_name="hr:employee_list", section=SECTION_WORKFORCE, icon="E"),

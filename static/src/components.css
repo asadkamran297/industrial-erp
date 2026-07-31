@@ -471,6 +471,12 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 .viz-swatch--sales { background: var(--series-sales); }
 .viz-swatch--purchases { background: var(--series-purchases); }
 
+/* A table row that navigates. The cursor and hover state say so before the
+ * click, so the behaviour is not a surprise. */
+.row-link { cursor: pointer; }
+.row-link:hover { background: #eef2f7; }
+.dark .row-link:hover { background: #17233a; }
+
 /* Chart tooltip. Highcharts renders this markup, so the classes live here
  * rather than as inline styles inside a JavaScript string. */
 .viz-tip-head { font-size: 11px; color: #64748b; }

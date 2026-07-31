@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -20,7 +21,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa, voucher_kind
 
 
 class AuditSaveMixin:
@@ -311,9 +312,30 @@ class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        voucher = self.object
         context["line_form"] = AccountVoucherLineForm()
-        context["active_accounts"] = AccountConfiguration.objects.filter(status=STATUS_ACTIVE).order_by("account_no")
-        context["balance_difference"] = self.object.balance_difference
+        # Lines validate against the chart of accounts, so the picker must
+        # offer postable leaves from the same chart. It previously listed the
+        # separate account master, whose codes fail that validation.
+        context["active_accounts"] = ChartOfAccount.objects.filter(
+            status=STATUS_ACTIVE, children__isnull=True
+        ).order_by("code")
+        titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+        context["lines"] = [
+            {
+                "line": line,
+                # Name the account, or say plainly that it is missing — a bare
+                # code with no name tells the reader nothing.
+                "title": titles.get(line.account_no),
+                "known": line.account_no in titles,
+            }
+            for line in voucher.lines.order_by("line_number")
+        ]
+        context["account_title"] = titles.get(voucher.account_no)
+        context["party_title"] = titles.get(voucher.party_account_no)
+        context["balance_difference"] = voucher.balance_difference
+        context["kind"] = voucher_kind(voucher)
+        context["is_locked"] = voucher.posted == "Y"
         return context
 
 
@@ -611,6 +633,26 @@ class CashFlowView(PagePermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(cash_flow_statement())
+        return context
+
+
+class DaybookView(PagePermissionRequiredMixin, TemplateView):
+    """The day's complete record: every voucher posted, in entry order."""
+
+    page = "reports.daybook"
+    template_name = "finance/daybook.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        day = parse_date((self.request.GET.get("day") or "").strip()) or timezone.localdate()
+        voucher_type = (self.request.GET.get("voucher_type") or "").strip()
+
+        context.update(daybook(day, voucher_type=voucher_type))
+        context["selected_type"] = voucher_type
+        context["voucher_types"] = FIN_VOUCHER_TYPE_CHOICES
+        context["previous_day"] = day - timedelta(days=1)
+        context["next_day"] = day + timedelta(days=1)
+        context["is_today"] = day == timezone.localdate()
         return context
 
 

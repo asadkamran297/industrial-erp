@@ -3,8 +3,8 @@
 {% include "components/ui/page_header.html" with title="Trial Balance" subtitle="Opening, movement and closing per account, split by Debit and Credit." %}
 
 {% if not integrity.is_clean %}
-  {# These entries never reach the columns below. Reporting them here is the
-     difference between a trial balance that balances and one that is right. #}
+  {% comment %}These entries never reach the columns below. Reporting them here is the
+     difference between a trial balance that balances and one that is right.{% endcomment %}
   <div class="mt-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm dark:border-rose-900 dark:bg-rose-950">
     <p class="font-semibold text-rose-800 dark:text-rose-300">This trial balance does not account for everything.</p>
 

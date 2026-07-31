@@ -38,6 +38,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("dashboard", "Dashboard", "Workspace", LIST_ONLY),
     Page("operations", "Production", "Operations", LIST_ONLY),
     Page("reports", "Reports", "Analytics", LIST_ONLY),
+    Page("reports.daybook", "Daybook", "Reports", LIST_ONLY),
     Page("settings", "System Settings", "Setup", LIST_ONLY),
     Page("help", "Help Desk", "Support", LIST_ONLY),
     # Inventory

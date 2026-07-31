@@ -887,6 +887,102 @@ def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
     )
 
 
+# A voucher's real-world name, when the source document says more than the
+# voucher type does. A sale return is a credit note; a purchase return a debit
+# note — neither has its own voucher type, both are journals underneath.
+_SOURCE_KINDS = (
+    ("inv_pos_return_masters:", "Credit Note"),
+    ("inv_purchase_return_masters:", "Debit Note"),
+    ("inv_pos_masters:", "Sale"),
+    ("inv_purchase_order_item_received:", "Purchase"),
+    ("inventory_adjustment:", "Stock Adjustment"),
+    ("period_close:", "Period Close"),
+)
+
+
+def voucher_kind(voucher) -> str:
+    for prefix, label in _SOURCE_KINDS:
+        if voucher.source_ref.startswith(prefix):
+            return label
+    return voucher.get_voucher_type_display()
+
+
+def daybook(day, *, voucher_type=""):
+    """Every entry posted on one day, in the order it was written.
+
+    The daybook is the book of original entry: one chronological list of the
+    day's transactions — sales, purchases, receipts, payments, credit and debit
+    notes, journals — each with its own debit and credit legs, and the day's
+    totals underneath. Anything posted to the ledger appears here, which is
+    what makes it the day's complete record rather than a per-module report.
+    """
+    zero = Decimal("0.00")
+    vouchers = (
+        AccountVoucher.objects.filter(voucher_date=day)
+        .prefetch_related("lines")
+        .order_by("id")
+    )
+    if voucher_type:
+        vouchers = vouchers.filter(voucher_type=voucher_type)
+
+    titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+    money_codes = cash_bank_account_codes()
+
+    entries, totals = [], {"debit": zero, "credit": zero, "cash_in": zero, "cash_out": zero}
+    summary: dict[str, dict] = {}
+
+    for voucher in vouchers:
+        lines = []
+        debit = credit = cash_in = cash_out = zero
+        for line in voucher.lines.all().order_by("line_number"):
+            line_debit = line.debit_amount or zero
+            line_credit = line.credit_amount or zero
+            debit += line_debit
+            credit += line_credit
+            if line.account_no in money_codes:
+                cash_in += line_debit
+                cash_out += line_credit
+            lines.append({
+                "account_no": line.account_no,
+                # An account missing from the chart is named as such rather
+                # than shown as a bare code with no explanation.
+                "title": titles.get(line.account_no, "— not in chart of accounts —"),
+                "known": line.account_no in titles,
+                "debit": line_debit,
+                "credit": line_credit,
+                "remarks": line.remarks,
+            })
+
+        kind = voucher_kind(voucher)
+        entries.append({
+            "voucher": voucher,
+            "kind": kind,
+            "party": titles.get(voucher.party_account_no or voucher.account_no, voucher.account_no),
+            "lines": lines,
+            "debit": debit,
+            "credit": credit,
+            "balanced": debit == credit,
+        })
+
+        totals["debit"] += debit
+        totals["credit"] += credit
+        totals["cash_in"] += cash_in
+        totals["cash_out"] += cash_out
+
+        bucket = summary.setdefault(kind, {"kind": kind, "count": 0, "amount": zero})
+        bucket["count"] += 1
+        bucket["amount"] += debit
+
+    return {
+        "day": day,
+        "entries": entries,
+        "totals": totals,
+        "summary": sorted(summary.values(), key=lambda row: -row["amount"]),
+        "balanced": totals["debit"] == totals["credit"],
+        "net_cash": totals["cash_in"] - totals["cash_out"],
+    }
+
+
 def ledger_integrity():
     """Everything that would make the statements lie, gathered in one place.
 
