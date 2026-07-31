@@ -18,7 +18,7 @@ from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, cash_bank_account_codes, dr_cr_to_signed, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_summary, dr_cr_to_signed, income_statement, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -576,6 +576,36 @@ class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
                 totals[key] += rows[-1][key]
         context["rows"] = rows
         context["totals"] = totals
+        return context
+
+
+class IncomeStatementView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.income_statement"
+    template_name = "finance/income_statement.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(income_statement())
+        return context
+
+
+class BalanceSheetView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.balance_sheet"
+    template_name = "finance/balance_sheet.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(balance_sheet())
+        return context
+
+
+class CashFlowView(PagePermissionRequiredMixin, TemplateView):
+    page = "finance.cash_flow"
+    template_name = "finance/cash_flow.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(cash_flow_summary())
         return context
 
 

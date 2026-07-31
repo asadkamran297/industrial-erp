@@ -1,0 +1,25 @@
+{% if node.collapsible %}
+  <details class="bs-node" data-depth="{{ node.depth }}">
+    <summary class="bs-row bs-summary" style="--depth: {{ node.depth }}">
+      <span class="bs-caret" aria-hidden="true">&#9656;</span>
+      <span class="bs-title">{{ node.title }}</span>
+      {% if node.code %}<span class="bs-code">{{ node.code }}</span>{% endif %}
+      <span class="bs-amount">{{ node.amount|floatformat:2 }}</span>
+    </summary>
+    {% for child in node.children %}
+      {% include "finance/_balance_sheet_node.html" with node=child %}
+    {% endfor %}
+  </details>
+{% else %}
+  <div class="bs-node">
+    <div class="bs-row{% if node.children %} bs-heading{% endif %}" style="--depth: {{ node.depth }}">
+      <span class="bs-caret" aria-hidden="true"></span>
+      <span class="bs-title">{{ node.title }}</span>
+      {% if node.code %}<span class="bs-code">{{ node.code }}</span>{% endif %}
+      <span class="bs-amount">{{ node.amount|floatformat:2 }}</span>
+    </div>
+    {% for child in node.children %}
+      {% include "finance/_balance_sheet_node.html" with node=child %}
+    {% endfor %}
+  </div>
+{% endif %}

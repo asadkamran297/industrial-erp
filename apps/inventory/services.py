@@ -209,12 +209,14 @@ def post_sale(*, sale, user):
     total = Decimal("0.00")
     tax_total = Decimal("0.00")
     discount_total = Decimal("0.00")
+    cost_total = Decimal("0.00")
     for item in sale.items.all():
         stock = Stock.objects.select_for_update().get(inventory_item=item.inventory_item)
         if item.quantity > stock.current_quantity:
             raise ValidationError(f"Insufficient stock for {item.item_name}.")
         old_quantity = stock.current_quantity
         old_price = stock.current_price
+        cost_total += item.quantity * (old_price or Decimal("0.00"))
         stock.current_quantity -= item.quantity
         stock.updated_by = user
         stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
@@ -232,6 +234,13 @@ def post_sale(*, sale, user):
     sale.posted = YES
     sale.updated_by = user
     sale.save()
+
+    # Posting the sale is also the accounting event: recognise revenue and match
+    # the cost of the stock just issued. Same transaction, so stock and ledger
+    # can never disagree.
+    from apps.finance.services import post_sale_to_gl  # lazy: finance imports inventory
+
+    post_sale_to_gl(sale=sale, cost_of_goods=cost_total, user=user)
     return sale
 
 

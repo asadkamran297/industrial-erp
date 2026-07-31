@@ -163,6 +163,18 @@ FIN_PAYMENT_METHOD_FIELDS: Final[dict[str, tuple[str, ...]]] = {
 # Every conditional field, in on-screen order — the ones hidden for a method.
 FIN_PAYMENT_CONDITIONAL_FIELDS: Final = ("bank_name", "cheque_no", "cheque_date", "wallet_operator", "transaction_ref")
 
+# Chart-of-accounts titles the automatic sales posting needs. Each entry is the
+# (root, sub-heading, leaf) path used to find-or-create the account, so a fresh
+# install posts without any manual chart setup.
+GL_CASH_PATH: Final = ("ASSETS", "Current Assets", "Cash")
+GL_INVENTORY_PATH: Final = ("ASSETS", "Current Assets", "Inventory")
+GL_SALES_TAX_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Sales Tax Payable")
+GL_SALES_REVENUE_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Revenue")
+# Sales discount is contra-revenue: a debit-balance account under REVENUE, so it
+# nets against Sales Revenue on the income statement instead of inflating expenses.
+GL_SALES_DISCOUNT_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Discount")
+GL_COGS_PATH: Final = ("EXPENSES", "Direct Expenses", "Cost of Goods Sold")
+
 # Business role of a postable account, and the optgroup caption it gets in the
 # voucher pickers. Roles come from the account's place in the chart of accounts,
 # not account_type alone: customer ledgers sit under Receivables, so their

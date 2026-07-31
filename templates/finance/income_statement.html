@@ -1,0 +1,57 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Income Statement" subtitle="Revenue and expense, life-to-date, with net profit or loss." %}
+
+<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+  <table class="w-full min-w-[600px] text-sm">
+    <thead>
+      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <th class="px-3 py-2">Code</th>
+        <th class="px-3 py-2">Account</th>
+        <th class="px-3 py-2 text-right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="bg-slate-50/60 dark:bg-slate-800/40">
+        <td class="px-3 py-1.5 font-semibold" colspan="3">Revenue</td>
+      </tr>
+      {% for row in revenue %}
+      <tr class="border-t border-slate-100 dark:border-slate-800">
+        <td class="px-3 py-1.5 font-mono text-xs text-slate-500">{{ row.code }}</td>
+        <td class="px-3 py-1.5">{{ row.title }}</td>
+        <td class="px-3 py-1.5 text-right font-mono">{{ row.amount|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="px-3 py-3 text-center text-sm text-slate-500">No revenue postings yet.</td></tr>
+      {% endfor %}
+      <tr class="border-t border-slate-200 font-semibold dark:border-slate-700">
+        <td class="px-3 py-1.5" colspan="2">Total Revenue</td>
+        <td class="px-3 py-1.5 text-right font-mono">{{ total_revenue|floatformat:2 }}</td>
+      </tr>
+
+      <tr class="bg-slate-50/60 dark:bg-slate-800/40">
+        <td class="px-3 py-1.5 font-semibold" colspan="3">Expense</td>
+      </tr>
+      {% for row in expense %}
+      <tr class="border-t border-slate-100 dark:border-slate-800">
+        <td class="px-3 py-1.5 font-mono text-xs text-slate-500">{{ row.code }}</td>
+        <td class="px-3 py-1.5">{{ row.title }}</td>
+        <td class="px-3 py-1.5 text-right font-mono">{{ row.amount|floatformat:2 }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="px-3 py-3 text-center text-sm text-slate-500">No expense postings yet.</td></tr>
+      {% endfor %}
+      <tr class="border-t border-slate-200 font-semibold dark:border-slate-700">
+        <td class="px-3 py-1.5" colspan="2">Total Expense</td>
+        <td class="px-3 py-1.5 text-right font-mono">{{ total_expense|floatformat:2 }}</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
+        <td class="px-3 py-2" colspan="2">Net {% if net_profit >= 0 %}Profit{% else %}Loss{% endif %}</td>
+        <td class="px-3 py-2 text-right font-mono {% if net_profit < 0 %}text-rose-600{% endif %}">{{ net_profit|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

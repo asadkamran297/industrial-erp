@@ -295,10 +295,19 @@ class AccountVoucher(BaseModel):
     credit_card_payment = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     credit_card_no = models.CharField(max_length=40, blank=True)
     credit_card_expiry = models.CharField(max_length=10, blank=True)
+    # Source document that generated this voucher, e.g. "inv_pos_masters:41".
+    # Blank for vouchers keyed in by hand; unique per source so a re-post cannot
+    # double-book the same sale.
+    source_ref = models.CharField(max_length=80, blank=True, db_index=True)
 
     class Meta:
         db_table = "fin_account_voucher"
         ordering = ["-voucher_date", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_ref"], condition=~models.Q(source_ref=""), name="uniq_voucher_source_ref"
+            )
+        ]
 
     def __str__(self) -> str:
         return self.voucher_no or "New voucher"
