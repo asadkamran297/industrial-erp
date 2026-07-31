@@ -1,10 +1,14 @@
 {
   "scripts": {
-    "build": "npm run build:css",
+    "build": "npm run build:vendor && npm run build:css",
+    "build:vendor": "node scripts/copy-vendor.js",
     "build:css": "tailwindcss -i ./static/src/app.css -o ./static/dist/app.css --minify",
     "watch:css": "tailwindcss -i ./static/src/app.css -o ./static/dist/app.css --watch"
   },
   "devDependencies": {
     "tailwindcss": "3.4.17"
+  },
+  "dependencies": {
+    "highcharts": "^13.0.0"
   }
 }
