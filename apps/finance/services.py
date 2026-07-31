@@ -887,6 +887,64 @@ def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
     )
 
 
+def ledger_integrity():
+    """Everything that would make the statements lie, gathered in one place.
+
+    ``account_balances()`` can only report on codes that exist in the chart, so
+    a line posted to a code that was never created — or was deleted — drops out
+    of every report. The trial balance then *looks* balanced precisely because
+    the offending entry is missing. These checks exist so that never passes
+    unnoticed: the reports say what they cannot account for.
+    """
+    zero = Decimal("0.00")
+    known = {code for code in ChartOfAccount.objects.values_list("code", flat=True) if code}
+
+    # Postings whose account is not in the chart of accounts.
+    orphan_rows = (
+        AccountVoucherLine.objects.exclude(account_no__in=known)
+        .values("account_no")
+        .annotate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+        .order_by("account_no")
+    )
+    orphans = [
+        {"account_no": row["account_no"], "debit": row["debit"] or zero, "credit": row["credit"] or zero}
+        for row in orphan_rows
+    ]
+    orphan_debit = sum((row["debit"] for row in orphans), zero)
+    orphan_credit = sum((row["credit"] for row in orphans), zero)
+
+    # Vouchers whose own lines do not balance.
+    unbalanced = []
+    for voucher in AccountVoucher.objects.prefetch_related("lines").order_by("voucher_date", "id"):
+        lines = list(voucher.lines.all())
+        if not lines:
+            continue
+        debit = sum((line.debit_amount or zero for line in lines), zero)
+        credit = sum((line.credit_amount or zero for line in lines), zero)
+        if debit != credit:
+            unbalanced.append({
+                "voucher": voucher, "debit": debit, "credit": credit, "difference": debit - credit,
+            })
+
+    # Opening balances are entered by hand and must themselves be a double entry.
+    opening_debit = opening_credit = zero
+    for account in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True):
+        debit, credit = signed_to_dr_cr(account.opening_balance or zero, account.account_type)
+        opening_debit += debit
+        opening_credit += credit
+
+    return {
+        "orphans": orphans,
+        "orphan_debit": orphan_debit,
+        "orphan_credit": orphan_credit,
+        "unbalanced": unbalanced,
+        "opening_debit": opening_debit,
+        "opening_credit": opening_credit,
+        "opening_difference": opening_debit - opening_credit,
+        "is_clean": not orphans and not unbalanced and opening_debit == opening_credit,
+    }
+
+
 def sync_customer_from_coa(*, node, user=None):
     """Reverse sync: a postable account added under Receivables auto-creates a Customer.
 

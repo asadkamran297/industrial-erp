@@ -2,6 +2,56 @@
 {% block content %}
 {% include "components/ui/page_header.html" with title="Trial Balance" subtitle="Opening, movement and closing per account, split by Debit and Credit." %}
 
+{% if not integrity.is_clean %}
+  {# These entries never reach the columns below. Reporting them here is the
+     difference between a trial balance that balances and one that is right. #}
+  <div class="mt-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm dark:border-rose-900 dark:bg-rose-950">
+    <p class="font-semibold text-rose-800 dark:text-rose-300">This trial balance does not account for everything.</p>
+
+    {% if integrity.orphans %}
+      <p class="mt-2 text-rose-700 dark:text-rose-400">
+        {{ integrity.orphans|length }} account code{{ integrity.orphans|length|pluralize }} posted to but missing from the
+        Chart of Accounts. These entries are excluded from every report, so the figures below balance only because
+        they are absent:
+      </p>
+      <ul class="mt-1 space-y-0.5 text-rose-700 dark:text-rose-400">
+        {% for row in integrity.orphans %}
+          <li>
+            <span class="tabular-nums font-semibold">{{ row.account_no }}</span>
+            &mdash; Dr <span class="tabular-nums">{{ row.debit|amount }}</span>,
+            Cr <span class="tabular-nums">{{ row.credit|amount }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if integrity.unbalanced %}
+      <p class="mt-2 text-rose-700 dark:text-rose-400">
+        {{ integrity.unbalanced|length }} voucher{{ integrity.unbalanced|length|pluralize }} whose own lines do not balance:
+      </p>
+      <ul class="mt-1 space-y-0.5 text-rose-700 dark:text-rose-400">
+        {% for row in integrity.unbalanced %}
+          <li>
+            <a href="{% url 'finance:account_voucher_detail' row.voucher.pk %}" class="font-semibold hover:underline">{{ row.voucher.voucher_no }}</a>
+            &mdash; Dr <span class="tabular-nums">{{ row.debit|amount }}</span>,
+            Cr <span class="tabular-nums">{{ row.credit|amount }}</span>,
+            out by <span class="tabular-nums font-semibold">{{ row.difference|amount }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if integrity.opening_difference %}
+      <p class="mt-2 text-rose-700 dark:text-rose-400">
+        Opening balances are out by <span class="tabular-nums font-semibold">{{ integrity.opening_difference|amount }}</span>
+        (Dr {{ integrity.opening_debit|amount }} against Cr {{ integrity.opening_credit|amount }}).
+        Enter the missing counterpart on
+        <a href="{% url 'finance:opening_balances' %}" class="font-semibold underline">Opening Balances</a>.
+      </p>
+    {% endif %}
+  </div>
+{% endif %}
+
 <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
   <table class="w-full min-w-[900px] text-sm">
     <thead>

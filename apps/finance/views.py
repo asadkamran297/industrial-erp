@@ -20,7 +20,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -578,6 +578,9 @@ class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
                 totals[key] += rows[-1][key]
         context["rows"] = rows
         context["totals"] = totals
+        # A trial balance that hides what it could not account for is worse
+        # than one that does not balance, so the gaps are reported alongside.
+        context["integrity"] = ledger_integrity()
         return context
 
 
