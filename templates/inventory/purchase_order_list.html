@@ -218,7 +218,7 @@
                       <a href="javascript:void(0)" onclick="(function(url){var w=window.open(url,'_blank','width=900,height=700');w.onload=function(){w.print();w.onafterprint=function(){w.close();};};}('{% url 'inventory:purchase_order_print' order.pk %}'));" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
                     </div>
                     <!-- hidden CSRF form for inline save -->
-                    <form x-ref="addForm" method="post" :action="addUrl" style="display:none">{% csrf_token %}
+                    <form x-ref="addForm" method="post" :action="addUrl" class="is-hidden">{% csrf_token %}
                       <input type="hidden" name="inventory_item" x-model="sel">
                       <input type="hidden" name="uom_title" x-model="uom">
                       <input type="hidden" name="quantity" x-model="qty">

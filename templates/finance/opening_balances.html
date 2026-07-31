@@ -2,92 +2,41 @@
 {% block content %}
 {% include "components/ui/page_header.html" with title="Opening Balances" subtitle="Enter each account's opening balance on its Debit or Credit side. Movement and closing update with every voucher." %}
 
-<style>
-  .ob-wrap{--ob-line:#e2e8f0;--ob-line-d:#334155;
-    --type-asset:#0ea5e9;--type-liability:#f97316;--type-revenue:#10b981;--type-expense:#ef4444;--type-capital:#8b5cf6;}
-  .ob-toolbar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap;}
-  .ob-btn{border:1px solid var(--ob-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;font-weight:600;color:#475569;cursor:pointer;}
-  .ob-btn:hover{background:#f8fafc;}
-  .dark .ob-btn{background:#0f172a;border-color:var(--ob-line-d);color:#cbd5e1;}
-  #ob-search{border:1px solid var(--ob-line);background:#fff;border-radius:8px;padding:.35rem .7rem;font-size:.8rem;color:#0f172a;min-width:220px;}
-  #ob-search:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
-  .dark #ob-search{background:#0f172a;border-color:var(--ob-line-d);color:#e2e8f0;}
-  .ob-node.ob-hidden{display:none;}
 
-  .ob-card{border:1px solid var(--ob-line);background:#fff;border-radius:14px;padding:.5rem;overflow-x:auto;}
-  .dark .ob-card{background:#0b1220;border-color:var(--ob-line-d);}
-  .ob-list{list-style:none;margin:0;padding:0;min-width:640px;}
-  .ob-children{margin:2px 0 2px 26px;padding-left:14px;border-left:1px dashed var(--ob-line);}
-  .dark .ob-children{border-left-color:var(--ob-line-d);}
-  .ob-node.collapsed > .ob-children{display:none;}
-
-  /* header + rows share one column track so the numbers line up at any depth */
-  .ob-row,.ob-head{display:flex;align-items:center;gap:.55rem;padding:.35rem .6rem;border-radius:10px;border:1px solid transparent;}
-  .ob-row:hover{background:#f8fafc;border-color:var(--ob-line);}
-  .dark .ob-row:hover{background:#111c33;border-color:var(--ob-line-d);}
-  .ob-row.is-root{background:#f1f5f9;font-weight:700;}
-  .dark .ob-row.is-root{background:#0f1b30;}
-  .ob-row.is-group .ob-title{font-weight:600;}
-
-  .ob-caret{width:18px;height:18px;border:0;background:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;transition:transform .12s;flex:0 0 auto;}
-  .ob-node.collapsed > .ob-row .ob-caret{transform:rotate(-90deg);}
-  .ob-dot{width:8px;height:8px;border-radius:50%;background:var(--dot,#94a3b8);flex:0 0 auto;}
-  .ob-title{font-size:.9rem;color:#0f172a;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .dark .ob-title{color:#e2e8f0;}
-  .ob-row.is-root .ob-title{font-size:.82rem;letter-spacing:.03em;text-transform:uppercase;}
-  .ob-code{font-size:.72rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em;color:#64748b;background:#f1f5f9;border-radius:6px;padding:.1rem .4rem;flex:0 0 auto;}
-  .dark .ob-code{background:#1e293b;color:#94a3b8;}
-
-  .ob-input{width:130px;flex:0 0 auto;text-align:right;font-size:.8rem;font-variant-numeric:tabular-nums;
-    border:1px solid var(--ob-line);border-radius:8px;padding:.25rem .5rem;background:#fffbeb;color:#0f172a;}
-  .ob-input:focus{outline:2px solid var(--primary-color);outline-offset:1px;}
-  .dark .ob-input{background:#1c1917;border-color:var(--ob-line-d);color:#e2e8f0;}
-  .ob-rollup,.ob-num{width:130px;flex:0 0 auto;text-align:right;font-size:.78rem;
-    font-variant-numeric:tabular-nums;color:#64748b;padding:.25rem .5rem;}
-  .ob-rollup{font-weight:600;color:#475569;}
-  .dark .ob-rollup{color:#cbd5e1;}
-  .ob-num.is-negative,.ob-rollup.is-negative{color:#e11d48;}
-
-  .ob-head{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;border-bottom:1px solid var(--ob-line);border-radius:0;}
-  .dark .ob-head{border-bottom-color:var(--ob-line-d);}
-  .ob-head .ob-head-account{flex:1 1 auto;}
-  .ob-head span:not(.ob-head-account){width:130px;flex:0 0 auto;text-align:right;padding:0 .5rem;}
-</style>
-
-<div class="ob-wrap">
-  <div class="ob-toolbar">
-    <input type="search" id="ob-search" placeholder="Search account or code…" autocomplete="off">
-    <button type="button" class="ob-btn" id="ob-expand">Expand all</button>
-    <button type="button" class="ob-btn" id="ob-collapse">Collapse all</button>
+<div>
+  <div class="toolbar">
+    <input type="search" id="ob-search" class="toolbar-search" placeholder="Search account or code…" autocomplete="off">
+    <button type="button" class="toolbar-btn" id="ob-expand">Expand all</button>
+    <button type="button" class="toolbar-btn" id="ob-collapse">Collapse all</button>
   </div>
 
   <form method="post">{% csrf_token %}
-    <div class="ob-card">
-      <div class="ob-head">
-        <span class="ob-head-account">Account</span>
+    <div class="tree-card tree-card--scroll">
+      <div class="tree-head">
+        <span class="tree-head-account">Account</span>
         <span>Debit</span>
         <span>Credit</span>
         <span>Movement</span>
         <span>Closing</span>
       </div>
-      <ul class="ob-list" id="ob-root">
+      <ul class="tree-list tree-list--wide" id="ob-root">
         {% for node in opening_tree %}
           {% include "finance/_opening_node.html" with node=node %}
         {% endfor %}
       </ul>
-      <div class="ob-row ob-foot" style="border-top:1px solid var(--ob-line);font-weight:700;">
-        <span class="ob-title">Total (live, from the Debit/Credit inputs above)</span>
-        <span class="ob-rollup" id="ob-total-dr">0.00</span>
-        <span class="ob-rollup" id="ob-total-cr">0.00</span>
-        <span class="ob-num"></span>
-        <span class="ob-num"></span>
+      <div class="tree-row tree-foot">
+        <span class="tree-title">Total (live, from the Debit/Credit inputs above)</span>
+        <span class="tree-rollup" id="ob-total-dr">0.00</span>
+        <span class="tree-rollup" id="ob-total-cr">0.00</span>
+        <span class="tree-num"></span>
+        <span class="tree-num"></span>
       </div>
-      <div class="ob-row ob-foot" style="font-weight:700;">
-        <span class="ob-title">Total (saved, whole ledger)</span>
-        <span class="ob-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|floatformat:2 }}</span>
-        <span class="ob-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|floatformat:2 }}</span>
-        <span class="ob-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|floatformat:2 }} / {{ grand_totals.movement_cr|floatformat:2 }}</span>
-        <span class="ob-num {% if grand_totals.closing_dr != grand_totals.closing_cr %}is-negative{% endif %}">{{ grand_totals.closing_dr|floatformat:2 }} / {{ grand_totals.closing_cr|floatformat:2 }}</span>
+      <div class="tree-row tree-foot tree-foot--last">
+        <span class="tree-title">Total (saved, whole ledger)</span>
+        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|floatformat:2 }}</span>
+        <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|floatformat:2 }}</span>
+        <span class="tree-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|floatformat:2 }} / {{ grand_totals.movement_cr|floatformat:2 }}</span>
+        <span class="tree-num {% if grand_totals.closing_dr != grand_totals.closing_cr %}is-negative{% endif %}">{{ grand_totals.closing_dr|floatformat:2 }} / {{ grand_totals.closing_cr|floatformat:2 }}</span>
       </div>
     </div>
 
@@ -107,19 +56,19 @@
   if (!root) return;
 
   root.addEventListener('click', (e) => {
-    const caret = e.target.closest('.ob-caret');
+    const caret = e.target.closest('.tree-caret');
     if (!caret) return;
-    caret.closest('.ob-node').classList.toggle('collapsed');
+    caret.closest('.tree-node').classList.toggle('collapsed');
   });
 
   function setCollapsed(state) {
-    root.querySelectorAll('.ob-node.has-children').forEach(n => n.classList.toggle('collapsed', state));
+    root.querySelectorAll('.tree-node.has-children').forEach(n => n.classList.toggle('collapsed', state));
   }
   document.getElementById('ob-expand').addEventListener('click', () => setCollapsed(false));
   document.getElementById('ob-collapse').addEventListener('click', () => setCollapsed(true));
 
   // Red out negative movement/closing figures.
-  root.querySelectorAll('.ob-num').forEach(el => {
+  root.querySelectorAll('.tree-num').forEach(el => {
     el.classList.toggle('is-negative', parseFloat(el.textContent) < 0);
   });
 
@@ -129,8 +78,8 @@
   const tallyHint = document.getElementById('ob-tally-hint');
   function recalcTotals() {
     let dr = 0, cr = 0;
-    root.querySelectorAll('.ob-dr-input').forEach(el => { dr += parseFloat(el.value) || 0; });
-    root.querySelectorAll('.ob-cr-input').forEach(el => { cr += parseFloat(el.value) || 0; });
+    root.querySelectorAll('.tree-dr-input').forEach(el => { dr += parseFloat(el.value) || 0; });
+    root.querySelectorAll('.tree-cr-input').forEach(el => { cr += parseFloat(el.value) || 0; });
     totalDr.textContent = dr.toFixed(2);
     totalCr.textContent = cr.toFixed(2);
     const balanced = Math.abs(dr - cr) < 0.005;
@@ -140,7 +89,7 @@
     if (tallyHint) tallyHint.classList.toggle('text-slate-500', balanced);
   }
   root.addEventListener('input', (e) => {
-    if (e.target.classList.contains('ob-dr-input') || e.target.classList.contains('ob-cr-input')) recalcTotals();
+    if (e.target.classList.contains('tree-dr-input') || e.target.classList.contains('tree-cr-input')) recalcTotals();
   });
   recalcTotals();
 
@@ -148,19 +97,19 @@
   const search = document.getElementById('ob-search');
   search.addEventListener('input', () => {
     const term = search.value.trim().toLowerCase();
-    const nodes = root.querySelectorAll('.ob-node');
+    const nodes = root.querySelectorAll('.tree-node');
     if (!term) {
-      nodes.forEach(n => n.classList.remove('ob-hidden'));
+      nodes.forEach(n => n.classList.remove('is-hidden'));
       return;
     }
-    nodes.forEach(n => n.classList.add('ob-hidden'));
+    nodes.forEach(n => n.classList.add('is-hidden'));
     nodes.forEach(node => {
-      const row = node.querySelector(':scope > .ob-row');
-      const title = row.querySelector('.ob-title').textContent.toLowerCase();
-      const code = (row.querySelector('.ob-code') || {}).textContent || '';
+      const row = node.querySelector(':scope > .tree-row');
+      const title = row.querySelector('.tree-title').textContent.toLowerCase();
+      const code = (row.querySelector('.tree-code') || {}).textContent || '';
       if (!title.includes(term) && !code.toLowerCase().includes(term)) return;
-      for (let el = node; el && el !== root; el = el.parentElement.closest('.ob-node')) {
-        el.classList.remove('ob-hidden', 'collapsed');
+      for (let el = node; el && el !== root; el = el.parentElement.closest('.tree-node')) {
+        el.classList.remove('is-hidden', 'collapsed');
         if (!el.parentElement) break;
       }
     });

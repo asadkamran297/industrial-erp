@@ -1,0 +1,615 @@
+/* ==================================================================== *
+ * Reusable UI components
+ * --------------------------------------------------------------------
+ * Every rule here is global. Templates must not carry <style> blocks —
+ * add the component here and use its class instead, so one change lands
+ * on every page that uses it.
+ *
+ * Naming: `.tree-*`, `.field-*` … are STYLING hooks and belong to this
+ * file. Page scripts hook onto their own prefixed classes (`.coa-*`,
+ * `.ob-*`) which carry no styles, so markup can be restyled without
+ * touching JavaScript and vice versa.
+ * ==================================================================== */
+
+/* -------------------------------------------------------------------- *
+ * Shared tokens
+ * -------------------------------------------------------------------- */
+:root {
+  --line: #e2e8f0;
+  --line-dark: #334155;
+  /* Chart-of-accounts root colours, keyed by account_type. */
+  --type-asset: #059669;
+  --type-asset-bg: #d1fae5;
+  --type-liability: #e11d48;
+  --type-liability-bg: #ffe4e6;
+  --type-capital: #7c3aed;
+  --type-capital-bg: #ede9fe;
+  --type-revenue: #2563eb;
+  --type-revenue-bg: #dbeafe;
+  --type-expense: #d97706;
+  --type-expense-bg: #fef3c7;
+}
+
+/* ==================================================================== *
+ * Toolbar — the filter/action strip above a card
+ * ==================================================================== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .75rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+.toolbar-btn:hover { background: #f8fafc; }
+.dark .toolbar-btn { background: #0f172a; border-color: var(--line-dark); color: #cbd5e1; }
+
+.toolbar-search {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: .8rem;
+  color: #0f172a;
+  min-width: 220px;
+}
+.toolbar-search:focus { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.dark .toolbar-search { background: #0f172a; border-color: var(--line-dark); color: #e2e8f0; }
+
+.toolbar-btn--primary { border-color: var(--primary-color); color: var(--primary-color); }
+.toolbar-status { font-size: .75rem; color: #94a3b8; }
+
+/* ==================================================================== *
+ * Tree — the hierarchical account list shared by Chart of Accounts,
+ * Opening Balances and the Balance Sheet.
+ * ==================================================================== */
+.tree-card {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 14px;
+  padding: .5rem;
+}
+.dark .tree-card { background: #0b1220; border-color: var(--line-dark); }
+.tree-card--scroll { overflow-x: auto; }
+
+.tree-list { list-style: none; margin: 0; padding: 0; }
+.tree-list--wide { min-width: 640px; }
+.tree-empty { padding: 2rem; text-align: center; color: #94a3b8; font-size: .85rem; }
+
+.tree-children {
+  margin: 2px 0 2px 26px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--line);
+  min-height: 6px;
+}
+.dark .tree-children { border-left-color: var(--line-dark); }
+.tree-node.collapsed > .tree-children { display: none; }
+
+/* Visibility state toggled by page scripts — never an inline style attribute. */
+.is-hidden { display: none !important; }
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .45rem .6rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.tree-row:hover { background: #f8fafc; border-color: var(--line); }
+.dark .tree-row:hover { background: #111c33; border-color: var(--line-dark); }
+.tree-row.is-root { background: #f1f5f9; font-weight: 700; }
+.dark .tree-row.is-root { background: #0f1b30; }
+.tree-row.is-group .tree-title { font-weight: 600; }
+
+.tree-caret {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: .7rem;
+  padding: 0;
+  flex: 0 0 auto;
+  transition: transform .12s;
+}
+.tree-node.collapsed > .tree-row .tree-caret { transform: rotate(-90deg); }
+
+.tree-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot, #94a3b8);
+  flex: 0 0 auto;
+}
+
+.tree-title {
+  font-size: .9rem;
+  color: #0f172a;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dark .tree-title { color: #e2e8f0; }
+.tree-row.is-root .tree-title { font-size: .82rem; letter-spacing: .03em; text-transform: uppercase; }
+.tree-title mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* Account code pill. Inter's tabular figures keep the segments aligned. */
+.tree-code {
+  font-size: .72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: var(--dot, #64748b);
+  background: var(--dot-bg, #f1f5f9);
+  border-radius: 6px;
+  padding: .1rem .4rem;
+  flex: 0 0 auto;
+}
+.dark .tree-code { background: #1e293b; color: #94a3b8; }
+
+.tree-count {
+  font-size: .65rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 0 .4rem;
+}
+.dark .tree-count { background: #1e293b; color: #94a3b8; }
+
+.tree-badge {
+  margin-left: .35rem;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--dot, #64748b);
+  background: var(--dot-bg, #f1f5f9);
+  border-radius: 6px;
+  padding: .1rem .4rem;
+}
+
+/* Numeric cells in a tree row — fixed width so columns line up at any depth. */
+.tree-num,
+.tree-rollup {
+  width: 130px;
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+  padding: .25rem .5rem;
+}
+.tree-rollup { font-weight: 600; color: #475569; }
+.dark .tree-rollup { color: #cbd5e1; }
+.tree-num.is-negative,
+.tree-rollup.is-negative { color: #e11d48; }
+
+.tree-input {
+  width: 130px;
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: .25rem .5rem;
+  background: #fffbeb;
+  color: #0f172a;
+}
+.tree-input:focus { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.dark .tree-input { background: #1c1917; border-color: var(--line-dark); color: #e2e8f0; }
+
+/* Column header aligned to the same track as .tree-num / .tree-input. */
+.tree-head {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .35rem .6rem;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-bottom: 1px solid var(--line);
+}
+.dark .tree-head { border-bottom-color: var(--line-dark); }
+.tree-head-account { flex: 1 1 auto; }
+.tree-head span:not(.tree-head-account) { width: 130px; flex: 0 0 auto; text-align: right; padding: 0 .5rem; }
+
+/* Totals row pinned under a tree. */
+.tree-foot { font-weight: 700; border-top: 1px solid var(--line); border-radius: 0; }
+.dark .tree-foot { border-top-color: var(--line-dark); }
+.tree-foot--last { border-top: 0; }
+.tree-foot:hover { background: transparent; border-color: transparent; border-top-color: var(--line); }
+.tree-foot--last:hover { border-top-color: transparent; }
+
+/* Row actions, revealed on hover. */
+.tree-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: .2rem;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.tree-row:hover .tree-actions { opacity: 1; }
+.tree-actions button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: .9rem;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+.tree-action--add { color: #059669; }
+.tree-action--add:hover { background: #d1fae5; }
+.tree-action--edit { color: var(--primary-color); }
+.tree-action--edit:hover { background: #e2e8f0; }
+.tree-action--delete { color: #e11d48; }
+.tree-action--delete:hover { background: #ffe4e6; }
+
+.tree-handle {
+  cursor: grab;
+  color: #cbd5e1;
+  font-size: .85rem;
+  letter-spacing: -3px;
+  user-select: none;
+}
+
+/* Codes hidden until the row is hovered. */
+.tree-hide-codes .tree-code { display: none; }
+.tree-hide-codes .tree-row:hover .tree-code { display: inline; }
+
+/* Account-type accents, read by .tree-dot / .tree-code / .tree-badge. */
+.tree-node[data-type="asset"]     { --dot: var(--type-asset);     --dot-bg: var(--type-asset-bg); }
+.tree-node[data-type="liability"] { --dot: var(--type-liability); --dot-bg: var(--type-liability-bg); }
+.tree-node[data-type="capital"]   { --dot: var(--type-capital);   --dot-bg: var(--type-capital-bg); }
+.tree-node[data-type="revenue"]   { --dot: var(--type-revenue);   --dot-bg: var(--type-revenue-bg); }
+.tree-node[data-type="expense"]   { --dot: var(--type-expense);   --dot-bg: var(--type-expense-bg); }
+
+/* -------------------------------------------------------------------- *
+ * Tree drag & drop (Chart of Accounts reordering)
+ * -------------------------------------------------------------------- */
+.tree-dragging .tree-children:empty {
+  min-height: 26px;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+}
+.tree-dragging .tree-children:empty::before {
+  content: "drop here";
+  display: block;
+  font-size: .65rem;
+  color: #cbd5e1;
+  padding: .3rem .5rem;
+}
+.tree-children.is-drop-target { border-color: var(--primary-color) !important; background: rgba(99, 102, 241, .06); }
+
+/* Insertion line marking the drop position among siblings. */
+.tree-ghost { opacity: 1; }
+.tree-ghost > .tree-row { position: relative; background: transparent; border-color: transparent; }
+.tree-ghost > .tree-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--primary-color);
+}
+.tree-ghost > .tree-children { display: none; }
+.tree-chosen { background: #eef2ff; border-radius: 10px; }
+.tree-drag > .tree-row {
+  background: #fff;
+  border: 1px solid var(--primary-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .15);
+}
+.dark .tree-drag > .tree-row { background: #0b1220; }
+
+/* -------------------------------------------------------------------- *
+ * Disclosure tree (native <details>, no JavaScript) — Balance Sheet
+ * -------------------------------------------------------------------- */
+.tree-row--flat {
+  padding: .35rem .75rem .35rem calc(.75rem + (var(--depth, 1) - 1) * 1.1rem);
+  font-size: .875rem;
+  border-top: 1px solid rgb(241 245 249);
+  border-radius: 0;
+}
+.dark .tree-row--flat { border-top-color: rgb(30 41 59); }
+.tree-row--flat:hover { background: transparent; border-color: transparent; border-top-color: rgb(241 245 249); }
+.dark .tree-row--flat:hover { border-top-color: rgb(30 41 59); }
+
+.tree-summary { cursor: pointer; list-style: none; font-weight: 600; }
+.tree-summary::-webkit-details-marker { display: none; }
+.tree-summary:hover { background: #f8fafc; }
+.dark .tree-summary:hover { background: rgb(30 41 59); }
+.tree-row--heading { font-weight: 600; }
+
+.tree-caret--static { width: .75rem; font-size: .625rem; color: #64748b; transition: transform .15s; }
+details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); }
+
+.tree-amount {
+  font-family: inherit;
+  text-align: right;
+  min-width: 7rem;
+  font-variant-numeric: tabular-nums;
+}
+.tree-amount.is-negative { color: #e11d48; }
+
+/* Statement section: header, rows, and a ruled total line. */
+.statement-section { overflow: hidden; border-radius: .5rem; border: 1px solid var(--line); }
+.dark .statement-section { border-color: var(--line-dark); }
+.statement-header {
+  background: #f8fafc;
+  padding: .5rem .75rem;
+  font-size: .75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #64748b;
+}
+.dark .statement-header { background: #1e293b; color: #94a3b8; }
+.statement-header--divided { border-top: 1px solid var(--line); }
+.dark .statement-header--divided { border-top-color: var(--line-dark); }
+.statement-empty { padding: 1.5rem .75rem; text-align: center; font-size: .875rem; color: #64748b; }
+
+.statement-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding: .5rem .75rem;
+  font-size: .875rem;
+  font-weight: 600;
+}
+.dark .statement-total { border-top-color: var(--line-dark); }
+.statement-total--grand { border-top-width: 2px; background: #f8fafc; }
+.dark .statement-total--grand { background: #1e293b; }
+.statement-total .tree-amount { font-weight: 600; }
+
+/* ==================================================================== *
+ * Progress bar — the fill reads its width and colour from custom
+ * properties, so a template passes data (`--progress: 92%`) rather than
+ * writing a style rule.
+ * ==================================================================== */
+.progress-fill {
+  height: .5rem;
+  border-radius: 999px;
+  width: var(--progress, 0%);
+  background: var(--progress-color, var(--primary-color));
+}
+.progress-fill--lg { height: .75rem; }
+
+/* ==================================================================== *
+ * Hero — gradient detail banner (employee profile, and any record page
+ * that leads with an avatar, a title and a strip of headline figures)
+ * ==================================================================== */
+.hero {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #1e293b 65%, #0f172a 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+}
+.hero-body { padding: 32px; }
+
+.hero-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, .55);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  margin-bottom: 24px;
+}
+.hero-back:hover { color: rgba(255, 255, 255, .85); }
+
+.hero-top { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+
+.hero-avatar { position: relative; flex-shrink: 0; }
+.hero-avatar img,
+.hero-avatar-fallback {
+  width: 112px;
+  height: 112px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .35);
+  border: 3px solid rgba(255, 255, 255, .18);
+}
+.hero-avatar img { object-fit: cover; }
+.hero-avatar-fallback {
+  background: rgba(255, 255, 255, .15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 900;
+  color: #fff;
+}
+.hero-status-dot {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 3px solid #0f172a;
+}
+
+.hero-identity { flex: 1; min-width: 200px; }
+.hero-name { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -.5px; margin: 0; }
+.hero-subtitle { margin: 6px 0 0; font-size: 15px; color: rgba(255, 255, 255, .6); font-weight: 500; }
+
+.hero-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.hero-chip {
+  background: rgba(255, 255, 255, .12);
+  color: rgba(255, 255, 255, .8);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hero-aside { flex-shrink: 0; align-self: flex-start; }
+.hero-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.hero-action:hover { background: rgba(255, 255, 255, .28); }
+
+/* Headline figures under the hero. Collapses on narrow screens. */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 28px;
+}
+@media (max-width: 900px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .hero-stats { grid-template-columns: 1fr; } }
+
+.hero-stat { background: rgba(255, 255, 255, .10); border-radius: 12px; padding: 16px; }
+.hero-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .45);
+  margin: 0;
+}
+.hero-stat-value {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fff;
+  margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat-hint { font-size: 10px; color: rgba(255, 255, 255, .35); margin: 0; }
+
+/* ==================================================================== *
+ * Dialog — centred modal used by the tree editors
+ * ==================================================================== */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, .5);
+  padding: 1rem;
+}
+.dialog-backdrop.open { display: flex; }
+.dialog h3 + .dialog-body { padding-top: 1.25rem; }
+
+.dialog {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, .3);
+  overflow: hidden;
+}
+.dark .dialog { background: #0b1220; border: 1px solid var(--line-dark); }
+
+.dialog h3 {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  color: #0f172a;
+}
+.dark .dialog h3 { color: #e2e8f0; border-color: var(--line-dark); }
+
+.dialog-body { padding: 1.25rem; display: flex; flex-direction: column; gap: .85rem; }
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  padding: .9rem 1.25rem;
+  border-top: 1px solid var(--line);
+}
+.dark .dialog-foot { border-color: var(--line-dark); }
+
+.dialog-hint { font-size: .78rem; color: #64748b; line-height: 1.4; }
+.dialog-danger-name { font-weight: 700; color: #e11d48; }
+
+.dialog-btn { border: 0; border-radius: 9px; padding: .5rem 1rem; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.dialog-btn--ghost { background: #f1f5f9; color: #475569; }
+.dark .dialog-btn--ghost { background: #1e293b; color: #cbd5e1; }
+.dialog-btn--primary { background: var(--primary-color); color: #fff; }
+.dialog-btn--danger { background: #e11d48; color: #fff; }
+
+/* ==================================================================== *
+ * Form field — label + control stack used inside dialogs
+ * ==================================================================== */
+.field { display: flex; flex-direction: column; gap: .3rem; }
+.field label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.field input[type="text"],
+.field-select {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: .5rem .7rem;
+  font-size: .9rem;
+  color: #0f172a;
+  background: #fff;
+}
+.field-select { width: 100%; }
+.field input:focus,
+.field-select:focus { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+.dark .field input,
+.dark .field-select { background: #0f172a; border-color: var(--line-dark); color: #e2e8f0; }
+
+/* Segmented radio group rendered as adjacent buttons. */
+.segmented { display: flex; gap: .4rem; }
+.segmented label {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: .5rem;
+  text-align: center;
+  font-size: .78rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.segmented input { display: none; }
+.segmented input:checked + span { color: var(--primary-color); }
+.segmented label:has(input:checked) { border-color: var(--primary-color); background: rgba(99, 102, 241, .08); }
+.segmented--compact label { padding: .35rem .6rem; font-size: .75rem; }

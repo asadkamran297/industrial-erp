@@ -1,18 +1,18 @@
-<li class="coa-node{% if node.children %} has-children{% endif %}" data-id="{{ node.id }}" data-type="{{ node.account_type }}" data-group="{% if node.is_group %}1{% else %}0{% endif %}"{% if node.is_root %} data-root="1"{% endif %}>
-  <div class="coa-row{% if node.is_root %} is-root{% endif %}{% if node.is_group %} is-group{% endif %}">
-    <span class="coa-handle" title="Drag to move">&#8942;&#8942;</span>
-    <button type="button" class="coa-caret" title="Collapse / expand" aria-label="toggle">{% if node.children %}&#9662;{% endif %}</button>
-    <span class="coa-dot"></span>
-    <span class="coa-title">{{ node.title }}</span>
-    {% if node.code %}<span class="coa-code">{{ node.code }}</span>{% endif %}
-    {% if node.children %}<span class="coa-count">{{ node.children|length }}</span>{% endif %}
-    <span class="coa-actions">
-      <button type="button" class="coa-add" title="Add account under this">+</button>
-      <button type="button" class="coa-rename" title="Rename">&#9998;</button>
-      {% if not node.is_root %}<button type="button" class="coa-delete" title="Delete">&times;</button>{% endif %}
+<li class="tree-node{% if node.children %} has-children{% endif %}" data-id="{{ node.id }}" data-type="{{ node.account_type }}" data-group="{% if node.is_group %}1{% else %}0{% endif %}"{% if node.is_root %} data-root="1"{% endif %}>
+  <div class="tree-row{% if node.is_root %} is-root{% endif %}{% if node.is_group %} is-group{% endif %}">
+    <span class="tree-handle" title="Drag to move">&#8942;&#8942;</span>
+    <button type="button" class="tree-caret" title="Collapse / expand" aria-label="toggle">{% if node.children %}&#9662;{% endif %}</button>
+    <span class="tree-dot"></span>
+    <span class="tree-title">{{ node.title }}</span>
+    {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
+    {% if node.children %}<span class="tree-count">{{ node.children|length }}</span>{% endif %}
+    <span class="tree-actions">
+      <button type="button" class="tree-action--add" title="Add account under this">+</button>
+      <button type="button" class="tree-action--edit" title="Rename">&#9998;</button>
+      {% if not node.is_root %}<button type="button" class="tree-action--delete" title="Delete">&times;</button>{% endif %}
     </span>
   </div>
-  <ul class="coa-list coa-children">
+  <ul class="tree-list tree-children">
     {% for child in node.children %}
       {% include "finance/_coa_node.html" with node=child %}
     {% endfor %}

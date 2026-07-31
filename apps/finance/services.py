@@ -12,16 +12,26 @@ from apps.core.constants import (
     ACCOUNT_TYPE_LIABILITY,
     ACCOUNT_TYPE_REVENUE,
     FIN_ACCOUNT_TYPE_ROLES,
+    CASH_FLOW_FINANCING,
+    CASH_FLOW_INVESTING,
+    CASH_FLOW_OPERATING,
+    CASH_FLOW_SECTION_LABELS,
     GL_CASH_PATH,
     GL_COGS_PATH,
     GL_INVENTORY_PATH,
+    GL_PAYABLES_PARENT,
+    GL_PAYABLES_TITLES,
+    GL_RETAINED_EARNINGS_PATH,
     GL_SALES_DISCOUNT_PATH,
+    GL_SALES_RETURN_PATH,
     GL_SALES_REVENUE_PATH,
     GL_SALES_TAX_PAYABLE_PATH,
     SETTLEMENT_CASH,
     SETTLEMENT_CREDIT,
     STATUS_ACTIVE,
     STATUS_SUBMITTED,
+    VOUCHER_TYPE_JOURNAL,
+    VOUCHER_TYPE_PURCHASE,
     VOUCHER_TYPE_SALES,
     YES,
 )
@@ -294,28 +304,115 @@ def balance_sheet():
     }
 
 
-def cash_flow_summary():
-    """Opening, movement (net change) and closing balance for every Cash/Bank leaf account.
+def _current_account_codes():
+    """Codes sitting under Current Assets or Current Liabilities.
 
-    A simple net-change view, not a full indirect/direct-method statement —
-    there is no activity classification (operating/investing/financing) to
-    derive one from yet.
+    Being *current* is what separates a working-capital account (trade
+    receivables, stock, trade payables) from a long-term one, and that is the
+    distinction the cash-flow sections turn on.
+    """
+    codes = set()
+    for root_title, heading in (("ASSETS", "Current Assets"), ("LIABILITIES", "Current Liabilities")):
+        group = ChartOfAccount.objects.filter(title=heading, parent__title=root_title).first()
+        if group:
+            codes |= set(_descendant_leaf_codes(group))
+            if group.code:
+                codes.add(group.code)
+    return codes
+
+
+def _cash_flow_section(counterpart_type, code, current_codes):
+    """Which activity a cash movement belongs to, from the account it faced.
+
+    Trading and working-capital accounts are day-to-day operating flows;
+    owner capital and long-term debt are financing; what is left — chiefly
+    non-current assets — is investing.
+    """
+    if counterpart_type in (ACCOUNT_TYPE_REVENUE, ACCOUNT_TYPE_EXPENSE):
+        return CASH_FLOW_OPERATING
+    if counterpart_type == ACCOUNT_TYPE_CAPITAL:
+        return CASH_FLOW_FINANCING
+    if code in current_codes:
+        return CASH_FLOW_OPERATING
+    # Non-current: borrowings are financing, everything else is investing.
+    if counterpart_type == ACCOUNT_TYPE_LIABILITY:
+        return CASH_FLOW_FINANCING
+    return CASH_FLOW_INVESTING
+
+
+def cash_flow_statement():
+    """Where cash actually came from and went, grouped by activity.
+
+    Built from real movements on the Cash and Bank accounts rather than from
+    account balances: for every voucher touching money, the cash leg is the
+    amount and the other legs say what it was for. Each counterpart account
+    becomes a line under Operating, Investing or Financing.
+
+    Opening cash + net movement = closing cash, and that reconciliation is
+    what makes this a statement rather than a list.
     """
     zero = Decimal("0.00")
+    money_codes = cash_bank_account_codes()
     balances = account_balances()
-    groups = money_account_codes()
-    accounts = {a.code: a for a in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True)}
-    rows, totals = [], {"opening": zero, "movement": zero, "closing": zero}
-    for group_title, codes in groups.items():
-        for code in sorted(codes):
-            account = accounts.get(code)
-            own = balances.get(code)
-            if not account or not own:
+    natures = dict(ChartOfAccount.objects.values_list("code", "account_type"))
+    titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+    current_codes = _current_account_codes()
+
+    opening = sum((balances.get(code, {}).get("opening", zero) for code in money_codes), zero)
+    closing = sum((balances.get(code, {}).get("closing", zero) for code in money_codes), zero)
+
+    # Group the lines by voucher so each cash leg can be attributed to whatever
+    # the rest of that voucher was about.
+    lines = AccountVoucherLine.objects.values("voucher_id", "account_no", "debit_amount", "credit_amount")
+    by_voucher: dict[int, list] = {}
+    for line in lines:
+        by_voucher.setdefault(line["voucher_id"], []).append(line)
+
+    buckets: dict[str, dict[str, Decimal]] = {
+        CASH_FLOW_OPERATING: {}, CASH_FLOW_INVESTING: {}, CASH_FLOW_FINANCING: {}
+    }
+    for voucher_lines in by_voucher.values():
+        cash_in = sum(((ln["debit_amount"] or zero) - (ln["credit_amount"] or zero))
+                      for ln in voucher_lines if ln["account_no"] in money_codes)
+        if not cash_in:
+            continue
+        others = [ln for ln in voucher_lines if ln["account_no"] not in money_codes]
+        # Split the cash movement across the non-cash legs in proportion to
+        # their size, so a mixed voucher lands in more than one activity.
+        weights = [abs((ln["debit_amount"] or zero) - (ln["credit_amount"] or zero)) for ln in others]
+        total_weight = sum(weights, zero)
+        if not total_weight:
+            continue
+        for line, weight in zip(others, weights):
+            if not weight:
                 continue
-            rows.append({"code": code, "title": account.title, "group": group_title, **own})
-            for key in totals:
-                totals[key] += own[key]
-    return {"rows": rows, "totals": totals}
+            code = line["account_no"]
+            share = (cash_in * weight / total_weight).quantize(TWO_DP)
+            section = _cash_flow_section(natures.get(code), code, current_codes)
+            buckets[section][code] = buckets[section].get(code, zero) + share
+
+    sections = []
+    net_movement = zero
+    for key in (CASH_FLOW_OPERATING, CASH_FLOW_INVESTING, CASH_FLOW_FINANCING):
+        rows = [
+            {"code": code, "title": titles.get(code, code), "amount": amount}
+            for code, amount in sorted(buckets[key].items())
+            if amount
+        ]
+        subtotal = sum((row["amount"] for row in rows), zero)
+        net_movement += subtotal
+        sections.append({"key": key, "label": CASH_FLOW_SECTION_LABELS[key], "rows": rows, "subtotal": subtotal})
+
+    return {
+        "sections": sections,
+        "opening": opening,
+        "net_movement": net_movement,
+        "closing": closing,
+        # Opening + movement must equal closing; a gap means cash moved through
+        # a voucher this attribution could not explain, and is surfaced not hidden.
+        "reconciles": (opening + net_movement) == closing,
+        "difference": closing - (opening + net_movement),
+    }
 
 
 # account_type of each chart-of-accounts root, for auto-created GL account paths.
@@ -345,11 +442,103 @@ def gl_account(path, *, user=None):
     return node
 
 
+def get_payables_group(*, user=None):
+    """Supplier control heading under LIABILITIES > Current Liabilities.
+
+    Reuses a hand-made "Payable"/"Payables" heading if one already exists, so
+    an established chart never gains a second, nearly identical group.
+    """
+    parent = gl_account(GL_PAYABLES_PARENT, user=user)
+    existing = ChartOfAccount.objects.filter(parent=parent, title__in=GL_PAYABLES_TITLES).first()
+    if existing:
+        return existing
+    return _get_or_create_group(parent=parent, title=GL_PAYABLES_TITLES[0], account_type=parent.account_type, user=user)
+
+
+@transaction.atomic
+def create_vendor_payable_account(*, vendor, user=None):
+    """Postable payable account for a supplier (idempotent by name)."""
+    payables = get_payables_group(user=user)
+    existing = ChartOfAccount.objects.filter(parent=payables, title=vendor.name).first()
+    if existing:
+        return existing
+    next_order = (
+        ChartOfAccount.objects.filter(parent=payables).order_by("-sort_order").values_list("sort_order", flat=True).first() or 0
+    ) + 1
+    node = ChartOfAccount.objects.create(
+        parent=payables,
+        title=vendor.name,
+        account_type=payables.account_type,
+        is_group=False,
+        sort_order=next_order,
+        created_by=user,
+        updated_by=user,
+    )
+    ChartOfAccount.rebuild_codes()
+    node.refresh_from_db(fields=["code"])
+    return node
+
+
+def _post_voucher(*, source_ref, voucher_type, voucher_date, account_no, entries, remarks,
+                  settlement_mode="", party_account_no="", user=None):
+    """Create one balanced, posted voucher from ``entries`` and return it.
+
+    ``entries`` is a list of ``(account_code, debit, credit, line_remark)``.
+    Zero-value lines are dropped: they carry no information and the line
+    validator rejects them. The voucher is only marked posted once its lines
+    exist, so ``AccountVoucher.clean()`` can verify debits equal credits.
+
+    Idempotent by ``source_ref`` — re-posting a source document is a no-op,
+    which is what stops a retried save from double-booking the same event.
+    """
+    existing = AccountVoucher.objects.filter(source_ref=source_ref).first()
+    if existing:
+        return existing
+    if not any(debit or credit for _code, debit, credit, _r in entries):
+        return None
+
+    voucher = AccountVoucher(
+        source_ref=source_ref,
+        voucher_type=voucher_type,
+        voucher_date=voucher_date,
+        settlement_mode=settlement_mode,
+        account_no=account_no,
+        party_account_no=party_account_no,
+        remarks=remarks,
+        created_by=user,
+        updated_by=user,
+    )
+    voucher.save()
+
+    line_number = 0
+    for account_code, debit, credit, line_remark in entries:
+        if not debit and not credit:
+            continue
+        line_number += 1
+        AccountVoucherLine.objects.create(
+            voucher=voucher,
+            line_number=line_number,
+            voucher_no=voucher.voucher_no,
+            account_no=account_code,
+            voucher_date=voucher.voucher_date,
+            debit_amount=debit,
+            credit_amount=credit,
+            remarks=line_remark,
+            created_by=user,
+            updated_by=user,
+        )
+
+    voucher.refresh_from_db()
+    voucher.status = STATUS_SUBMITTED
+    voucher.posted = YES  # clean() re-checks debit == credit before allowing this
+    voucher.updated_by = user
+    voucher.save()
+    return voucher
+
+
 @transaction.atomic
 def post_sale_to_gl(*, sale, cost_of_goods, user=None):
-    """Book the double entry for a posted POS sale and return the voucher.
-
-    Two entries in one Sales voucher, per the perpetual inventory method:
+    """Book a posted POS sale.
 
     Revenue recognition
         Dr Cash/Bank            amount actually collected
@@ -357,18 +546,11 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
         Dr Sales Discount       discount given (contra-revenue)
             Cr Sales Revenue        gross sale value
             Cr Sales Tax Payable    tax collected on behalf of the authority
-    Cost matching
+    Cost matching (perpetual inventory)
         Dr Cost of Goods Sold   stock cost of the items sold
             Cr Inventory            same, removing the asset
-
-    Idempotent: a sale that already has a voucher returns it untouched.
     """
     from apps.inventory.models import Customer  # lazy: inventory imports finance
-
-    source_ref = f"inv_pos_masters:{sale.pk}"
-    existing = AccountVoucher.objects.filter(source_ref=source_ref).first()
-    if existing:
-        return existing
 
     zero = Decimal("0.00")
     gross = (sale.total_amount or zero).quantize(TWO_DP)
@@ -378,8 +560,6 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
     paid = min((sale.total_paid or zero).quantize(TWO_DP), net)
     receivable = net - paid
     cost = (cost_of_goods or zero).quantize(TWO_DP)
-    if not gross and not cost:
-        return None
 
     customer = sale.customer or Customer.get_default()
     if not customer:
@@ -396,52 +576,183 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
     # A fully collected sale settles in cash and names the customer separately;
     # anything left outstanding is a credit sale headed by the customer ledger.
     on_credit = receivable > 0
-    voucher = AccountVoucher(
-        source_ref=source_ref,
+    return _post_voucher(
+        source_ref=f"inv_pos_masters:{sale.pk}",
         voucher_type=VOUCHER_TYPE_SALES,
         voucher_date=sale.sale_date,
         settlement_mode=SETTLEMENT_CREDIT if on_credit else SETTLEMENT_CASH,
         account_no=customer_account.code if on_credit else cash.code,
         party_account_no="" if on_credit else customer_account.code,
         remarks=f"Auto-posted from sale {sale.sale_num}",
-        created_by=user,
-        updated_by=user,
+        entries=[
+            (cash.code, paid, zero, f"Received against {sale.sale_num}"),
+            (customer_account.code, receivable, zero, f"Receivable on {sale.sale_num}"),
+            (sales_discount.code, discount, zero, f"Discount allowed on {sale.sale_num}"),
+            (revenue.code, zero, gross, f"Sale {sale.sale_num}"),
+            (tax_payable.code, zero, tax, f"Sales tax on {sale.sale_num}"),
+            (cogs.code, cost, zero, f"Cost of goods sold on {sale.sale_num}"),
+            (inventory.code, zero, cost, f"Stock issued against {sale.sale_num}"),
+        ],
+        user=user,
     )
-    voucher.save()
 
-    entries = [
-        (cash.code, paid, zero, f"Received against {sale.sale_num}"),
-        (customer_account.code, receivable, zero, f"Receivable on {sale.sale_num}"),
-        (sales_discount.code, discount, zero, f"Discount allowed on {sale.sale_num}"),
-        (revenue.code, zero, gross, f"Sale {sale.sale_num}"),
-        (tax_payable.code, zero, tax, f"Sales tax on {sale.sale_num}"),
-        (cogs.code, cost, zero, f"Cost of goods sold on {sale.sale_num}"),
-        (inventory.code, zero, cost, f"Stock issued against {sale.sale_num}"),
-    ]
-    line_number = 0
-    for account_no, debit, credit, remarks in entries:
-        if not debit and not credit:
-            continue  # a zero line carries no information and clean() rejects it
-        line_number += 1
-        AccountVoucherLine.objects.create(
-            voucher=voucher,
-            line_number=line_number,
-            voucher_no=voucher.voucher_no,
-            account_no=account_no,
-            voucher_date=voucher.voucher_date,
-            debit_amount=debit,
-            credit_amount=credit,
-            remarks=remarks,
-            created_by=user,
-            updated_by=user,
-        )
 
-    voucher.refresh_from_db()
-    voucher.status = STATUS_SUBMITTED
-    voucher.posted = YES  # clean() re-checks debit == credit before allowing this
-    voucher.updated_by = user
-    voucher.save()
-    return voucher
+@transaction.atomic
+def post_sale_return_to_gl(*, sale_return, cost_of_goods, user=None):
+    """Book a posted sale return — the mirror of the sale.
+
+        Dr Sales Returns        value returned (contra-revenue)
+            Cr Customer receivable  credit given back to the customer
+        Dr Inventory            cost of the goods back on the shelf
+            Cr Cost of Goods Sold   reversing the original cost match
+
+    The credit goes to the customer's ledger rather than cash: a refund paid
+    out is a separate payment voucher, so the two events stay distinguishable.
+    """
+    from apps.inventory.models import Customer  # lazy: inventory imports finance
+
+    zero = Decimal("0.00")
+    returned = (sale_return.returned_amount or zero).quantize(TWO_DP)
+    cost = (cost_of_goods or zero).quantize(TWO_DP)
+
+    sale = sale_return.pos_master
+    customer = sale.customer or Customer.get_default()
+    if not customer:
+        raise ValidationError("A customer (or a default customer) is required to post a sale return to the general ledger.")
+    customer_account = create_customer_receivable_account(customer=customer, user=user)
+
+    sales_return = gl_account(GL_SALES_RETURN_PATH, user=user)
+    cogs = gl_account(GL_COGS_PATH, user=user)
+    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+
+    return _post_voucher(
+        source_ref=f"inv_pos_return_masters:{sale_return.pk}",
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=sale_return.return_date,
+        account_no=customer_account.code,
+        remarks=f"Auto-posted from sale return {sale_return.return_num} against {sale_return.sale_num}",
+        entries=[
+            (sales_return.code, returned, zero, f"Sale return {sale_return.return_num}"),
+            (customer_account.code, zero, returned, f"Credit to customer on {sale_return.return_num}"),
+            (inventory.code, cost, zero, f"Stock returned on {sale_return.return_num}"),
+            (cogs.code, zero, cost, f"Reversing cost of goods sold on {sale_return.return_num}"),
+        ],
+        user=user,
+    )
+
+
+@transaction.atomic
+def post_purchase_receipt_to_gl(*, receipt, vendor, amount, user=None):
+    """Book goods received against a purchase order.
+
+        Dr Inventory            landed cost of the goods received
+            Cr Supplier payable     amount now owed to the vendor
+
+    Landed cost includes apportioned freight, so the asset carries what the
+    goods actually cost to bring in — which is what the later COGS entry
+    matches against revenue.
+    """
+    zero = Decimal("0.00")
+    value = (amount or zero).quantize(TWO_DP)
+    if not vendor:
+        raise ValidationError("A vendor is required to post a goods receipt to the general ledger.")
+    vendor_account = create_vendor_payable_account(vendor=vendor, user=user)
+    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+
+    return _post_voucher(
+        source_ref=f"inv_purchase_order_item_received:{receipt.pk}",
+        voucher_type=VOUCHER_TYPE_PURCHASE,
+        voucher_date=receipt.receive_date,
+        settlement_mode=SETTLEMENT_CREDIT,
+        account_no=vendor_account.code,
+        remarks=f"Auto-posted from goods receipt {receipt.grn_number}",
+        entries=[
+            (inventory.code, value, zero, f"Stock received on {receipt.grn_number}"),
+            (vendor_account.code, zero, value, f"Payable to {vendor.name} on {receipt.grn_number}"),
+        ],
+        user=user,
+    )
+
+
+@transaction.atomic
+def post_purchase_return_to_gl(*, purchase_return, user=None):
+    """Book a posted purchase return — goods go back, the debt shrinks.
+
+        Dr Supplier payable     amount no longer owed
+            Cr Inventory            cost of the goods sent back
+    """
+    zero = Decimal("0.00")
+    returned = (purchase_return.returned_amount or zero).quantize(TWO_DP)
+    vendor = getattr(purchase_return.purchase_master, "vendor", None) or getattr(purchase_return.purchase_order, "vendor", None)
+    if not vendor:
+        raise ValidationError("A vendor is required to post a purchase return to the general ledger.")
+    vendor_account = create_vendor_payable_account(vendor=vendor, user=user)
+    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+
+    return _post_voucher(
+        source_ref=f"inv_purchase_return_masters:{purchase_return.pk}",
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=purchase_return.return_date,
+        account_no=vendor_account.code,
+        remarks=f"Auto-posted from purchase return {purchase_return.return_num}",
+        entries=[
+            (vendor_account.code, returned, zero, f"Payable reduced on {purchase_return.return_num}"),
+            (inventory.code, zero, returned, f"Stock returned to {vendor.name} on {purchase_return.return_num}"),
+        ],
+        user=user,
+    )
+
+
+@transaction.atomic
+def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
+    """Close revenue and expense into Retained Earnings and return the voucher.
+
+    The closing entry every set of books needs at period end: each income and
+    expense account is written back to nil against its own natural side, and
+    the difference — the profit or loss — lands in Capital.
+
+        Dr each revenue account      its credit balance
+            Cr each expense account      its debit balance
+            Cr Retained Earnings         the profit  (Dr, if a loss)
+
+    After this runs the income statement starts again from zero and the
+    balance sheet balances on its own, without profit being plugged in.
+    """
+    zero = Decimal("0.00")
+    balances = account_balances()
+    accounts = ChartOfAccount.objects.filter(
+        status=STATUS_ACTIVE, children__isnull=True, account_type__in=INCOME_STATEMENT_TYPES
+    ).order_by("code")
+
+    retained = gl_account(GL_RETAINED_EARNINGS_PATH, user=user)
+    entries, result = [], zero
+    for account in accounts:
+        # Signed on the account's own natural side: positive revenue is a
+        # credit balance, positive expense a debit one.
+        amount = (balances.get(account.code) or {}).get("closing", zero)
+        if not amount:
+            continue
+        debit, credit = signed_to_dr_cr(amount, account.account_type)
+        # Post the opposite side to bring the account back to nil.
+        entries.append((account.code, credit, debit, f"Closing {account.title}"))
+        result += amount if account.account_type == ACCOUNT_TYPE_REVENUE else -amount
+
+    if not entries:
+        return None
+
+    profit_debit, profit_credit = (zero, result) if result >= 0 else (-result, zero)
+    entries.append((retained.code, profit_debit, profit_credit,
+                    "Profit for the period" if result >= 0 else "Loss for the period"))
+
+    return _post_voucher(
+        source_ref=f"period_close:{closing_date:%Y-%m-%d}",
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=closing_date,
+        account_no=retained.code,
+        remarks=label or f"Closing entries for the period ended {closing_date:%d %b %Y}",
+        entries=entries,
+        user=user,
+    )
 
 
 def sync_customer_from_coa(*, node, user=None):

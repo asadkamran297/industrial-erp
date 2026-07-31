@@ -1,3 +1,10 @@
+/* Shared UI components. Templates carry no <style> blocks of their own —
+ * everything reusable lives in components.css. Must sit above the @tailwind
+ * directives: CSS requires @import to precede every other rule, and anything
+ * after them is silently dropped. Component rules are class-based, so they
+ * still outrank Preflight's element-level resets. */
+@import "./components.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

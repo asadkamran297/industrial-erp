@@ -1,0 +1,63 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Period Close" subtitle="Write revenue and expense back to nil and carry the result to Retained Earnings." %}
+
+<div class="mt-4 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+  <section class="statement-section">
+    <header class="statement-header">What will be closed</header>
+    {% for row in revenue %}
+      <div class="tree-row tree-row--flat" style="--depth: 2">
+        <span class="tree-title">{{ row.title }}</span>
+        <span class="tree-code">{{ row.code }}</span>
+        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+      </div>
+    {% endfor %}
+    {% for row in expense %}
+      <div class="tree-row tree-row--flat" style="--depth: 2">
+        <span class="tree-title">{{ row.title }}</span>
+        <span class="tree-code">{{ row.code }}</span>
+        <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+      </div>
+    {% endfor %}
+    {% if not has_balances %}
+      <p class="statement-empty">No revenue or expense balances — nothing to close.</p>
+    {% endif %}
+    <div class="statement-total statement-total--grand">
+      <span>{% if net_profit >= 0 %}Profit{% else %}Loss{% endif %} to Retained Earnings</span>
+      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|floatformat:2 }}</span>
+    </div>
+  </section>
+
+  <div class="space-y-4">
+    <form method="post" class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      {% csrf_token %}
+      <div class="field">
+        <label for="closing_date">Closing date</label>
+        <input id="closing_date" type="date" name="closing_date" value="{{ closing_date|date:'Y-m-d' }}">
+      </div>
+      <p class="dialog-hint mt-3">
+        This posts one journal voucher. Income and expense accounts start again from zero,
+        and the balance sheet balances without profit being plugged in.
+      </p>
+      <button type="submit" class="mt-3 w-full rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white"
+              {% if not has_balances %}disabled{% endif %}>
+        Post closing entry
+      </button>
+    </form>
+
+    <section class="statement-section">
+      <header class="statement-header">Previous closings</header>
+      {% for voucher in closings %}
+        <div class="tree-row tree-row--flat" style="--depth: 1">
+          <span class="tree-title">
+            <a href="{% url 'finance:account_voucher_detail' voucher.pk %}" class="hover:underline">{{ voucher.voucher_no }}</a>
+          </span>
+          <span class="tree-amount">{{ voucher.voucher_date|date:"d M Y" }}</span>
+        </div>
+      {% empty %}
+        <p class="statement-empty">No period has been closed yet.</p>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}

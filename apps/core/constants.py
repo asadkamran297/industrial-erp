@@ -170,10 +170,29 @@ GL_CASH_PATH: Final = ("ASSETS", "Current Assets", "Cash")
 GL_INVENTORY_PATH: Final = ("ASSETS", "Current Assets", "Inventory")
 GL_SALES_TAX_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Sales Tax Payable")
 GL_SALES_REVENUE_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Revenue")
-# Sales discount is contra-revenue: a debit-balance account under REVENUE, so it
-# nets against Sales Revenue on the income statement instead of inflating expenses.
+# Sales discount and sales returns are contra-revenue: debit-balance accounts
+# under REVENUE, so they net against Sales Revenue on the income statement
+# instead of being misreported as expenses.
 GL_SALES_DISCOUNT_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Discount")
+GL_SALES_RETURN_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Returns")
 GL_COGS_PATH: Final = ("EXPENSES", "Direct Expenses", "Cost of Goods Sold")
+GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
+
+# Supplier control account. Both spellings are accepted so an existing
+# hand-built chart is reused instead of gaining a near-duplicate heading.
+GL_PAYABLES_PARENT: Final = ("LIABILITIES", "Current Liabilities")
+GL_PAYABLES_TITLES: Final = ("Payables", "Payable")
+
+# Cash-flow activity buckets, by the account type on the other side of the entry.
+CASH_FLOW_OPERATING: Final = "operating"
+CASH_FLOW_INVESTING: Final = "investing"
+CASH_FLOW_FINANCING: Final = "financing"
+
+CASH_FLOW_SECTION_LABELS: Final[dict[str, str]] = {
+    CASH_FLOW_OPERATING: "Operating activities",
+    CASH_FLOW_INVESTING: "Investing activities",
+    CASH_FLOW_FINANCING: "Financing activities",
+}
 
 # Business role of a postable account, and the optgroup caption it gets in the
 # voucher pickers. Roles come from the account's place in the chart of accounts,

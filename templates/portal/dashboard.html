@@ -19,8 +19,8 @@
         <div class="grid h-24 w-24 place-items-center rounded-full border-8 border-emerald-400 text-lg font-bold">{{ ops_score }}</div>
       </div>
       <div class="mt-5 space-y-3 text-sm">
-        <div><div class="flex justify-between text-slate-300"><span>Payroll readiness</span><span>92%</span></div><div class="mt-1 h-2 rounded-full bg-white/10"><div class="h-2 rounded-full bg-emerald-400" style="width:92%"></div></div></div>
-        <div><div class="flex justify-between text-slate-300"><span>Finance posting</span><span>87%</span></div><div class="mt-1 h-2 rounded-full bg-white/10"><div class="h-2 rounded-full bg-blue-400" style="width:87%"></div></div></div>
+        <div><div class="flex justify-between text-slate-300"><span>Payroll readiness</span><span>92%</span></div><div class="mt-1 h-2 rounded-full bg-white/10"><div class="progress-fill bg-emerald-400" style="--progress: 92%"></div></div></div>
+        <div><div class="flex justify-between text-slate-300"><span>Finance posting</span><span>87%</span></div><div class="mt-1 h-2 rounded-full bg-white/10"><div class="progress-fill bg-blue-400" style="--progress: 87%"></div></div></div>
       </div>
     </div>
   </div>
@@ -130,7 +130,7 @@
       target.innerHTML = '<div class="space-y-3">' + rows.map((item, index) => {
         const width = Math.max(8, Math.round((Number(item.y || 0) / max) * 100));
         const palette = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
-        return `<div><div class="mb-1 flex justify-between text-sm"><span class="font-medium">${item.name}</span><span>${Number(item.y || 0).toLocaleString()}</span></div><div class="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div class="h-3 rounded-full" style="width:${width}%; background:${palette[index % palette.length]}"></div></div></div>`;
+        return `<div><div class="mb-1 flex justify-between text-sm"><span class="font-medium">${item.name}</span><span>${Number(item.y || 0).toLocaleString()}</span></div><div class="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div class="progress-fill progress-fill--lg" style="--progress:${width}%; --progress-color:${palette[index % palette.length]}"></div></div></div>`;
       }).join('') + '</div>';
     };
     const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#64748b'];

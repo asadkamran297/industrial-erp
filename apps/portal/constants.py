@@ -52,6 +52,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Income Statement", permission="finance.income_statement.index", url_name="finance:income_statement"),
         NavigationItem("Balance Sheet", permission="finance.balance_sheet.index", url_name="finance:balance_sheet"),
         NavigationItem("Cash Flow", permission="finance.cash_flow.index", url_name="finance:cash_flow"),
+        NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close"),
         NavigationItem("Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),
     )),
     NavigationItem("Employees", permission="hr.employees.index", section=SECTION_WORKFORCE, icon="E", url_name="hr:employee_list"),

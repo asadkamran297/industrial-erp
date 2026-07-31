@@ -1,41 +1,46 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Cash Flow" subtitle="Opening, net movement and closing balance for every Cash and Bank account." %}
+{% include "components/ui/page_header.html" with title="Cash Flow Statement" subtitle="Where cash came from and where it went, grouped by activity." %}
 
-<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-  <table class="w-full min-w-[700px] text-sm">
-    <thead>
-      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-        <th class="px-3 py-2">Code</th>
-        <th class="px-3 py-2">Account</th>
-        <th class="px-3 py-2">Group</th>
-        <th class="px-3 py-2 text-right">Opening</th>
-        <th class="px-3 py-2 text-right">Net Movement</th>
-        <th class="px-3 py-2 text-right">Closing</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-      <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
-        <td class="px-3 py-1.5">{{ row.title }}</td>
-        <td class="px-3 py-1.5">{{ row.group }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums {% if row.movement < 0 %}text-rose-600{% endif %}">{{ row.movement|floatformat:2 }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing|floatformat:2 }}</td>
-      </tr>
+<div class="mt-4 max-w-3xl">
+  <section class="statement-section">
+    {% for section in sections %}
+      <header class="statement-header{% if not forloop.first %} statement-header--divided{% endif %}">{{ section.label }}</header>
+      {% for row in section.rows %}
+        <div class="tree-row tree-row--flat" style="--depth: 2">
+          <span class="tree-title">{{ row.title }}</span>
+          <span class="tree-code">{{ row.code }}</span>
+          <span class="tree-amount{% if row.amount < 0 %} is-negative{% endif %}">{{ row.amount|floatformat:2 }}</span>
+        </div>
       {% empty %}
-      <tr><td colspan="6" class="px-3 py-6 text-center text-sm text-slate-500">No cash or bank accounts with a balance yet.</td></tr>
+        <p class="statement-empty">No cash movement from {{ section.label|lower }}.</p>
       {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
-        <td class="px-3 py-2" colspan="3">Total</td>
-        <td class="px-3 py-2 text-right tabular-nums">{{ totals.opening|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement < 0 %}text-rose-600{% endif %}">{{ totals.movement|floatformat:2 }}</td>
-        <td class="px-3 py-2 text-right tabular-nums">{{ totals.closing|floatformat:2 }}</td>
-      </tr>
-    </tfoot>
-  </table>
+      <div class="statement-total">
+        <span>Net cash from {{ section.label|lower }}</span>
+        <span class="tree-amount{% if section.subtotal < 0 %} is-negative{% endif %}">{{ section.subtotal|floatformat:2 }}</span>
+      </div>
+    {% endfor %}
+
+    {# Opening + movement = closing. This is the statement's own proof. #}
+    <div class="statement-total statement-total--grand">
+      <span>Cash at start of period</span>
+      <span class="tree-amount">{{ opening|floatformat:2 }}</span>
+    </div>
+    <div class="statement-total">
+      <span>Net increase / (decrease) in cash</span>
+      <span class="tree-amount{% if net_movement < 0 %} is-negative{% endif %}">{{ net_movement|floatformat:2 }}</span>
+    </div>
+    <div class="statement-total statement-total--grand">
+      <span>Cash at end of period</span>
+      <span class="tree-amount">{{ closing|floatformat:2 }}</span>
+    </div>
+  </section>
+
+  {% if not reconciles %}
+    <p class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
+      Cash moved by <span class="tabular-nums font-semibold">{{ difference|floatformat:2 }}</span> that these activities do not
+      explain. That gap means a cash entry has no counterpart to attribute it to — check for one-sided or unbalanced vouchers.
+    </p>
+  {% endif %}
 </div>
 {% endblock %}

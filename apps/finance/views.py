@@ -2,12 +2,14 @@ import json
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
 from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
@@ -18,7 +20,7 @@ from apps.core.constants import STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_summary, dr_cr_to_signed, income_statement, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -605,8 +607,42 @@ class CashFlowView(PagePermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(cash_flow_summary())
+        context.update(cash_flow_statement())
         return context
+
+
+class PeriodCloseView(PagePermissionRequiredMixin, TemplateView):
+    """Preview and run the closing entry that zeroes income into Capital."""
+
+    page = "finance.period_close"
+    template_name = "finance/period_close.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        statement = income_statement()
+        context.update(statement)
+        context["closing_date"] = timezone.localdate()
+        context["closings"] = AccountVoucher.objects.filter(
+            source_ref__startswith="period_close:"
+        ).order_by("-voucher_date")[:10]
+        context["has_balances"] = bool(statement["revenue"] or statement["expense"])
+        return context
+
+    def post(self, request, *args, **kwargs):
+        raw = (request.POST.get("closing_date") or "").strip()
+        closing_date = parse_date(raw) or timezone.localdate()
+        try:
+            voucher = close_period_to_retained_earnings(closing_date=closing_date, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("finance:period_close")
+        if voucher is None:
+            messages.info(request, "Nothing to close — no revenue or expense balances.")
+        elif voucher.voucher_date != closing_date:
+            messages.warning(request, f"This period was already closed by voucher {voucher.voucher_no}.")
+        else:
+            messages.success(request, f"Period closed. Closing entry {voucher.voucher_no} posted.")
+        return redirect("finance:period_close")
 
 
 class ChartOfAccountCreateView(PagePermissionRequiredMixin, View):

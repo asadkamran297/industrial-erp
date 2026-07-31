@@ -1,26 +1,26 @@
-<li class="ob-node{% if node.children %} has-children{% endif %}" data-id="{{ node.id }}">
-  <div class="ob-row{% if node.is_root %} is-root{% endif %}{% if not node.postable %} is-group{% endif %}">
-    <button type="button" class="ob-caret" aria-label="toggle">{% if node.children %}&#9662;{% endif %}</button>
-    <span class="ob-dot" style="--dot: var(--type-{{ node.account_type }})"></span>
-    <span class="ob-title">{{ node.title }}</span>
-    {% if node.code %}<span class="ob-code">{{ node.code }}</span>{% endif %}
+<li class="tree-node{% if node.children %} has-children{% endif %}" data-id="{{ node.id }}" data-type="{{ node.account_type }}">
+  <div class="tree-row{% if node.is_root %} is-root{% endif %}{% if not node.postable %} is-group{% endif %}">
+    <button type="button" class="tree-caret" aria-label="toggle">{% if node.children %}&#9662;{% endif %}</button>
+    <span class="tree-dot"></span>
+    <span class="tree-title">{{ node.title }}</span>
+    {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
 
     {% if node.postable %}
       <input type="number" step="0.01" name="opening_dr-{{ node.id }}" value="{{ node.opening_dr|floatformat:2 }}"
-             class="ob-input ob-dr-input" aria-label="Opening debit for {{ node.title }}">
+             class="tree-input tree-dr-input" aria-label="Opening debit for {{ node.title }}">
       <input type="number" step="0.01" name="opening_cr-{{ node.id }}" value="{{ node.opening_cr|floatformat:2 }}"
-             class="ob-input ob-cr-input" aria-label="Opening credit for {{ node.title }}">
+             class="tree-input tree-cr-input" aria-label="Opening credit for {{ node.title }}">
     {% else %}
       {# Headings hold no balance of their own — this is the subtree total. #}
-      <span class="ob-rollup">{{ node.opening_dr|floatformat:2 }}</span>
-      <span class="ob-rollup">{{ node.opening_cr|floatformat:2 }}</span>
+      <span class="tree-rollup">{{ node.opening_dr|floatformat:2 }}</span>
+      <span class="tree-rollup">{{ node.opening_cr|floatformat:2 }}</span>
     {% endif %}
 
-    <span class="ob-num ob-movement">{{ node.movement|floatformat:2 }}</span>
-    <span class="ob-num ob-closing">{{ node.closing|floatformat:2 }}</span>
+    <span class="tree-num">{{ node.movement|floatformat:2 }}</span>
+    <span class="tree-num">{{ node.closing|floatformat:2 }}</span>
   </div>
   {% if node.children %}
-    <ul class="ob-list ob-children">
+    <ul class="tree-list tree-children">
       {% for child in node.children %}
         {% include "finance/_opening_node.html" with node=child %}
       {% endfor %}

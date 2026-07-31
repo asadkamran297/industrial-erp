@@ -9,6 +9,7 @@
     "tailwindcss": "3.4.17"
   },
   "dependencies": {
-    "highcharts": "^13.0.0"
+    "highcharts": "^13.0.0",
+    "sortablejs": "^1.15.7"
   }
 }

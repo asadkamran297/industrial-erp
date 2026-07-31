@@ -3,113 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>{% block title %}Print{% endblock %}</title>
-<style>
-  /* Print pages are standalone documents and never load app.css, so Inter is
-     declared here too. Latin subset only — printouts are Latin-script. */
-  @font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: url("{% static 'fonts/inter-latin.woff2' %}") format('woff2');
-  }
-  * { box-sizing: border-box; }
-  body { font-family: Inter, Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; font-variant-numeric: tabular-nums; }
-
-  /* ── Org Header ─────────────────────────────────────────────── */
-  .org-header {
-    display: grid;
-    grid-template-columns: 120px 1fr 180px;
-    align-items: center;
-    border-bottom: 3px double #1e3a5f;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-    gap: 12px;
-  }
-  .org-header .org-logo img {
-    max-height: 72px;
-    max-width: 120px;
-    object-fit: contain;
-  }
-  .org-header .org-logo .org-initial {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 72px;
-    height: 72px;
-    background: #1e3a5f;
-    color: #fff;
-    font-size: 28px;
-    font-weight: 900;
-    border-radius: 8px;
-  }
-  .org-header .org-center {
-    text-align: center;
-  }
-  .org-header .org-center .org-name {
-    font-size: 22px;
-    font-weight: 900;
-    color: #1e3a5f;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    line-height: 1.2;
-  }
-  .org-header .org-center .org-branch {
-    font-size: 12px;
-    font-weight: 600;
-    color: #444;
-    margin-top: 3px;
-  }
-  .org-header .org-center .org-addr {
-    font-size: 11px;
-    color: #666;
-    margin-top: 2px;
-  }
-  .org-header .org-contact {
-    text-align: right;
-    font-size: 11px;
-    color: #333;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .org-header .org-contact span { white-space: nowrap; }
-  .org-header .org-contact b { color: #1e3a5f; }
-  .org-header .org-contact .print-meta { margin-top: 6px; color: #888; font-size: 10px; border-top: 1px solid #ddd; padding-top: 4px; }
-
-  /* ── Document ────────────────────────────────────────────────── */
-  h1.doc-title { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 10px; color: #1e3a5f; border-bottom: 1px solid #ccc; padding-bottom: 6px; }
-  .meta { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .meta td { padding: 3px 8px; vertical-align: top; font-size: 12px; }
-  .meta .lbl { font-weight: bold; white-space: nowrap; color: #1e3a5f; }
-  table.items { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  table.items th, table.items td { border: 1px solid #bbb; padding: 5px 8px; font-size: 11px; }
-  table.items th { background: #1e3a5f; color: #fff; text-align: left; }
-  table.items td.num, table.items th.num { text-align: right; }
-  .totals { text-align: right; margin-top: 10px; font-size: 13px; border-top: 2px solid #1e3a5f; padding-top: 6px; }
-  .words { margin-top: 4px; font-style: italic; color: #444; }
-  .sign { display: flex; justify-content: space-between; margin-top: 60px; }
-  .sign div { text-align: center; border-top: 1px solid #555; padding-top: 4px; min-width: 140px; font-weight: bold; font-size: 11px; }
-
-  /* ── Footer ──────────────────────────────────────────────────── */
-  .footer {
-    margin-top: 24px;
-    border-top: 1px solid #bbb;
-    padding-top: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    font-size: 10px;
-    color: #666;
-    gap: 8px;
-  }
-  .footer .footer-org { font-weight: 600; color: #1e3a5f; }
-
-  /* ── Controls ────────────────────────────────────────────────── */
-  .print-btn { margin-bottom: 14px; }
-  @media print { .print-btn { display: none; } body { margin: 0; } }
-  {% block extra_style %}{% endblock %}
-</style>
+<link rel="stylesheet" href="{% static 'dist/print.css' %}">
 </head>
 <body>
   <div class="print-btn">
@@ -156,7 +50,7 @@
       <span class="footer-org">{{ org.title }}</span>
       {% if org.address %} &bull; {{ org.address }}{% endif %}
     </div>
-    <div style="text-align:right; white-space:nowrap;">
+    <div class="footer-meta">
       {% if printed_by %}<div><b>Printed By:</b> {{ printed_by.get_full_name|default:printed_by.username }}</div>{% endif %}
       <div>System generated document &bull; {% now "d-M-Y" %}</div>
     </div>

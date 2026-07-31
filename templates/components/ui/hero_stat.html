@@ -1,0 +1,15 @@
+{% comment %}
+Headline figure inside a .hero-stats strip.
+
+Usage:
+  {% include "components/ui/hero_stat.html" with label="Base Salary" value=employee.salary|amount hint="PKR / month" %}
+
+Note: this note is wrapped in {% comment %} rather than {# #} — the latter
+cannot span multiple lines, so an example tag on a second line would be
+parsed as a real tag and this partial would include itself forever.
+{% endcomment %}
+<div class="hero-stat">
+  <p class="hero-stat-label">{{ label }}</p>
+  <p class="hero-stat-value">{{ value }}</p>
+  {% if hint %}<p class="hero-stat-hint">{{ hint }}</p>{% endif %}
+</div>

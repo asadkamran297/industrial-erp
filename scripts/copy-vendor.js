@@ -11,6 +11,7 @@ const path = require("path");
 const ASSETS = [
   ["highcharts/highcharts.js", "highcharts/highcharts.js"],
   ["highcharts/modules/accessibility.js", "highcharts/accessibility.js"],
+  ["sortablejs/Sortable.min.js", "sortablejs/Sortable.min.js"],
 ];
 
 const root = path.join(__dirname, "..");

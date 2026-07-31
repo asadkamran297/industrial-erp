@@ -2,71 +2,51 @@
 {% block content %}
 {% include "components/ui/page_header.html" with title="Balance Sheet" subtitle="Assets against Liabilities and Capital. Click a group to open its detail." %}
 
-<style>
-  .bs-row {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    padding: .35rem .75rem .35rem calc(.75rem + (var(--depth, 1) - 1) * 1.1rem);
-    font-size: .875rem;
-    border-top: 1px solid rgb(241 245 249);
-  }
-  .dark .bs-row { border-top-color: rgb(30 41 59); }
-  .bs-summary { cursor: pointer; list-style: none; }
-  .bs-summary::-webkit-details-marker { display: none; }
-  .bs-summary:hover { background: rgb(248 250 252); }
-  .dark .bs-summary:hover { background: rgb(30 41 59); }
-  .bs-heading, .bs-summary { font-weight: 600; }
-  .bs-caret { width: .75rem; font-size: .625rem; color: rgb(100 116 139); transition: transform .15s; }
-  details[open] > .bs-summary > .bs-caret { transform: rotate(90deg); }
-  .bs-title { flex: 1; }
-  .bs-code { font-size: .6875rem; color: rgb(100 116 139); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
-  .bs-amount { text-align: right; min-width: 7rem; font-variant-numeric: tabular-nums; }
-</style>
-
 <div class="mt-4 grid gap-4 md:grid-cols-2">
-  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-    <header class="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">Assets</header>
+  <section class="statement-section">
+    <header class="statement-header">Assets</header>
     {% for node in assets %}
       {% include "finance/_balance_sheet_node.html" with node=node %}
     {% empty %}
-      <p class="px-3 py-6 text-center text-sm text-slate-500">No asset balances yet.</p>
+      <p class="statement-empty">No asset balances yet.</p>
     {% endfor %}
-    <div class="flex items-center justify-between border-t-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800">
+    <div class="statement-total statement-total--grand">
       <span>Total Assets</span>
-      <span class="tabular-nums">{{ total_assets|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_assets|floatformat:2 }}</span>
     </div>
   </section>
 
-  <section class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-    <header class="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">Liabilities</header>
+  <section class="statement-section">
+    <header class="statement-header">Liabilities</header>
     {% for node in liabilities %}
       {% include "finance/_balance_sheet_node.html" with node=node %}
     {% empty %}
-      <p class="px-3 py-4 text-center text-sm text-slate-500">No liability balances yet.</p>
+      <p class="statement-empty">No liability balances yet.</p>
     {% endfor %}
-    <div class="flex items-center justify-between border-t border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700">
+    <div class="statement-total">
       <span>Total Liabilities</span>
-      <span class="tabular-nums">{{ total_liabilities|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_liabilities|floatformat:2 }}</span>
     </div>
 
-    <header class="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Capital</header>
+    <header class="statement-header statement-header--divided">Capital</header>
     {% for node in capital %}
       {% include "finance/_balance_sheet_node.html" with node=node %}
     {% endfor %}
-    <div class="bs-row" style="--depth: 1">
-      <span class="bs-caret"></span>
-      <span class="bs-title">Net Profit / Loss (life-to-date)</span>
-      <span class="bs-amount {% if net_profit < 0 %}text-rose-600{% endif %}">{{ net_profit|floatformat:2 }}</span>
+    {# Revenue and expense never close into retained earnings yet, so the
+       life-to-date result is shown as its own Capital line. #}
+    <div class="tree-row tree-row--flat" style="--depth: 1">
+      <span class="tree-caret tree-caret--static"></span>
+      <span class="tree-title">Net Profit / Loss (life-to-date)</span>
+      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|floatformat:2 }}</span>
     </div>
-    <div class="flex items-center justify-between border-t border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700">
+    <div class="statement-total">
       <span>Total Capital</span>
-      <span class="tabular-nums">{{ total_capital|floatformat:2 }}</span>
+      <span class="tree-amount">{{ total_capital|floatformat:2 }}</span>
     </div>
 
-    <div class="flex items-center justify-between border-t-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800">
+    <div class="statement-total statement-total--grand">
       <span>Total Liabilities + Capital</span>
-      <span class="tabular-nums {% if total_assets != total_liabilities_and_capital %}text-rose-600{% endif %}">{{ total_liabilities_and_capital|floatformat:2 }}</span>
+      <span class="tree-amount{% if total_assets != total_liabilities_and_capital %} is-negative{% endif %}">{{ total_liabilities_and_capital|floatformat:2 }}</span>
     </div>
   </section>
 </div>

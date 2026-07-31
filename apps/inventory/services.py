@@ -195,6 +195,14 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     stock.save()
 
     create_ledger_entry(stock=stock, inventory_item=purchase_order_item.inventory_item, transaction_id=purchase_master.transaction_id, transaction_no=po.purchase_num, transaction_type=LEDGER_RECEIVE, transaction_date=receive_date, ref_table="inv_purchase_order_item_received", ref_id=receipt.pk, ref_no=receipt.grn_number, quantity=quantity + extra_qty, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=remarks or purchase_order_item.descr, user=user)
+
+    # Receiving the goods is the accounting event: the asset arrives and the
+    # debt to the supplier arises at the same moment, at landed cost.
+    from apps.finance.services import post_purchase_receipt_to_gl  # lazy: finance imports inventory
+
+    post_purchase_receipt_to_gl(
+        receipt=receipt, vendor=po.vendor, amount=landed_price * received_units, user=user
+    )
     return receipt
 
 
@@ -250,6 +258,7 @@ def post_sale_return(*, sale_return, user):
     if sale_return.posted == YES:
         raise ValidationError("Posted return cannot be changed.")
     total_return = Decimal("0.00")
+    cost_total = Decimal("0.00")
     for item in sale_return.items.all():
         already_returned = sale_return.pos_master.returns.filter(posted=YES).exclude(pk=sale_return.pk).filter(items__pos_detail=item.pos_detail).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
         allowed = item.pos_detail.quantity - already_returned
@@ -263,12 +272,19 @@ def post_sale_return(*, sale_return, user):
         stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
         create_ledger_entry(stock=stock, inventory_item=item.inventory_item, transaction_id=sale_return.transaction_id, transaction_no=sale_return.return_num, transaction_type=LEDGER_SALE_RETURN, transaction_date=sale_return.return_date, ref_table="inv_pos_return_details", ref_id=item.pk, ref_no=f"Sale Return | {sale_return.sale_num}", quantity=item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=f"Sale Return {sale_return.return_num} against {sale_return.sale_num}", user=user)
         total_return += item.net_total
+        cost_total += item.quantity * (old_price or Decimal("0.00"))
 
     sale_return.returned_amount = total_return
     sale_return.status = STATUS_POSTED
     sale_return.posted = YES
     sale_return.updated_by = user
     sale_return.save()
+
+    # Mirror of the sale's entry: reverse the revenue and put the cost back
+    # into stock, in the same transaction so ledger and stock cannot diverge.
+    from apps.finance.services import post_sale_return_to_gl  # lazy: finance imports inventory
+
+    post_sale_return_to_gl(sale_return=sale_return, cost_of_goods=cost_total, user=user)
 
     master = sale_return.pos_master
     returned_qty = master.returns.filter(posted=YES).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
@@ -311,4 +327,9 @@ def post_purchase_return(*, purchase_return, user):
     purchase_master.return_amount = (purchase_master.return_amount or Decimal("0.00")) + total
     purchase_master.updated_by = user
     purchase_master.save(update_fields=["return_amount", "updated_by", "updated_at"])
+
+    # Goods go back to the supplier, so the stock asset and the debt both fall.
+    from apps.finance.services import post_purchase_return_to_gl  # lazy: finance imports inventory
+
+    post_purchase_return_to_gl(purchase_return=purchase_return, user=user)
     return purchase_return
