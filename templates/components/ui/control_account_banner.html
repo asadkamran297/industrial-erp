@@ -1,0 +1,45 @@
+{% comment %}
+Ties a subsidiary ledger page (items, stock, customers, vendors) to the control
+account that carries its total on the balance sheet.
+
+Expects a `control_account` dict in context:
+  label      what the subsidiary total is called, e.g. "Stock on hand"
+  subtotal   the subsidiary ledger total
+  account    the ChartOfAccount control account
+  ledger     that account's balance
+  difference subtotal - ledger
+  reconciles True when the two agree
+  url        where to go to reconcile them
+{% endcomment %}
+<div class="rounded-lg border {% if control_account.reconciles %}border-slate-200 dark:border-slate-800{% else %}border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950{% endif %} px-4 py-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+      <span>
+        <span class="text-slate-500 dark:text-slate-400">{{ control_account.label }}</span>
+        <span class="ml-2 font-semibold tabular-nums">{{ control_account.subtotal|amount }}</span>
+      </span>
+      <span>
+        <span class="text-slate-500 dark:text-slate-400">
+          Balance sheet &middot; {{ control_account.account.title }}
+        </span>
+        <span class="ml-2 font-semibold tabular-nums">{{ control_account.ledger|amount }}</span>
+      </span>
+      {% if not control_account.reconciles %}
+        <span>
+          <span class="text-amber-700 dark:text-amber-400">Difference</span>
+          <span class="ml-2 font-semibold tabular-nums text-amber-700 dark:text-amber-400">{{ control_account.difference|amount }}</span>
+        </span>
+      {% endif %}
+    </div>
+    <a href="{{ control_account.url }}"
+       class="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-[var(--primary-color)] hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+      {% if control_account.reconciles %}View valuation{% else %}Reconcile{% endif %} &rsaquo;
+    </a>
+  </div>
+  {% if not control_account.reconciles %}
+    <p class="mt-2 text-xs text-amber-700 dark:text-amber-400">
+      These items are the subsidiary ledger; the {{ control_account.account.title }} account is the control account
+      that reports their total on the balance sheet. They are meant to agree.
+    </p>
+  {% endif %}
+</div>

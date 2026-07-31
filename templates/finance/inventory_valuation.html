@@ -1,0 +1,110 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "components/ui/page_header.html" with title="Inventory Valuation" subtitle="Stock on hand against the Inventory account on the balance sheet." %}
+
+<div class="mt-4 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+  <section class="statement-section">
+    <header class="statement-header">Reconciliation</header>
+    <div class="tree-row tree-row--flat" style="--depth: 1">
+      <span class="tree-title">Stock on hand ({{ rows|length }} item{{ rows|length|pluralize }})</span>
+      <span class="tree-amount">{{ stock_value|amount }}</span>
+    </div>
+    <div class="tree-row tree-row--flat" style="--depth: 1">
+      <span class="tree-title">
+        Inventory account
+        <a href="{% url 'finance:balance_sheet' %}" class="tree-code hover:underline">{{ account.code }}</a>
+      </span>
+      <span class="tree-amount">{{ ledger_value|amount }}</span>
+    </div>
+    <div class="statement-total statement-total--grand">
+      <span>Difference</span>
+      <span class="tree-amount{% if not reconciles %} is-negative{% endif %}">{{ difference|amount }}</span>
+    </div>
+
+    {% if reconciles %}
+      <p class="statement-empty">The Inventory account agrees with the stock records.</p>
+    {% else %}
+      <p class="px-3 py-3 text-sm text-slate-600 dark:text-slate-400">
+        The balance sheet is {% if difference > 0 %}understating{% else %}overstating{% endif %}
+        stock by <span class="tabular-nums font-semibold">{{ difference|amount }}</span>.
+        Stock records are the subsidiary ledger; the Inventory account is the control account,
+        and the two are meant to agree.
+      </p>
+    {% endif %}
+  </section>
+
+  <div class="space-y-4">
+    <form method="post" class="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+      {% csrf_token %}
+      <div class="field">
+        <label for="adjustment_date">Adjustment date</label>
+        <input id="adjustment_date" type="date" name="adjustment_date" value="{{ adjustment_date|date:'Y-m-d' }}">
+      </div>
+      <div class="field mt-3">
+        <label>Why</label>
+        {% for key, label in reasons.items %}
+          <label class="flex items-start gap-2 text-xs font-normal normal-case tracking-normal text-slate-600 dark:text-slate-400">
+            <input type="radio" name="reason" value="{{ key }}" {% if forloop.first %}checked{% endif %}>
+            <span>{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      <p class="dialog-hint mt-3">
+        An opening catch-up goes to equity and never touches profit. A stock adjustment is a
+        trading loss or gain, so it does hit the income statement — pick the one that is true.
+      </p>
+      <button type="submit" class="mt-3 w-full rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white"
+              {% if reconciles %}disabled{% endif %}>
+        Post adjustment
+      </button>
+    </form>
+
+    {# One mispriced item can dominate the total, so the biggest holdings are
+       shown here — that is where a data-entry slip becomes obvious. #}
+    <section class="statement-section">
+      <header class="statement-header">Largest holdings</header>
+      {% for row in largest %}
+        <div class="tree-row tree-row--flat" style="--depth: 1">
+          <span class="tree-title">{{ row.item_name }}</span>
+          <span class="tree-amount">{{ row.value|amount }}</span>
+        </div>
+      {% empty %}
+        <p class="statement-empty">No stock on hand.</p>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+
+<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+  <table class="w-full min-w-[640px] text-sm">
+    <thead>
+      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <th class="px-3 py-2">Code</th>
+        <th class="px-3 py-2">Item</th>
+        <th class="px-3 py-2 text-right">Quantity</th>
+        <th class="px-3 py-2 text-right">Unit cost</th>
+        <th class="px-3 py-2 text-right">Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr class="border-t border-slate-100 dark:border-slate-800">
+          <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.item_code }}</td>
+          <td class="px-3 py-1.5">{{ row.item_name }}</td>
+          <td class="px-3 py-1.5 text-right tabular-nums">{{ row.quantity|qty }}</td>
+          <td class="px-3 py-1.5 text-right tabular-nums">{{ row.cost|amount }}</td>
+          <td class="px-3 py-1.5 text-right tabular-nums">{{ row.value|amount }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="px-3 py-6 text-center text-sm text-slate-500">No stock on hand.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
+        <td class="px-3 py-2" colspan="4">Total stock value</td>
+        <td class="px-3 py-2 text-right tabular-nums">{{ stock_value|amount }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

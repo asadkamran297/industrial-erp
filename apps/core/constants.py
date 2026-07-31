@@ -178,6 +178,17 @@ GL_SALES_RETURN_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Returns")
 GL_COGS_PATH: Final = ("EXPENSES", "Direct Expenses", "Cost of Goods Sold")
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
 
+# Counterparts for an inventory reconciliation. A genuine count difference is a
+# trading loss or gain; stock that predates general-ledger posting is not — it
+# is brought on to the books against opening equity so it never touches profit.
+GL_INVENTORY_ADJUSTMENT_PATH: Final = ("EXPENSES", "Direct Expenses", "Inventory Adjustment")
+GL_OPENING_EQUITY_PATH: Final = ("CAPITAL", "Owner's Capital", "Opening Balance Equity")
+
+INVENTORY_ADJUSTMENT_REASONS: Final[dict[str, str]] = {
+    "opening": "Opening catch-up — stock on hand before ledger posting began",
+    "adjustment": "Stock adjustment — count difference, shrinkage or write-down",
+}
+
 # Supplier control account. Both spellings are accepted so an existing
 # hand-built chart is reused instead of gaining a near-duplicate heading.
 GL_PAYABLES_PARENT: Final = ("LIABILITIES", "Current Liabilities")

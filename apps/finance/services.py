@@ -18,7 +18,9 @@ from apps.core.constants import (
     CASH_FLOW_SECTION_LABELS,
     GL_CASH_PATH,
     GL_COGS_PATH,
+    GL_INVENTORY_ADJUSTMENT_PATH,
     GL_INVENTORY_PATH,
+    GL_OPENING_EQUITY_PATH,
     GL_PAYABLES_PARENT,
     GL_PAYABLES_TITLES,
     GL_RETAINED_EARNINGS_PATH,
@@ -26,6 +28,7 @@ from apps.core.constants import (
     GL_SALES_RETURN_PATH,
     GL_SALES_REVENUE_PATH,
     GL_SALES_TAX_PAYABLE_PATH,
+    INVENTORY_ADJUSTMENT_REASONS,
     SETTLEMENT_CASH,
     SETTLEMENT_CREDIT,
     STATUS_ACTIVE,
@@ -277,6 +280,17 @@ def _balance_forest(account_types):
     return [built for root in children_map.get(None, []) if (built := build(root, 1))]
 
 
+def _attach_link(nodes, code, url_name):
+    """Tag the node with ``code`` so the statement can link it to its detail page."""
+    for node in nodes:
+        if node["code"] == code:
+            node["link"] = url_name
+            return True
+        if _attach_link(node["children"], code, url_name):
+            return True
+    return False
+
+
 def balance_sheet():
     """Assets vs. Liabilities + Capital as collapsible trees, with life-to-date net profit in Capital.
 
@@ -288,6 +302,9 @@ def balance_sheet():
     assets = _balance_forest([ACCOUNT_TYPE_ASSET])
     liabilities = _balance_forest([ACCOUNT_TYPE_LIABILITY])
     capital = _balance_forest([ACCOUNT_TYPE_CAPITAL])
+    # The Inventory line is a control account backed by the stock records, so
+    # it links through to the reconciliation that proves the two agree.
+    _attach_link(assets, gl_account(GL_INVENTORY_PATH).code, "finance:inventory_valuation")
     net_profit = income_statement()["net_profit"]
     total_assets = sum((node["amount"] for node in assets), zero)
     total_liabilities = sum((node["amount"] for node in liabilities), zero)
@@ -699,6 +716,121 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
             (vendor_account.code, returned, zero, f"Payable reduced on {purchase_return.return_num}"),
             (inventory.code, zero, returned, f"Stock returned to {vendor.name} on {purchase_return.return_num}"),
         ],
+        user=user,
+    )
+
+
+def inventory_valuation():
+    """Reconcile the Inventory control account against the stock records.
+
+    Stock is a subsidiary ledger: each item row says how many units are held
+    and what they cost. The Inventory account in the chart is the control
+    account that is supposed to equal their total. When the two disagree the
+    balance sheet is overstating or understating what the business owns, so
+    the difference is reported rather than smoothed over.
+    """
+    from apps.inventory.models import Stock  # lazy: inventory imports finance
+
+    zero = Decimal("0.00")
+    rows = []
+    for stock in Stock.objects.filter(status=STATUS_ACTIVE).order_by("item_name"):
+        quantity = stock.current_quantity or Decimal("0")
+        cost = stock.current_price or zero
+        value = (quantity * cost).quantize(TWO_DP)
+        if not quantity and not value:
+            continue
+        rows.append({
+            "item_code": stock.item_code,
+            "item_name": stock.item_name,
+            "quantity": quantity,
+            "cost": cost,
+            "value": value,
+        })
+
+    stock_value = sum((row["value"] for row in rows), zero)
+    account = gl_account(GL_INVENTORY_PATH)
+    ledger_value = (account_balances().get(account.code) or {}).get("closing", zero)
+
+    # A single mispriced item can dominate the total, so surface the largest
+    # holdings — that is where a data-entry slip shows up.
+    largest = sorted(rows, key=lambda row: -row["value"])[:5]
+
+    return {
+        "rows": rows,
+        "largest": largest,
+        "stock_value": stock_value,
+        "ledger_value": ledger_value,
+        "difference": stock_value - ledger_value,
+        "reconciles": stock_value == ledger_value,
+        "account": account,
+    }
+
+
+def inventory_control_summary():
+    """Compact form of :func:`inventory_valuation` for the stock/items banner.
+
+    Lets a subsidiary-ledger page show, in one line, whether it agrees with the
+    Inventory account that reports its total on the balance sheet.
+    """
+    from django.urls import reverse
+
+    state = inventory_valuation()
+    return {
+        "label": "Stock on hand",
+        "subtotal": state["stock_value"],
+        "account": state["account"],
+        "ledger": state["ledger_value"],
+        "difference": state["difference"],
+        "reconciles": state["reconciles"],
+        "url": reverse("finance:inventory_valuation"),
+    }
+
+
+@transaction.atomic
+def post_inventory_adjustment(*, adjustment_date, reason, user=None):
+    """Bring the Inventory control account in line with the stock records.
+
+        stock worth more than the ledger says
+            Dr Inventory          the shortfall
+                Cr counterpart
+        stock worth less
+            Dr counterpart
+                Cr Inventory          the excess
+
+    ``reason`` picks the counterpart: ``opening`` books the difference to
+    equity, for stock that existed before the ledger did; ``adjustment``
+    books it to an expense account, which is where a real count difference
+    belongs because it is a trading loss.
+    """
+    zero = Decimal("0.00")
+    state = inventory_valuation()
+    difference = state["difference"]
+    if not difference:
+        return None
+
+    counterpart_path = GL_OPENING_EQUITY_PATH if reason == "opening" else GL_INVENTORY_ADJUSTMENT_PATH
+    counterpart = gl_account(counterpart_path, user=user)
+    inventory = state["account"]
+    label = INVENTORY_ADJUSTMENT_REASONS.get(reason, reason)
+
+    if difference > 0:
+        entries = [
+            (inventory.code, difference, zero, "Inventory brought in line with stock on hand"),
+            (counterpart.code, zero, difference, label),
+        ]
+    else:
+        entries = [
+            (counterpart.code, -difference, zero, label),
+            (inventory.code, zero, -difference, "Inventory reduced to stock on hand"),
+        ]
+
+    return _post_voucher(
+        source_ref=f"inventory_adjustment:{adjustment_date:%Y-%m-%d}:{reason}",
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=adjustment_date,
+        account_no=inventory.code,
+        remarks=f"Inventory reconciliation — {label}",
+        entries=entries,
         user=user,
     )
 

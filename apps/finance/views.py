@@ -16,11 +16,11 @@ from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHO
 from apps.configurations.models import PaymentMethod
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
-from apps.core.constants import STATUS_INACTIVE
+from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, money_account_codes, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
+from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, sync_customer_from_coa
 
 
 class AuditSaveMixin:
@@ -609,6 +609,37 @@ class CashFlowView(PagePermissionRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context.update(cash_flow_statement())
         return context
+
+
+class InventoryValuationView(PagePermissionRequiredMixin, TemplateView):
+    """Stock on hand against the Inventory control account, and the fix."""
+
+    page = "finance.inventory_valuation"
+    template_name = "finance/inventory_valuation.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(inventory_valuation())
+        context["adjustment_date"] = timezone.localdate()
+        context["reasons"] = INVENTORY_ADJUSTMENT_REASONS
+        return context
+
+    def post(self, request, *args, **kwargs):
+        reason = request.POST.get("reason") or "adjustment"
+        if reason not in INVENTORY_ADJUSTMENT_REASONS:
+            messages.error(request, "Choose why the inventory is being adjusted.")
+            return redirect("finance:inventory_valuation")
+        adjustment_date = parse_date((request.POST.get("adjustment_date") or "").strip()) or timezone.localdate()
+        try:
+            voucher = post_inventory_adjustment(adjustment_date=adjustment_date, reason=reason, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("finance:inventory_valuation")
+        if voucher is None:
+            messages.info(request, "Inventory already agrees with the stock records — nothing to adjust.")
+        else:
+            messages.success(request, f"Inventory reconciled. Adjustment {voucher.voucher_no} posted.")
+        return redirect("finance:inventory_valuation")
 
 
 class PeriodCloseView(PagePermissionRequiredMixin, TemplateView):
