@@ -2,6 +2,9 @@ from .base import *  # noqa: F403
 
 DEBUG = False
 
+if config("VERCEL", default="", cast=str):  # noqa: F405
+    STATIC_ROOT = "/tmp/staticfiles"
+
 ALLOWED_HOSTS = [
     ".railway.app",
     ".onrender.com",
