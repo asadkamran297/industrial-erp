@@ -65,6 +65,7 @@
           select.dispatchEvent(new Event('change', { bubbles: true }));
           closePanel();
           updateLabel();
+          wrapper.dispatchEvent(new Event('selected'));
         });
         list.append(item);
       });
@@ -96,9 +97,54 @@
       panel.classList.add('hidden');
     }
 
+    function options() {
+      return Array.from(list.querySelectorAll('.searchable-select-option'));
+    }
+
+    function moveActive(step) {
+      const items = options();
+      if (!items.length) return;
+      const current = items.indexOf(document.activeElement);
+      const next = current === -1 ? (step > 0 ? 0 : items.length - 1) : current + step;
+      const target = items[Math.max(0, Math.min(items.length - 1, next))];
+      if (target) target.focus();
+    }
+
     button.addEventListener('click', () => {
       wrapper.dataset.open === 'true' ? closePanel() : openPanel();
     });
+
+    // Keyboard: the closed control opens on arrow/enter/space, the search box
+    // hands off to the list on arrow-down, and the list walks with the arrows.
+    button.addEventListener('keydown', (event) => {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+        event.preventDefault();
+        openPanel();
+      }
+    });
+
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveActive(1);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        const first = options()[0];
+        if (first) first.click();
+      }
+    });
+
+    list.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveActive(1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (options().indexOf(document.activeElement) === 0) search.focus();
+        else moveActive(-1);
+      }
+    });
+
     search.addEventListener('input', renderOptions);
     select.addEventListener('change', updateLabel);
     document.addEventListener('click', (event) => {
@@ -107,10 +153,14 @@
       }
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        closePanel();
-      }
+      if (event.key !== 'Escape' || wrapper.dataset.open !== 'true') return;
+      closePanel();
+      button.focus();   // put the user back where they opened from
     });
+
+    // Picking with the mouse or the keyboard both land here: close, then leave
+    // focus on the control so Tab carries on down the form.
+    wrapper.addEventListener('selected', () => button.focus());
     updateLabel();
   }
 

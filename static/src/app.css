@@ -266,6 +266,18 @@ main tbody td {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400;
   }
 
+  /* Amounts are typed, not stepped: the spinners only crowd the figure. */
+  .form-input[type="number"]::-webkit-inner-spin-button,
+  .form-input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+  .form-input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   /* Reusable premium surfaces */
   .surface-card {
     @apply rounded-xl border bg-white dark:bg-slate-900;

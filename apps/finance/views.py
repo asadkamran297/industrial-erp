@@ -442,7 +442,7 @@ class AccountBalanceView(PagePermissionRequiredMixin, View):
         # closing is signed on the account's own natural side, so the side it
         # sits on flips when it goes negative (a debit account run into credit).
         natural_debit = account.account_type in DEBIT_NATURE_TYPES
-        side = "" if not closing else ("Debit" if (closing > 0) == natural_debit else "Credit")
+        side = "" if not closing else ("Dr" if (closing > 0) == natural_debit else "Cr")
         return JsonResponse({
             "account_no": code,
             "title": account.title,

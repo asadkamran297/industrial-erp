@@ -2,81 +2,73 @@
 {% block content %}
 {% include "components/ui/page_header.html" with title=selected_voucher_type_label|add:" Voucher" %}
 
-<form method="post" id="voucher-form" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
-  {% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
-
-  {% comment %}Voucher type, with the number and date it will carry sitting
-     beside it — the three facts that identify the voucher, read together
-     before any of the entry below is filled in.{% endcomment %}
+<form method="post" id="voucher-form" class="mt-6">{% csrf_token %}
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
-  <div class="mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-    <div class="flex flex-wrap items-center gap-6">
-      {# Cash or bank narrows the money account below to one kind. #}
-      <div id="money-mode" class="flex items-center gap-4">
-        <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <input type="radio" name="money_mode" value="cash" class="h-4 w-4" checked> Cash
-        </label>
-        <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <input type="radio" name="money_mode" value="bank" class="h-4 w-4"> Bank
-        </label>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-start gap-4">
-      <div class="w-44">
-        <label class="mb-2 block text-sm font-medium" for="voucher-no-preview">Voucher No</label>
-        <input id="voucher-no-preview" class="form-input w-full tabular-nums font-semibold" type="text"
-               value="{{ next_voucher_no }}" readonly>
-      </div>
-      <div class="w-48">
-        <label class="mb-2 block text-sm font-medium" for="id_voucher_date">Voucher Date</label>
-        <input id="id_voucher_date" class="form-input w-full" type="date" name="voucher_date"
-               value="{{ form.voucher_date.value|date:'Y-m-d' }}">
-      </div>
-    </div>
-  </div>
-
   {# Workflow fields keep their defaults. #}
   <input type="hidden" name="status" value="{{ form.status.value }}">
   <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
 
-  <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {% for field in form %}{% if field.name not in hidden_header_fields %}
-      <div id="field-{{ field.name }}">
-        <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span></label>
-        {# Both account pickers share the same option list; JS filters them by role. #}
-        {% if field.name == "account_no" or field.name == "party_account_no" %}
-          <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
-            <option value="">Select account…</option>
-            {% for acc in voucher_accounts %}
-              <option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.title }}</option>
-            {% endfor %}
-          </select>
-        {% else %}{{ field }}{% endif %}
-        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
-        {% if field.name == "account_no" %}<p id="account-balance" class="mt-1 hidden text-xs font-semibold text-slate-600 dark:text-slate-300"></p>{% endif %}
+  <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    {% if form.non_field_errors %}<div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <div id="money-mode" class="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+        <label class="money-pill cursor-pointer rounded-lg px-5 py-2 text-sm font-semibold text-slate-500 transition">
+          <input type="radio" name="money_mode" value="cash" class="sr-only" checked> Cash
+        </label>
+        <label class="money-pill cursor-pointer rounded-lg px-5 py-2 text-sm font-semibold text-slate-500 transition">
+          <input type="radio" name="money_mode" value="bank" class="sr-only"> Bank
+        </label>
       </div>
-    {% endif %}{% endfor %}
-  </div>
+
+      <div class="flex flex-wrap items-end gap-4">
+        <div class="w-36">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="voucher-no-preview">Voucher No</label>
+          <input id="voucher-no-preview" class="form-input h-11 w-full font-bold tabular-nums" type="text" value="{{ next_voucher_no }}" readonly>
+        </div>
+        <div class="w-40">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="id_voucher_date">Date</label>
+          <input id="id_voucher_date" class="form-input h-11 w-full" type="date" name="voucher_date" value="{{ form.voucher_date.value|date:'Y-m-d' }}">
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap-5 sm:grid-cols-2">
+      {% for field in form %}{% if field.name not in hidden_header_fields %}
+        <div id="field-{{ field.name }}">
+          <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span></label>
+          {# Both account pickers share the same option list; JS filters them by role. #}
+          {% if field.name == "account_no" or field.name == "party_account_no" %}
+            <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
+              <option value="">Select account…</option>
+              {% for acc in voucher_accounts %}
+                <option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}" {% if acc.code == field.value %}selected{% endif %}>{{ acc.title }}</option>
+              {% endfor %}
+            </select>
+          {% else %}{{ field }}{% endif %}
+          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          {% if field.name == "account_no" %}<p id="account-balance" class="mt-1 hidden text-xs font-bold"></p>{% endif %}
+        </div>
+      {% endif %}{% endfor %}
+    </div>
 
   {% if not object %}
-  <div id="simple-entry" class="mb-6 hidden gap-4 sm:grid-cols-2">
+  <div id="simple-entry" class="mt-5 hidden gap-5 sm:grid-cols-2">
     <div>
       <label class="mb-1.5 block text-sm font-medium" for="simple-account"><span id="label-simple-account">Account</span></label>
       <select id="simple-account" class="form-select"></select>
-      <p id="simple-account-balance" class="mt-1 hidden text-xs font-semibold text-slate-600 dark:text-slate-300"></p>
+      <p id="simple-account-balance" class="mt-1 hidden text-xs font-bold"></p>
       <p id="simple-account-error" class="mt-1 hidden text-xs text-rose-600">Pick an account.</p>
     </div>
     <div>
       <label class="mb-1.5 block text-sm font-medium" for="simple-amount">Amount</label>
-      <input id="simple-amount" type="number" min="0" step="0.01" placeholder="0.00"
-             class="form-input w-full py-3 text-right text-2xl font-semibold tabular-nums">
+      <input id="simple-amount" type="number" min="0" step="0.01" class="form-input w-full tabular-nums">
       <p id="simple-amount-error" class="mt-1 hidden text-xs text-rose-600">Enter an amount.</p>
     </div>
   </div>
 
   {# Voucher entry grid: one row per ledger line, totals must balance #}
-  <div id="line-grid-wrap" class="mb-6 rounded-lg border border-slate-200 dark:border-slate-800">
+  <div id="line-grid-wrap" class="mt-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
     <table class="w-full text-sm" id="line-grid">
       <thead>
         <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
@@ -119,24 +111,25 @@
       </tfoot>
     </table>
   </div>
-  <div id="add-line-wrap" class="mb-6 hidden items-center justify-between">
+  <div id="add-line-wrap" class="mt-3 hidden items-center justify-between">
     <button type="button" id="add-line-btn" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">
       + Add Line
     </button>
   </div>
-  <div id="field-narration" class="mb-6">
+  <div id="field-narration" class="mt-5">
     <label class="mb-1.5 block text-sm font-medium" for="id_narration">Narration</label>
-    <textarea name="remarks" id="id_narration" rows="2" class="form-input w-full" placeholder="What is this entry for?"></textarea>
+    <textarea name="remarks" id="id_narration" rows="2" class="form-input w-full"></textarea>
   </div>
-  <p id="balance-hint" class="mb-6 hidden rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
-  <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected above — the voucher always balances.</p>
+  <p id="balance-hint" class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
   {% endif %}
 
-  <p id="save-flash" class="mb-4 hidden rounded-lg border p-3 text-sm"></p>
-  <div class="mt-6 flex justify-end gap-3">
-    <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
-    <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save</button>
-  </div>
+    <p id="save-flash" class="mt-5 hidden rounded-xl border p-3 text-sm"></p>
+
+    <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
+      <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</a>
+      <button class="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary-color)] px-8 text-sm font-bold text-white transition hover:opacity-90">Save Voucher</button>
+    </div>
+  </section>
 </form>
 
 {{ simple_voucher_types|json_script:"simple-voucher-types" }}
@@ -339,6 +332,10 @@
       }
       // Simple mode always balances: the money leg is generated from this total.
       hint.classList.toggle('hidden', simple || balanced || (dr === 0 && cr === 0));
+      // The side panel shows what this voucher is worth: the amount in simple
+      // mode, the debit side of a journal (the two sides must match anyway).
+      const summary = document.getElementById('summary-amount');
+      if (summary) summary.textContent = (simple ? amount : dr).toFixed(2);
       return used;
     }
     recalcGrid = recalc;
@@ -413,6 +410,15 @@
     if (simpleBalanceLine) simpleBalanceLine.classList.add('hidden');
     if (balanceLine) balanceLine.classList.add('hidden');
     document.querySelectorAll('#simple-entry p.text-rose-600').forEach(el => el.classList.add('hidden'));
+    syncEnhancedSelects();
+  }
+
+  // The searchable dropdowns hold their own visible label and only redraw it on
+  // the select's change event, so clearing a value in code has to say so.
+  function syncEnhancedSelects() {
+    document.querySelectorAll('#voucher-form select[data-searchable-enhanced="true"]').forEach(select => {
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
 
   // Each voucher type numbers itself, so the preview is re-fetched whenever
@@ -445,8 +451,20 @@
 
   // Switching cash/bank invalidates whatever money account was picked, so the
   // list is rebuilt and cleared.
+  // Segmented control: the checked radio's own label carries the raised look.
+  const PILL_ON = ['bg-white', 'text-slate-900', 'shadow-sm', 'dark:bg-slate-900', 'dark:text-white'];
+  function paintPills() {
+    document.querySelectorAll('#money-mode .money-pill').forEach(pill => {
+      const on = pill.querySelector('input').checked;
+      PILL_ON.forEach(c => pill.classList.toggle(c, on));
+      pill.classList.toggle('text-slate-500', !on);
+    });
+  }
+  paintPills();
+
   document.querySelectorAll('#money-mode input').forEach(radio => {
     radio.addEventListener('change', () => {
+      paintPills();
       refresh('header');
       loadNextVoucherNo();  // cash and bank number in separate books
       loadBalance();        // account was cleared, so the old balance is stale
@@ -488,7 +506,16 @@
 
   // Wrapped: the event object must not reach refresh()'s `clear` flag.
   if (settlement) settlement.addEventListener('change', () => refresh());
-  if (acct) acct.addEventListener('change', () => { refresh(); loadBalance(); });
+  // Picking an account must not rebuild the account list: arrow keys fire a
+  // change per step, and re-filling the options would reset the walk. Only the
+  // things that depend on which account was picked are refreshed here.
+  if (acct) {
+    acct.addEventListener('change', () => {
+      applyMode();
+      toggleMethodFields();
+      loadBalance();
+    });
+  }
 
   function refresh(clear) {
     filterAccounts(clear);
@@ -583,6 +610,35 @@
     });
   }
 
+  // Enter walks the entry instead of submitting it: picking the money account
+  // and pressing Enter lands on Paid To, then the amount, then the narration.
+  form.addEventListener('keydown', (e) => {
+    const isEnter = e.key === 'Enter';
+    const isTab = e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey;
+    if (!isEnter && !isTab) return;
+    if (isEnter && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON')) return;
+
+    // Selects are enhanced into searchable dropdowns, so the chain walks their
+    // buttons; the panel's own search box is not a step in the entry.
+    const visible = [...form.querySelectorAll(
+      'input:not([type=hidden]):not([readonly]):not(.searchable-select-search), textarea, select:not(.sr-only), .searchable-select-button'
+    )].filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.searchable-select-panel'));
+    const here = visible.indexOf(e.target);
+    if (here === -1) return;
+    // Shift+Tab walks the same chain backwards.
+    const back = isTab && e.shiftKey;
+    const next = visible[here + (back ? -1 : 1)];
+    if (!next) {
+      // Past the last field (the narration) the entry is complete: go straight
+      // to Save rather than through Cancel.
+      if (!back && saveBtn) { e.preventDefault(); saveBtn.focus(); }
+      return;
+    }
+    e.preventDefault();
+    next.focus();
+    if (next.select) next.select();
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
@@ -604,6 +660,7 @@
         showFlash(('Voucher ' + data.voucher_no + ' saved. ' + extra).trim(), true);
         resetEntry();
         refresh(true);
+        syncEnhancedSelects();  // options were rebuilt, so redraw the labels
         loadNextVoucherNo();
         loadBalance();  // the saved voucher just moved it
         const first = document.querySelector('#field-account_no select, #field-account_no input');
