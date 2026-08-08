@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -139,6 +139,33 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
     queryset = AccountVoucher.objects.select_related("payment_method").order_by("-voucher_date", "-id")
     search_fields = ("voucher_no", "account_no", "remarks")
     filter_fields = {"status": "status", "voucher_type": "voucher_type", "posted": "posted"}
+    date_filters = [{"field": "voucher_date", "label": "Voucher date"}]
+
+    # Period shortcuts, resolved to the date range the mixin already filters on.
+    PERIODS = ("this_month", "last_month", "this_year", "all")
+
+    def _period_range(self):
+        period = self.request.GET.get("period", "this_month")
+        today = timezone.localdate()
+        if period == "last_month":
+            end = today.replace(day=1) - timedelta(days=1)
+            return period, end.replace(day=1), end
+        if period == "this_year":
+            return period, today.replace(month=1, day=1), today.replace(month=12, day=31)
+        if period == "all" or period not in self.PERIODS:
+            return ("all" if period == "all" else "this_month"), None, None
+        first = today.replace(day=1)
+        next_first = (first + timedelta(days=32)).replace(day=1)
+        return "this_month", first, next_first - timedelta(days=1)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Explicit dates win; the period only fills them in when none were typed.
+        if not self.request.GET.get("date_from") and not self.request.GET.get("date_to"):
+            _period, start, end = self._period_range()
+            if start:
+                queryset = queryset.filter(voucher_date__gte=start, voucher_date__lte=end)
+        return queryset
 
     def get_filter_specs(self):
         return [
@@ -146,6 +173,34 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
             {"name": "voucher_type", "label": "All voucher types", "choices": FIN_VOUCHER_TYPE_CHOICES, "value": self.request.GET.get("voucher_type", "")},
             {"name": "posted", "label": "Posted?", "choices": YES_NO_CHOICES, "value": self.request.GET.get("posted", "")},
         ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = self.get_queryset()
+        totals = rows.aggregate(total=Sum("debit_amount"), count=Count("id"))
+        period, start, end = self._period_range()
+        context["voucher_total"] = totals["total"] or Decimal("0")
+        context["voucher_count"] = totals["count"] or 0
+        context["posted_total"] = rows.filter(posted="Y").aggregate(total=Sum("debit_amount"))["total"] or Decimal("0")
+        context["selected_period"] = period
+        context["period_start"] = self.request.GET.get("date_from") or (start.isoformat() if start else "")
+        context["period_end"] = self.request.GET.get("date_to") or (end.isoformat() if end else "")
+        context["voucher_type_choices"] = FIN_VOUCHER_TYPE_CHOICES
+        selected_type = self.request.GET.get("voucher_type", "")
+        context["selected_voucher_type"] = selected_type
+        # A type-scoped list names itself and adds that same type; the unscoped
+        # list keeps the generic wording and starts a Payment.
+        label = dict(FIN_VOUCHER_TYPE_CHOICES).get(selected_type, "")
+        context["list_title"] = f"{label} Vouchers" if label else "Vouchers"
+        context["add_label"] = f"Add {label}" if label else "Add Voucher"
+        creatable = {code for code, *_rest in FIN_VOUCHER_TYPE_PICKER_META}
+        context["add_type"] = selected_type if selected_type in creatable else FIN_VOUCHER_TYPE_PICKER_META[0][0]
+        context["can_add_type"] = not selected_type or selected_type in creatable
+        context["period_choices"] = (
+            ("this_month", "This Month"), ("last_month", "Last Month"),
+            ("this_year", "This Year"), ("all", "All Time"),
+        )
+        return context
 
 
 class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):

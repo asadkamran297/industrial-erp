@@ -1,38 +1,107 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% url "finance:account_voucher_create" as create_url %}
-{% if can_add %}{% include "components/ui/page_header.html" with title="Account Vouchers" subtitle="Manage payment and receipt vouchers." action_label="New Voucher" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Account Vouchers" subtitle="Manage payment and receipt vouchers." %}{% endif %}
-<section class="mt-6">{% include "components/table/search_filters.html" with search_placeholder="Search vouchers..." %}
-<div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/40">
-  <div class="min-w-[280px] flex-1">
-    <label for="voucher-jump" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Jump to voucher</label>
-    <input id="voucher-jump" type="text" class="form-input w-full" placeholder="Paste voucher URL or ID" />
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold">{{ list_title }}</h1>
   </div>
-  <button type="button" onclick="goToVoucher()" class="inline-flex min-h-11 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Open</button>
+  {% if can_add and can_add_type %}
+  <a href="{% url 'finance:account_voucher_create' %}?type={{ add_type }}"
+     class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">
+    + {{ add_label }}
+  </a>
+  {% endif %}
 </div>
-<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800"><tr><th class="px-4 py-3">Voucher</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Debit</th><th class="px-4 py-3">Credit</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Posted</th><th class="px-4 py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for voucher in vouchers %}<tr><td class="px-4 py-3"><p class="font-medium">{{ voucher.voucher_no }}</p><p class="text-xs text-slate-500">{{ voucher.account_no }}</p></td><td class="px-4 py-3">{{ voucher.voucher_date }}</td><td class="px-4 py-3">{{ voucher.get_voucher_type_display }}</td><td class="px-4 py-3">{{ voucher.debit_amount|amount }}</td><td class="px-4 py-3">{{ voucher.credit_amount|amount }}</td><td class="px-4 py-3">{{ voucher.get_status_display }}</td><td class="px-4 py-3">{{ voucher.get_posted_display }}</td><td class="px-4 py-3"><div class="flex justify-end gap-2"><a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'finance:account_voucher_detail' voucher.pk %}" title="View"><span>&#128065;</span></a>{% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'finance:account_voucher_update' voucher.pk %}" title="Edit"><span>&#9998;</span></a>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No vouchers found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>
-<script>
-  function goToVoucher() {
-    const input = document.getElementById('voucher-jump');
-    const value = (input?.value || '').trim();
-    if (!value) return;
 
-    const match = value.match(/\/finance\/vouchers\/(\d+)\/?$/) || value.match(/\/finance\/vouchers\/(\d+)\//) || value.match(/^(\d+)$/);
-    const voucherId = match ? match[1] : null;
+<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="period">Filter by</label>
+    <select name="period" id="period" class="form-select" onchange="this.form.submit()">
+      {% for value, label in period_choices %}
+        <option value="{{ value }}" {% if value == selected_period %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
+    <input type="date" name="date_from" id="date_from" value="{{ period_start }}" class="form-input">
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
+    <input type="date" name="date_to" id="date_to" value="{{ period_end }}" class="form-input">
+  </div>
+  {# The type is set by the sidebar, so it rides along instead of being re-picked. #}
+  <input type="hidden" name="voucher_type" value="{{ selected_voucher_type }}">
+  <div class="min-w-[220px] flex-1">
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="q">Search</label>
+    <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Voucher no, account, remarks" class="form-input w-full">
+  </div>
+  <button class="inline-flex min-h-11 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Apply</button>
+  <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex min-h-11 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium dark:border-slate-700">Reset</a>
+</form>
 
-    if (!voucherId) {
-      alert('Please enter a voucher ID or a voucher URL.');
-      return;
-    }
+<div class="mt-4 grid gap-4 sm:grid-cols-3">
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-sm text-slate-500">Total Amount</p>
+    <p class="mt-1 text-2xl font-bold tabular-nums">{{ voucher_total|amount }}</p>
+    <p class="mt-1 text-xs text-slate-500">Posted: <span class="font-semibold">{{ posted_total|amount }}</span></p>
+  </div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-sm text-slate-500">Vouchers</p>
+    <p class="mt-1 text-2xl font-bold tabular-nums">{{ voucher_count }}</p>
+    <p class="mt-1 text-xs text-slate-500">in the selected period</p>
+  </div>
+  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <p class="text-sm text-slate-500">Period</p>
+    <p class="mt-1 text-sm font-semibold">{% if period_start %}{{ period_start }} → {{ period_end }}{% else %}All time{% endif %}</p>
+  </div>
+</div>
 
-    window.location.href = `/finance/vouchers/${voucherId}/`;
-  }
-
-  document.getElementById('voucher-jump')?.addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      goToVoucher();
-    }
-  });
-</script>
+<section class="mt-4">
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Ref No.</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Account</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3">Payment Type</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for voucher in vouchers %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+            <td class="px-4 py-3 whitespace-nowrap">{{ voucher.voucher_date }}</td>
+            <td class="px-4 py-3 font-medium">{{ voucher.voucher_no }}</td>
+            <td class="px-4 py-3">{{ voucher.get_voucher_type_display }}</td>
+            <td class="px-4 py-3">{{ voucher.account_no }}<span class="block text-xs text-slate-500">{{ voucher.remarks|truncatechars:40 }}</span></td>
+            <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ voucher.debit_amount|amount }}</td>
+            <td class="px-4 py-3">{{ voucher.payment_method|default:"—" }}</td>
+            <td class="px-4 py-3">
+              {% if voucher.posted == "Y" %}
+                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Posted</span>
+              {% else %}
+                <span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">{{ voucher.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex justify-end gap-2">
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'finance:account_voucher_detail' voucher.pk %}" title="View">&#128065;</a>
+                {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'finance:account_voucher_update' voucher.pk %}" title="Edit">&#9998;</a>{% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="px-4 py-10 text-center text-slate-500">No vouchers in this period.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
 {% endblock %}

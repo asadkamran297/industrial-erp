@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import parse_qs
 
 from django.http import HttpRequest
 from django.urls import reverse
@@ -23,10 +24,15 @@ def is_href_active(href: str, current_path: str, current_query: str = "") -> boo
     if href == "#":
         return False
     # Siblings that share a path and differ only by query (the voucher types)
-    # must match on the query as well, or they would all light up together.
+    # must match on the query as well, or they would all light up together. The
+    # item's own params must be present; the page's other params (period, page,
+    # search) are free to vary without dropping the highlight.
     if "?" in href:
         path, _, query = href.partition("?")
-        return current_path.rstrip("/") == path.rstrip("/") and query == current_query
+        if current_path.rstrip("/") != path.rstrip("/"):
+            return False
+        current = parse_qs(current_query)
+        return all(value in current.get(key, []) for key, values in parse_qs(query).items() for value in values)
     if href == "/":
         return current_path == href
     normalized_href = href.rstrip("/")

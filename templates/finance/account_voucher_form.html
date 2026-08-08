@@ -52,8 +52,25 @@
   </div>
 
   {% if not object %}
+  {# Payment/Receipt are one account and one amount — the money leg is posted
+     from the header account, so a ledger grid would only be a table with one
+     row in it. The grid stays for Journal, where both sides are entered. #}
+  <div id="simple-entry" class="mb-6 hidden gap-4 sm:grid-cols-2">
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" for="simple-account"><span id="label-simple-account">Account</span></label>
+      <select id="simple-account" class="form-select"></select>
+      <p id="simple-account-error" class="mt-1 hidden text-xs text-rose-600">Pick an account.</p>
+    </div>
+    <div>
+      <label class="mb-1.5 block text-sm font-medium" for="simple-amount">Amount</label>
+      <input id="simple-amount" type="number" min="0" step="0.01" placeholder="0.00"
+             class="form-input w-full py-3 text-right text-2xl font-semibold tabular-nums">
+      <p id="simple-amount-error" class="mt-1 hidden text-xs text-rose-600">Enter an amount.</p>
+    </div>
+  </div>
+
   {# Voucher entry grid: one row per ledger line, totals must balance #}
-  <div class="mb-6 rounded-lg border border-slate-200 dark:border-slate-800">
+  <div id="line-grid-wrap" class="mb-6 rounded-lg border border-slate-200 dark:border-slate-800">
     <table class="w-full text-sm" id="line-grid">
       <thead>
         <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
@@ -85,8 +102,7 @@
         </tr>
         {% endfor %}
       </tbody>
-      {% comment %} Totals row hidden with the single-line grid; restores with multi-line entry.
-      <tfoot>
+      <tfoot id="grid-totals">
         <tr class="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
           <td colspan="3" class="px-3 py-2 text-right text-sm font-semibold">Totals :</td>
           <td class="px-3 py-2 col-drcr"><input type="text" id="total-debit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
@@ -95,23 +111,20 @@
           <td></td>
         </tr>
       </tfoot>
-      {% endcomment %}
     </table>
   </div>
-  {% comment %} Multi-line entry disabled: one line per voucher for now.
-  <div class="mb-6 flex items-center justify-between">
+  <div id="add-line-wrap" class="mb-6 hidden items-center justify-between">
     <button type="button" id="add-line-btn" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">
       + Add Line
     </button>
   </div>
-  {% endcomment %}
   <p id="balance-hint" class="mb-6 hidden rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
   <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected above — the voucher always balances.</p>
   {% endif %}
 
   <p id="save-flash" class="mb-4 hidden rounded-lg border p-3 text-sm"></p>
   <div class="mt-6 flex justify-end gap-3">
-    <a href="{% url 'finance:account_voucher_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
+    <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
     <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save</button>
   </div>
 </form>
@@ -140,12 +153,21 @@
   // Simple mode = no Debit/Credit columns, just an Amount per line.
   const SIMPLE_TYPES = JSON.parse(document.getElementById('simple-voucher-types').textContent);
 
+  // Simple-mode entry: one account and one amount, mirrored into the first grid
+  // row so the POST looks the same as a grid entry to the server.
+  const simpleEntry = document.getElementById('simple-entry');
+  const simpleAccount = document.getElementById('simple-account');
+  const simpleAmount = document.getElementById('simple-amount');
+  const gridWrap = document.getElementById('line-grid-wrap');
+  const firstRow = () => document.querySelector('#line-grid .line-row');
+
   const party = document.getElementById('id_party_account_no');
   const settlement = document.getElementById('id_settlement_mode');
   const lineLabel = document.getElementById('line-account-label');
   const simpleHint = document.getElementById('simple-hint');
   const defaultLineLabel = lineLabel ? lineLabel.textContent : '';
   let recalcGrid = () => {};
+  let ensureRows = () => {};
 
   function settlementMode() {
     return SETTLEMENT_TYPES.includes(hidden.value) && settlement ? settlement.value : '';
@@ -208,6 +230,7 @@
     if (party) { filterSelect(party, PARTY_ROLES[hidden.value]); wipe(party); }
     const lineRoles = LINE_ROLES[hidden.value];
     document.querySelectorAll('#line-grid .line-account').forEach(s => { filterSelect(s, lineRoles); wipe(s); });
+    if (simpleAccount) { filterSelect(simpleAccount, lineRoles); wipe(simpleAccount); }
   }
 
   // Simple mode hides the Debit/Credit pair behind a single Amount column; the
@@ -226,6 +249,19 @@
     toggleField('settlement_mode', showSettlement);
     toggleField('party_account_no', showParty);
     toggleField('payment_method', (!showSettlement || mode === 'cash') && !headerIsCash());
+
+    if (!simple) ensureRows(2);
+    const addLineWrap = document.getElementById('add-line-wrap');
+    if (addLineWrap) {
+      addLineWrap.classList.toggle('hidden', simple);
+      addLineWrap.classList.toggle('flex', !simple);
+    }
+    if (simpleEntry) {
+      simpleEntry.classList.toggle('hidden', !simple);
+      simpleEntry.classList.toggle('grid', simple);
+      if (gridWrap) gridWrap.classList.toggle('hidden', simple);
+      setLabel('simple-account', labels.line);
+    }
 
     setLabel('settlement_mode', labels.settlement);
     setLabel('party_account_no', labels.party);
@@ -280,8 +316,7 @@
       rowsBody.querySelectorAll('.line-row .line-num').forEach((input, index) => { input.value = index + 1; });
     }
 
-    // Unused while the grid is locked to a single line; kept for the multi-line mode.
-    function addRow() {  // eslint-disable-line no-unused-vars
+    function addRow() {
       const last = rowsBody.querySelector('.line-row:last-child');
       const clone = last.cloneNode(true);
       clone.querySelectorAll('input').forEach(i => { i.value = ''; });
@@ -320,6 +355,11 @@
         addRow().querySelector('.line-account').focus();
       });
     }
+    // Journal is entered as a pair: one row debited, one credited. Start with
+    // both rows on screen so the entry reads as the two halves it is.
+    ensureRows = (count) => {
+      while (rowsBody.querySelectorAll('.line-row').length < count) addRow();
+    };
     recalc();
   }
 
@@ -337,6 +377,9 @@
       row.querySelectorAll('input:not(.line-num), select').forEach(control => { control.value = ''; });
     });
     document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
+    if (simpleAccount) simpleAccount.value = '';
+    if (simpleAmount) simpleAmount.value = '';
+    document.querySelectorAll('#simple-entry p.text-rose-600').forEach(el => el.classList.add('hidden'));
   }
 
   // Each voucher type numbers itself, so the preview is re-fetched whenever
@@ -391,6 +434,35 @@
 
   if (methodSelect) methodSelect.addEventListener('change', toggleMethodFields);
 
+  // Mirror the simple entry into the grid row the server reads.
+  if (simpleAccount) {
+    simpleAccount.addEventListener('change', () => {
+      const row = firstRow();
+      if (row) row.querySelector('.line-account').value = simpleAccount.value;
+      document.getElementById('simple-account-error').classList.add('hidden');
+      recalcGrid();
+    });
+  }
+  if (simpleAmount) {
+    simpleAmount.addEventListener('input', () => {
+      const row = firstRow();
+      if (row) row.querySelector('.line-amount').value = simpleAmount.value;
+      document.getElementById('simple-amount-error').classList.add('hidden');
+      recalcGrid();
+    });
+  }
+
+  // The grid row is hidden in simple mode, so its own errors never show; check
+  // the two visible boxes here instead of letting the server bounce a blank one.
+  function simpleEntryValid() {
+    if (!SIMPLE_TYPES.includes(hidden.value)) return true;
+    const noAccount = !simpleAccount.value;
+    const noAmount = !(parseFloat(simpleAmount.value) > 0);
+    document.getElementById('simple-account-error').classList.toggle('hidden', !noAccount);
+    document.getElementById('simple-amount-error').classList.toggle('hidden', !noAmount);
+    return !noAccount && !noAmount;
+  }
+
   refresh();  // initial
 
   {% if not object %}
@@ -425,6 +497,7 @@
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
+    if (!simpleEntryValid()) { showFlash('Fill the account and amount.', false); return; }
     saveBtn.disabled = true;
     fetch(form.action || window.location.href, {
       method: 'POST',

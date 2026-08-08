@@ -64,14 +64,12 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # deliberate act that ends a period.
     # One entry per voucher type: the type is chosen here rather than on the
     # form, so the entry screen opens already set for the voucher being written.
-    NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=(
-        NavigationItem("All Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),
-    ) + tuple(
+    NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=tuple(
         NavigationItem(
             label,
-            permission="finance.vouchers.add",
-            url_name="finance:account_voucher_create",
-            query=f"type={code}",
+            permission="finance.vouchers.index",
+            url_name="finance:account_voucher_list",
+            query=f"voucher_type={code}",
         )
         for code, label, _fkey, _prefix in FIN_VOUCHER_TYPE_PICKER_META
     )),
