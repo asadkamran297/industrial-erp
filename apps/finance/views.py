@@ -262,6 +262,8 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
             account.tree_depth = depth_of(account.id)
         context["voucher_accounts"] = accounts
         context["simple_voucher_types"] = list(VOUCHER_SIMPLE_SIDES)
+        # {type: (header side, line side)} — drives the posting preview.
+        context["simple_voucher_sides"] = {code: list(sides) for code, sides in VOUCHER_SIMPLE_SIDES.items()}
         context["voucher_header_roles"] = FIN_VOUCHER_HEADER_ROLES
         context["voucher_line_roles"] = FIN_VOUCHER_LINE_ROLES
         context["settlement_header_roles"] = FIN_SETTLEMENT_HEADER_ROLES
