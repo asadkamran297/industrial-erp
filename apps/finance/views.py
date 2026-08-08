@@ -8,7 +8,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
@@ -172,6 +172,7 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context = super().get_context_data(**kwargs)
         context["voucher_type_meta"] = FIN_VOUCHER_TYPE_PICKER_META
         context["selected_voucher_type"] = self._selected_type()
+        context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(self._selected_type(), "")
         # Rendered server-side so the number is present before JavaScript runs;
         # the fetch then keeps it in step as the type changes.
         context["next_voucher_no"] = next_voucher_number(self._selected_type())
@@ -262,6 +263,19 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
             updated_by=self.request.user,
         )
 
+    def _is_ajax(self):
+        return self.request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    def _drain_messages(self):
+        """Messages queued for the redirect would surface on some later page; hand them
+        to the caller instead so the AJAX save shows them where the entry happened."""
+        return [{"level": m.level_tag, "text": m.message} for m in messages.get_messages(self.request)]
+
+    def form_invalid(self, form):
+        if self._is_ajax():
+            return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         with transaction.atomic():
             response = super().form_valid(form)
@@ -285,6 +299,14 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         self.object.refresh_from_db()
         if self.object.lines.exists() and not self.object.is_balanced:
             messages.warning(self.request, "Voucher totals are not balanced yet. Debit and credit must match before posting.")
+        if self._is_ajax():
+            # Stay on the form: the entry screen clears itself for the next voucher.
+            return JsonResponse({
+                "ok": True,
+                "voucher_no": self.object.voucher_no,
+                "detail_url": reverse("finance:account_voucher_detail", args=[self.object.pk]),
+                "messages": self._drain_messages(),
+            })
         return response
 
 

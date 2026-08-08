@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from apps.core.constants import FIN_VOUCHER_TYPE_PICKER_META
+
 
 @dataclass(frozen=True)
 class NavigationItem:
@@ -10,6 +12,9 @@ class NavigationItem:
     section: str = "main"
     icon: str = ""
     children: tuple["NavigationItem", ...] = ()
+    # Query string appended to the resolved href, e.g. "type=EV". Items that
+    # differ only by query are matched on the query too, never on path alone.
+    query: str = ""
 
 
 SECTION_WORKSPACE = "Workspace"
@@ -57,7 +62,19 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # ── Accounts ────────────────────────────────────────────────────────
     # Entry, then what you read, then what you set up, then the one
     # deliberate act that ends a period.
-    NavigationItem("Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list", section=SECTION_FINANCE, icon="V"),
+    # One entry per voucher type: the type is chosen here rather than on the
+    # form, so the entry screen opens already set for the voucher being written.
+    NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=(
+        NavigationItem("All Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),
+    ) + tuple(
+        NavigationItem(
+            label,
+            permission="finance.vouchers.add",
+            url_name="finance:account_voucher_create",
+            query=f"type={code}",
+        )
+        for code, label, _fkey, _prefix in FIN_VOUCHER_TYPE_PICKER_META
+    )),
     NavigationItem("Financial Reports", permission=None, section=SECTION_FINANCE, icon="R", children=(
         NavigationItem("Trial Balance", permission="finance.trial_balance.index", url_name="finance:trial_balance"),
         NavigationItem("Income Statement", permission="finance.income_statement.index", url_name="finance:income_statement"),

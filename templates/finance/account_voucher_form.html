@@ -1,8 +1,8 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Account Voucher" subtitle="Pick a voucher type, then fill the entry. Posted vouchers cannot be updated." %}
+{% include "components/ui/page_header.html" with title=selected_voucher_type_label|add:" Voucher" subtitle="Fill the entry and save. Posted vouchers cannot be updated." %}
 
-<form method="post" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+<form method="post" id="voucher-form" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
   {% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
 
   {% comment %}Voucher type, with the number and date it will carry sitting
@@ -11,16 +11,8 @@
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
   <div class="mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
     <div>
-      <p class="mb-2 text-sm font-medium">Voucher Type</p>
-      <div class="flex flex-wrap gap-2" id="voucher-type-picker">
-        {% for code, label, fkey, prefix in voucher_type_meta %}
-        <button type="button" data-code="{{ code }}"
-          class="vtype-btn inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition {% if code == selected_voucher_type %}border-[var(--primary-color)] bg-[var(--primary-color)] text-white{% else %}border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}"
-          {% if object %}disabled{% endif %}>
-          {{ label }}
-        </button>
-        {% endfor %}
-      </div>
+      <p class="mb-2 text-sm font-medium text-slate-500">Voucher Type</p>
+      <p class="text-lg font-semibold">{{ selected_voucher_type_label }}</p>
     </div>
 
     <div class="flex flex-wrap items-start gap-4">
@@ -117,6 +109,7 @@
   <p id="simple-hint" class="mb-6 hidden rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">The matching Cash/Bank entry is posted automatically from the account selected above — the voucher always balances.</p>
   {% endif %}
 
+  <p id="save-flash" class="mb-4 hidden rounded-lg border p-3 text-sm"></p>
   <div class="mt-6 flex justify-end gap-3">
     <a href="{% url 'finance:account_voucher_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium">Cancel</a>
     <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save</button>
@@ -134,11 +127,8 @@
 {{ payment_conditional_fields|json_script:"payment-conditional-fields" }}
 <script>
 (function () {
-  const picker = document.getElementById('voucher-type-picker');
   const hidden = document.getElementById('id_voucher_type');
   const acct = document.getElementById('id_account_no');
-  const active = 'border-[var(--primary-color)] bg-[var(--primary-color)] text-white';
-  const idle = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
   // Allowed account roles per voucher type; absent => any role (Journal/Contra).
   const HEADER_ROLES = JSON.parse(document.getElementById('voucher-header-roles').textContent);
@@ -178,9 +168,14 @@
     return !!opt && opt.dataset.role === 'cash';
   }
 
+  // Labels captured as rendered, so a type without its own wording (Journal,
+  // Contra) falls back to the form's label instead of keeping the previous type's.
+  const defaultLabels = {};
+  document.querySelectorAll('[id^="label-"]').forEach(el => { defaultLabels[el.id.slice(6)] = el.textContent; });
+
   function setLabel(fieldName, text) {
     const el = document.getElementById('label-' + fieldName);
-    if (el && text) el.textContent = text;
+    if (el) el.textContent = text || defaultLabels[fieldName] || el.textContent;
   }
 
   // Keep full option list; rebuild on each change (option.hidden unreliable in Safari/mobile).
@@ -205,11 +200,14 @@
     select.value = [...select.options].some(o => o.value === prev) ? prev : '';
   }
 
-  function filterAccounts() {
-    if (acct) filterSelect(acct, headerRoles());
-    if (party) filterSelect(party, PARTY_ROLES[hidden.value]);
+  // `clear` is set when the voucher type changed: the rebuilt list must come up
+  // empty rather than carrying the account picked for the previous type.
+  function filterAccounts(clear) {
+    const wipe = (select) => { if (clear) select.value = ''; };
+    if (acct) { filterSelect(acct, headerRoles()); wipe(acct); }
+    if (party) { filterSelect(party, PARTY_ROLES[hidden.value]); wipe(party); }
     const lineRoles = LINE_ROLES[hidden.value];
-    document.querySelectorAll('#line-grid .line-account').forEach(s => filterSelect(s, lineRoles));
+    document.querySelectorAll('#line-grid .line-account').forEach(s => { filterSelect(s, lineRoles); wipe(s); });
   }
 
   // Simple mode hides the Debit/Credit pair behind a single Amount column; the
@@ -325,19 +323,21 @@
     recalc();
   }
 
-  picker.addEventListener('click', (e) => {
-    const btn = e.target.closest('.vtype-btn');
-    if (!btn || btn.disabled) return;
-    hidden.value = btn.dataset.code;
-    picker.querySelectorAll('.vtype-btn').forEach(b => {
-      const on = b === btn;
-      active.split(' ').forEach(c => b.classList.toggle(c, on));
-      idle.split(' ').forEach(c => b.classList.toggle(c, !on));
+  // Clears the entry after a save. Type, number and date identify the voucher,
+  // so those stay; everything the user typed for the saved voucher goes.
+  function resetEntry() {
+    document.querySelectorAll('[id^="field-"]').forEach(wrapper => {
+      wrapper.querySelectorAll('input, select, textarea').forEach(control => {
+        if (control.type === 'checkbox' || control.type === 'radio') control.checked = control.defaultChecked;
+        else control.value = '';
+      });
     });
-    if (settlement) settlement.value = '';  // a fresh type re-asks cash vs credit
-    refresh();
-    loadNextVoucherNo();
-  });
+    document.querySelectorAll('#line-grid .line-row').forEach((row, index) => {
+      if (index) { row.remove(); return; }  // multi-line entry: drop back to one row
+      row.querySelectorAll('input:not(.line-num), select').forEach(control => { control.value = ''; });
+    });
+    document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
+  }
 
   // Each voucher type numbers itself, so the preview is re-fetched whenever
   // the type changes. It is advisory: the number is finally allocated on save,
@@ -366,11 +366,12 @@
   // No fetch on load: the server already rendered the right number for the
   // selected type. Fetching here would only risk replacing a good value.
 
-  if (settlement) settlement.addEventListener('change', refresh);
-  if (acct) acct.addEventListener('change', refresh);
+  // Wrapped: the event object must not reach refresh()'s `clear` flag.
+  if (settlement) settlement.addEventListener('change', () => refresh());
+  if (acct) acct.addEventListener('change', () => refresh());
 
-  function refresh() {
-    filterAccounts();
+  function refresh(clear) {
+    filterAccounts(clear);
     applyMode();
     toggleMethodFields();
   }
@@ -391,6 +392,64 @@
   if (methodSelect) methodSelect.addEventListener('change', toggleMethodFields);
 
   refresh();  // initial
+
+  {% if not object %}
+  // ----- save without leaving the screen -----
+  // Vouchers are entered in runs, so a save clears the form for the next one
+  // instead of bouncing to the list; the number preview refetches for the type.
+  const form = document.getElementById('voucher-form');
+  const flash = document.getElementById('save-flash');
+  const saveBtn = form.querySelector('button:not([type=button])');
+
+  function showFlash(text, ok) {
+    if (!flash) return;
+    flash.textContent = text;
+    flash.className = 'mb-4 rounded-lg border p-3 text-sm ' + (ok
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : 'border-rose-200 bg-rose-50 text-rose-800');
+  }
+
+  function showFieldErrors(errors) {
+    Object.entries(errors || {}).forEach(([name, list]) => {
+      const wrapper = document.getElementById('field-' + name);
+      if (!wrapper) return;
+      list.forEach(error => {
+        const p = document.createElement('p');
+        p.className = 'mt-1 text-xs text-rose-600';
+        p.textContent = error;
+        wrapper.appendChild(p);
+      });
+    });
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
+    saveBtn.disabled = true;
+    fetch(form.action || window.location.href, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.ok) {
+          showFieldErrors(data.errors);
+          showFlash('Voucher not saved. Check the highlighted fields.', false);
+          return;
+        }
+        const extra = (data.messages || []).filter(m => m.level !== 'success').map(m => m.text).join(' ');
+        showFlash(('Voucher ' + data.voucher_no + ' saved. ' + extra).trim(), true);
+        resetEntry();
+        refresh(true);
+        loadNextVoucherNo();
+        const first = document.querySelector('#field-account_no select, #field-account_no input');
+        if (first) first.focus();
+      })
+      .catch(() => showFlash('Save failed — check the connection and try again.', false))
+      .finally(() => { saveBtn.disabled = false; });
+  });
+  {% endif %}
 })();
 </script>
 {% endblock %}

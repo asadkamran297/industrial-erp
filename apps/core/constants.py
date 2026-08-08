@@ -124,10 +124,10 @@ FIN_VOUCHER_TYPE_META: Final = (
 
 FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, _fkey, prefix in FIN_VOUCHER_TYPE_META}
 
-# Voucher types hidden from the manual add-voucher picker. Sales vouchers are
-# generated automatically when a POS sale is posted, so they are not created by
-# hand; the type itself stays valid everywhere else (numbering, lists, posting).
-FIN_VOUCHER_TYPE_HIDDEN: Final = (VOUCHER_TYPE_SALES,)
+# Voucher types kept off the manual entry screen: Sales is posted from a POS
+# sale, Purchase from a GRN, and Contra is not entered here for now. The types
+# stay valid everywhere else (numbering, lists, posting, reports).
+FIN_VOUCHER_TYPE_HIDDEN: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE, VOUCHER_TYPE_CONTRA)
 
 FIN_VOUCHER_TYPE_PICKER_META: Final = tuple(
     entry for entry in FIN_VOUCHER_TYPE_META if entry[0] not in FIN_VOUCHER_TYPE_HIDDEN

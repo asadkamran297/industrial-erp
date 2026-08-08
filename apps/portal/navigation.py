@@ -9,9 +9,8 @@ from .constants import NAV_ITEMS, NavigationItem
 
 
 def resolve_nav_href(item: NavigationItem) -> str:
-    if item.url_name:
-        return reverse(item.url_name)
-    return item.href
+    href = reverse(item.url_name) if item.url_name else item.href
+    return f"{href}?{item.query}" if item.query else href
 
 
 def user_can_view_item(item: NavigationItem, permission_codes: set[str]) -> bool:
@@ -20,9 +19,14 @@ def user_can_view_item(item: NavigationItem, permission_codes: set[str]) -> bool
     return item.permission in permission_codes
 
 
-def is_href_active(href: str, current_path: str) -> bool:
+def is_href_active(href: str, current_path: str, current_query: str = "") -> bool:
     if href == "#":
         return False
+    # Siblings that share a path and differ only by query (the voucher types)
+    # must match on the query as well, or they would all light up together.
+    if "?" in href:
+        path, _, query = href.partition("?")
+        return current_path.rstrip("/") == path.rstrip("/") and query == current_query
     if href == "/":
         return current_path == href
     normalized_href = href.rstrip("/")
@@ -34,11 +38,12 @@ def build_navigation_item(
     permission_codes: set[str],
     current_path: str,
     depth: int = 0,
+    current_query: str = "",
 ) -> dict[str, Any] | None:
     children = [
         child
         for child in (
-            build_navigation_item(child_item, permission_codes, current_path, depth + 1)
+            build_navigation_item(child_item, permission_codes, current_path, depth + 1, current_query)
             for child_item in item.children
         )
         if child is not None
@@ -52,7 +57,7 @@ def build_navigation_item(
         return None
 
     href = resolve_nav_href(item)
-    is_active = is_href_active(href, current_path)
+    is_active = is_href_active(href, current_path, current_query)
     has_active_child = any(child["is_active"] or child["is_open"] for child in children)
 
     return {
@@ -97,10 +102,11 @@ def get_nav_icon_class(is_active: bool) -> str:
 def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:
     permission_codes = get_user_permission_codes(request.user)
     current_path = request.path
+    current_query = request.GET.urlencode()
     navigation = []
 
     for item in NAV_ITEMS:
-        nav_item = build_navigation_item(item, permission_codes, current_path)
+        nav_item = build_navigation_item(item, permission_codes, current_path, current_query=current_query)
         if nav_item is not None:
             navigation.append(nav_item)
 
