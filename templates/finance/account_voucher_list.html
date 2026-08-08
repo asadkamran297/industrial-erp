@@ -99,6 +99,7 @@
             <td class="px-4 py-3">
               <div class="flex justify-end gap-2">
                 <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'finance:account_voucher_detail' voucher.pk %}" title="View">&#128065;</a>
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'finance:account_voucher_print' voucher.pk %}" target="_blank" title="Print">&#128438;</a>
                 {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'finance:account_voucher_update' voucher.pk %}" title="Edit">&#9998;</a>{% endif %}
               </div>
             </td>

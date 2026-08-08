@@ -943,6 +943,43 @@ def next_voucher_number(voucher_type: str, money_mode: str = "") -> str:
     return f"{prefix}-{highest + 1:06d}"
 
 
+_ONES = ("", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+         "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen")
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def _under_thousand(number: int) -> str:
+    if number < 20:
+        return _ONES[number]
+    if number < 100:
+        return _TENS[number // 10] + (f"-{_ONES[number % 10]}" if number % 10 else "")
+    return _ONES[number // 100] + " hundred" + (f" {_under_thousand(number % 100)}" if number % 100 else "")
+
+
+def amount_in_words(amount, currency: str = "Rupees", fraction: str = "Paisa") -> str:
+    """The figure spelled out, the way a voucher is signed off.
+
+    Grouped as crore / lakh / thousand: that is how the amount is read aloud
+    here, and a printed voucher that reads differently from the ledger invites
+    the argument it exists to prevent.
+    """
+    amount = Decimal(amount or 0).quantize(Decimal("0.01"))
+    whole = int(amount)
+    paisa = int((amount - whole) * 100)
+    parts = []
+    for size, name in ((10000000, "crore"), (100000, "lakh"), (1000, "thousand")):
+        if whole >= size:
+            parts.append(f"{_under_thousand(whole // size)} {name}")
+            whole %= size
+    if whole:
+        parts.append(_under_thousand(whole))
+    words = " ".join(parts) or "zero"
+    text = f"{currency} {words}"
+    if paisa:
+        text += f" and {fraction} {_under_thousand(paisa)}"
+    return f"{text} only".capitalize()
+
+
 def voucher_kind(voucher) -> str:
     for prefix, label in _SOURCE_KINDS:
         if voucher.source_ref.startswith(prefix):

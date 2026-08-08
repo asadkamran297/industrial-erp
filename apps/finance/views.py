@@ -15,13 +15,13 @@ from django.views.generic import CreateView, DetailView, ListView, TemplateView,
 
 from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
-from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import DEBIT_NATURE_TYPES, account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from .services import DEBIT_NATURE_TYPES, account_balances, account_role, amount_in_words, money_mode_for_account, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class AuditSaveMixin:
@@ -384,6 +384,7 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
                 "ok": True,
                 "voucher_no": self.object.voucher_no,
                 "detail_url": reverse("finance:account_voucher_detail", args=[self.object.pk]),
+                "print_url": reverse("finance:account_voucher_print", args=[self.object.pk]),
                 "messages": self._drain_messages(),
             })
         return response
@@ -396,16 +397,35 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
         # Header-only update; lines are managed on the detail page.
         return super(AccountVoucherCreateView, self).form_valid(form)
 
+    def get_success_url(self):
+        # Editing is about one voucher, so it ends back on that voucher.
+        return reverse("finance:account_voucher_detail", args=[self.object.pk])
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["selected_voucher_type"] = self.object.voucher_type
+        voucher = self.object
+        context["selected_voucher_type"] = voucher.voucher_type
+        context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(voucher.voucher_type, "")
+        # The number is already allocated; previewing the next one would be a lie.
+        context["next_voucher_no"] = voucher.voucher_no
+        context["money_mode"] = money_mode_for_account(voucher.account_no)
+        # Lines belong to the detail page, so the panel reports them instead of
+        # offering an amount box that would post nothing.
+        titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+        lines = list(voucher.lines.order_by("line_number"))
+        for line in lines:
+            line.account_title = titles.get(line.account_no, line.account_no)
+        context["voucher_lines"] = lines
+        context["voucher_total"] = voucher.debit_amount or Decimal("0")
+        context["amount_words"] = amount_in_words(voucher.debit_amount or Decimal("0"))
+        context["print_url"] = reverse("finance:account_voucher_print", args=[voucher.pk])
         return context
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.posted == "Y":
             messages.error(request, "Posted voucher cannot be updated.")
-            return redirect("finance:account_voucher_list")
+            return redirect("finance:account_voucher_detail", pk=self.object.pk)
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -427,6 +447,30 @@ class NextVoucherNumberView(PagePermissionRequiredMixin, View):
             "money_mode": money_mode,
             "voucher_no": next_voucher_number(voucher_type, money_mode),
         })
+
+
+class AccountVoucherPrintView(PrintContextMixin, PagePermissionRequiredMixin, DetailView):
+    """The signed-and-filed copy of a voucher."""
+
+    page = "finance.vouchers"
+    model = AccountVoucher
+    template_name = "finance/account_voucher_print.html"
+    context_object_name = "voucher"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lines = list(self.object.lines.order_by("line_number"))
+        titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+        for line in lines:
+            line.account_title = titles.get(line.account_no, line.account_no)
+        context["lines"] = lines
+        context["account_title"] = titles.get(self.object.account_no, self.object.account_no)
+        # The voucher's value is one side of it, not the sum of both.
+        total = self.object.debit_amount or Decimal("0")
+        context["voucher_total"] = total
+        context["amount_words"] = amount_in_words(total)
+        context["print_back_url"] = reverse("finance:account_voucher_detail", args=[self.object.pk])
+        return context
 
 
 class AccountBalanceView(PagePermissionRequiredMixin, View):

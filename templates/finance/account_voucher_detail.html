@@ -21,6 +21,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <a href="{% url 'finance:daybook' %}?day={{ voucher.voucher_date|date:'Y-m-d' }}" class="toolbar-btn">Daybook for this day</a>
         <a href="{% url 'finance:account_voucher_list' %}" class="toolbar-btn">All vouchers</a>
+        <a href="{% url 'finance:account_voucher_print' voucher.pk %}" target="_blank" class="toolbar-btn">&#128438; Print</a>
         {% if not is_locked %}
           <a href="{% url 'finance:account_voucher_update' voucher.pk %}"
              class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Edit voucher</a>

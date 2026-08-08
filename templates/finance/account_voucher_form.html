@@ -1,6 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<h1 class="text-xl font-bold">{{ selected_voucher_type_label }} Voucher</h1>
+<h1 class="text-xl font-bold">{% if object %}Edit {{ selected_voucher_type_label }} Voucher &mdash; {{ object.voucher_no }}{% else %}{{ selected_voucher_type_label }} Voucher{% endif %}</h1>
 
 <form method="post" id="voucher-form" class="mt-3">{% csrf_token %}
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
@@ -14,10 +14,10 @@
     <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div id="money-mode" class="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
         <label class="money-pill cursor-pointer rounded-lg px-4 py-1.5 text-sm font-semibold text-slate-500 transition">
-          <input type="radio" name="money_mode" value="cash" class="sr-only" checked> Cash
+          <input type="radio" name="money_mode" value="cash" class="sr-only" {% if money_mode != "bank" %}checked{% endif %}> Cash
         </label>
         <label class="money-pill cursor-pointer rounded-lg px-4 py-1.5 text-sm font-semibold text-slate-500 transition">
-          <input type="radio" name="money_mode" value="bank" class="sr-only"> Bank
+          <input type="radio" name="money_mode" value="bank" class="sr-only" {% if money_mode == "bank" %}checked{% endif %}> Bank
         </label>
       </div>
 
@@ -109,15 +109,43 @@
       + Add Line
     </button>
   </div>
-  <div id="field-narration">
-    <label class="mb-1.5 block text-sm font-medium" for="id_narration">Narration</label>
-    <textarea name="remarks" id="id_narration" rows="2" class="form-input w-full"></textarea>
-  </div>
   <p id="balance-hint" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
   {% endif %}
+
+  <div id="field-narration">
+    <label class="mb-1.5 block text-sm font-medium" for="id_narration">Narration</label>
+    <textarea name="remarks" id="id_narration" rows="2" class="form-input w-full">{{ form.remarks.value|default:"" }}</textarea>
+  </div>
     </div>
 
     <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+      {% if object %}
+      <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
+      <p class="mt-2 border-b border-slate-200 pb-3 text-3xl font-bold tabular-nums dark:border-slate-700">Rs {{ voucher_total|floatformat:2 }}</p>
+      <p class="mt-2 text-sm italic text-slate-500">{{ amount_words }}</p>
+
+      <p class="mt-5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Posted Lines</p>
+      <div class="mt-3 space-y-2.5 text-sm">
+        {% for line in voucher_lines %}
+        <div class="flex items-center justify-between gap-3">
+          <span class="flex min-w-0 items-center gap-2">
+            {% if line.debit_amount %}
+              <span class="rounded bg-emerald-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">DR</span>
+            {% else %}
+              <span class="rounded bg-rose-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">CR</span>
+            {% endif %}
+            <span class="truncate text-slate-600 dark:text-slate-300">{{ line.account_title }}</span>
+          </span>
+          <span class="shrink-0 font-semibold tabular-nums">{{ line.debit_amount|add:line.credit_amount|floatformat:2 }}</span>
+        </div>
+        {% empty %}
+        <p class="text-slate-500">No lines on this voucher yet.</p>
+        {% endfor %}
+      </div>
+      <p class="mt-4 text-xs text-slate-500">Lines are managed on the
+        <a class="font-semibold text-[var(--primary-color)] underline" href="{% url 'finance:account_voucher_detail' object.pk %}">voucher page</a>.
+      </p>
+      {% else %}
       <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
       <div class="mt-2 flex items-baseline gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
         <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
@@ -145,6 +173,7 @@
         </div>
         <p class="pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">&#10003; Double entry balanced</p>
       </div>
+      {% endif %}
     </aside>
     </div>
 
@@ -153,8 +182,14 @@
     <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">
+        {% if object %}
+        <a href="{% url 'finance:account_voucher_detail' object.pk %}" class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</a>
+        <a href="{{ print_url }}" target="_blank" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--primary-color)] px-5 text-sm font-bold text-[var(--primary-color)] transition hover:bg-[var(--primary-color)] hover:text-white">&#128438; Print</a>
+        {% else %}
         <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</a>
-        <button class="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--primary-color)] px-8 text-sm font-bold text-white transition hover:opacity-90">Save Voucher</button>
+        <button id="save-print-btn" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--primary-color)] px-5 text-sm font-bold text-[var(--primary-color)] transition hover:bg-[var(--primary-color)] hover:text-white">&#128438; Save &amp; Print</button>
+        {% endif %}
+        <button id="save-btn" class="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--primary-color)] px-8 text-sm font-bold text-white transition hover:opacity-90">{% if object %}Update Voucher{% else %}Save Voucher{% endif %}</button>
       </div>
     </div>
   </section>
@@ -683,7 +718,13 @@
   // instead of bouncing to the list; the number preview refetches for the type.
   const form = document.getElementById('voucher-form');
   const flash = document.getElementById('save-flash');
-  const saveBtn = form.querySelector('button:not([type=button])');
+  const saveBtn = document.getElementById('save-btn');
+  const savePrintBtn = document.getElementById('save-print-btn');
+  // Which button was pressed decides what happens after the save lands.
+  let printAfterSave = false;
+  [[saveBtn, false], [savePrintBtn, true]].forEach(([button, wantsPrint]) => {
+    if (button) button.addEventListener('click', () => { printAfterSave = wantsPrint; });
+  });
 
   function showFlash(text, ok) {
     if (!flash) return;
@@ -740,6 +781,7 @@
     document.querySelectorAll('[id^="field-"] p.text-rose-600').forEach(el => el.remove());
     if (!simpleEntryValid()) { showFlash('Fill the account and amount.', false); return; }
     saveBtn.disabled = true;
+    if (savePrintBtn) savePrintBtn.disabled = true;
     fetch(form.action || window.location.href, {
       method: 'POST',
       body: new FormData(form),
@@ -752,6 +794,8 @@
           showFlash('Voucher not saved. Check the highlighted fields.', false);
           return;
         }
+        // Opened before the form clears, so the printed copy is the voucher just saved.
+        if (printAfterSave && data.print_url) window.open(data.print_url, '_blank');
         const extra = (data.messages || []).filter(m => m.level !== 'success').map(m => m.text).join(' ');
         showFlash(('Voucher ' + data.voucher_no + ' saved. ' + extra).trim(), true);
         resetEntry();
@@ -763,7 +807,10 @@
         if (first) first.focus();
       })
       .catch(() => showFlash('Save failed — check the connection and try again.', false))
-      .finally(() => { saveBtn.disabled = false; });
+      .finally(() => {
+        saveBtn.disabled = false;
+        if (savePrintBtn) savePrintBtn.disabled = false;
+      });
   });
   {% endif %}
 })();
