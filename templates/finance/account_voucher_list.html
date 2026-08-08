@@ -5,7 +5,7 @@
     <h1 class="text-2xl font-bold">{{ list_title }}</h1>
   </div>
   {% if can_add and can_add_type %}
-  <a href="{% url 'finance:account_voucher_create' %}?type={{ add_type }}"
+  <a href="{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}"
      class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">
     + {{ add_label }}
   </a>
@@ -31,6 +31,14 @@
   </div>
   {# The type is set by the sidebar, so it rides along instead of being re-picked. #}
   <input type="hidden" name="voucher_type" value="{{ selected_voucher_type }}">
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="money_mode">Cash / Bank</label>
+    <select name="money_mode" id="money_mode" class="form-select" onchange="this.form.submit()">
+      <option value="">Both</option>
+      <option value="cash" {% if selected_money_mode == "cash" %}selected{% endif %}>Cash</option>
+      <option value="bank" {% if selected_money_mode == "bank" %}selected{% endif %}>Bank</option>
+    </select>
+  </div>
   <div class="min-w-[220px] flex-1">
     <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="q">Search</label>
     <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Voucher no, account, remarks" class="form-input w-full">

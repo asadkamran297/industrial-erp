@@ -124,6 +124,10 @@ FIN_VOUCHER_TYPE_META: Final = (
 
 FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, _fkey, prefix in FIN_VOUCHER_TYPE_META}
 
+# Cash and bank vouchers of the same type number in separate books: EC-000001
+# runs alongside EB-000001, so each book reads as its own unbroken sequence.
+FIN_MONEY_MODE_SUFFIX: Final[dict[str, str]] = {"cash": "C", "bank": "B"}
+
 # Voucher types kept off the manual entry screen: Sales is posted from a POS
 # sale, Purchase from a GRN, and Contra is not entered here for now. The types
 # stay valid everywhere else (numbering, lists, posting, reports).
@@ -242,7 +246,9 @@ FIN_VOUCHER_HEADER_ROLES: Final[dict[str, tuple[str, ...]]] = {
     VOUCHER_TYPE_RECEIPT: ("cash", "bank"),
 }
 FIN_VOUCHER_LINE_ROLES: Final[dict[str, tuple[str, ...]]] = {
-    VOUCHER_TYPE_PAYMENT: ("vendor", "expense"),
+    # "customer" included: money is also paid out to a customer — a refund, or
+    # an advance being returned — which lands on the receivable ledger.
+    VOUCHER_TYPE_PAYMENT: ("vendor", "expense", "customer"),
     VOUCHER_TYPE_RECEIPT: ("customer", "revenue"),
     VOUCHER_TYPE_SALES: ("revenue",),
     VOUCHER_TYPE_PURCHASE: ("expense", "other"),

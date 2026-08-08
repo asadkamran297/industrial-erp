@@ -27,6 +27,7 @@ from apps.core.constants import (
     GL_SALES_DISCOUNT_PATH,
     GL_SALES_RETURN_PATH,
     GL_SALES_REVENUE_PATH,
+    FIN_MONEY_MODE_SUFFIX,
     FIN_VOUCHER_PREFIX_MAP,
     GL_SALES_TAX_PAYABLE_PATH,
     INVENTORY_ADJUSTMENT_REASONS,
@@ -901,11 +902,25 @@ _SOURCE_KINDS = (
 )
 
 
-def next_voucher_number(voucher_type: str) -> str:
+def money_mode_for_account(account_no: str) -> str:
+    """"cash" or "bank" for a money account, "" for anything else."""
+    if not account_no:
+        return ""
+    groups = money_account_codes()
+    if account_no in groups.get("Cash", ()):
+        return "cash"
+    if account_no in groups.get("Bank", ()):
+        return "bank"
+    return ""
+
+
+def next_voucher_number(voucher_type: str, money_mode: str = "") -> str:
     """The next number in this voucher type's own sequence.
 
     Each type counts independently — payments run E-000001, E-000002 … while
     receipts run R-000001 … — so a gap in one book does not shift another.
+    Cash and bank keep separate books within a type (EC-000001 vs EB-000001):
+    the cash book and the bank book are read and reconciled separately.
     Numbering previously used the table's highest id, which meant the first
     receipt could be numbered R-000015 simply because payments had been
     entered first.
@@ -916,7 +931,7 @@ def next_voucher_number(voucher_type: str) -> str:
     """
     import re
 
-    prefix = FIN_VOUCHER_PREFIX_MAP.get(voucher_type, "V")
+    prefix = FIN_VOUCHER_PREFIX_MAP.get(voucher_type, "V") + FIN_MONEY_MODE_SUFFIX.get(money_mode, "")
     pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
     highest = 0
     for number in AccountVoucher.all_objects.filter(voucher_type=voucher_type).values_list(

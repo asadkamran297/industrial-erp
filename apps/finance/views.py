@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
+from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
@@ -21,7 +21,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from .services import DEBIT_NATURE_TYPES, account_balances, account_role, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class AuditSaveMixin:
@@ -165,6 +165,12 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
             _period, start, end = self._period_range()
             if start:
                 queryset = queryset.filter(voucher_date__gte=start, voucher_date__lte=end)
+        # Cash vs bank is read off the header account, the same way the voucher
+        # number's book is decided, so the two always agree.
+        money_mode = self.request.GET.get("money_mode", "").strip()
+        if money_mode in FIN_MONEY_MODE_SUFFIX:
+            group = "Cash" if money_mode == "cash" else "Bank"
+            queryset = queryset.filter(account_no__in=money_account_codes().get(group, set()))
         return queryset
 
     def get_filter_specs(self):
@@ -183,6 +189,7 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
         context["voucher_count"] = totals["count"] or 0
         context["posted_total"] = rows.filter(posted="Y").aggregate(total=Sum("debit_amount"))["total"] or Decimal("0")
         context["selected_period"] = period
+        context["selected_money_mode"] = self.request.GET.get("money_mode", "")
         context["period_start"] = self.request.GET.get("date_from") or (start.isoformat() if start else "")
         context["period_end"] = self.request.GET.get("date_to") or (end.isoformat() if end else "")
         context["voucher_type_choices"] = FIN_VOUCHER_TYPE_CHOICES
@@ -212,7 +219,9 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
     success_message = "Voucher saved."
 
     def _selected_type(self):
-        value = self.request.GET.get("type", "")
+        # Same param name as the list filter, so one sidebar entry matches both
+        # the list and the entry screen for its type.
+        value = self.request.GET.get("voucher_type", "") or self.request.GET.get("type", "")
         if value in {code for code, *_rest in FIN_VOUCHER_TYPE_PICKER_META}:
             return value
         return FIN_VOUCHER_TYPE_PICKER_META[0][0]  # default to first (Payment)
@@ -230,14 +239,27 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(self._selected_type(), "")
         # Rendered server-side so the number is present before JavaScript runs;
         # the fetch then keeps it in step as the type changes.
-        context["next_voucher_no"] = next_voucher_number(self._selected_type())
+        # Cash is the form's default money mode, so preview that book's number.
+        context["next_voucher_no"] = next_voucher_number(self._selected_type(), "cash")
         # Last (childless) nodes of the chart of accounts are the postable ones.
         money_groups = money_account_codes()
         customer_codes = receivable_account_codes()
         accounts = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code"))
+        # ChartOfAccount.depth walks parents one query at a time, so the levels
+        # are derived once here from a single pass over the tree.
+        parents = dict(ChartOfAccount.objects.values_list("id", "parent_id"))
+
+        def depth_of(account_id):
+            level = 1
+            while parents.get(account_id):
+                account_id = parents[account_id]
+                level += 1
+            return level
+
         for account in accounts:
             account.role = account_role(account, money_groups, customer_codes)
             account.group_label = FIN_ACCOUNT_ROLE_LABELS[account.role]
+            account.tree_depth = depth_of(account.id)
         context["voucher_accounts"] = accounts
         context["simple_voucher_types"] = list(VOUCHER_SIMPLE_SIDES)
         context["voucher_header_roles"] = FIN_VOUCHER_HEADER_ROLES
@@ -248,7 +270,7 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["settlement_voucher_types"] = list(VOUCHER_SETTLEMENT_TYPES)
         # Kept on the form but off the screen: date defaults to today and the
         # workflow fields stay at their model defaults until the detail page.
-        context["hidden_header_fields"] = ["voucher_type", "voucher_date", "status", "adj_entry", "adj_voucher"]
+        context["hidden_header_fields"] = ["voucher_type", "voucher_date", "remarks", "status", "adj_entry", "adj_voucher"]
         # {payment_method_id: [extra field names]} — drives the conditional fields.
         context["payment_method_fields"] = {
             str(pk): list(FIN_PAYMENT_METHOD_FIELDS.get((title or "").strip().lower(), ()))
@@ -395,9 +417,38 @@ class NextVoucherNumberView(PagePermissionRequiredMixin, View):
         valid = {code for code, _label in FIN_VOUCHER_TYPE_CHOICES}
         if voucher_type not in valid:
             return JsonResponse({"error": "Unknown voucher type."}, status=400)
+        money_mode = (request.GET.get("money_mode") or "").strip()
+        if money_mode not in FIN_MONEY_MODE_SUFFIX:
+            money_mode = ""
         return JsonResponse({
             "voucher_type": voucher_type,
-            "voucher_no": next_voucher_number(voucher_type),
+            "money_mode": money_mode,
+            "voucher_no": next_voucher_number(voucher_type, money_mode),
+        })
+
+
+class AccountBalanceView(PagePermissionRequiredMixin, View):
+    """Current balance of one account, for the entry form's running-balance line."""
+
+    page = "finance.vouchers"
+
+    def get(self, request):
+        code = (request.GET.get("account_no") or "").strip()
+        account = ChartOfAccount.objects.filter(code=code).first() if code else None
+        if account is None:
+            return JsonResponse({"error": "Unknown account."}, status=400)
+        own = account_balances().get(code) or {}
+        closing = own.get("closing") or Decimal("0")
+        # closing is signed on the account's own natural side, so the side it
+        # sits on flips when it goes negative (a debit account run into credit).
+        natural_debit = account.account_type in DEBIT_NATURE_TYPES
+        side = "" if not closing else ("Debit" if (closing > 0) == natural_debit else "Credit")
+        return JsonResponse({
+            "account_no": code,
+            "title": account.title,
+            "balance": f"{abs(closing):,.2f}",
+            "side": side,
+            "amount": float(closing),  # sign drives the colour on the form
         })
 
 

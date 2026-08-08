@@ -402,7 +402,7 @@ class AccountVoucher(BaseModel):
     def save(self, *args, **kwargs):
         from django.db import IntegrityError, transaction as db_transaction
 
-        from .services import next_voucher_number
+        from .services import money_mode_for_account, next_voucher_number
 
         if self.voucher_no:
             self.full_clean()
@@ -412,8 +412,11 @@ class AccountVoucher(BaseModel):
         # derive the same number. voucher_no is unique, so the loser hits the
         # constraint; re-derive and retry rather than surfacing an error.
         self.full_clean(exclude=["voucher_no"])
+        # The header account decides which book the voucher belongs to, so the
+        # number matches what the form previewed for the same account.
+        money_mode = money_mode_for_account(self.account_no)
         for _attempt in range(5):
-            self.voucher_no = next_voucher_number(self.voucher_type)
+            self.voucher_no = next_voucher_number(self.voucher_type, money_mode)
             try:
                 with db_transaction.atomic():
                     return super().save(*args, **kwargs)

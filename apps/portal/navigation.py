@@ -29,7 +29,10 @@ def is_href_active(href: str, current_path: str, current_query: str = "") -> boo
     # search) are free to vary without dropping the highlight.
     if "?" in href:
         path, _, query = href.partition("?")
-        if current_path.rstrip("/") != path.rstrip("/"):
+        normalized = path.rstrip("/")
+        # Pages under the item's path count too (the list's own entry screen),
+        # provided the item's params match — otherwise a sibling type would match.
+        if current_path.rstrip("/") != normalized and not current_path.startswith(f"{normalized}/"):
             return False
         current = parse_qs(current_query)
         return all(value in current.get(key, []) for key, values in parse_qs(query).items() for value in values)

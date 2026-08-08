@@ -29,8 +29,14 @@
         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 lg:hidden dark:border-slate-700" @click="sidebarOpen = true" aria-label="Open menu">
           <span class="text-xl">=</span>
         </button>
-        <div class="hidden min-w-0 flex-1 sm:block">
-          {% include "components/ui/search_box.html" with placeholder="Search records, reports, requests..." %}
+        <div class="hidden min-w-0 sm:block">
+          {% include "components/ui/search_box.html" with placeholder="Search records, reports..." %}
+        </div>
+
+        {# Quick entry: the two things started most often, one click from anywhere. #}
+        <div class="ml-auto flex items-center gap-2">
+          <a href="{% url 'inventory:pos_create' %}" class="inline-flex h-9 items-center rounded-lg bg-[var(--primary-color)] px-3 text-sm font-semibold text-white hover:opacity-90">+ Add Sale</a>
+          <a href="{% url 'finance:account_voucher_create' %}?voucher_type=PV" class="inline-flex h-9 items-center rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">+ Add Voucher</a>
         </div>
         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" @click="toggleTheme()" aria-label="Toggle theme">◐</button>
         <input class="h-10 w-10 rounded-lg border border-slate-200 bg-transparent p-1 dark:border-slate-700" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Primary color">
