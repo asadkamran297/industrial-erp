@@ -15,6 +15,13 @@ except Exception:
 
 call_command("collectstatic", interactive=False, verbosity=0)
 
+try:
+    call_command("ensure_superuser")
+    call_command("seed")
+    call_command("seed_demo")
+except Exception:
+    pass
+
 from config.wsgi import application
 
 app = application
