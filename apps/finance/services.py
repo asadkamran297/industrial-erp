@@ -252,8 +252,13 @@ def _balance_forest(account_types):
     its subtree. Branches that net to zero are pruned — a balance sheet lists
     what the business holds, not every account ever opened.
     """
+    from .models import AccountVoucherLine  # lazy: models imports services in clean()
+
     zero = Decimal("0.00")
     balances = account_balances()
+    # Debits equal to credits leave no movement figure behind, so activity is
+    # read from the lines themselves: an account that was used stays on the sheet.
+    posted_codes = set(AccountVoucherLine.objects.values_list("account_no", flat=True).distinct())
     nodes = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, account_type__in=account_types).order_by("sort_order", "id"))
     children_map: dict[int | None, list] = {}
     for node in nodes:
@@ -269,7 +274,7 @@ def _balance_forest(account_types):
         # An account that moved is part of the story even when it nets to zero:
         # a bank run down to nil still belongs on the sheet. Only accounts that
         # were never touched are pruned.
-        touched = bool(own.get("movement") or own.get("opening"))
+        touched = node.code in posted_codes or bool(own.get("opening"))
         if not amount and not children and not touched:
             return None
         return {
@@ -279,6 +284,8 @@ def _balance_forest(account_types):
             "amount": amount,
             "depth": depth,
             "children": children,
+            # Only a postable leaf holds entries, so only it opens a ledger.
+            "is_leaf": not children,
             # Level 3 and deeper collapse behind a disclosure; the top two levels
             # are the statement's own headings and always stay open.
             "collapsible": bool(children) and depth >= 3,

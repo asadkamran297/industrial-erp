@@ -4,6 +4,7 @@
       <span class="tree-caret tree-caret--static" aria-hidden="true">&#9656;</span>
       <span class="tree-title">
         {% if node.link %}<a href="{% url node.link %}" class="hover:underline">{{ node.title }} &rsaquo;</a>
+        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="hover:underline" title="Open ledger">{{ node.title }}</a>
         {% else %}{{ node.title }}{% endif %}
       </span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
@@ -19,6 +20,7 @@
       <span class="tree-caret tree-caret--static" aria-hidden="true"></span>
       <span class="tree-title">
         {% if node.link %}<a href="{% url node.link %}" class="hover:underline">{{ node.title }} &rsaquo;</a>
+        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="hover:underline" title="Open ledger">{{ node.title }}</a>
         {% else %}{{ node.title }}{% endif %}
       </span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
