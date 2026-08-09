@@ -307,10 +307,23 @@ class VendorCreateView(InventoryManageMixin, CreateView):
     page = "inventory.vendors"
     model = Vendor
     form_class = VendorForm
-    template_name = "inventory/simple_form.html"
+    template_name = "inventory/vendor_form.html"
     success_url = reverse_lazy("inventory:vendor_list")
     success_message = "Vendor saved."
-    extra_context = {"title": "Vendor"}
+    extra_context = {
+        "title": "Vendor",
+        # Name, phone and the address block are placed by hand; the rest are
+        # grouped behind their own tabs so the first screen stays short.
+        "registration_fields": ("code", "ntn_number", "sale_tax_num", "web_url"),
+        "extra_fields": ("fax", "tel2", "status", "vendor_current_status", "remarks"),
+    }
+
+    def get_success_url(self):
+        # "Save & New" is for entering suppliers in a run: it comes straight back
+        # to an empty form instead of the list.
+        if "save_and_new" in self.request.POST:
+            return reverse_lazy("inventory:vendor_create")
+        return super().get_success_url()
 
 
 class VendorUpdateView(VendorCreateView, UpdateView):

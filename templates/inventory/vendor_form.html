@@ -1,0 +1,97 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="space-y-6">
+  {% include "components/ui/page_header.html" with title=title %}
+
+  <form method="post" x-data="{ tab: 'address' }"
+        class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="m-6 mb-0 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="grid gap-4 p-6 sm:grid-cols-2 lg:max-w-2xl">
+      <div id="field-name">
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.name.id_for_label }}">{{ form.name.label }} <span class="text-rose-500">*</span></label>
+        {{ form.name }}
+        {% for error in form.name.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div id="field-tel1">
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.tel1.id_for_label }}">Phone Number</label>
+        {{ form.tel1 }}
+        {% for error in form.tel1.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+
+    <div class="border-b border-slate-200 px-6 dark:border-slate-800">
+      <nav class="-mb-px flex flex-wrap gap-6 text-sm font-semibold">
+        <button type="button" @click="tab = 'address'"
+                :class="tab === 'address' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
+                class="border-b-2 pb-3 pt-1 transition">Address</button>
+        <button type="button" @click="tab = 'registration'"
+                :class="tab === 'registration' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
+                class="border-b-2 pb-3 pt-1 transition">Registration</button>
+        <button type="button" @click="tab = 'more'"
+                :class="tab === 'more' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
+                class="border-b-2 pb-3 pt-1 transition">Additional Fields</button>
+      </nav>
+    </div>
+
+    <div class="p-6">
+      <div x-show="tab === 'address'" x-transition.opacity class="grid gap-6 lg:grid-cols-3">
+        <div class="grid content-start gap-4">
+          <div>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ form.email.id_for_label }}">Email ID</label>
+            {{ form.email }}
+            {% for error in form.email.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ form.city.id_for_label }}">{{ form.city.label }} <span class="text-rose-500">*</span></label>
+            {{ form.city }}
+            {% for error in form.city.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+
+        <div class="lg:border-l lg:border-slate-200 lg:pl-6 dark:lg:border-slate-800">
+          <label class="mb-1.5 block text-sm font-medium" for="{{ form.addr1.id_for_label }}">Billing Address</label>
+          {{ form.addr1 }}
+          {% for error in form.addr1.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div>
+          <label class="mb-1.5 block text-sm font-medium" for="{{ form.addr2.id_for_label }}">Shipping Address</label>
+          {{ form.addr2 }}
+          {% for error in form.addr2.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          <p class="mt-1 text-xs text-slate-500">Leave blank to use the billing address.</p>
+        </div>
+      </div>
+
+      <div x-show="tab === 'registration'" x-transition.opacity x-cloak class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for field in form %}{% if field.name in registration_fields %}
+        <div>
+          <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+
+      <div x-show="tab === 'more'" x-transition.opacity x-cloak class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {% for field in form %}{% if field.name in extra_fields %}
+        <div>
+          <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+      <a href="{% url 'inventory:vendor_list' %}" class="toolbar-btn min-h-11">Cancel</a>
+      <button type="submit" name="save_and_new" value="1" class="toolbar-btn min-h-11 !text-[var(--primary-color)]">Save &amp; New</button>
+      <button type="submit" class="btn-primary min-h-11 px-8">Save</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
