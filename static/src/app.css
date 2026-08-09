@@ -388,23 +388,74 @@ aside nav p.uppercase {
   }
 
   /* Premium primary button */
-  .btn-primary {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white outline-none transition active:scale-[0.98];
-    background: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 92%, white), var(--primary-color));
-    box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.2), 0 6px 16px -8px var(--primary-color);
+  /* ── Buttons ───────────────────────────────────────────────────
+     One button system: `.btn` sets the shape and rhythm, a `--variant`
+     sets the weight it carries on the page, a `--size` its scale. Anything
+     clickable uses these, so a Save on one screen matches a Save on another.
+
+       <a class="btn btn-primary">…</a>
+       <button class="btn btn-secondary btn-sm">…</button>
+
+     The `.btn--variant` spellings are kept as aliases, as is `.toolbar-btn`,
+     so older markup keeps working while it is migrated. */
+  .btn {
+    @apply inline-flex min-h-11 shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-semibold outline-none transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
   }
-  .btn-primary:hover {
-    filter: brightness(1.05);
-    box-shadow: 0 2px 4px hsl(var(--shadow-color) / 0.25), 0 10px 22px -8px var(--primary-color);
-  }
-  .btn-primary:focus-visible {
+  .btn:focus-visible {
     box-shadow: 0 0 0 4px var(--ring-primary);
   }
 
-  .btn-ghost {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold text-slate-700 outline-none transition hover:bg-slate-50 active:scale-[0.98] dark:text-slate-200 dark:hover:bg-slate-800;
-    border-color: var(--border-strong);
+  /* The one action the screen is for. At most one per view. */
+  .btn-primary,
+  .btn--primary {
+    @apply text-white;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 92%, white), var(--primary-color));
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.2), 0 6px 16px -8px var(--primary-color);
   }
+  .btn-primary:hover,
+  .btn--primary:hover {
+    filter: brightness(1.05);
+    box-shadow: 0 2px 4px hsl(var(--shadow-color) / 0.25), 0 10px 22px -8px var(--primary-color);
+  }
+
+  /* A real action, but not the one being pushed: outlined, not filled. */
+  /* Outlined in the brand hue: clearly an action, clearly not the main one. */
+  .btn-secondary,
+  .btn--secondary {
+    @apply border bg-white dark:bg-slate-900;
+    border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+    color: var(--primary-color);
+  }
+  .btn-secondary:hover,
+  .btn--secondary:hover {
+    background: color-mix(in srgb, var(--primary-color) 8%, #fff);
+    border-color: var(--primary-color);
+  }
+  .dark .btn-secondary:hover,
+  .dark .btn--secondary:hover {
+    background: color-mix(in srgb, var(--primary-color) 20%, #0f172a);
+  }
+
+  /* Retreat: cancel, back, dismiss. No border, no weight. */
+  .btn-ghost,
+  .btn--ghost {
+    @apply border border-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white;
+  }
+
+  /* Destructive. Outlined until hover, so it is never the easy click. */
+  .btn-danger,
+  .btn--danger {
+    @apply border border-rose-200 bg-white text-rose-600 hover:bg-rose-600 hover:text-white dark:border-rose-500/40 dark:bg-slate-900;
+  }
+
+  .btn-sm,
+  .btn--sm { @apply min-h-9 gap-1.5 rounded-md px-3 text-xs; }
+  .btn-lg,
+  .btn--lg { @apply min-h-12 px-6 text-base; }
+  /* Square, for a button that is only its icon. */
+  .btn--icon { @apply w-11 px-0; }
+  .btn--icon.btn--sm { @apply w-9; }
+  .btn--block { @apply w-full; }
 
   /* Status badge */
   .badge {

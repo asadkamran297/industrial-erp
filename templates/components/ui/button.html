@@ -1,1 +1,43 @@
-<a href="{{ href|default:'#' }}" class="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium transition {% if active %}bg-[var(--primary-color)] text-white{% else %}text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800{% endif %}">{{ label }}</a>
+{% comment %}
+Generic button. Renders an <a> when `href` is given, a <button> otherwise.
+
+    {% include "components/ui/button.html" with label="Save" variant="primary" only %}
+    {% include "components/ui/button.html" with label="Cancel" href=list_url variant="ghost" only %}
+    {% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" only %}
+    {% include "components/ui/button.html" with icon="&#128438;" title="Print" only_icon=True only %}
+
+Always pass `only`. Without it the page's own `title`, `label` or `href`
+variables leak in and land on the button.
+
+Options
+  label      text on the button (omit for an icon-only button)
+  href       makes it a link; without it the button submits its form
+  variant    primary | secondary | ghost | danger   (default: secondary)
+  size       sm | lg                                 (default: standard)
+  icon       leading glyph or entity
+  only_icon  square icon button; `title` then carries the wording
+  type       button type when it is not a link       (default: submit)
+  name/value posted with the form, e.g. which button was pressed
+  title      tooltip / accessible name
+  extra      extra classes
+  disabled   disables the button
+{% endcomment %}
+{% spaceless %}
+{% if href %}
+<a href="{{ href }}"
+   class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"
+   {% if title %}title="{{ title }}" aria-label="{{ title }}"{% endif %}
+   {% if target %}target="{{ target }}"{% endif %}>
+  {% if icon %}<span aria-hidden="true">{{ icon }}</span>{% endif %}{% if label %}<span>{{ label }}</span>{% endif %}
+</a>
+{% else %}
+<button type="{{ type|default:'submit' }}"
+        class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"
+        {% if name %}name="{{ name }}"{% endif %}{% if value %} value="{{ value }}"{% endif %}
+        {% if title %}title="{{ title }}" aria-label="{{ title }}"{% endif %}
+        {% if onclick %}onclick="{{ onclick }}"{% endif %}
+        {% if disabled %}disabled{% endif %}>
+  {% if icon %}<span aria-hidden="true">{{ icon }}</span>{% endif %}{% if label %}<span>{{ label }}</span>{% endif %}
+</button>
+{% endif %}
+{% endspaceless %}

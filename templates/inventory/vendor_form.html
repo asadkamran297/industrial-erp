@@ -87,10 +87,11 @@
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
-      <a href="{% url 'inventory:vendor_list' %}" class="toolbar-btn min-h-11">Cancel</a>
-      <button type="submit" name="save_and_new" value="1" class="toolbar-btn min-h-11 !text-[var(--primary-color)]">Save &amp; New</button>
-      <button type="submit" class="btn-primary min-h-11 px-8">Save</button>
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+      {% url 'inventory:vendor_list' as cancel_url %}
+      {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
+      {% include "components/ui/button.html" with label="Save & New" variant="secondary" name="save_and_new" value="1" only %}
+      {% include "components/ui/button.html" with label="Save" variant="primary" extra="px-8" only %}
     </div>
   </form>
 </section>
