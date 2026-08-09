@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -14,7 +14,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
-from apps.finance.services import create_customer_receivable_account
+from apps.finance.models import AccountVoucherLine, ChartOfAccount
+from apps.finance.services import account_balances, create_customer_receivable_account
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
@@ -203,15 +204,92 @@ class UOMConversionUpdateView(UOMConversionCreateView, UpdateView):
 
 
 class VendorListView(BaseSimpleListView):
+    """Suppliers, each row opening onto what the business has bought from them."""
+
     page = "inventory.vendors"
     model = Vendor
+    template_name = "inventory/vendor_list.html"
     queryset = Vendor.objects.select_related("city").order_by("name")
     search_fields = ("name", "code", "email", "tel1")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status", "columns": [("Name", "name"), ("Code", "code"), ("City", "city"), ("Status", "status_toggle")]}
+    extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status"}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        vendors = list(context.get("records") or [])
+        if not vendors:
+            return context
+
+        zero = Decimal("0.00")
+        # One query per kind for the whole page rather than per expanded row:
+        # the panels are open by default, so every row's figures are needed.
+        purchases = {
+            row["vendor_id"]: row
+            for row in PurchaseMaster.objects.filter(vendor__in=vendors)
+            .values("vendor_id")
+            .annotate(total=Sum("total_amount"), count=Count("id"))
+        }
+        returns = {
+            row["vendor_id"]: row
+            for row in PurchaseReturnMaster.objects.filter(vendor__in=vendors)
+            .values("vendor_id")
+            .annotate(total=Sum("returned_amount"), count=Count("id"))
+        }
+        orders = {
+            row["vendor_id"]: row["count"]
+            for row in PurchaseOrder.objects.filter(vendor__in=vendors).values("vendor_id").annotate(count=Count("id"))
+        }
+        # A supplier's payable account is named after them, so the ledger the
+        # panel links to is found the same way the posting created it.
+        payable_codes = dict(
+            ChartOfAccount.objects.filter(title__in=[vendor.name for vendor in vendors])
+            .values_list("title", "code")
+        )
+        balances = account_balances()
+
+        # Every supplier's ledger in one pass: the panels are ledgers, and one
+        # query per open panel would be a query per row.
+        entries = {}
+        if payable_codes:
+            lines = (
+                AccountVoucherLine.objects.filter(account_no__in=payable_codes.values())
+                .select_related("voucher")
+                .order_by("voucher_date", "voucher_no", "line_number")
+            )
+            for line in lines:
+                entries.setdefault(line.account_no, []).append(line)
+
+        def ledger_rows(code):
+            """Payables are credit-natured: a purchase raises the balance, a payment lowers it."""
+            running = (balances.get(code) or {}).get("opening") or zero
+            rows = []
+            for line in entries.get(code, []):
+                debit = line.debit_amount or zero
+                credit = line.credit_amount or zero
+                running += credit - debit
+                rows.append({"line": line, "debit": debit, "credit": credit, "balance": running})
+            return rows[::-1][:8]  # newest first, the last few dealings
+
+        for vendor in vendors:
+            bought = purchases.get(vendor.id) or {}
+            sent_back = returns.get(vendor.id) or {}
+            vendor.purchase_total = bought.get("total") or zero
+            vendor.purchase_count = bought.get("count") or 0
+            vendor.return_total = sent_back.get("total") or zero
+            vendor.return_count = sent_back.get("count") or 0
+            vendor.order_count = orders.get(vendor.id, 0)
+            vendor.payable_code = payable_codes.get(vendor.name, "")
+            vendor.payable_balance = (balances.get(vendor.payable_code) or {}).get("closing") or zero
+            vendor.opening_balance = (balances.get(vendor.payable_code) or {}).get("opening") or zero
+            vendor.ledger_rows = ledger_rows(vendor.payable_code) if vendor.payable_code else []
+
+        context["supplier_count"] = len(vendors)
+        context["payable_total"] = sum((vendor.payable_balance for vendor in vendors), zero)
+        context["purchased_total"] = sum((vendor.purchase_total for vendor in vendors), zero)
+        return context
 
 
 class VendorToggleStatusView(InventoryManageMixin, View):
