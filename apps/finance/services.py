@@ -261,11 +261,16 @@ def _balance_forest(account_types):
 
     def build(node, depth):
         children = [built for child in children_map.get(node.id, []) if (built := build(child, depth + 1))]
+        own = balances.get(node.code) or {}
         if children:
             amount = sum((child["amount"] for child in children), zero)
         else:
-            amount = (balances.get(node.code) or {}).get("closing", zero)
-        if not amount and not children:
+            amount = own.get("closing", zero)
+        # An account that moved is part of the story even when it nets to zero:
+        # a bank run down to nil still belongs on the sheet. Only accounts that
+        # were never touched are pruned.
+        touched = bool(own.get("movement") or own.get("opening"))
+        if not amount and not children and not touched:
             return None
         return {
             "code": node.code,

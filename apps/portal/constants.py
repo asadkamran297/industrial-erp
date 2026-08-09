@@ -36,7 +36,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # ── Day to Day ──────────────────────────────────────────────────────
     # One group per direction goods move: in from suppliers, out to
     # customers, and what is sitting on the shelf in between.
-    NavigationItem("Purchasing", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
+    NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index", url_name="inventory:purchase_order_list"),
         NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
