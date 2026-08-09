@@ -122,7 +122,10 @@ def get_nav_icon_class(is_active: bool, on_active_path: bool = False) -> str:
 def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:
     permission_codes = get_user_permission_codes(request.user)
     current_path = request.path
-    current_query = request.GET.urlencode()
+    # A record page (voucher detail/edit/print) carries no query of its own, so
+    # nothing would tell the sidebar which of the query-scoped siblings it
+    # belongs to. Views set ``nav_query`` to say so.
+    current_query = getattr(request, "nav_query", "") or request.GET.urlencode()
     navigation = []
 
     for item in NAV_ITEMS:

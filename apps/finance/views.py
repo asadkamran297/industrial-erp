@@ -26,6 +26,20 @@ from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, Ch
 from .services import DEBIT_NATURE_TYPES, account_balances, account_role, amount_in_words, money_mode_for_account, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
+class VoucherNavMixin:
+    """Keeps the sidebar on this voucher's own list entry.
+
+    The list entries are one path with a ``voucher_type`` query; a detail, edit
+    or print URL has neither, so the sidebar is told which one it belongs to.
+    """
+
+    def get_context_data(self, **kwargs):
+        voucher = getattr(self, "object", None)
+        if voucher is not None:
+            self.request.nav_query = f"voucher_type={voucher.voucher_type}"
+        return super().get_context_data(**kwargs)
+
+
 class AuditSaveMixin:
     def form_valid(self, form):
         if not form.instance.pk:
@@ -443,7 +457,7 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         return response
 
 
-class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
+class AccountVoucherUpdateView(VoucherNavMixin, AccountVoucherCreateView, UpdateView):
     success_message = "Voucher updated."
 
     def form_valid(self, form):
@@ -513,7 +527,7 @@ class NextVoucherNumberView(PagePermissionRequiredMixin, View):
         })
 
 
-class AccountVoucherPrintView(PrintContextMixin, PagePermissionRequiredMixin, DetailView):
+class AccountVoucherPrintView(VoucherNavMixin, PrintContextMixin, PagePermissionRequiredMixin, DetailView):
     """The signed-and-filed copy of a voucher."""
 
     page = "finance.vouchers"
@@ -567,7 +581,7 @@ class AccountBalanceView(PagePermissionRequiredMixin, View):
         })
 
 
-class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
+class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, DetailView):
     page = "finance.vouchers"
     model = AccountVoucher
     template_name = "finance/account_voucher_detail.html"
