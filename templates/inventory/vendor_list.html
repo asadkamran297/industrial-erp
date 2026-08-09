@@ -92,6 +92,8 @@
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Receipts</dt><dd class="font-semibold tabular-nums">{{ vendor.purchase_count }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Purchased</dt><dd class="font-semibold tabular-nums">{{ vendor.purchase_total|amount }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Returned</dt><dd class="font-semibold tabular-nums">{{ vendor.return_total|amount }} <span class="text-xs text-slate-400">({{ vendor.return_count }})</span></dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Opening balance</dt><dd class="font-semibold tabular-nums">{{ vendor.opening_balance|amount }}{% if vendor.opening_balance_date %} <span class="text-xs text-slate-400">as of {{ vendor.opening_balance_date|dmy }}</span>{% endif %}</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Credit limit</dt><dd class="font-semibold tabular-nums">{% if vendor.credit_limit %}{{ vendor.credit_limit|amount }}{% if vendor.credit_period_days %} <span class="text-xs text-slate-400">/ {{ vendor.credit_period_days }} days</span>{% endif %}{% else %}<span class="text-slate-400">No limit</span>{% endif %}</dd></div>
                     <div class="flex justify-between gap-3 border-t border-slate-200 pt-1 dark:border-slate-700">
                       <dt class="text-slate-500">Payable balance</dt>
                       <dd class="font-bold tabular-nums {% if vendor.payable_balance > 0 %}text-rose-600{% endif %}">{{ vendor.payable_balance|amount }}</dd>

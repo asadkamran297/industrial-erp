@@ -1209,3 +1209,28 @@ def account_ledger(account_no, *, date_from=None, date_to=None):
         "total_credit": total_credit,
         "closing": balance,
     }
+
+
+@transaction.atomic
+def sync_vendor_opening_balance(*, vendor, user=None):
+    """Carry a supplier's opening balance onto their payable account.
+
+    The master screen is where the figure is typed, but the ledger is where it
+    has to live: ``account_balances`` reads openings off the chart of accounts,
+    so the payable account is created (if this is the first time the supplier
+    is given one) and its opening set to match. Returns the account, or None
+    when there is nothing to record.
+    """
+    amount = vendor.opening_balance or Decimal("0.00")
+    account = ChartOfAccount.objects.filter(title=vendor.name, is_group=False).first()
+    if account is None:
+        if not amount:
+            # No balance and no account yet: nothing to open. The account is
+            # created on the supplier's first posting instead.
+            return None
+        account = create_vendor_payable_account(vendor=vendor, user=user)
+    if account.opening_balance != amount:
+        account.opening_balance = amount
+        account.updated_by = user
+        account.save(update_fields=["opening_balance", "updated_by", "updated_at"])
+    return account

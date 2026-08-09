@@ -77,7 +77,8 @@ class UOMConversion(BaseModel):
 
 class Vendor(BaseModel):
     name = models.CharField(max_length=180)
-    code = models.CharField(max_length=40, unique=True)
+    # Assigned by save(); nobody types a supplier code.
+    code = models.CharField(max_length=40, unique=True, blank=True)
     web_url = models.URLField(blank=True)
     email = models.EmailField(blank=True)
     fax = models.CharField(max_length=40, blank=True)
@@ -92,19 +93,56 @@ class Vendor(BaseModel):
     remarks = models.TextField(blank=True)
     vendor_current_status = models.CharField(max_length=60, blank=True)
 
+    # ── Credit & balance ────────────────────────────────────────────────
+    # What was already owed when the supplier was put on the system, and the
+    # date that figure was true. It is mirrored onto the supplier's payable
+    # account, so the ledger opens from the same number the master carries.
+    opening_balance = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    opening_balance_date = models.DateField(null=True, blank=True)
+    # Blank means no limit: a supplier who extends credit without a ceiling.
+    credit_limit = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    # Days allowed before a bill falls due, counted from the invoice date.
+    credit_period_days = models.PositiveIntegerField(null=True, blank=True)
+
     class Meta:
         db_table = "inv_config_vendors"
         ordering = ["name"]
 
+    CODE_PREFIX = "VEN"
+
     def clean(self):
         code = (self.code or "").strip().upper()
+        if not code:
+            return  # save() assigns it
         if len(code) < 4:
             raise ValidationError({"code": "Code must be at least 4 characters."})
-        if not code.isalnum():
+        if not code.replace("-", "").isalnum():
             raise ValidationError({"code": "Code may contain alphabets and numbers only."})
+
+    @classmethod
+    def next_code(cls):
+        """Next code in the supplier sequence: VEN-0001, VEN-0002, …
+
+        Read off the highest number already issued rather than the row count, so
+        a deleted supplier never lets its code be handed out twice.
+        """
+        prefix = cls.CODE_PREFIX
+        issued = cls.all_objects.filter(code__startswith=f"{prefix}-").values_list("code", flat=True)
+        highest = 0
+        for code in issued:
+            tail = code.rsplit("-", 1)[-1]
+            if tail.isdigit():
+                highest = max(highest, int(tail))
+        return f"{prefix}-{highest + 1:04d}"
 
     def save(self, *args, **kwargs):
         self.code = (self.code or "").strip().upper()
+        if not self.code:
+            self.code = self.next_code()
+            # A second save racing this one would take the same number, so the
+            # collision is walked past rather than raised at the user.
+            while Vendor.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = self.next_code()
         self.full_clean()
         super().save(*args, **kwargs)
 

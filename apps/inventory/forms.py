@@ -70,13 +70,56 @@ class UOMConversionForm(StyledModelForm):
 class VendorForm(StyledModelForm):
     class Meta:
         model = Vendor
-        fields = ("name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num", "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status")
-        widgets = {"remarks": forms.TextInput()}
+        fields = (
+            "name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num",
+            "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status",
+            "opening_balance", "opening_balance_date", "credit_limit", "credit_period_days",
+        )
+        widgets = {
+            "remarks": forms.TextInput(),
+            "opening_balance_date": forms.DateInput(attrs={"type": "date"}),
+        }
+        labels = {
+            "opening_balance": "Opening Balance",
+            "opening_balance_date": "As Of Date",
+            "credit_limit": "Credit Limit",
+            "credit_period_days": "Credit Period (days)",
+        }
+        help_texts = {
+            "opening_balance": "What was already owed to this supplier when they were put on the system.",
+            "credit_limit": "Leave blank for no limit.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["city"].required = True
+        # Optional: a supplier is often on the books before their address is.
+        self.fields["city"].required = False
         self.fields["city"].empty_label = "-- Select city --"
+        # System-assigned: shown so it can be read, never typed.
+        self.fields["code"].required = False
+        self.fields["code"].disabled = True
+        self.fields["code"].help_text = "Assigned automatically."
+        if not self.instance.pk:
+            self.initial["code"] = Vendor.next_code()
+        self.fields["opening_balance"].required = False
+        # The date only matters once there is a figure to date; clean() ties them.
+        self.fields["opening_balance_date"].required = False
+        # A new supplier's balance is almost always "as of today", so today is
+        # offered; an existing record keeps whatever date it was given.
+        if not self.instance.pk and not self.initial.get("opening_balance_date"):
+            self.initial["opening_balance_date"] = timezone.localdate()
+
+    def clean(self):
+        cleaned = super().clean()
+        opening = cleaned.get("opening_balance")
+        as_of = cleaned.get("opening_balance_date")
+        if opening and not as_of:
+            # An opening balance with no date cannot be placed in a period.
+            self.add_error("opening_balance_date", "Give the date this balance was true.")
+        limit = cleaned.get("credit_limit")
+        if limit is not None and limit < 0:
+            self.add_error("credit_limit", "Credit limit cannot be negative.")
+        return cleaned
 
 
 class InventoryItemForm(StyledModelForm):

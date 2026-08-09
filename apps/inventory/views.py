@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import account_balances, create_customer_receivable_account
+from apps.finance.services import account_balances, create_customer_receivable_account, sync_vendor_opening_balance
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
@@ -209,7 +209,8 @@ class VendorListView(BaseSimpleListView):
     page = "inventory.vendors"
     model = Vendor
     template_name = "inventory/vendor_list.html"
-    queryset = Vendor.objects.select_related("city").order_by("name")
+    # Newest first: a supplier just added is the one being looked for.
+    queryset = Vendor.objects.select_related("city").order_by("-id")
     search_fields = ("name", "code", "email", "tel1")
     filter_fields = {"status": "status"}
     extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status"}
@@ -283,7 +284,6 @@ class VendorListView(BaseSimpleListView):
             vendor.order_count = orders.get(vendor.id, 0)
             vendor.payable_code = payable_codes.get(vendor.name, "")
             vendor.payable_balance = (balances.get(vendor.payable_code) or {}).get("closing") or zero
-            vendor.opening_balance = (balances.get(vendor.payable_code) or {}).get("opening") or zero
             vendor.ledger_rows = ledger_rows(vendor.payable_code) if vendor.payable_code else []
 
         context["supplier_count"] = len(vendors)
@@ -312,11 +312,17 @@ class VendorCreateView(InventoryManageMixin, CreateView):
     success_message = "Vendor saved."
     extra_context = {
         "title": "Vendor",
-        # Name, phone and the address block are placed by hand; the rest are
-        # grouped behind their own tabs so the first screen stays short.
+        # Name, phone, address and the credit block are placed by hand; the rest
+        # are grouped behind their own tabs so the first screen stays short.
         "registration_fields": ("code", "ntn_number", "sale_tax_num", "web_url"),
         "extra_fields": ("fax", "tel2", "status", "vendor_current_status", "remarks"),
     }
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # The opening balance belongs in the ledger, not only on the master.
+        sync_vendor_opening_balance(vendor=self.object, user=self.request.user)
+        return response
 
     def get_success_url(self):
         # "Save & New" is for entering suppliers in a run: it comes straight back

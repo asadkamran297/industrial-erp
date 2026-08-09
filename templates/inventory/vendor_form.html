@@ -28,6 +28,9 @@
         <button type="button" @click="tab = 'address'"
                 :class="tab === 'address' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
                 class="border-b-2 pb-3 pt-1 transition">Address</button>
+        <button type="button" @click="tab = 'credit'"
+                :class="tab === 'credit' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
+                class="border-b-2 pb-3 pt-1 transition">Credit &amp; Balance</button>
         <button type="button" @click="tab = 'registration'"
                 :class="tab === 'registration' ? 'border-[var(--primary-color)] text-[var(--primary-color)]' : 'border-transparent text-slate-400 hover:text-slate-600'"
                 class="border-b-2 pb-3 pt-1 transition">Registration</button>
@@ -46,7 +49,7 @@
             {% for error in form.email.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
           </div>
           <div>
-            <label class="mb-1.5 block text-sm font-medium" for="{{ form.city.id_for_label }}">{{ form.city.label }} <span class="text-rose-500">*</span></label>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ form.city.id_for_label }}">{{ form.city.label }}</label>
             {{ form.city }}
             {% for error in form.city.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
           </div>
@@ -63,6 +66,53 @@
           {{ form.addr2 }}
           {% for error in form.addr2.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
           <p class="mt-1 text-xs text-slate-500">Leave blank to use the billing address.</p>
+        </div>
+      </div>
+
+      <div x-show="tab === 'credit'" x-transition.opacity x-cloak
+           x-data="{ limited: {% if form.credit_limit.value %}true{% else %}false{% endif %} }">
+        <div class="grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
+          <div>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_balance.id_for_label }}">Opening Balance</label>
+            {{ form.opening_balance }}
+            <p class="mt-1 text-xs text-slate-500">Owed to this supplier before the system was in use. Posted to their payable account.</p>
+            {% for error in form.opening_balance.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_balance_date.id_for_label }}">As Of Date</label>
+            {{ form.opening_balance_date }}
+            <p class="mt-1 text-xs text-slate-500">The date that figure was true.</p>
+            {% for error in form.opening_balance_date.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+
+        <div class="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+          <p class="text-sm font-medium">Credit Limit</p>
+          <div class="mt-2 flex flex-wrap items-center gap-3">
+            <span class="text-sm font-semibold" :class="limited ? 'text-slate-400' : 'text-[var(--primary-color)]'">No Limit</span>
+            <button type="button" @click="limited = !limited; if (!limited) { $refs.limit.value = ''; }"
+                    class="relative h-6 w-11 shrink-0 rounded-full transition"
+                    :class="limited ? 'bg-[var(--primary-color)]' : 'bg-slate-300 dark:bg-slate-600'"
+                    role="switch" :aria-checked="limited.toString()" aria-label="Credit limit">
+              <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform" :class="limited && 'translate-x-5'"></span>
+            </button>
+            <span class="text-sm font-semibold" :class="limited ? 'text-[var(--primary-color)]' : 'text-slate-400'">Custom Limit</span>
+          </div>
+
+          <div x-show="limited" x-transition.opacity class="mt-4 grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for="{{ form.credit_limit.id_for_label }}">Limit Amount</label>
+              <span x-ref="limit">{{ form.credit_limit }}</span>
+              <p class="mt-1 text-xs text-slate-500">Purchases on credit beyond this are flagged.</p>
+              {% for error in form.credit_limit.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for="{{ form.credit_period_days.id_for_label }}">Credit Period (days)</label>
+              {{ form.credit_period_days }}
+              <p class="mt-1 text-xs text-slate-500">Days a bill may stand before it is due.</p>
+              {% for error in form.credit_period_days.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+          </div>
         </div>
       </div>
 
