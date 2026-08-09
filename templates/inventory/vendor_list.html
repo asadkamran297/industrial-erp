@@ -42,9 +42,9 @@
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr>
             <th class="w-10 px-3 py-3"></th>
-            <th class="px-4 py-3">Supplier</th>
-            <th class="px-4 py-3 text-right">Payable</th>
-            <th class="px-4 py-3">Status</th>
+            {% include "components/table/sort_header.html" with label="Supplier" field="name" %}
+            {% include "components/table/sort_header.html" with label="Payable" field="payable" align="right" %}
+            {% include "components/table/sort_header.html" with label="Status" field="status" %}
             <th class="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>

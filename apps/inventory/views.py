@@ -13,7 +13,7 @@ from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
-from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, create_customer_receivable_account, sync_vendor_opening_balance
 from apps.finance.views import AuditSaveMixin
@@ -203,7 +203,7 @@ class UOMConversionUpdateView(UOMConversionCreateView, UpdateView):
     success_message = "UOM conversion updated."
 
 
-class VendorListView(BaseSimpleListView):
+class VendorListView(SortableListMixin, BaseSimpleListView):
     """Suppliers, each row opening onto what the business has bought from them."""
 
     page = "inventory.vendors"
@@ -212,6 +212,10 @@ class VendorListView(BaseSimpleListView):
     # Newest first: a supplier just added is the one being looked for.
     queryset = Vendor.objects.select_related("city").order_by("-id")
     search_fields = ("name", "code", "email", "tel1")
+    sort_fields = {"name": "name", "code": "code", "city": "city__title", "status": ("status", "name"), "added": "-id"}
+    # Rolled up per row after the query, so the database cannot order by it.
+    python_sort_fields = {"payable": "payable_balance"}
+    default_sort = "added"
     filter_fields = {"status": "status"}
     extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status"}
 
@@ -286,6 +290,8 @@ class VendorListView(BaseSimpleListView):
             vendor.payable_balance = (balances.get(vendor.payable_code) or {}).get("closing") or zero
             vendor.ledger_rows = ledger_rows(vendor.payable_code) if vendor.payable_code else []
 
+        # The payable column is computed above, so its sort happens here.
+        context["records"] = self.sort_rows(vendors)
         context["supplier_count"] = len(vendors)
         context["payable_total"] = sum((vendor.payable_balance for vendor in vendors), zero)
         context["purchased_total"] = sum((vendor.purchase_total for vendor in vendors), zero)

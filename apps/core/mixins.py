@@ -156,3 +156,75 @@ class SearchFilterPaginationMixin:
             }
         )
         return context
+
+
+class SortableListMixin:
+    """Column sorting for a list view, driven by ``?sort=<key>&dir=asc|desc``.
+
+    A view declares which columns may be sorted and what each one orders by::
+
+        sort_fields = {"name": "name", "city": "city__title", "added": "-id"}
+        default_sort = "added"
+
+    A value may be a single field or a tuple, so a column can order by more than
+    one field ("status, then name"). Only declared keys are honoured, so the
+    query string can never reach into the model with an arbitrary field.
+
+    Columns computed in Python (a balance rolled up per row) cannot be ordered
+    by the database; declare those in ``python_sort_fields`` as attribute names
+    and the mixin sorts the page's rows itself.
+    """
+
+    sort_fields: dict[str, object] = {}
+    python_sort_fields: dict[str, str] = {}
+    default_sort: str = ""
+    default_sort_dir: str = "asc"
+
+    def current_sort(self) -> tuple[str, str]:
+        key = (self.request.GET.get("sort") or self.default_sort or "").strip()
+        if key not in self.sort_fields and key not in self.python_sort_fields:
+            key = self.default_sort
+        direction = (self.request.GET.get("dir") or "").strip().lower()
+        if direction not in ("asc", "desc"):
+            direction = self.default_sort_dir if key == self.default_sort else "asc"
+        return key, direction
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        key, direction = self.current_sort()
+        target = self.sort_fields.get(key)
+        if not target:
+            return queryset
+        fields = target if isinstance(target, (list, tuple)) else (target,)
+        # A field declared with its own "-" keeps that meaning as the ascending
+        # sense of the column ("Added" ascending means newest first).
+        if direction == "desc":
+            fields = [field[1:] if field.startswith("-") else f"-{field}" for field in fields]
+        return queryset.order_by(*fields)
+
+    def sort_rows(self, rows):
+        """Order rows in Python for a column the database cannot sort on."""
+        key, direction = self.current_sort()
+        attribute = self.python_sort_fields.get(key)
+        if not attribute:
+            return rows
+        return sorted(rows, key=lambda row: getattr(row, attribute, 0) or 0, reverse=direction == "desc")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        key, direction = self.current_sort()
+        query = self.request.GET.copy()
+        query.pop("sort", None)
+        query.pop("dir", None)
+        query.pop("page", None)
+        base = query.urlencode()
+        context.update(
+            {
+                "sort_key": key,
+                "sort_dir": direction,
+                # Everything except sort/dir/page, so a sort link keeps the
+                # search and filters the user already set.
+                "sort_base_query": f"{base}&" if base else "",
+            }
+        )
+        return context

@@ -1,0 +1,27 @@
+{% comment %}
+Sortable column header. Pairs with core.mixins.SortableListMixin.
+
+    {% include "components/table/sort_header.html" with label="Supplier" field="name" %}
+    {% include "components/table/sort_header.html" with label="Payable" field="payable" align="right" %}
+
+  label  header text
+  field  key declared in the view's sort_fields / python_sort_fields
+  align  "right" | "center"  (default: left)
+  width  extra classes for the column width, e.g. "w-36"
+
+Clicking the active column flips its direction; clicking another starts it
+ascending. Needs `sort_key`, `sort_dir` and `sort_base_query` in context — the
+mixin puts them there.
+{% endcomment %}
+<th class="px-4 py-3 {% if align == 'right' %}text-right{% elif align == 'center' %}text-center{% else %}text-left{% endif %} {{ width|default:'' }}">
+  <a class="group inline-flex items-center gap-1 transition hover:text-[var(--primary-color)] {% if align == 'right' %}flex-row-reverse{% endif %}"
+     href="?{{ sort_base_query }}sort={{ field }}&dir={% if sort_key == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+    <span>{{ label }}</span>
+    {% if sort_key == field %}
+      <span class="text-[var(--primary-color)]" aria-hidden="true">{% if sort_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+      <span class="sr-only">sorted {{ sort_dir }}</span>
+    {% else %}
+      <span class="text-slate-300 opacity-0 transition group-hover:opacity-100 dark:text-slate-600" aria-hidden="true">&#9650;</span>
+    {% endif %}
+  </a>
+</th>
