@@ -151,6 +151,9 @@
 }
 .dark .tree-title { color: #e2e8f0; }
 .tree-row.is-root .tree-title { font-size: .82rem; letter-spacing: .03em; text-transform: uppercase; }
+/* A postable leaf opens its ledger, so its title behaves like the link it is. */
+.tree-node[data-group="0"]:not([data-root="1"]) > .tree-row .tree-title { cursor: pointer; }
+.tree-node[data-group="0"]:not([data-root="1"]) > .tree-row .tree-title:hover { color: var(--primary-color); text-decoration: underline; }
 .tree-title mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
 
 /* Account code pill. Inter's tabular figures keep the segments aligned. */

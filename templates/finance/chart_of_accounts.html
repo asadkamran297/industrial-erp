@@ -260,7 +260,19 @@
     finally { saveBtn.disabled = false; }
   });
 
+  // A postable leaf is a real ledger: its title opens the account's statement.
+  // Groups only hold other accounts, so their titles stay inert.
+  const LEDGER_URL = '{% url "finance:account_ledger" %}';
   root.addEventListener('click', (e) => {
+    const title = e.target.closest('.tree-title');
+    if (title) {
+      const li = title.closest('.tree-node');
+      const code = li.querySelector(':scope > .tree-row .tree-code');
+      if (li.dataset.group !== '1' && li.dataset.root !== '1' && code && code.textContent.trim()) {
+        window.location.href = LEDGER_URL + '?account_no=' + encodeURIComponent(code.textContent.trim());
+        return;
+      }
+    }
     const btn = e.target.closest('button');
     if (!btn) return;
     const li = btn.closest('.tree-node');

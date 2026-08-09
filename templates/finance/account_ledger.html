@@ -1,0 +1,117 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="title-accent text-2xl font-bold">Account Ledger</h1>
+  {% if ledger %}
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class="toolbar-btn grid h-11 w-11 place-items-center !px-0" title="Print" aria-label="Print"
+            onclick="printSection('ledger-table', 'Account Ledger — {{ ledger.account.title|escapejs }}')">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+      </svg>
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+  <div class="min-w-[260px] flex-1">
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="account_no">Account</label>
+    <select name="account_no" id="account_no" class="form-select" onchange="this.form.submit()">
+      <option value="">Select account…</option>
+      {% for account in accounts %}
+        <option value="{{ account.code }}" {% if account.code == selected_account %}selected{% endif %}>{{ account.title }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
+    <input type="date" name="date_from" id="date_from" value="{{ date_from }}" class="form-input" onchange="this.form.submit()">
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
+    <input type="date" name="date_to" id="date_to" value="{{ date_to }}" class="form-input" onchange="this.form.submit()">
+  </div>
+</form>
+
+{% if ledger %}
+<div class="mt-4 grid gap-4 sm:grid-cols-3">
+  <div class="stat-tile">
+    <span class="stat-icon">&rarr;</span>
+    <div>
+      <p class="stat-label">Opening Balance</p>
+      <p class="stat-value">{{ ledger.opening|amount }}</p>
+      <p class="mt-0.5 text-xs text-slate-500">{% if ledger.debit_natured %}Debit{% else %}Credit{% endif %} nature</p>
+    </div>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-icon">&#8721;</span>
+    <div>
+      <p class="stat-label">Period Movement</p>
+      <p class="stat-value">{{ ledger.total_debit|amount }} / {{ ledger.total_credit|amount }}</p>
+      <p class="mt-0.5 text-xs text-slate-500">debit / credit</p>
+    </div>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-icon">=</span>
+    <div>
+      <p class="stat-label">Closing Balance</p>
+      <p class="stat-value">{{ ledger.closing|amount }}</p>
+      <p class="mt-0.5 text-xs text-slate-500">{{ ledger.account.title }}</p>
+    </div>
+  </div>
+</div>
+
+<section class="mt-4">
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table id="ledger-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Voucher</th>
+            <th class="px-4 py-3">Particulars</th>
+            <th class="px-4 py-3 text-right">Debit</th>
+            <th class="px-4 py-3 text-right">Credit</th>
+            <th class="px-4 py-3 text-right">Balance</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          <tr class="bg-slate-50/60 font-semibold dark:bg-slate-800/40">
+            <td class="px-4 py-3" colspan="5">Opening Balance</td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ ledger.opening|amount }}</td>
+          </tr>
+          {% for row in ledger.rows %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+            <td class="px-4 py-3 whitespace-nowrap">{{ row.line.voucher_date|dmy }}</td>
+            <td class="px-4 py-3 font-medium">
+              <a class="text-[var(--primary-color)] hover:underline" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.line.voucher_no }}</a>
+            </td>
+            <td class="px-4 py-3 text-slate-500">{{ row.line.remarks|default:"—" }}</td>
+            <td class="px-4 py-3 text-right tabular-nums">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>
+            <td class="px-4 py-3 text-right tabular-nums">{% if row.credit %}{{ row.credit|amount }}{% endif %}</td>
+            <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ row.balance|amount }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">No entries on this account in the selected period.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="bg-slate-50 font-semibold dark:bg-slate-800">
+          <tr>
+            <td class="px-4 py-3" colspan="3">Closing Balance</td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ ledger.total_debit|amount }}</td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ ledger.total_credit|amount }}</td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ ledger.closing|amount }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+{% else %}
+<p class="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+  Pick an account to read its ledger.
+</p>
+{% endif %}
+{% endblock %}

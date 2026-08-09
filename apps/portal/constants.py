@@ -95,6 +95,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # it leads: it is the one place the whole day can be read at once.
     NavigationItem("Reports", permission=None, section=SECTION_REPORTS, icon="R", children=(
         NavigationItem("Daybook", permission="reports.daybook.index", url_name="finance:daybook"),
+        NavigationItem("Account Ledger", permission="reports.account_ledger.index", url_name="finance:account_ledger"),
     )),
 
     # ── People ──────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import DEBIT_NATURE_TYPES, account_balances, account_role, amount_in_words, money_mode_for_account, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class VoucherNavMixin:
@@ -926,6 +926,33 @@ class CashFlowView(PagePermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(cash_flow_statement())
+        return context
+
+
+class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
+    """One account's statement: opening balance, its entries, running balance."""
+
+    page = "reports.account_ledger"
+    template_name = "finance/account_ledger.html"
+
+    def _dates(self):
+        date_from = parse_date((self.request.GET.get("date_from") or "").strip())
+        date_to = parse_date((self.request.GET.get("date_to") or "").strip())
+        return date_from, date_to
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        code = (self.request.GET.get("account_no") or "").strip()
+        date_from, date_to = self._dates()
+
+        # Only postable leaves hold entries, so only those are offered.
+        context["accounts"] = ChartOfAccount.objects.filter(
+            status=STATUS_ACTIVE, children__isnull=True
+        ).order_by("code")
+        context["selected_account"] = code
+        context["date_from"] = date_from.isoformat() if date_from else ""
+        context["date_to"] = date_to.isoformat() if date_to else ""
+        context["ledger"] = account_ledger(code, date_from=date_from, date_to=date_to) if code else None
         return context
 
 

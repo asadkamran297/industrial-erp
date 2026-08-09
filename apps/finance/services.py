@@ -1138,3 +1138,62 @@ def sync_customer_from_coa(*, node, user=None):
     return Customer.objects.create(
         customer_name=node.title, customer_code=node.code or None, created_by=user, updated_by=user
     )
+
+
+def account_ledger(account_no, *, date_from=None, date_to=None):
+    """One account's statement: opening balance, its entries, running balance.
+
+    The opening balance is the account's own opening plus everything posted
+    before ``date_from``, so a date range reads as a continuation of the ledger
+    rather than a fragment of it. Each row carries the balance as it stood after
+    that entry, signed on the account's natural side — the same convention
+    ``account_balances`` uses, so a positive figure always means normal balance.
+    """
+    from .models import AccountVoucherLine  # lazy: models imports services in clean()
+
+    zero = Decimal("0.00")
+    account = ChartOfAccount.objects.filter(code=account_no).first()
+    if account is None:
+        return None
+
+    debit_natured = account.account_type in DEBIT_NATURE_TYPES
+    signed = (lambda debit, credit: debit - credit) if debit_natured else (lambda debit, credit: credit - debit)
+
+    lines = AccountVoucherLine.objects.filter(account_no=account_no).select_related("voucher")
+
+    opening = account.opening_balance or zero
+    if date_from:
+        earlier = lines.filter(voucher_date__lt=date_from).aggregate(
+            debit=Sum("debit_amount"), credit=Sum("credit_amount")
+        )
+        opening += signed(earlier["debit"] or zero, earlier["credit"] or zero)
+        lines = lines.filter(voucher_date__gte=date_from)
+    if date_to:
+        lines = lines.filter(voucher_date__lte=date_to)
+
+    rows = []
+    balance = opening
+    total_debit = total_credit = zero
+    for line in lines.order_by("voucher_date", "voucher_no", "line_number"):
+        debit = line.debit_amount or zero
+        credit = line.credit_amount or zero
+        balance += signed(debit, credit)
+        total_debit += debit
+        total_credit += credit
+        rows.append({
+            "line": line,
+            "voucher": line.voucher,
+            "debit": debit,
+            "credit": credit,
+            "balance": balance,
+        })
+
+    return {
+        "account": account,
+        "debit_natured": debit_natured,
+        "opening": opening,
+        "rows": rows,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "closing": balance,
+    }
