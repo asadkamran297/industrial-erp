@@ -11,6 +11,12 @@
         <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
       </svg>
     </button>
+    <a class="toolbar-btn grid h-11 w-11 place-items-center !px-0" title="Export to Excel" aria-label="Export to Excel"
+       href="{% url 'finance:account_ledger_export' %}?{{ request.GET.urlencode }}">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path><path d="m9.5 12.5 5 5"></path><path d="m14.5 12.5-5 5"></path>
+      </svg>
+    </a>
   </div>
   {% endif %}
 </div>

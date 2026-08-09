@@ -956,6 +956,39 @@ class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
         return context
 
 
+class AccountLedgerExportView(AccountLedgerView):
+    """The ledger on screen as a spreadsheet, same account and date range."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data()
+        ledger = context.get("ledger")
+        if ledger is None:
+            return redirect("finance:account_ledger")
+
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        stamp = timezone.localdate().isoformat()
+        response["Content-Disposition"] = f'attachment; filename="ledger-{ledger["account"].code}-{stamp}.csv"'
+        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
+        response.write("﻿")
+        writer = csv.writer(response)
+        writer.writerow([ledger["account"].title, ledger["account"].code])
+        writer.writerow(["From", context["date_from"] or "Start", "To", context["date_to"] or "Today"])
+        writer.writerow([])
+        writer.writerow(["Date", "Voucher", "Particulars", "Debit", "Credit", "Balance"])
+        writer.writerow(["", "", "Opening Balance", "", "", ledger["opening"]])
+        for row in ledger["rows"]:
+            writer.writerow([
+                format_date(row["line"].voucher_date),
+                row["line"].voucher_no,
+                row["line"].remarks,
+                row["debit"] or "",
+                row["credit"] or "",
+                row["balance"],
+            ])
+        writer.writerow(["", "", "Closing Balance", ledger["total_debit"], ledger["total_credit"], ledger["closing"]])
+        return response
+
+
 class DaybookView(PagePermissionRequiredMixin, TemplateView):
     """The day's complete record: every voucher posted, in entry order."""
 
