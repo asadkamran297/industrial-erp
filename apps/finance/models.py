@@ -27,6 +27,7 @@ from apps.core.constants import (
     FIN_VOUCHER_PREFIX_MAP,
     FIN_VOUCHER_STATUS_CHOICES,
     FIN_VOUCHER_TYPE_CHOICES,
+    VOUCHER_HEADERLESS_TYPES,
     NO,
     RECORD_STATUS_CHOICES,
     SETTLEMENT_CASH,
@@ -345,8 +346,15 @@ class AccountVoucher(BaseModel):
             self.settlement_mode, FIN_VOUCHER_HEADER_ROLES.get(self.voucher_type)
         )
         self.account_no = (self.account_no or "").strip()
-        role = self._account_role(self.account_no)
-        if role is None:
+        headerless = self.voucher_type in VOUCHER_HEADERLESS_TYPES
+        if headerless:
+            # Nothing heads a journal: the grid carries both sides of it.
+            self.account_no = ""
+            self.payment_method = None
+        role = None if headerless else self._account_role(self.account_no)
+        if headerless:
+            pass
+        elif role is None:
             errors["account_no"] = "Active leaf chart-of-account is required."
         elif allowed_roles and role not in allowed_roles:
             wanted = ", ".join(FIN_ACCOUNT_ROLE_LABELS[name] for name in allowed_roles)

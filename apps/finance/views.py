@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
+from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_HEADERLESS_TYPES, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
 from apps.core.formatting import format_date
 from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
@@ -304,7 +304,9 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         # Rendered server-side so the number is present before JavaScript runs;
         # the fetch then keeps it in step as the type changes.
         # Cash is the form's default money mode, so preview that book's number.
-        context["next_voucher_no"] = next_voucher_number(self._selected_type(), "cash")
+        # A journal has no cash/bank book, so it numbers without that suffix.
+        preview_mode = "" if self._selected_type() in VOUCHER_HEADERLESS_TYPES else "cash"
+        context["next_voucher_no"] = next_voucher_number(self._selected_type(), preview_mode)
         # Last (childless) nodes of the chart of accounts are the postable ones.
         money_groups = money_account_codes()
         customer_codes = receivable_account_codes()
@@ -334,6 +336,8 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_party_roles"] = FIN_VOUCHER_PARTY_ROLES
         context["voucher_labels"] = FIN_VOUCHER_LABELS
         context["settlement_voucher_types"] = list(VOUCHER_SETTLEMENT_TYPES)
+        # Types entered purely as a grid: no header account, method or amount box.
+        context["headerless_voucher_types"] = list(VOUCHER_HEADERLESS_TYPES)
         # Kept on the form but off the screen: date defaults to today and the
         # workflow fields stay at their model defaults until the detail page.
         context["hidden_header_fields"] = ["voucher_type", "voucher_date", "remarks", "status", "adj_entry", "adj_voucher"]
@@ -361,14 +365,15 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         """
         sides = VOUCHER_SIMPLE_SIDES.get(self.request.POST.get("voucher_type", ""))
         accounts = self.request.POST.getlist("line_account[]")
-        descriptions = self.request.POST.getlist("line_description[]")
+        # The grid has no description column: the voucher's narration describes
+        # every line of it, so each row carries the same words.
+        narration = (self.request.POST.get("remarks") or "").strip()
         debits = self.request.POST.getlist("line_debit[]")
         credits = self.request.POST.getlist("line_credit[]")
         amounts = self.request.POST.getlist("line_amount[]")
         rows = []
-        for index in range(max(len(accounts), len(debits), len(credits), len(amounts), len(descriptions))):
+        for index in range(max(len(accounts), len(debits), len(credits), len(amounts))):
             account_no = (accounts[index] if index < len(accounts) else "").strip()
-            description = (descriptions[index] if index < len(descriptions) else "").strip()
             if sides:
                 amount = self._decimal(amounts, index)
                 debit = amount if sides[1] == "debit" else Decimal("0")
@@ -376,9 +381,9 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
             else:
                 debit = self._decimal(debits, index)
                 credit = self._decimal(credits, index)
-            if not account_no and not description and debit == 0 and credit == 0:
+            if not account_no and debit == 0 and credit == 0:
                 continue
-            rows.append({"account_no": account_no, "remarks": description, "debit_amount": debit, "credit_amount": credit})
+            rows.append({"account_no": account_no, "remarks": narration, "debit_amount": debit, "credit_amount": credit})
         return rows
 
     def _append_money_line(self, line_number):

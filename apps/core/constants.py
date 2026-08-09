@@ -164,6 +164,10 @@ FIN_SETTLEMENT_MODE_CHOICES: Final[StatusChoices] = (
 
 VOUCHER_SETTLEMENT_TYPES: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE)
 
+# A Journal is only its lines: no money account heads it, so no payment method
+# and no single amount either — the grid carries both sides.
+VOUCHER_HEADERLESS_TYPES: Final = (VOUCHER_TYPE_JOURNAL,)
+
 # Extra voucher header fields each payment method needs, keyed by a lowercased
 # PaymentMethod.title. Methods missing here (Cash, …) collect nothing extra; the
 # listed fields are both shown and required, and everything else is blanked out.

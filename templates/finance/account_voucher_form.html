@@ -21,7 +21,7 @@
         </label>
       </div>
 
-      <div class="flex flex-wrap items-end gap-4">
+      <div class="ml-auto flex flex-wrap items-end gap-4">
         <div class="w-36">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="voucher-no-preview">Voucher No</label>
           <input id="voucher-no-preview" class="form-input h-10 w-full font-bold tabular-nums" type="text" value="{{ next_voucher_no }}" readonly>
@@ -33,8 +33,8 @@
       </div>
     </div>
 
-    <div class="grid gap-5 border-t border-slate-100 pt-4 lg:grid-cols-3 dark:border-slate-800">
-    <div class="grid content-start gap-4 lg:col-span-2">
+    <div id="entry-layout" class="grid gap-5 border-t border-slate-100 pt-4 lg:grid-cols-3 dark:border-slate-800">
+    <div id="entry-column" class="grid content-start gap-4 lg:col-span-2">
       {% for field in form %}{% if field.name not in hidden_header_fields %}
         <div id="field-{{ field.name }}">
           <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span>{% if field.field.required %} <span class="text-rose-500">*</span>{% endif %}</label>
@@ -60,13 +60,13 @@
   </div>
 
   {# Voucher entry grid: one row per ledger line, totals must balance #}
-  <div id="line-grid-wrap" class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+  {# No clipping here: the account dropdown opens out of the last row. #}
+  <div id="line-grid-wrap" class="rounded-xl border border-slate-200 dark:border-slate-800">
     <table class="w-full text-sm" id="line-grid">
       <thead>
         <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           <th class="w-16 px-3 py-2">Line#</th>
           <th class="w-64 px-3 py-2" id="line-account-label">Account</th>
-          <th class="px-3 py-2">Description</th>
           <th class="w-36 px-3 py-2 text-right col-drcr">Debit</th>
           <th class="w-36 px-3 py-2 text-right col-drcr">Credit</th>
           <th class="w-36 px-3 py-2 text-right col-amount">Amount</th>
@@ -84,7 +84,6 @@
               {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}" {% if object and acc.code == line.account_no %}selected{% endif %}>{{ acc.title }}</option>{% endfor %}
             </select>
           </td>
-          <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800" value="{% if object %}{{ line.remarks|default:'' }}{% endif %}"></td>
           <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.debit_amount %}{{ line.debit_amount|floatformat:2 }}{% endif %}"></td>
           <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.credit_amount %}{{ line.credit_amount|floatformat:2 }}{% endif %}"></td>
           <td class="px-3 py-1.5 col-amount"><input type="number" name="line_amount[]" min="0" step="0.01" class="form-input line-amount w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.entry_amount %}{{ line.entry_amount|floatformat:2 }}{% endif %}"></td>
@@ -94,7 +93,7 @@
       </tbody>
       <tfoot id="grid-totals">
         <tr class="border-t border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
-          <td colspan="3" class="px-3 py-2 text-right text-sm font-semibold">Totals :</td>
+          <td colspan="2" class="px-3 py-2 text-right text-sm font-semibold">Totals :</td>
           <td class="px-3 py-2 col-drcr"><input type="text" id="total-debit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
           <td class="px-3 py-2 col-drcr"><input type="text" id="total-credit" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
           <td class="px-3 py-2 col-amount"><input type="text" id="total-amount" class="form-input w-full bg-yellow-50 text-right font-semibold dark:bg-slate-900" value="0.00" readonly tabindex="-1"></td>
@@ -116,7 +115,7 @@
   </div>
     </div>
 
-    <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+    <aside id="amount-panel" class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
       <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
       <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
         <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
@@ -154,6 +153,7 @@
 {{ voucher_party_roles|json_script:"voucher-party-roles" }}
 {{ voucher_labels|json_script:"voucher-labels" }}
 {{ settlement_voucher_types|json_script:"settlement-voucher-types" }}
+{{ headerless_voucher_types|json_script:"headerless-voucher-types" }}
 {{ payment_method_fields|json_script:"payment-method-fields" }}
 {{ payment_conditional_fields|json_script:"payment-conditional-fields" }}
 <script>
@@ -168,6 +168,8 @@
   const PARTY_ROLES = JSON.parse(document.getElementById('voucher-party-roles').textContent);
   const LABELS = JSON.parse(document.getElementById('voucher-labels').textContent);
   const SETTLEMENT_TYPES = JSON.parse(document.getElementById('settlement-voucher-types').textContent);
+  // A Journal is only its grid: no header account, no payment method, no single amount.
+  const HEADERLESS_TYPES = JSON.parse(document.getElementById('headerless-voucher-types').textContent);
   // Simple mode = no Debit/Credit columns, just an Amount per line.
   const SIMPLE_TYPES = JSON.parse(document.getElementById('simple-voucher-types').textContent);
   const SIMPLE_SIDES = JSON.parse(document.getElementById('simple-voucher-sides').textContent);
@@ -211,7 +213,15 @@
     return roles;
   }
 
+  // Cash/Bank only means something where the header account is a money account.
+  // A Journal has no money side, so it has no book to pick.
+  function usesMoneyMode() {
+    if (HEADERLESS_TYPES.includes(hidden.value)) return false;
+    return !!(HEADER_ROLES[hidden.value] || SETTLEMENT_HEADER_ROLES[hidden.value]);
+  }
+
   function moneyMode() {
+    if (!usesMoneyMode()) return '';
     const picked = document.querySelector('#money-mode input:checked');
     return picked ? picked.value : '';
   }
@@ -307,6 +317,25 @@
       if (gridWrap) gridWrap.classList.toggle('hidden', simple);
       setLabel('simple-account', labels.line);
     }
+
+    const pills = document.getElementById('money-mode');
+    if (pills) pills.classList.toggle('hidden', !usesMoneyMode());
+
+    // Grid-only types drop the header account, the payment method and the
+    // amount panel; the rows carry every figure the voucher has.
+    const headerless = HEADERLESS_TYPES.includes(hidden.value);
+    if (headerless) {
+      toggleField('account_no', false);
+      toggleField('payment_method', false);
+    }
+    const amountPanel = document.getElementById('amount-panel');
+    if (amountPanel) amountPanel.classList.toggle('hidden', headerless);
+    // With the side panel gone the grid takes the whole width, so a journal's
+    // Dr/Cr rows are not squeezed into two thirds of the screen.
+    const layout = document.getElementById('entry-layout');
+    const column = document.getElementById('entry-column');
+    if (layout) layout.classList.toggle('lg:grid-cols-3', !headerless);
+    if (column) column.classList.toggle('lg:col-span-2', !headerless);
 
     setLabel('settlement_mode', labels.settlement);
     setLabel('party_account_no', labels.party);
@@ -663,16 +692,8 @@
     document.getElementById('preview-cr-amount').textContent = figure;
   }
 
-  // Simple mode hides the line's own description, so the narration stands in
-  // for it — the one line of the voucher reads the same as the voucher itself.
-  const narration = document.getElementById('id_narration');
-  if (narration) {
-    narration.addEventListener('input', () => {
-      if (!SIMPLE_TYPES.includes(hidden.value)) return;
-      const row = firstRow();
-      if (row) row.querySelector('.line-desc').value = narration.value;
-    });
-  }
+  // The narration stands as every line's description; the server copies it
+  // onto each row, so there is nothing to mirror here.
 
   // The grid row is hidden in simple mode, so its own errors never show; check
   // the two visible boxes here instead of letting the server bounce a blank one.
