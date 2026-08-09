@@ -125,6 +125,10 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
         # enforced in AccountVoucher.clean, which knows the type and settlement mode.
         self.fields["settlement_mode"].required = False
         self.fields["party_account_no"].required = False
+        # Bank and the transaction reference are recorded when known; a cash-side
+        # entry or a cheque handed over in person has neither.
+        self.fields["bank_name"].required = False
+        self.fields["transaction_ref"].required = False
 
     def clean_account_no(self):
         return self.cleaned_data["account_no"].strip()

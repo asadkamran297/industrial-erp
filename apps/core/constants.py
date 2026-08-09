@@ -168,7 +168,10 @@ VOUCHER_SETTLEMENT_TYPES: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE)
 # PaymentMethod.title. Methods missing here (Cash, …) collect nothing extra; the
 # listed fields are both shown and required, and everything else is blanked out.
 FIN_PAYMENT_METHOD_FIELDS: Final[dict[str, tuple[str, ...]]] = {
-    "bank transfer": ("bank_name", "transaction_ref"),
+    # A transfer already moves through the voucher's bank account, so the bank is
+    # known; only the reference the bank gave it is collected.
+    "bank transfer": ("transaction_ref",),
+    "bank": ("transaction_ref",),
     "cheque": ("bank_name", "cheque_no", "cheque_date"),
     "mobile wallet": ("wallet_operator", "transaction_ref"),
 }

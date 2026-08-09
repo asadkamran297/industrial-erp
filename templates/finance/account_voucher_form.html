@@ -37,7 +37,7 @@
     <div class="grid content-start gap-4 lg:col-span-2">
       {% for field in form %}{% if field.name not in hidden_header_fields %}
         <div id="field-{{ field.name }}">
-          <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span> <span class="text-rose-500">*</span></label>
+          <label class="mb-1.5 block text-sm font-medium"><span id="label-{{ field.name }}">{{ field.label }}</span>{% if field.field.required %} <span class="text-rose-500">*</span>{% endif %}</label>
           {# Both account pickers share the same option list; JS filters them by role. #}
           {% if field.name == "account_no" or field.name == "party_account_no" %}
             <select name="{{ field.name }}" id="id_{{ field.name }}" class="form-select">
@@ -543,6 +543,7 @@
 
   function refresh(clear) {
     filterAccounts(clear);
+    filterMethods();
     applyMode();
     toggleMethodFields();
   }
@@ -551,6 +552,25 @@
   const METHOD_FIELDS = JSON.parse(document.getElementById('payment-method-fields').textContent);
   const CONDITIONAL_FIELDS = JSON.parse(document.getElementById('payment-conditional-fields').textContent);
   const methodSelect = document.getElementById('id_payment_method');
+
+  // The list is rebuilt per money mode, so the full set is kept from the start.
+  const methodOptions = methodSelect ? [...methodSelect.options].map(o => o.cloneNode(true)) : [];
+
+  // Money paid out of a bank account is never "Cash": the method describes how
+  // the bank moved it (cheque, transfer, ...), so that option is dropped there.
+  function filterMethods() {
+    if (!methodSelect) return;
+    const bank = moneyMode() === 'bank';
+    const previous = methodSelect.value;
+    methodSelect.innerHTML = '';
+    methodOptions.forEach(option => {
+      if (bank && /^cash$/i.test(option.text.trim())) return;
+      methodSelect.appendChild(option.cloneNode(true));
+    });
+    methodSelect.value = [...methodSelect.options].some(o => o.value === previous) ? previous : '';
+    // The searchable dropdown redraws its label only on change.
+    methodSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  }
 
   function toggleMethodFields() {
     // A hidden payment method (credit sale/purchase) collects nothing extra.
