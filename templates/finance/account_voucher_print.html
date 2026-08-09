@@ -1,65 +1,58 @@
 {% extends "layouts/print_base.html" %}
+{% load core_extras %}
 {% block title %}{{ voucher.get_voucher_type_display }} Voucher {{ voucher.voucher_no }}{% endblock %}
 
 {% block print_content %}
 <h1 class="doc-title">{{ voucher.get_voucher_type_display }} Voucher</h1>
 
+{# Reads the same way the on-screen preview does: the facts, then the figure. #}
 <table class="meta">
   <tr>
     <td class="lbl">Voucher No</td><td>{{ voucher.voucher_no }}</td>
-    <td class="lbl">Date</td><td>{{ voucher.voucher_date|date:"d-M-Y" }}</td>
+    <td class="lbl">Date</td><td>{{ voucher.voucher_date|date:"d-m-Y" }}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Voucher Type</td>
+    <td>{{ voucher.get_voucher_type_display }}{% if money_mode %} &middot; {{ money_mode|capfirst }}{% endif %}</td>
     <td class="lbl">Status</td><td>{% if voucher.posted == "Y" %}Posted{% else %}{{ voucher.get_status_display }}{% endif %}</td>
   </tr>
+  {% if voucher.payment_method or voucher.bank_name %}
   <tr>
-    <td class="lbl">{% if voucher.voucher_type == "RV" %}Received In{% else %}Paid From{% endif %}</td>
-    <td>{{ account_title }}</td>
-    <td class="lbl">Payment Mode</td><td colspan="3">{{ voucher.payment_method|default:"&mdash;" }}</td>
+    <td class="lbl">Payment Mode</td><td>{{ voucher.payment_method|default:"&mdash;" }}</td>
+    {# Bank only appears on a voucher that names one. #}
+    {% if voucher.bank_name %}<td class="lbl">Bank</td><td>{{ voucher.bank_name }}</td>{% else %}<td colspan="2"></td>{% endif %}
   </tr>
-  {% if voucher.cheque_no or voucher.bank_name or voucher.transaction_ref %}
+  {% endif %}
+  {% if voucher.cheque_no or voucher.transaction_ref %}
   <tr>
-    <td class="lbl">Bank</td><td>{{ voucher.bank_name|default:"&mdash;" }}</td>
-    <td class="lbl">Cheque No</td><td>{{ voucher.cheque_no|default:"&mdash;" }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|date:"d-M-Y" }}{% endif %}</td>
+    <td class="lbl">Cheque No</td><td>{{ voucher.cheque_no|default:"&mdash;" }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|date:"d-m-Y" }}{% endif %}</td>
     <td class="lbl">Reference</td><td>{{ voucher.transaction_ref|default:"&mdash;" }}</td>
   </tr>
   {% endif %}
 </table>
 
+{# The two sides of the voucher, named — no ledger grid. #}
 <table class="items">
-  <thead>
-    <tr>
-      <th style="width:34px">#</th>
-      <th style="width:110px">Code</th>
-      <th>Account</th>
-      <th>Particulars</th>
-      <th class="num" style="width:110px">Debit</th>
-      <th class="num" style="width:110px">Credit</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for line in lines %}
-    <tr>
-      <td>{{ line.line_number }}</td>
-      <td>{{ line.account_no }}</td>
-      <td>{{ line.account_title }}</td>
-      <td>{{ line.remarks|default:"" }}</td>
-      <td class="num">{% if line.debit_amount %}{{ line.debit_amount|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-      <td class="num">{% if line.credit_amount %}{{ line.credit_amount|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="6">No lines recorded on this voucher.</td></tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr>
-      <th colspan="4" class="num">Total</th>
-      <th class="num">{{ voucher.debit_amount|floatformat:2 }}</th>
-      <th class="num">{{ voucher.credit_amount|floatformat:2 }}</th>
-    </tr>
-  </tfoot>
+  <tr>
+    <th style="width:50%">{% if voucher.voucher_type == "RV" %}Received In{% else %}Paid From{% endif %}</th>
+    <th>{% if voucher.voucher_type == "RV" %}Received From{% else %}Paid To{% endif %}</th>
+  </tr>
+  <tr>
+    <td>{{ account_title|default:voucher.account_no }}</td>
+    <td>{{ counter_titles|default:"&mdash;" }}</td>
+  </tr>
 </table>
 
-<div class="totals">Amount: {{ voucher_total|floatformat:2 }}</div>
-<div class="words">{{ amount_words }}</div>
+{# Plain rows, the way a receipt reads: the figure, then the same figure in words. #}
+<table class="amount-box">
+  <tr>
+    <td class="amt-label">{% if voucher.voucher_type == "RV" %}Received{% else %}Paid{% endif %}</td>
+    <td class="amt-colon">:</td>
+    <td class="amt-value">Rs {{ voucher_total|amount }}</td>
+  </tr>
+  <tr><td class="amt-head" colspan="3">Amount in Words:</td></tr>
+  <tr><td class="amt-words" colspan="3">{{ amount_words }}</td></tr>
+</table>
 
 {% if voucher.remarks %}
 <table class="meta" style="margin-top:10px">

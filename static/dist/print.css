@@ -89,6 +89,15 @@
   table.items td.num, table.items th.num { text-align: right; }
   .totals { text-align: right; margin-top: 10px; font-size: 13px; border-top: 2px solid #1e3a5f; padding-top: 6px; }
   .words { margin-top: 4px; font-style: italic; color: #444; }
+  /* The figure, laid out the way a receipt reads it. */
+  table.amount-box { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.amount-box td { border: 1px solid #999; padding: 6px 8px; font-size: 12px; }
+  table.amount-box .amt-label { font-weight: 600; }
+  table.amount-box .amt-colon { width: 14px; text-align: center; border-left: 0; border-right: 0; }
+  table.amount-box .amt-value { text-align: right; font-weight: 700; white-space: nowrap; width: 160px; }
+  table.amount-box .amt-head { background: #f1f4f8; font-weight: 700; }
+  table.amount-box .amt-words { font-style: italic; }
+
   .sign { display: flex; justify-content: space-between; margin-top: 60px; }
   .sign div { text-align: center; border-top: 1px solid #555; padding-top: 4px; min-width: 140px; font-weight: bold; font-size: 11px; }
 

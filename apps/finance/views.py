@@ -533,6 +533,11 @@ class AccountVoucherPrintView(PrintContextMixin, PagePermissionRequiredMixin, De
         total = self.object.debit_amount or Decimal("0")
         context["voucher_total"] = total
         context["amount_words"] = amount_in_words(total)
+        # Which book it belongs to, and the account on the other side of it —
+        # the same two facts the on-screen preview leads with.
+        context["money_mode"] = money_mode_for_account(self.object.account_no)
+        counter = [line for line in lines if line.account_no != self.object.account_no]
+        context["counter_titles"] = ", ".join(line.account_title for line in counter)
         context["print_back_url"] = reverse("finance:account_voucher_detail", args=[self.object.pk])
         return context
 
