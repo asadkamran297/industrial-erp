@@ -274,7 +274,9 @@ class ChartOfAccount(BaseModel):
 
 class AccountVoucher(BaseModel):
     voucher_no = models.CharField(max_length=80, unique=True, blank=True)
-    account_no = models.CharField(max_length=80)
+    # Blank on a journal, which is only its lines; clean() still demands one on
+    # every type that is headed by a money account.
+    account_no = models.CharField(max_length=80, blank=True)
     voucher_date = models.DateField(default=timezone.localdate)
     voucher_type = models.CharField(max_length=2, choices=FIN_VOUCHER_TYPE_CHOICES)
     settlement_mode = models.CharField(max_length=10, choices=FIN_SETTLEMENT_MODE_CHOICES, blank=True)

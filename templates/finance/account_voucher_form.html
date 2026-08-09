@@ -83,6 +83,8 @@
               <option value="">Select account…</option>
               {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}" {% if object and acc.code == line.account_no %}selected{% endif %}>{{ acc.title }}</option>{% endfor %}
             </select>
+            {# Where the account stands before this voucher moves it. #}
+            <p class="line-balance mt-1 hidden text-xs font-bold"></p>
           </td>
           <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.debit_amount %}{{ line.debit_amount|floatformat:2 }}{% endif %}"></td>
           <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.credit_amount %}{{ line.credit_amount|floatformat:2 }}{% endif %}"></td>
@@ -189,6 +191,7 @@
   const defaultLineLabel = lineLabel ? lineLabel.textContent : '';
   let recalcGrid = () => {};
   let ensureRows = () => {};
+  let renumberRows = () => {};
 
   // Money boxes are grouped with commas (amount-format.js), so their text is
   // stripped before it is read as a number.
@@ -306,6 +309,7 @@
     toggleField('payment_method', (!showSettlement || mode === 'cash') && !cashEntry);
 
     if (!simple) ensureRows(2);
+    if (grid) renumberRows();
     const addLineWrap = document.getElementById('add-line-wrap');
     if (addLineWrap) {
       addLineWrap.classList.toggle('hidden', simple);
@@ -390,8 +394,19 @@
     }
     recalcGrid = recalc;
 
+    // The first two rows are the entry itself — a journal's debit and credit
+    // halves — so only rows added on top of them carry a cross.
+    function minimumRows() {
+      return 2;
+    }
+
     function renumber() {
-      rowsBody.querySelectorAll('.line-row .line-num').forEach((input, index) => { input.value = index + 1; });
+      const floor = minimumRows();
+      rowsBody.querySelectorAll('.line-row').forEach((row, index) => {
+        row.querySelector('.line-num').value = index + 1;
+        const remove = row.querySelector('.line-remove');
+        if (remove) remove.classList.toggle('invisible', index < floor);
+      });
     }
 
     function addRow() {
@@ -399,6 +414,8 @@
       const clone = last.cloneNode(true);
       clone.querySelectorAll('input').forEach(i => { i.value = ''; });
       clone.querySelector('.line-account').value = '';
+      const balance = clone.querySelector('.line-balance');
+      if (balance) { balance.textContent = ''; balance.classList.add('hidden'); }
       rowsBody.appendChild(clone);
       renumber();
       return clone;
@@ -412,18 +429,18 @@
       // if (lastRow.contains(e.target)) addRow();  // always keep one empty row
     });
     grid.addEventListener('change', (e) => {
-      if (e.target.classList.contains('line-account')) recalc();
+      if (!e.target.classList.contains('line-account')) return;
+      recalc();
+      const row = e.target.closest('.line-row');
+      if (row) showBalance(e.target, row.querySelector('.line-balance'));
     });
     grid.addEventListener('click', (e) => {
       const btn = e.target.closest('.line-remove');
       if (!btn) return;
-      if (rowsBody.querySelectorAll('.line-row').length <= 1) {  // keep at least one row; just clear it
-        const row = btn.closest('.line-row');
-        row.querySelectorAll('input:not(.line-num)').forEach(i => { i.value = ''; });
-        row.querySelector('.line-account').value = '';
-      } else {
-        btn.closest('.line-row').remove();
-      }
+      // The base rows are the entry itself: their cross is hidden, and a click
+      // that reaches one anyway is ignored rather than emptying the voucher.
+      if (rowsBody.querySelectorAll('.line-row').length <= minimumRows()) return;
+      btn.closest('.line-row').remove();
       renumber();
       recalc();
     });
@@ -435,10 +452,12 @@
     }
     // Journal is entered as a pair: one row debited, one credited. Start with
     // both rows on screen so the entry reads as the two halves it is.
+    renumberRows = renumber;
     ensureRows = (count) => {
       while (rowsBody.querySelectorAll('.line-row').length < count) addRow();
     };
     recalc();
+    renumber();
   }
 
   // Clears the entry after a save. Type, number and date identify the voucher,
@@ -528,15 +547,23 @@
   const balanceLine = document.getElementById('account-balance');
   const simpleBalanceLine = document.getElementById('simple-account-balance');
   const balanceRequests = new Map();
-  const BALANCE_BASE = 'mt-1 text-xs font-bold';
+
+  const BALANCE_TONES = ['text-rose-600', 'text-emerald-600', 'text-slate-600'];
+
+  // Only the colour is swapped: rewriting className would strip the element's
+  // own classes (a grid row's .line-balance), and the next pick could not find it.
+  function paintBalance(line, tone) {
+    BALANCE_TONES.forEach(name => line.classList.toggle(name, name === tone));
+    line.classList.remove('hidden');
+  }
 
   function showBalance(select, line) {
     if (!line || !select) return;
-    if (!select.value) { line.classList.add('hidden'); return; }
+    if (!select.value) { line.classList.add('hidden'); line.textContent = ''; return; }
     const ticket = (balanceRequests.get(line) || 0) + 1;
     balanceRequests.set(line, ticket);
     line.textContent = 'Balance …';
-    line.className = BALANCE_BASE;
+    paintBalance(line, '');
     fetch('{% url "finance:account_balance" %}?account_no=' + encodeURIComponent(select.value), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
@@ -546,7 +573,7 @@
         line.textContent = 'Current balance: ' + data.balance + (data.side ? ' (' + data.side + ')' : '');
         // Red below zero, green above: an overdrawn account should be obvious
         // before the entry is written, not after the ledger is read.
-        line.className = BALANCE_BASE + ' ' + (data.amount < 0 ? 'text-rose-600' : data.amount > 0 ? 'text-emerald-600' : 'text-slate-600');
+        paintBalance(line, data.amount < 0 ? 'text-rose-600' : data.amount > 0 ? 'text-emerald-600' : 'text-slate-600');
       })
       .catch(() => { if (ticket === balanceRequests.get(line)) line.classList.add('hidden'); });
   }
@@ -714,6 +741,11 @@
     syncEnhancedSelects();
     showBalance(simpleAccount, simpleBalanceLine);
   }
+  // Editing: rows come back with their accounts, so their balances are shown too.
+  document.querySelectorAll('#line-grid .line-row').forEach(row => {
+    const select = row.querySelector('.line-account');
+    if (select && select.value) showBalance(select, row.querySelector('.line-balance'));
+  });
   writeAmountWords();
   writePreview();
 
