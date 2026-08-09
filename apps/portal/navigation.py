@@ -81,31 +81,42 @@ def build_navigation_item(
         "is_active": is_active or has_active_child,
         "is_current": is_active,
         "is_open": has_active_child,
-        "item_class": get_nav_item_class(depth, bool(children), is_active or has_active_child),
-        "icon_class": get_nav_icon_class(is_active or has_active_child),
+        # The page you are on and the branch leading to it read differently: only
+        # one item at a time is the current page.
+        "item_class": get_nav_item_class(depth, bool(children), is_active, has_active_child),
+        "icon_class": get_nav_icon_class(is_active, has_active_child),
     }
 
 
-def get_nav_item_class(depth: int, has_children: bool, is_active: bool) -> str:
+def get_nav_item_class(depth: int, has_children: bool, is_active: bool, on_active_path: bool = False) -> str:
     base = "flex w-full items-center text-left text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--primary-color)]/30"
     if depth == 0:
         size = "min-h-10 gap-3 rounded-lg px-3 font-semibold"
         active = "bg-[var(--primary-color)] text-white shadow-sm shadow-blue-900/10"
+        # An open branch is marked, not filled: the filled pill stays reserved for
+        # the page actually on screen.
+        on_path = "bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)]"
         inactive = "text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
     else:
         size = "min-h-9 gap-2 rounded-md px-3"
-        active = "bg-slate-100 font-semibold text-[var(--primary-color)] dark:bg-slate-800"
+        # Tint plus a left rule, so the current page is readable against the
+        # indent guides instead of relying on a faint grey fill.
+        active = "border-l-2 border-[var(--primary-color)] bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] font-semibold text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)] dark:text-white"
+        on_path = "font-semibold text-[var(--primary-color)] dark:text-white"
         inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
     if depth >= 2 and not has_children:
         size = "min-h-9 rounded-md px-3"
-    return f"{base} {size} {active if is_active else inactive}"
+    state = active if is_active else (on_path if on_active_path else inactive)
+    return f"{base} {size} {state}"
 
 
-def get_nav_icon_class(is_active: bool) -> str:
+def get_nav_icon_class(is_active: bool, on_active_path: bool = False) -> str:
     base = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-bold"
+    # White only works on the filled pill; an open branch keeps a tinted chip.
     active = "bg-white/15 text-white"
+    on_path = "bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)]"
     inactive = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
-    return f"{base} {active if is_active else inactive}"
+    return f"{base} {active if is_active else (on_path if on_active_path else inactive)}"
 
 
 def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:

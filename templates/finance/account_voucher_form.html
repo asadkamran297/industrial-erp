@@ -778,8 +778,10 @@
           showFlash('Voucher not saved. Check the highlighted fields.', false);
           return;
         }
-        // Opened before the form clears, so the printed copy is the voucher just saved.
+        // Opened before leaving, so the printed copy is the voucher just saved.
         if (printAfterSave && data.print_url) window.open(data.print_url, '_blank');
+        // The entry ends on the list for this voucher type.
+        if (data.list_url) { window.location.href = data.list_url; return; }
         const extra = (data.messages || []).filter(m => m.level !== 'success').map(m => m.text).join(' ');
         showFlash(('Voucher ' + data.voucher_no + ' saved. ' + extra).trim(), true);
         resetEntry();

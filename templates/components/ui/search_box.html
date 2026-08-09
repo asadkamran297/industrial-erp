@@ -1,5 +1,8 @@
-<form class="relative" role="search">
+<form class="search-field" role="search">
   <label class="sr-only" for="global-search">Search</label>
-  <input id="global-search" name="q" type="search" placeholder="{{ placeholder|default:'Search...' }}" class="h-9 w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 pr-8 text-sm outline-none transition focus:border-[var(--primary-color)] focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900">
-  <span class="pointer-events-none absolute right-3 top-1.5 text-slate-400">⌕</span>
+  <input id="global-search" name="q" type="search" placeholder="{{ placeholder|default:'Search...' }}" class="search-input">
+  {# SVG rather than the ⌕ glyph: it takes the brand colour and holds its weight. #}
+  <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
+  </svg>
 </form>

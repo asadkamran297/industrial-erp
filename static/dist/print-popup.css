@@ -29,3 +29,6 @@ button, form, label, input, .peer, [class*='sr-only'] { display: none !important
 @media print { .print-btn { display: none; }
 body { margin: 0; }
 }
+
+/* Screen-only furniture (row action buttons) never reaches the paper. */
+.print-hide { display: none !important; }

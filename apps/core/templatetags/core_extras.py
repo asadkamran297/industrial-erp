@@ -1,7 +1,7 @@
 from django import template
 
 from apps.access_control.selectors import user_has_permission
-from apps.core.formatting import format_amount, format_qty
+from apps.core.formatting import format_amount, format_date, format_qty
 
 register = template.Library()
 
@@ -16,6 +16,12 @@ def qty(value):
 def amount(value):
     """Render an amount with thousands separators and fixed decimal precision."""
     return format_amount(value)
+
+
+@register.filter(name="dmy")
+def dmy(value):
+    """Render a date the way the business writes it: DD-MM-YYYY."""
+    return format_date(value)
 
 
 @register.simple_tag(takes_context=True)

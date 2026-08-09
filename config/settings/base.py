@@ -144,6 +144,9 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "en-us"
+
+# Dates render DD-MM-YYYY everywhere; see config/formats/en/formats.py.
+FORMAT_MODULE_PATH = ["config.formats"]
 TIME_ZONE = config("TIME_ZONE", default="Asia/Karachi")
 USE_I18N = True
 USE_TZ = True

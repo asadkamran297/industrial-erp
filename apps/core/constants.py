@@ -179,6 +179,10 @@ FIN_PAYMENT_METHOD_FIELDS: Final[dict[str, tuple[str, ...]]] = {
 # Every conditional field, in on-screen order — the ones hidden for a method.
 FIN_PAYMENT_CONDITIONAL_FIELDS: Final = ("bank_name", "cheque_no", "cheque_date", "wallet_operator", "transaction_ref")
 
+# Shown for their method but never demanded: the bank reference often reaches the
+# office after the voucher is written.
+FIN_PAYMENT_OPTIONAL_FIELDS: Final = ("transaction_ref",)
+
 # Chart-of-accounts titles the automatic sales posting needs. Each entry is the
 # (root, sub-heading, leaf) path used to find-or-create the account, so a fresh
 # install posts without any manual chart setup.

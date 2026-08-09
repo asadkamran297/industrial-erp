@@ -1,3 +1,4 @@
+import csv
 import json
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -6,7 +7,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -15,6 +16,7 @@ from django.views.generic import CreateView, DetailView, ListView, TemplateView,
 
 from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
+from apps.core.formatting import format_date
 from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
 
 from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
@@ -180,6 +182,24 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
             {"name": "posted", "label": "Posted?", "choices": YES_NO_CHOICES, "value": self.request.GET.get("posted", "")},
         ]
 
+    @staticmethod
+    def _attach_account_titles(vouchers):
+        """Name both sides of each voucher: the money account it moved through and
+        the account it was paid to/received from (its non-money line)."""
+        vouchers = list(vouchers)
+        if not vouchers:
+            return
+        titles = dict(ChartOfAccount.objects.values_list("code", "title"))
+        # One query for the whole page instead of one per row.
+        lines = AccountVoucherLine.objects.filter(voucher__in=vouchers).order_by("line_number")
+        by_voucher = {}
+        for line in lines.values_list("voucher_id", "account_no"):
+            by_voucher.setdefault(line[0], []).append(line[1])
+        for voucher in vouchers:
+            voucher.from_account_title = titles.get(voucher.account_no, voucher.account_no)
+            other = [code for code in by_voucher.get(voucher.id, []) if code != voucher.account_no]
+            voucher.to_account_title = ", ".join(titles.get(code, code) for code in other)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         rows = self.get_queryset()
@@ -192,13 +212,16 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
         context["selected_money_mode"] = self.request.GET.get("money_mode", "")
         context["period_start"] = self.request.GET.get("date_from") or (start.isoformat() if start else "")
         context["period_end"] = self.request.GET.get("date_to") or (end.isoformat() if end else "")
+        # The date inputs need ISO; people read DD-MM-YYYY, so the tile gets its own.
+        context["period_start_display"] = format_date(context["period_start"])
+        context["period_end_display"] = format_date(context["period_end"])
         context["voucher_type_choices"] = FIN_VOUCHER_TYPE_CHOICES
         selected_type = self.request.GET.get("voucher_type", "")
         context["selected_voucher_type"] = selected_type
         # A type-scoped list names itself and adds that same type; the unscoped
         # list keeps the generic wording and starts a Payment.
         label = dict(FIN_VOUCHER_TYPE_CHOICES).get(selected_type, "")
-        context["list_title"] = f"{label} Vouchers" if label else "Vouchers"
+        context["list_title"] = f"{label} Details" if label else "Vouchers"
         context["add_label"] = f"Add {label}" if label else "Add Voucher"
         creatable = {code for code, *_rest in FIN_VOUCHER_TYPE_PICKER_META}
         context["add_type"] = selected_type if selected_type in creatable else FIN_VOUCHER_TYPE_PICKER_META[0][0]
@@ -207,7 +230,34 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
             ("this_month", "This Month"), ("last_month", "Last Month"),
             ("this_year", "This Year"), ("all", "All Time"),
         )
+        self._attach_account_titles(context.get("vouchers") or [])
         return context
+
+
+class AccountVoucherExportView(AccountVoucherListView):
+    """The voucher list as a spreadsheet, under the filters currently applied."""
+
+    def get(self, request, *args, **kwargs):
+        vouchers = list(self.get_queryset())
+        self._attach_account_titles(vouchers)
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        stamp = timezone.localdate().isoformat()
+        voucher_type = request.GET.get("voucher_type", "") or "vouchers"
+        response["Content-Disposition"] = f'attachment; filename="{voucher_type}-{stamp}.csv"'
+        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
+        response.write("﻿")
+        writer = csv.writer(response)
+        writer.writerow(["Date", "Ref No.", "Account From", "Paid To", "Amount", "Status"])
+        for voucher in vouchers:
+            writer.writerow([
+                voucher.voucher_date,
+                voucher.voucher_no,
+                voucher.from_account_title,
+                voucher.to_account_title,
+                voucher.debit_amount,
+                "Posted" if voucher.posted == "Y" else voucher.get_status_display(),
+            ])
+        return response
 
 
 class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
@@ -385,6 +435,8 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
                 "ok": True,
                 "voucher_no": self.object.voucher_no,
                 "detail_url": reverse("finance:account_voucher_detail", args=[self.object.pk]),
+                # Where the browser goes once the save (and any print) is done.
+                "list_url": f"{reverse('finance:account_voucher_list')}?voucher_type={self.object.voucher_type}",
                 "print_url": reverse("finance:account_voucher_print", args=[self.object.pk]),
                 "messages": self._drain_messages(),
             })
@@ -402,8 +454,8 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
             return super().form_valid(form)
 
     def get_success_url(self):
-        # Editing is about one voucher, so it ends back on that voucher.
-        return reverse("finance:account_voucher_detail", args=[self.object.pk])
+        # Back to the list for this voucher's type, where the entry started.
+        return f"{reverse('finance:account_voucher_list')}?voucher_type={self.object.voucher_type}"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -542,6 +594,14 @@ class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
         context["balance_difference"] = voucher.balance_difference
         context["kind"] = voucher_kind(voucher)
         context["is_locked"] = voucher.posted == "Y"
+        # The voucher's value is one side of it, read the same way the entry
+        # screen and the printed copy read it.
+        total = voucher.debit_amount or Decimal("0")
+        context["voucher_total"] = total
+        context["amount_words"] = amount_in_words(total)
+        # The account the money went to: the line that is not the money account.
+        counter = [line for line in voucher.lines.all() if line.account_no != voucher.account_no]
+        context["counter_titles"] = ", ".join(titles.get(line.account_no, line.account_no) for line in counter)
         return context
 
 

@@ -18,6 +18,7 @@ from apps.core.constants import (
     FIN_COA_ACCOUNT_TYPE_CHOICES,
     FIN_PAYMENT_CONDITIONAL_FIELDS,
     FIN_PAYMENT_METHOD_FIELDS,
+    FIN_PAYMENT_OPTIONAL_FIELDS,
     FIN_SETTLEMENT_HEADER_ROLES,
     FIN_SETTLEMENT_MODE_CHOICES,
     FIN_VOUCHER_HEADER_ROLES,
@@ -380,7 +381,7 @@ class AccountVoucher(BaseModel):
             if isinstance(value, str):
                 value = value.strip()
                 setattr(self, name, value)
-            if not value:
+            if not value and name not in FIN_PAYMENT_OPTIONAL_FIELDS:
                 label = self._meta.get_field(name).verbose_name
                 errors[name] = f"{label.capitalize()} is required for {method_title} payments."
 

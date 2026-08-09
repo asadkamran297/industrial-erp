@@ -13,8 +13,7 @@
   <tr>
     <td class="lbl">{% if voucher.voucher_type == "RV" %}Received In{% else %}Paid From{% endif %}</td>
     <td>{{ account_title }}</td>
-    <td class="lbl">Payment Mode</td><td>{{ voucher.payment_method|default:"&mdash;" }}</td>
-    <td class="lbl">Account Code</td><td>{{ voucher.account_no }}</td>
+    <td class="lbl">Payment Mode</td><td colspan="3">{{ voucher.payment_method|default:"&mdash;" }}</td>
   </tr>
   {% if voucher.cheque_no or voucher.bank_name or voucher.transaction_ref %}
   <tr>

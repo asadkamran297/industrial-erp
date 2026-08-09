@@ -337,6 +337,25 @@ aside nav p.uppercase {
     box-shadow: 0 0 0 4px var(--ring-primary), 0 1px 2px hsl(var(--shadow-color) / 0.05);
   }
 
+  /* Every search box in the portal is the same field: one height, one length. */
+  .search-input {
+    @apply h-11 w-full min-w-0 rounded-lg border bg-white px-4 pr-10 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-[var(--primary-color)] dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500;
+    max-width: 32rem;
+    border-color: var(--border-strong);
+  }
+  .search-input:focus {
+    box-shadow: 0 0 0 4px var(--ring-primary);
+  }
+  /* Wrapper keeps the icon centred against the field, not the line box. */
+  .search-field {
+    @apply relative flex w-full items-center;
+    max-width: 32rem;
+  }
+  .search-field .search-icon {
+    @apply pointer-events-none absolute right-3 h-4 w-4;
+    color: var(--primary-color);
+  }
+
   .form-label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400;
   }
@@ -452,7 +471,11 @@ aside nav p.uppercase {
   }
   .stat-tile .stat-icon {
     @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white;
-    background: var(--grad-primary);
+    /* Solid first: the gradient rides on color-mix(), and where that does not
+       resolve the whole background would drop out, leaving a white glyph on a
+       white tile. The flat primary keeps the icon readable either way. */
+    background-color: var(--primary-color);
+    background-image: var(--grad-primary);
     box-shadow: 0 6px 16px -8px var(--primary-color);
   }
   .stat-tile .stat-value {
