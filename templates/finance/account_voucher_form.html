@@ -192,6 +192,7 @@
   let recalcGrid = () => {};
   let ensureRows = () => {};
   let renumberRows = () => {};
+  let lockSidesAll = () => {};
 
   // Money boxes are grouped with commas (amount-format.js), so their text is
   // stripped before it is read as a number.
@@ -416,13 +417,41 @@
       clone.querySelector('.line-account').value = '';
       const balance = clone.querySelector('.line-balance');
       if (balance) { balance.textContent = ''; balance.classList.add('hidden'); }
+      clone.querySelectorAll('.line-debit, .line-credit').forEach(i => {
+        i.readOnly = false;
+        i.tabIndex = 0;
+        i.classList.remove('cursor-not-allowed', 'opacity-50');
+      });
       rowsBody.appendChild(clone);
       renumber();
       return clone;
     }
 
+    // A line sits on one side of the ledger: once a figure is typed the other
+    // box is closed off, and clearing it opens both again.
+    function lockSides(row) {
+      const debit = row.querySelector('.line-debit');
+      const credit = row.querySelector('.line-credit');
+      if (!debit || !credit) return;
+      const hasDebit = num(debit) > 0;
+      const hasCredit = num(credit) > 0;
+      // readonly, not disabled: a disabled box posts nothing, and the
+      // line_debit[]/line_credit[] arrays would fall out of step with the accounts.
+      [[debit, hasCredit], [credit, hasDebit]].forEach(([box, off]) => {
+        box.readOnly = off;
+        box.tabIndex = off ? -1 : 0;
+        box.classList.toggle('cursor-not-allowed', off);
+        box.classList.toggle('opacity-50', off);
+        if (off) box.value = '';
+      });
+    }
+
+    lockSidesAll = () => rowsBody.querySelectorAll('.line-row').forEach(lockSides);
+
     grid.addEventListener('input', (e) => {
-      if (!e.target.closest('.line-row')) return;
+      const row = e.target.closest('.line-row');
+      if (!row) return;
+      if (e.target.classList.contains('line-debit') || e.target.classList.contains('line-credit')) lockSides(row);
       recalc();
       // Auto-grow disabled with the single-line grid:
       // const lastRow = rowsBody.querySelector('.line-row:last-child');
@@ -458,6 +487,7 @@
     };
     recalc();
     renumber();
+    lockSidesAll();
   }
 
   // Clears the entry after a save. Type, number and date identify the voucher,
