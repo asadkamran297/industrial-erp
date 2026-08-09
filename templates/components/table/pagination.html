@@ -3,11 +3,11 @@
     <p>Showing page {{ page_obj.number }} of {{ paginator.num_pages }} · {{ paginator.count }} records</p>
     <div class="flex items-center gap-2">
       {% if page_obj.has_previous %}
-        <a class="rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800" href="?{{ page_query_prefix }}page={{ page_obj.previous_page_number }}">Previous</a>
+        <a class="toolbar-btn !min-h-9 px-3" href="?{{ page_query_prefix }}page={{ page_obj.previous_page_number }}">Previous</a>
       {% endif %}
-      <span class="rounded-md bg-slate-100 px-3 py-2 font-medium text-slate-900 dark:bg-slate-800 dark:text-white">{{ page_obj.number }}</span>
+      <span class="rounded-lg px-3.5 py-2 font-bold text-white" style="background: var(--grad-primary);">{{ page_obj.number }}</span>
       {% if page_obj.has_next %}
-        <a class="rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800" href="?{{ page_query_prefix }}page={{ page_obj.next_page_number }}">Next</a>
+        <a class="toolbar-btn !min-h-9 px-3" href="?{{ page_query_prefix }}page={{ page_obj.next_page_number }}">Next</a>
       {% endif %}
     </div>
   </nav>

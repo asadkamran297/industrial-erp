@@ -51,8 +51,13 @@
   color: #475569;
   cursor: pointer;
 }
-.toolbar-btn:hover { background: #f8fafc; }
+.toolbar-btn:hover {
+  background: color-mix(in srgb, var(--primary-color) 7%, #fff);
+  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--line));
+  color: var(--primary-color);
+}
 .dark .toolbar-btn { background: #0f172a; border-color: var(--line-dark); color: #cbd5e1; }
+.dark .toolbar-btn:hover { background: color-mix(in srgb, var(--primary-color) 18%, #0f172a); }
 
 .toolbar-search {
   border: 1px solid var(--line);
@@ -410,12 +415,34 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 
 /* Headline figure. The number leads; everything else recedes. */
 .kpi {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background:
+    linear-gradient(180deg, rgba(59, 130, 246, .05), transparent 55%),
+    #fff;
   padding: 1.1rem 1.2rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 14px 30px -22px rgba(15, 23, 42, .35);
+  transition: transform .22s ease, box-shadow .22s ease;
 }
-.dark .kpi { background: #0b1220; border-color: var(--line-dark); }
+.kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .07), 0 26px 46px -26px rgba(15, 23, 42, .45);
+}
+/* A tinted wash keyed to the tile's own colour, so the four headline figures
+   are told apart at a glance rather than read one by one. */
+.kpi--revenue { background: linear-gradient(180deg, rgba(57, 135, 229, .10), transparent 55%), #fff; }
+.kpi--expense { background: linear-gradient(180deg, rgba(217, 89, 38, .10), transparent 55%), #fff; }
+.kpi--profit { background: linear-gradient(180deg, rgba(12, 163, 12, .10), transparent 55%), #fff; }
+.kpi--profit.is-loss { background: linear-gradient(180deg, rgba(208, 59, 59, .12), transparent 55%), #fff; }
+.kpi--cash { background: linear-gradient(180deg, rgba(99, 102, 241, .10), transparent 55%), #fff; }
+.dark .kpi { background: #0b1220; border-color: var(--line-dark); box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 34px -26px rgba(0,0,0,.8); }
+.dark .kpi--revenue { background: linear-gradient(180deg, rgba(57,135,229,.16), transparent 55%), #0b1220; }
+.dark .kpi--expense { background: linear-gradient(180deg, rgba(217,89,38,.16), transparent 55%), #0b1220; }
+.dark .kpi--profit { background: linear-gradient(180deg, rgba(16,185,129,.16), transparent 55%), #0b1220; }
+.dark .kpi--profit.is-loss { background: linear-gradient(180deg, rgba(244,63,94,.18), transparent 55%), #0b1220; }
+.dark .kpi--cash { background: linear-gradient(180deg, rgba(129,140,248,.16), transparent 55%), #0b1220; }
 .kpi-label {
   font-size: .7rem;
   font-weight: 700;
@@ -437,12 +464,12 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 .kpi-note { margin: 0; font-size: .72rem; color: #94a3b8; }
 
 /* A 3px rule in the series colour ties each tile to its line on the chart. */
-.kpi-rule { height: 3px; width: 34px; border-radius: 999px; margin-bottom: .85rem; background: #cbd5e1; }
-.kpi--revenue .kpi-rule { background: var(--series-sales); }
-.kpi--expense .kpi-rule { background: var(--series-purchases); }
-.kpi--profit .kpi-rule { background: #0ca30c; }
+.kpi-rule { height: 4px; width: 44px; border-radius: 999px; margin-bottom: .85rem; background: #cbd5e1; }
+.kpi--revenue .kpi-rule { background: linear-gradient(90deg, var(--series-sales), #60a5fa); }
+.kpi--expense .kpi-rule { background: linear-gradient(90deg, var(--series-purchases), #fb923c); }
+.kpi--profit .kpi-rule { background: linear-gradient(90deg, #0ca30c, #34d399); }
 .kpi--profit.is-loss .kpi-rule { background: #d03b3b; }
-.kpi--cash .kpi-rule { background: #475569; }
+.kpi--cash .kpi-rule { background: linear-gradient(90deg, #6366f1, #22d3ee); }
 
 /* Panel — a titled surface holding a chart or a list. */
 .panel {

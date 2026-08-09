@@ -284,7 +284,8 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
     @staticmethod
     def _decimal(values, index):
         try:
-            return Decimal((values[index] if index < len(values) else "") or "0")
+            # Amount boxes are shown grouped, so a stray separator is dropped here.
+            return Decimal(((values[index] if index < len(values) else "") or "0").replace(",", ""))
         except InvalidOperation:
             return Decimal("0")
 
@@ -394,8 +395,11 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
     success_message = "Voucher updated."
 
     def form_valid(self, form):
-        # Header-only update; lines are managed on the detail page.
-        return super(AccountVoucherCreateView, self).form_valid(form)
+        # The screen is the entry screen, so the posted grid is the voucher's
+        # lines: the old ones go and the parent re-creates them from the POST.
+        with transaction.atomic():
+            self.get_object().lines.all().delete()
+            return super().form_valid(form)
 
     def get_success_url(self):
         # Editing is about one voucher, so it ends back on that voucher.
@@ -409,13 +413,21 @@ class AccountVoucherUpdateView(AccountVoucherCreateView, UpdateView):
         # The number is already allocated; previewing the next one would be a lie.
         context["next_voucher_no"] = voucher.voucher_no
         context["money_mode"] = money_mode_for_account(voucher.account_no)
-        # Lines belong to the detail page, so the panel reports them instead of
-        # offering an amount box that would post nothing.
         titles = dict(ChartOfAccount.objects.values_list("code", "title"))
         lines = list(voucher.lines.order_by("line_number"))
         for line in lines:
             line.account_title = titles.get(line.account_no, line.account_no)
         context["voucher_lines"] = lines
+        # Simple mode generates the money leg from the header account on save, so
+        # the grid shows only the reason lines the user actually typed.
+        simple = voucher.voucher_type in VOUCHER_SIMPLE_SIDES
+        entry_lines = [line for line in lines if not (simple and line.account_no == voucher.account_no)]
+        for line in entry_lines:
+            line.entry_amount = line.debit_amount or line.credit_amount or Decimal("0")
+        context["entry_lines"] = entry_lines
+        first = entry_lines[0] if entry_lines else None
+        context["entry_line_account"] = first.account_no if first else ""
+        context["entry_amount"] = first.entry_amount if first else ""
         context["voucher_total"] = voucher.debit_amount or Decimal("0")
         context["amount_words"] = amount_in_words(voucher.debit_amount or Decimal("0"))
         context["print_url"] = reverse("finance:account_voucher_print", args=[voucher.pk])

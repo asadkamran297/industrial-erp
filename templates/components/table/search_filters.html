@@ -1,4 +1,4 @@
-<div class="mb-4 rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" x-data="{ open: {{ has_table_filters|yesno:'true,false' }} }">
+<div class="mb-4 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" x-data="{ open: {{ has_table_filters|yesno:'true,false' }} }">
   <button type="button" class="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left" @click="open = !open" :aria-expanded="open.toString()">
     <div>
       <p class="text-sm font-semibold text-slate-900 dark:text-white">Search & filters</p>
@@ -36,8 +36,8 @@
         {% endfor %}
       </div>
       <div class="flex items-center justify-end gap-2">
-        <a href="{{ request.path }}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium dark:border-slate-700">Reset</a>
-        <button type="submit" class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Search</button>
+        <a href="{{ request.path }}" class="toolbar-btn">Reset</a>
+        <button type="submit" class="btn-primary">Search</button>
       </div>
     </div>
   </form>

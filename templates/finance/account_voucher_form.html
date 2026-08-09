@@ -1,6 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<h1 class="text-xl font-bold">{% if object %}Edit {{ selected_voucher_type_label }} Voucher &mdash; {{ object.voucher_no }}{% else %}{{ selected_voucher_type_label }} Voucher{% endif %}</h1>
+<h1 class="title-accent text-xl font-bold">{% if object %}Edit {{ selected_voucher_type_label }} Voucher &mdash; {{ object.voucher_no }}{% else %}{{ selected_voucher_type_label }} Voucher{% endif %}</h1>
 
 <form method="post" id="voucher-form" class="mt-3">{% csrf_token %}
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
@@ -8,7 +8,7 @@
   <input type="hidden" name="status" value="{{ form.status.value }}">
   <input type="hidden" name="adj_entry" value="{{ form.adj_entry.value }}">
 
-  <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+  <section class="card-rail rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     {% if form.non_field_errors %}<div class="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
 
     <div class="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -52,10 +52,9 @@
         </div>
       {% endif %}{% endfor %}
 
-  {% if not object %}
   <div id="simple-entry" class="hidden">
     <label class="mb-1.5 block text-sm font-medium" for="simple-account"><span id="label-simple-account">Account</span> <span class="text-rose-500">*</span></label>
-    <select id="simple-account" class="form-select"></select>
+    <select id="simple-account" class="form-select" data-initial="{{ entry_line_account }}"></select>
     <p id="simple-account-balance" class="mt-1 hidden text-xs font-bold"></p>
     <p id="simple-account-error" class="mt-1 hidden text-xs text-rose-600">Pick an account.</p>
   </div>
@@ -75,20 +74,20 @@
         </tr>
       </thead>
       <tbody id="line-rows">
-        {# Single entry line for now; multi-line grid re-enables with #add-line-btn below. #}
-        {% for i in "1" %}
+        {# Editing starts from the voucher's own lines; a new voucher starts from one blank row. #}
+        {% for line in entry_lines|default:"x" %}
         <tr class="line-row border-t border-slate-100 dark:border-slate-800">
           <td class="px-3 py-1.5"><input type="text" class="form-input line-num w-14 bg-amber-50 text-center dark:bg-slate-800" value="{{ forloop.counter }}" readonly tabindex="-1"></td>
           <td class="px-3 py-1.5">
             <select name="line_account[]" class="form-select line-account">
               <option value="">Select account…</option>
-              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}">{{ acc.title }}</option>{% endfor %}
+              {% for acc in voucher_accounts %}<option value="{{ acc.code }}" data-role="{{ acc.role }}" data-group="{{ acc.group_label }}" data-depth="{{ acc.tree_depth }}" {% if object and acc.code == line.account_no %}selected{% endif %}>{{ acc.title }}</option>{% endfor %}
             </select>
           </td>
-          <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800"></td>
-          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
-          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800"></td>
-          <td class="px-3 py-1.5 col-amount"><input type="number" name="line_amount[]" min="0" step="0.01" class="form-input line-amount w-full bg-orange-50 text-right dark:bg-slate-800"></td>
+          <td class="px-3 py-1.5"><input type="text" name="line_description[]" class="form-input line-desc w-full bg-indigo-50/60 dark:bg-slate-800" value="{% if object %}{{ line.remarks|default:'' }}{% endif %}"></td>
+          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_debit[]" min="0" step="0.01" class="form-input line-debit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.debit_amount %}{{ line.debit_amount|floatformat:2 }}{% endif %}"></td>
+          <td class="px-3 py-1.5 col-drcr"><input type="number" name="line_credit[]" min="0" step="0.01" class="form-input line-credit w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.credit_amount %}{{ line.credit_amount|floatformat:2 }}{% endif %}"></td>
+          <td class="px-3 py-1.5 col-amount"><input type="number" name="line_amount[]" min="0" step="0.01" class="form-input line-amount w-full bg-orange-50 text-right dark:bg-slate-800" value="{% if object and line.entry_amount %}{{ line.entry_amount|floatformat:2 }}{% endif %}"></td>
           <td class="px-2 py-1.5 text-center"><button type="button" class="line-remove text-lg font-bold leading-none text-slate-400 hover:text-rose-600" title="Remove line" tabindex="-1">&times;</button></td>
         </tr>
         {% endfor %}
@@ -110,7 +109,6 @@
     </button>
   </div>
   <p id="balance-hint" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Debit and credit totals must match before the voucher can be posted.</p>
-  {% endif %}
 
   <div id="field-narration">
     <label class="mb-1.5 block text-sm font-medium" for="id_narration">Narration</label>
@@ -119,61 +117,14 @@
     </div>
 
     <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-      {% if object %}
-      <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
-      <p class="mt-2 border-b border-slate-200 pb-3 text-3xl font-bold tabular-nums dark:border-slate-700">Rs {{ voucher_total|floatformat:2 }}</p>
-      <p class="mt-2 text-sm italic text-slate-500">{{ amount_words }}</p>
-
-      <p class="mt-5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Posted Lines</p>
-      <div class="mt-3 space-y-2.5 text-sm">
-        {% for line in voucher_lines %}
-        <div class="flex items-center justify-between gap-3">
-          <span class="flex min-w-0 items-center gap-2">
-            {% if line.debit_amount %}
-              <span class="rounded bg-emerald-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">DR</span>
-            {% else %}
-              <span class="rounded bg-rose-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">CR</span>
-            {% endif %}
-            <span class="truncate text-slate-600 dark:text-slate-300">{{ line.account_title }}</span>
-          </span>
-          <span class="shrink-0 font-semibold tabular-nums">{{ line.debit_amount|add:line.credit_amount|floatformat:2 }}</span>
-        </div>
-        {% empty %}
-        <p class="text-slate-500">No lines on this voucher yet.</p>
-        {% endfor %}
-      </div>
-      <p class="mt-4 text-xs text-slate-500">Lines are managed on the
-        <a class="font-semibold text-[var(--primary-color)] underline" href="{% url 'finance:account_voucher_detail' object.pk %}">voucher page</a>.
-      </p>
-      {% else %}
-      <p class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
-      <div class="mt-2 flex items-baseline gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
+      <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
+      <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
         <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
-        <input id="simple-amount" type="number" min="0" step="0.01" placeholder="0"
-               class="w-full border-0 bg-transparent p-0 text-3xl font-bold tabular-nums text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 dark:text-white dark:placeholder:text-slate-600">
+        <input id="simple-amount" type="number" min="0" step="0.01" placeholder="0" value="{{ entry_amount|default:'' }}"
+               class="w-full border-0 bg-transparent p-0 text-center text-3xl font-bold tabular-nums text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 dark:text-white dark:placeholder:text-slate-600">
       </div>
-      <p id="amount-words" class="mt-2 text-sm italic text-slate-400">Amount in words appears here</p>
-      <p id="simple-amount-error" class="mt-1 hidden text-xs font-semibold text-rose-600">Enter an amount.</p>
-
-      <p class="mt-5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Posting Preview</p>
-      <div class="mt-3 space-y-2.5 text-sm">
-        <div class="flex items-center justify-between gap-3">
-          <span class="flex min-w-0 items-center gap-2">
-            <span class="rounded bg-emerald-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">DR</span>
-            <span id="preview-dr-account" class="truncate text-slate-600 dark:text-slate-300">Paid To account</span>
-          </span>
-          <span id="preview-dr-amount" class="shrink-0 font-semibold tabular-nums">Rs 0</span>
-        </div>
-        <div class="flex items-center justify-between gap-3">
-          <span class="flex min-w-0 items-center gap-2">
-            <span class="rounded bg-rose-50 px-1.5 py-0.5 text-[0.65rem] font-bold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">CR</span>
-            <span id="preview-cr-account" class="truncate text-slate-600 dark:text-slate-300">Paid From account</span>
-          </span>
-          <span id="preview-cr-amount" class="shrink-0 font-semibold tabular-nums">Rs 0</span>
-        </div>
-        <p class="pt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">&#10003; Double entry balanced</p>
-      </div>
-      {% endif %}
+      <p id="amount-words" class="mt-2 text-center text-sm italic text-slate-400">Amount in words appears here</p>
+      <p id="simple-amount-error" class="mt-1 hidden text-center text-xs font-semibold text-rose-600">Enter an amount.</p>
     </aside>
     </div>
 
@@ -183,13 +134,13 @@
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">
         {% if object %}
-        <a href="{% url 'finance:account_voucher_detail' object.pk %}" class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</a>
-        <a href="{{ print_url }}" target="_blank" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--primary-color)] px-5 text-sm font-bold text-[var(--primary-color)] transition hover:bg-[var(--primary-color)] hover:text-white">&#128438; Print</a>
+        <a href="{% url 'finance:account_voucher_detail' object.pk %}" class="toolbar-btn h-10 px-5">Cancel</a>
+        <a href="{{ print_url }}" target="_blank" class="toolbar-btn h-10 px-5 !text-[var(--primary-color)]">&#128438; Print</a>
         {% else %}
-        <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancel</a>
-        <button id="save-print-btn" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--primary-color)] px-5 text-sm font-bold text-[var(--primary-color)] transition hover:bg-[var(--primary-color)] hover:text-white">&#128438; Save &amp; Print</button>
+        <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ selected_voucher_type }}" class="toolbar-btn h-10 px-5">Cancel</a>
+        <button id="save-print-btn" class="toolbar-btn h-10 px-5 !text-[var(--primary-color)]">&#128438; Save &amp; Print</button>
         {% endif %}
-        <button id="save-btn" class="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--primary-color)] px-8 text-sm font-bold text-white transition hover:opacity-90">{% if object %}Update Voucher{% else %}Save Voucher{% endif %}</button>
+        <button id="save-btn" class="btn-primary h-10 px-8">{% if object %}Update Voucher{% else %}Save Voucher{% endif %}</button>
       </div>
     </div>
   </section>
@@ -236,6 +187,11 @@
   const defaultLineLabel = lineLabel ? lineLabel.textContent : '';
   let recalcGrid = () => {};
   let ensureRows = () => {};
+
+  // Money boxes are grouped with commas (amount-format.js), so their text is
+  // stripped before it is read as a number.
+  const num = (input) => parseFloat(((input && input.value) || '').replace(/,/g, '')) || 0;
+  const money = (value) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function settlementMode() {
     return SETTLEMENT_TYPES.includes(hidden.value) && settlement ? settlement.value : '';
@@ -381,17 +337,17 @@
       const simple = SIMPLE_TYPES.includes(hidden.value);
       let dr = 0, cr = 0, amount = 0, used = 0;
       rowsBody.querySelectorAll('.line-row').forEach(row => {
-        const d = parseFloat(row.querySelector('.line-debit').value) || 0;
-        const c = parseFloat(row.querySelector('.line-credit').value) || 0;
-        const a = parseFloat(row.querySelector('.line-amount').value) || 0;
+        const d = num(row.querySelector('.line-debit'));
+        const c = num(row.querySelector('.line-credit'));
+        const a = num(row.querySelector('.line-amount'));
         dr += d; cr += c; amount += a;
         if (d || c || a || row.querySelector('.line-account').value) used++;
       });
       const balanced = dr === cr;
       if (totalDebit) {  // totals row is hidden while the grid is single-line
-        totalDebit.value = dr.toFixed(2);
-        totalCredit.value = cr.toFixed(2);
-        totalAmount.value = amount.toFixed(2);
+        totalDebit.value = money(dr);
+        totalCredit.value = money(cr);
+        totalAmount.value = money(amount);
         totalDebit.classList.toggle('text-rose-600', !balanced);
         totalCredit.classList.toggle('text-rose-600', !balanced);
       }
@@ -400,7 +356,7 @@
       // The side panel shows what this voucher is worth: the amount in simple
       // mode, the debit side of a journal (the two sides must match anyway).
       const summary = document.getElementById('summary-amount');
-      if (summary) summary.textContent = (simple ? amount : dr).toFixed(2);
+      if (summary) summary.textContent = money(simple ? amount : dr);
       return used;
     }
     recalcGrid = recalc;
@@ -653,7 +609,7 @@
   function writeAmountWords() {
     const line = document.getElementById('amount-words');
     if (!line || !simpleAmount) return;
-    const value = parseFloat(simpleAmount.value);
+    const value = num(simpleAmount);
     if (!(value > 0)) {
       line.textContent = 'Amount in words appears here';
       line.classList.add('text-slate-400');
@@ -679,7 +635,7 @@
     };
     const money = text(acct, 'Money account');
     const other = text(simpleAccount, 'Other account');
-    const figure = 'Rs ' + (parseFloat(simpleAmount && simpleAmount.value) || 0).toLocaleString();
+    const figure = 'Rs ' + num(simpleAmount).toLocaleString();
 
     drName.textContent = headerFirst ? money : other;
     document.getElementById('preview-cr-account').textContent = headerFirst ? other : money;
@@ -703,13 +659,21 @@
   function simpleEntryValid() {
     if (!SIMPLE_TYPES.includes(hidden.value)) return true;
     const noAccount = !simpleAccount.value;
-    const noAmount = !(parseFloat(simpleAmount.value) > 0);
+    const noAmount = !(num(simpleAmount) > 0);
     document.getElementById('simple-account-error').classList.toggle('hidden', !noAccount);
     document.getElementById('simple-amount-error').classList.toggle('hidden', !noAmount);
     return !noAccount && !noAmount;
   }
 
   refresh();  // initial
+  // Editing: the simple picker is built by JS, so its saved account is restored
+  // after the options exist.
+  if (simpleAccount && simpleAccount.dataset.initial) {
+    simpleAccount.value = simpleAccount.dataset.initial;
+    syncEnhancedSelects();
+    showBalance(simpleAccount, simpleBalanceLine);
+  }
+  writeAmountWords();
   writePreview();
 
   {% if not object %}

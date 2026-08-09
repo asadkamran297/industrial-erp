@@ -1,1 +1,3 @@
-<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">{{ label|default:"Status" }}</span>
+{% with state=label|default:"Status"|lower %}
+<span class="badge {% if state == 'active' or state == 'posted' or state == 'approved' or state == 'paid' or state == 'completed' %}badge-success{% elif state == 'draft' or state == 'pending' or state == 'partial' %}badge-warning{% elif state == 'inactive' or state == 'cancelled' or state == 'rejected' or state == 'void' %}badge-danger{% else %}badge-muted{% endif %}">{{ label|default:"Status" }}</span>
+{% endwith %}
