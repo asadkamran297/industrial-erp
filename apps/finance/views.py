@@ -594,6 +594,9 @@ class AccountVoucherDetailView(PagePermissionRequiredMixin, DetailView):
         context["balance_difference"] = voucher.balance_difference
         context["kind"] = voucher_kind(voucher)
         context["is_locked"] = voucher.posted == "Y"
+        # Which book the voucher belongs to, read off its money account — the same
+        # way the number's Cash/Bank suffix is decided.
+        context["money_mode"] = money_mode_for_account(voucher.account_no)
         # The voucher's value is one side of it, read the same way the entry
         # screen and the printed copy read it.
         total = voucher.debit_amount or Decimal("0")

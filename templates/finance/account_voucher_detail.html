@@ -6,21 +6,13 @@
   <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <div class="flex flex-wrap items-center gap-2">
-          <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">{{ voucher.voucher_no }}</h1>
-          <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ kind }}</span>
-          {% if is_locked %}
-            <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Posted</span>
-          {% else %}
-            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{{ voucher.get_status_display }}</span>
-          {% endif %}
-        </div>
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">{{ voucher.voucher_no }}</h1>
         <p class="mt-1 text-sm text-slate-500">{{ voucher.voucher_date|date:"l, d M Y" }}</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <a href="{% url 'finance:daybook' %}?day={{ voucher.voucher_date|date:'Y-m-d' }}" class="toolbar-btn">Daybook for this day</a>
-        <a href="{% url 'finance:account_voucher_list' %}" class="toolbar-btn">All vouchers</a>
+        {# Back to the list this voucher belongs to, not the unfiltered one. #}
+        <a href="{% url 'finance:account_voucher_list' %}?voucher_type={{ voucher.voucher_type }}" class="toolbar-btn">All vouchers</a>
         <a href="{% url 'finance:account_voucher_print' voucher.pk %}" target="_blank" class="toolbar-btn">&#128438; Print</a>
         {% if not is_locked %}
           <a href="{% url 'finance:account_voucher_update' voucher.pk %}"
@@ -33,22 +25,18 @@
     <dl class="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
       <div>
         <dt class="kpi-label">Voucher Type</dt>
-        <dd class="mt-0.5">{{ voucher.get_voucher_type_display }}</dd>
+        <dd class="mt-0.5">{{ voucher.get_voucher_type_display }}{% if money_mode %} &middot; {{ money_mode|capfirst }}{% endif %}</dd>
       </div>
       <div>
         <dt class="kpi-label">Main Account</dt>
-        <dd class="mt-0.5">
-          <span class="tabular-nums text-xs text-slate-500">{{ voucher.account_no }}</span>
-          {% if account_title %}<span class="ml-1">{{ account_title }}</span>{% endif %}
-        </dd>
+        <dd class="mt-0.5">{{ account_title|default:voucher.account_no }}</dd>
       </div>
       {% if voucher.settlement_mode %}
         <div><dt class="kpi-label">Settlement</dt><dd class="mt-0.5">{{ voucher.get_settlement_mode_display }}</dd></div>
       {% endif %}
       {% if voucher.party_account_no %}
         <div><dt class="kpi-label">Party</dt>
-          <dd class="mt-0.5"><span class="tabular-nums text-xs text-slate-500">{{ voucher.party_account_no }}</span>
-            {% if party_title %}<span class="ml-1">{{ party_title }}</span>{% endif %}</dd></div>
+          <dd class="mt-0.5">{{ party_title|default:voucher.party_account_no }}</dd></div>
       {% endif %}
       {% if voucher.payment_method %}
         <div><dt class="kpi-label">Payment Method</dt><dd class="mt-0.5">{{ voucher.payment_method.title }}</dd></div>
@@ -92,103 +80,12 @@
     {% endif %}
   </div>
 
-  {# ── The entry itself ── #}
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table class="w-full min-w-[720px] text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-3 py-3 w-10">#</th>
-            <th class="px-3 py-3">Account</th>
-            <th class="px-3 py-3">Description</th>
-            <th class="px-3 py-3 text-right w-36">Debit</th>
-            <th class="px-3 py-3 text-right w-36">Credit</th>
-            {% if not is_locked %}<th class="px-3 py-3 w-12"></th>{% endif %}
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for row in lines %}
-            <tr>
-              <td class="px-3 py-2 text-slate-500">{{ row.line.line_number }}</td>
-              <td class="px-3 py-2">
-                <span class="tabular-nums text-xs text-slate-500">{{ row.line.account_no }}</span>
-                {% if row.known %}
-                  <span class="ml-1">{{ row.title }}</span>
-                {% else %}
-                  <span class="ml-1 text-rose-600">— not in chart of accounts —</span>
-                {% endif %}
-              </td>
-              <td class="px-3 py-2 text-slate-500">{{ row.line.remarks|default:"—" }}</td>
-              <td class="px-3 py-2 text-right tabular-nums">{% if row.line.debit_amount %}{{ row.line.debit_amount|amount }}{% endif %}</td>
-              <td class="px-3 py-2 text-right tabular-nums">{% if row.line.credit_amount %}{{ row.line.credit_amount|amount }}{% endif %}</td>
-              {% if not is_locked %}
-                <td class="px-3 py-2 text-right">
-                  <form method="post" action="{% url 'finance:account_voucher_line_delete' voucher.pk row.line.pk %}"
-                        onsubmit="return confirm('Remove line {{ row.line.line_number }}?');">
-                    {% csrf_token %}
-                    <button type="submit" class="text-rose-600 hover:text-rose-700" title="Remove line">&times;</button>
-                  </form>
-                </td>
-              {% endif %}
-            </tr>
-          {% empty %}
-            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">This voucher has no lines yet.</td></tr>
-          {% endfor %}
-        </tbody>
-        <tfoot class="bg-slate-50 font-semibold dark:bg-slate-800">
-          <tr>
-            <td class="px-3 py-2" colspan="3">Total</td>
-            <td class="px-3 py-2 text-right tabular-nums {% if not voucher.is_balanced %}text-rose-600{% endif %}">{{ voucher.debit_amount|amount }}</td>
-            <td class="px-3 py-2 text-right tabular-nums {% if not voucher.is_balanced %}text-rose-600{% endif %}">{{ voucher.credit_amount|amount }}</td>
-            {% if not is_locked %}<td></td>{% endif %}
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  </div>
-
-  {# ── Add a line, while the voucher is still open ── #}
+  {# Lines are entered on the voucher form; a posted voucher says why it cannot be. #}
   {% if is_locked %}
     <p class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300">
       This voucher is posted, so it can no longer be changed. Posted entries are history —
       correct one with a reversing entry rather than an edit, so the audit trail stays intact.
     </p>
-  {% else %}
-    <form method="post" action="{% url 'finance:account_voucher_line_create' voucher.pk %}"
-          class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      {% csrf_token %}
-      <h2 class="panel-title">Add a line</h2>
-      <p class="panel-sub">Enter either a debit or a credit — not both.</p>
-      <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div class="lg:col-span-2">
-          <label class="mb-1 block text-xs font-medium" for="line-account">Account</label>
-          <input id="line-account" name="account_no" list="account-options" class="form-input w-full"
-                 placeholder="Search account…" autocomplete="off" required>
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium" for="line-remarks">Description</label>
-          <input id="line-remarks" name="remarks" class="form-input w-full" placeholder="Narration">
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium" for="line-debit">Debit</label>
-          <input id="line-debit" name="debit_amount" type="number" step="0.01" min="0" class="form-input w-full" placeholder="0.00">
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium" for="line-credit">Credit</label>
-          <input id="line-credit" name="credit_amount" type="number" step="0.01" min="0" class="form-input w-full" placeholder="0.00">
-        </div>
-      </div>
-      <div class="mt-3 flex justify-end">
-        <button type="submit" class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-5 text-sm font-semibold text-white">Add line</button>
-      </div>
-    </form>
-
-    {# Postable leaves of the chart of accounts — the codes the line validator accepts. #}
-    <datalist id="account-options">
-      {% for account in active_accounts %}
-        <option value="{{ account.code }}">{{ account.title }}</option>
-      {% endfor %}
-    </datalist>
   {% endif %}
 </section>
 {% endblock %}
