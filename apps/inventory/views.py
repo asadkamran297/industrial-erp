@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import account_balances, create_customer_receivable_account, sync_vendor_opening_balance
+from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_vendor_opening_balance
 from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
@@ -292,9 +292,49 @@ class VendorListView(SortableListMixin, BaseSimpleListView):
 
         # The payable column is computed above, so its sort happens here.
         context["records"] = self.sort_rows(vendors)
-        context["supplier_count"] = len(vendors)
-        context["payable_total"] = sum((vendor.payable_balance for vendor in vendors), zero)
-        context["purchased_total"] = sum((vendor.purchase_total for vendor in vendors), zero)
+        # The tiles report the whole filtered set, not just the page in front of
+        # you: "10 suppliers" on page 1 of 4 would be a lie.
+        all_vendors = self.get_queryset()
+        context["supplier_count"] = all_vendors.count()
+        context["purchased_total"] = (
+            PurchaseMaster.objects.filter(vendor__in=all_vendors).aggregate(total=Sum("total_amount"))["total"] or zero
+        )
+        all_codes = ChartOfAccount.objects.filter(
+            title__in=all_vendors.values_list("name", flat=True), is_group=False
+        ).values_list("code", flat=True)
+        context["payable_total"] = sum(((balances.get(code) or {}).get("closing") or zero for code in all_codes), zero)
+        return context
+
+
+class VendorDetailView(PagePermissionRequiredMixin, DetailView):
+    """Everything on file for one supplier, with their ledger underneath."""
+
+    page = "inventory.vendors"
+    model = Vendor
+    template_name = "inventory/vendor_detail.html"
+    context_object_name = "vendor"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        vendor = self.object
+        zero = Decimal("0.00")
+
+        bought = PurchaseMaster.objects.filter(vendor=vendor).aggregate(total=Sum("total_amount"), count=Count("id"))
+        sent_back = PurchaseReturnMaster.objects.filter(vendor=vendor).aggregate(total=Sum("returned_amount"), count=Count("id"))
+        context["purchase_total"] = bought["total"] or zero
+        context["purchase_count"] = bought["count"] or 0
+        context["return_total"] = sent_back["total"] or zero
+        context["return_count"] = sent_back["count"] or 0
+        context["order_count"] = PurchaseOrder.objects.filter(vendor=vendor).count()
+        context["recent_receipts"] = PurchaseMaster.objects.filter(vendor=vendor).order_by("-id")[:10]
+
+        # The supplier's payable account is named after them, the same way the
+        # posting created it, so the ledger here is the ledger the books hold.
+        account = ChartOfAccount.objects.filter(title=vendor.name, is_group=False).first()
+        context["payable_code"] = account.code if account else ""
+        ledger = account_ledger(account.code) if account else None
+        context["ledger"] = ledger
+        context["payable_balance"] = ledger["closing"] if ledger else zero
         return context
 
 

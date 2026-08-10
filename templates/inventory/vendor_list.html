@@ -3,7 +3,7 @@
 {% block content %}
 <section class="space-y-4">
   {% if can_add %}
-    {% include "components/ui/page_header.html" with title=title action_label="New" action_url=create_url %}
+    {% include "components/ui/page_header.html" with title=title action_label="Add Supplier" action_url=create_url %}
   {% else %}
     {% include "components/ui/page_header.html" with title=title %}
   {% endif %}
@@ -15,7 +15,7 @@
       <div>
         <p class="stat-label">Suppliers</p>
         <p class="stat-value">{{ supplier_count }}</p>
-        <p class="mt-0.5 text-xs text-slate-500">on this page</p>
+        <p class="mt-0.5 text-xs text-slate-500">{% if has_table_filters %}matching the filters{% else %}on file{% endif %}</p>
       </div>
     </div>
     <div class="stat-tile">
@@ -23,7 +23,7 @@
       <div>
         <p class="stat-label">Purchased</p>
         <p class="stat-value">{{ purchased_total|amount }}</p>
-        <p class="mt-0.5 text-xs text-slate-500">life to date</p>
+        <p class="mt-0.5 text-xs text-slate-500">life to date, all suppliers shown</p>
       </div>
     </div>
     <div class="stat-tile">
@@ -54,7 +54,7 @@
             <td class="px-3 py-3">
               <span class="vendor-caret inline-block -rotate-90 text-slate-400 transition">&#9662;</span>
             </td>
-            <td class="px-4 py-3 font-semibold">{{ vendor.name }}</td>
+            <td class="px-4 py-3 font-semibold"><a class="hover:text-[var(--primary-color)] hover:underline" href="{% url 'inventory:vendor_detail' vendor.pk %}" onclick="event.stopPropagation();">{{ vendor.name }}</a></td>
             <td class="px-4 py-3 text-right font-semibold tabular-nums {% if vendor.payable_balance > 0 %}text-rose-600{% endif %}">{{ vendor.payable_balance|amount }}</td>
             <td class="px-4 py-3">
               <form method="post" action="{% url status_toggle_url_name vendor.pk %}" onclick="event.stopPropagation();">
@@ -66,8 +66,16 @@
               </form>
             </td>
             <td class="px-4 py-3">
-              <div class="flex justify-end gap-2" onclick="event.stopPropagation();">
-                {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url edit_url_name vendor.pk %}" title="Edit">&#9998;</a>{% endif %}
+              <div class="flex justify-end gap-1" onclick="event.stopPropagation();">
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                   href="{% url 'inventory:vendor_detail' vendor.pk %}" title="Preview" aria-label="Preview">&#128065;</a>
+                {% if vendor.payable_code %}
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                   href="{% url 'finance:account_ledger' %}?account_no={{ vendor.payable_code|urlencode }}" title="Ledger" aria-label="Ledger">&#128220;</a>
+                {% else %}
+                <span class="grid h-8 w-8 place-items-center rounded-md text-slate-300 dark:text-slate-600" title="No ledger account yet" aria-hidden="true">&#128220;</span>
+                {% endif %}
+                {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url edit_url_name vendor.pk %}" title="Edit" aria-label="Edit">&#9998;</a>{% endif %}
               </div>
             </td>
           </tr>

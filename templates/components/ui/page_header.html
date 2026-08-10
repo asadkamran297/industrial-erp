@@ -1,7 +1,25 @@
+{% comment %}
+Page title, optional subtitle, and the page's primary action.
+
+    {% include "components/ui/page_header.html" with title="Vendors" action_label="Add Supplier" action_url=create_url %}
+
+  action_icon    glyph before the label (default: +)
+  action_variant button weight (default: primary)
+  secondary_*    an optional second action, rendered beside the first
+{% endcomment %}
 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
   <div class="title-accent">
     <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ title }}</h1>
     {% if subtitle %}<p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{{ subtitle }}</p>{% endif %}
   </div>
-  {% if action_label %}<a href="{{ action_url|default:'#' }}" class="btn-primary min-h-11">{{ action_label }}</a>{% endif %}
+  {% if action_label or secondary_label %}
+  <div class="flex flex-wrap items-center gap-2">
+    {% if secondary_label %}
+      {% include "components/ui/button.html" with label=secondary_label href=secondary_url icon=secondary_icon variant=secondary_variant|default:"secondary" only %}
+    {% endif %}
+    {% if action_label %}
+      {% include "components/ui/button.html" with label=action_label href=action_url|default:"#" icon=action_icon|default:"+" variant=action_variant|default:"primary" only %}
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
