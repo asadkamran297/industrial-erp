@@ -1,9 +1,11 @@
+import csv
 import json
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -382,16 +384,55 @@ class SupplierUpdateView(SupplierCreateView, UpdateView):
     success_message = "Supplier updated."
 
 
-class ItemListView(BaseSimpleListView):
+class ItemStockListMixin(InventoryListMixin):
+    """Items with the stock figures that used to live on their own page.
+
+    Stock is one row per item, so the two are read together rather than kept as
+    separate screens; the item list is the only place either is now shown.
+    """
+
     page = "inventory.items"
     model = InventoryItem
-    queryset = InventoryItem.objects.select_related("uom", "item_class").order_by("item_name")
-    search_fields = ("item_name", "code", "item_bar_code")
-    filter_fields = {"status": "status"}
-    extra_context = {"title": "Inventory Items", "create_url": reverse_lazy("inventory:item_create"), "edit_url_name": "inventory:item_update", "status_toggle_url_name": "inventory:item_toggle_status", "columns": [("Name", "item_name"), ("Code", "code"), ("UOM", "uom"), ("Price", "price"), ("Status", "status_toggle")]}
+    context_object_name = "records"
+    queryset = InventoryItem.objects.select_related("uom", "item_class", "stock").order_by("item_name")
+    # The stock row carries its own copy of the code and name, and is what a
+    # search for a stocked item is likely typed against.
+    search_fields = ("item_name", "code", "item_bar_code", "stock__item_code", "stock__item_name")
+    filter_fields = {"status": "status", "item_class": "item_class_id"}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+        class_choices = list(InventoryClass.objects.order_by("title").values_list("id", "title"))
+        return [
+            {"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
+            {"name": "item_class", "label": "All classes", "choices": class_choices, "value": self.request.GET.get("item_class", "")},
+        ]
+
+    @staticmethod
+    def _decorate(rows):
+        """Attach the per-row stock value and return the (quantity, value) totals."""
+        total_quantity = Decimal("0.0000")
+        total_value = Decimal("0.00")
+        for row in rows:
+            stock = getattr(row, "stock", None)
+            quantity = stock.current_quantity if stock else Decimal("0.0000")
+            # Valued at the current price, the same figure the Inventory control
+            # account is reconciled against.
+            price = stock.current_price if stock else row.price
+            row.stock_value = (quantity * price).quantize(Decimal("0.01"))
+            total_quantity += quantity
+            total_value += row.stock_value
+        return total_quantity, total_value
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        total_quantity, total_value = self._decorate(context["records"])
+        context["page_total_quantity"] = total_quantity
+        context["page_total_value"] = total_value
+        return context
+
+
+class ItemListView(ItemStockListMixin, ListView):
+    template_name = "inventory/item_list.html"
 
     def get_context_data(self, **kwargs):
         # Items are the subsidiary ledger behind the balance sheet's Inventory
@@ -399,8 +440,60 @@ class ItemListView(BaseSimpleListView):
         from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
 
         context = super().get_context_data(**kwargs)
+        context["title"] = "Inventory Items"
+        context["create_url"] = reverse_lazy("inventory:item_create")
         context["control_account"] = inventory_control_summary()
         return context
+
+
+class ItemPrintView(PrintContextMixin, ItemStockListMixin, ListView):
+    """Every item under the filters currently applied, unpaginated."""
+
+    action = "index"
+    template_name = "inventory/item_print.html"
+    paginate_by = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["print_back_url"] = reverse_lazy("inventory:item_list")
+        return context
+
+
+class ItemExportView(ItemStockListMixin, ListView):
+    """The item list as a spreadsheet, under the filters currently applied.
+
+    Written as UTF-8 CSV rather than a real workbook: Excel opens it directly
+    and it keeps the export dependency-free, matching the voucher export.
+    """
+
+    action = "index"
+    paginate_by = None
+
+    def get(self, request, *args, **kwargs):
+        rows = list(self.get_queryset())
+        total_quantity, total_value = self._decorate(rows)
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        stamp = timezone.localdate().isoformat()
+        response["Content-Disposition"] = f'attachment; filename="inventory-items-{stamp}.csv"'
+        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
+        response.write("﻿")
+        writer = csv.writer(response)
+        writer.writerow(["Item Name", "Code", "Class", "UOM", "Stock Qty", "Current Price", "Last Price", "Stock Value", "Status"])
+        for row in rows:
+            stock = getattr(row, "stock", None)
+            writer.writerow([
+                row.item_name,
+                row.code,
+                row.item_class.title,
+                str(row.uom),
+                stock.current_quantity if stock else "",
+                stock.current_price if stock else "",
+                stock.last_price if stock else "",
+                row.stock_value,
+                row.get_status_display(),
+            ])
+        writer.writerow(["Totals", "", "", "", total_quantity, "", "", total_value, ""])
+        return response
 
 
 class ItemToggleStatusView(InventoryManageMixin, View):
@@ -426,23 +519,6 @@ class ItemCreateView(InventoryManageMixin, CreateView):
 
 class ItemUpdateView(ItemCreateView, UpdateView):
     success_message = "Item updated."
-
-
-class StockListView(InventoryListMixin, ListView):
-    page = "inventory.stock"
-    template_name = "inventory/stock_list.html"
-    context_object_name = "stocks"
-    queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
-    search_fields = ("item_code", "item_name", "inventory_item__code")
-
-    def get_context_data(self, **kwargs):
-        # Stock is the subsidiary ledger behind the balance sheet's Inventory
-        # account; the banner says whether the two currently agree.
-        from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
-
-        context = super().get_context_data(**kwargs)
-        context["control_account"] = inventory_control_summary()
-        return context
 
 
 class LedgerListView(InventoryListMixin, ListView):
@@ -497,21 +573,6 @@ class CustomerLedgerListView(InventoryListMixin, ListView):
     def get_filter_specs(self):
         customer_choices = list(Customer.objects.order_by("customer_name").values_list("id", "customer_name"))
         return [{"name": "customer", "label": "All customers", "choices": customer_choices, "value": self.request.GET.get("customer", "")}]
-
-
-class StockPrintView(PrintContextMixin, InventoryListMixin, ListView):
-    page = "inventory.stock"
-    action = "view"
-    template_name = "inventory/stock_print.html"
-    context_object_name = "stocks"
-    queryset = Stock.objects.select_related("inventory_item").order_by("item_name")
-    search_fields = ("item_code", "item_name", "inventory_item__code")
-    paginate_by = None
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["print_back_url"] = reverse_lazy("inventory:stock_list")
-        return context
 
 
 class LedgerPrintView(PrintContextMixin, InventoryListMixin, ListView):

@@ -50,11 +50,9 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Customer Ledger", permission="inventory.customer_ledger.index", url_name="inventory:customer_ledger_list"),
     )),
     NavigationItem("Stock", permission=None, section=SECTION_OPERATIONS, icon="K", children=(
-        NavigationItem("Current Stock", permission="inventory.stock.index", url_name="inventory:stock_list"),
-        NavigationItem("Items", permission="inventory.items.index", url_name="inventory:item_list"),
+        NavigationItem("Items & Stock", permission="inventory.items.index", url_name="inventory:item_list"),
         NavigationItem("Stock Adjustment", permission="inventory.manual_transaction.index", url_name="inventory:manual_transaction"),
         NavigationItem("Item Ledger", permission="inventory.item_ledger.index", url_name="inventory:ledger_list"),
-        NavigationItem("Stock Report", permission="inventory.stock.index", url_name="inventory:report_stock"),
         NavigationItem("Ledger Report", permission="inventory.item_ledger.index", url_name="inventory:report_ledger"),
     )),
     NavigationItem("Production", permission="operations.index", section=SECTION_OPERATIONS, icon="P"),

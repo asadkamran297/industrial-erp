@@ -1,0 +1,49 @@
+{% extends "layouts/print_base.html" %}
+{% block title %}Inventory Items{% endblock %}
+
+{% block print_content %}
+  <h1 class="doc-title">Inventory Items &amp; Stock</h1>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Item Name</th>
+        <th>Code</th>
+        <th>Class</th>
+        <th>UOM</th>
+        <th class="num">Stock Qty</th>
+        <th class="num">Current Price</th>
+        <th class="num">Last Price</th>
+        <th class="num">Stock Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in records %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ row.item_name }}</td>
+        <td>{{ row.code }}</td>
+        <td>{{ row.item_class.title }}</td>
+        <td>{{ row.uom }}</td>
+        <td class="num">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
+        <td class="num">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>
+        <td class="num">{% if row.stock %}{{ row.stock.last_price|amount }}{% else %}&mdash;{% endif %}</td>
+        <td class="num">{{ row.stock_value|amount }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="u-center">No items.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if records %}
+    <tfoot>
+      <tr>
+        <td colspan="5" class="num"><strong>Totals</strong></td>
+        <td class="num"><strong>{{ page_total_quantity|qty }}</strong></td>
+        <td colspan="2"></td>
+        <td class="num"><strong>{{ page_total_value|amount }}</strong></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+{% endblock %}

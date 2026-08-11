@@ -48,7 +48,6 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("inventory.uom_conversions", "UOM Conversions", "Inventory", MASTER_NO_DELETE),
     Page("inventory.suppliers", "Suppliers", "Inventory", MASTER_NO_DELETE),
     Page("inventory.items", "Items", "Inventory", MASTER_NO_DELETE),
-    Page("inventory.stock", "Current Stock", "Inventory", READ_ONLY),
     Page("inventory.item_ledger", "Item Ledger", "Inventory", READ_ONLY),
     Page("inventory.customer_ledger", "Customer Ledger", "Inventory", READ_ONLY),
     Page("inventory.purchase_orders", "Purchase Orders", "Inventory", CRUD),
