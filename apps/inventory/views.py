@@ -51,7 +51,7 @@ class InventoryClassListView(BaseSimpleListView):
     queryset = InventoryClass.objects.order_by("title")
     search_fields = ("title", "class_code")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Inventory Classes", "create_url": reverse_lazy("inventory:class_create"), "edit_url_name": "inventory:class_update", "status_toggle_url_name": "inventory:class_toggle_status", "columns": [("Class Name", "title"), ("Class Code", "class_code"), ("Status", "status_toggle")]}
+    extra_context = {"title": "Inventory Classes", "create_url": reverse_lazy("inventory:class_create"), "edit_url_name": "inventory:class_update", "status_toggle_url_name": "inventory:class_toggle_status", "active_tab": "category", "columns": [("Class Name", "title"), ("Class Code", "class_code"), ("Status", "status_toggle")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
@@ -100,7 +100,7 @@ class UOMListView(BaseSimpleListView):
     queryset = UOM.objects.order_by("title")
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Units of Measure", "create_url": reverse_lazy("inventory:uom_create"), "edit_url_name": "inventory:uom_update", "columns": [("Title", "title"), ("Code", "code"), ("Status", "get_status_display")]}
+    extra_context = {"title": "Units of Measure", "create_url": reverse_lazy("inventory:uom_create"), "edit_url_name": "inventory:uom_update", "active_tab": "units", "columns": [("Title", "title"), ("Code", "code"), ("Status", "get_status_display")]}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
@@ -401,6 +401,13 @@ class ItemStockListMixin(InventoryListMixin):
     search_fields = ("item_name", "code", "item_bar_code", "stock__item_code", "stock__item_name")
     filter_fields = {"status": "status", "item_class": "item_class_id"}
 
+    def item_kind(self):
+        """Which tab is being viewed. Products unless Services is asked for."""
+        return INVENTORY_KIND_SERVICE if self.request.GET.get("kind") == INVENTORY_KIND_SERVICE else INVENTORY_KIND_PRODUCT
+
+    def get_queryset(self):
+        return super().get_queryset().filter(item_kind=self.item_kind())
+
     def get_filter_specs(self):
         class_choices = list(InventoryClass.objects.order_by("title").values_list("id", "title"))
         return [
@@ -429,6 +436,11 @@ class ItemStockListMixin(InventoryListMixin):
         total_quantity, total_value = self._decorate(context["records"])
         context["page_total_quantity"] = total_quantity
         context["page_total_value"] = total_value
+        is_service = self.item_kind() == INVENTORY_KIND_SERVICE
+        context["active_tab"] = "services" if is_service else "products"
+        context["is_service_tab"] = is_service
+        context["product_value"] = INVENTORY_KIND_PRODUCT
+        context["service_value"] = INVENTORY_KIND_SERVICE
         return context
 
 
@@ -441,9 +453,11 @@ class ItemListView(ItemStockListMixin, ListView):
         from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
 
         context = super().get_context_data(**kwargs)
-        context["title"] = "Inventory Items"
+        context["title"] = "Services" if context["is_service_tab"] else "Inventory Items"
         context["create_url"] = reverse_lazy("inventory:item_create")
-        context["control_account"] = inventory_control_summary()
+        # A service holds no stock, so the Inventory control banner belongs only
+        # on the products tab, where the figures it reconciles are shown.
+        context["control_account"] = None if context["is_service_tab"] else inventory_control_summary()
         return context
 
 

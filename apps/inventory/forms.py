@@ -153,11 +153,21 @@ class InventoryItemForm(StyledModelForm):
         help_text="Left blank, the purchase price is used.",
         widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0", "placeholder": "0.00"}),
     )
+    # Free text rather than a plain dropdown: an existing category is picked
+    # from the list, and a name that is not on it is created on save, so
+    # nobody has to break off and set the category up first.
+    category = forms.CharField(
+        label="Category",
+        required=False,
+        max_length=160,
+        help_text="Pick one, or type a new name to create it.",
+        widget=forms.TextInput(attrs={"class": "form-input", "list": "category-options", "autocomplete": "off", "placeholder": "Select or type…"}),
+    )
 
     class Meta:
         model = InventoryItem
         fields = (
-            "item_name", "code", "item_kind", "uom", "item_class", "conversion",
+            "item_name", "code", "item_kind", "uom", "conversion",
             "item_bar_code", "status", "imported", "inventory", "price", "purchase_price",
         )
 
@@ -166,9 +176,56 @@ class InventoryItemForm(StyledModelForm):
         self.fields["code"].required = False  # the model assigns one from the class
         self.fields["price"].label = "Sale Price"
         self.fields["purchase_price"].label = "Purchase Price"
-        self.fields["item_class"].label = "Category"
         self.fields["uom"].label = "Unit"
         self.fields["opening_date"].initial = timezone.localdate()
+        if self.instance.pk and self.instance.item_class_id:
+            self.initial.setdefault("category", self.instance.item_class.title)
+
+    @property
+    def category_options(self):
+        return InventoryClass.objects.order_by("title").values_list("title", flat=True)
+
+    def clean_category(self):
+        """Resolve the typed name to a category, creating one when it is new."""
+        title = (self.cleaned_data.get("category") or "").strip()
+        self._item_class = None
+        if not title:
+            return ""
+
+        existing = InventoryClass.objects.filter(title__iexact=title).first()
+        if existing:
+            self._item_class = existing
+            return existing.title
+
+        self._item_class = InventoryClass(title=title, class_code=self._next_class_code(title))
+        return title
+
+    @staticmethod
+    def _next_class_code(title):
+        """A short unique code for a category created from this form.
+
+        Built from the first letters of the name so the generated item codes
+        still read as something, with a number appended only on a clash.
+        """
+        letters = "".join(ch for ch in title.upper() if ch.isalnum())[:6] or "CAT"
+        code = letters
+        suffix = 1
+        while InventoryClass.all_objects.filter(class_code__iexact=code).exists():
+            suffix += 1
+            code = f"{letters[:5]}{suffix}"
+        return code
+
+    def save(self, commit=True):
+        item = super().save(commit=False)
+        item_class = getattr(self, "_item_class", None)
+        if item_class is not None and item_class.pk is None:
+            item_class.created_by = item.created_by
+            item_class.updated_by = item.updated_by
+            item_class.save()
+        item.item_class = item_class
+        if commit:
+            item.save()
+        return item
 
     @property
     def opening_stock_allowed(self):

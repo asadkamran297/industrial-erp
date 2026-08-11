@@ -1,0 +1,10 @@
+<nav class="-mx-1 flex flex-wrap gap-1" aria-label="Item masters">
+  <a href="{% url 'inventory:item_list' %}?kind={{ product_value|default:'P' }}"
+     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'products' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">PRODUCTS</a>
+  <a href="{% url 'inventory:item_list' %}?kind={{ service_value|default:'S' }}"
+     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'services' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">SERVICES</a>
+  <a href="{% url 'inventory:class_list' %}"
+     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'category' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">CATEGORY</a>
+  <a href="{% url 'inventory:uom_list' %}"
+     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'units' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">UNITS</a>
+</nav>

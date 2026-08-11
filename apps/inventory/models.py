@@ -156,7 +156,9 @@ class InventoryItem(BaseModel):
     item_name = models.CharField(max_length=180)
     code = models.CharField(max_length=60, unique=True, blank=True)
     uom = models.ForeignKey(UOM, on_delete=models.PROTECT, db_column="inv_config_uom_id")
-    item_class = models.ForeignKey(InventoryClass, on_delete=models.PROTECT, db_column="inv_config_class_id")
+    # Optional: an item can be filed before anyone decides which category it
+    # belongs to. Uncategorised items fall back to the generic code prefix.
+    item_class = models.ForeignKey(InventoryClass, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_class_id")
     conversion = models.ForeignKey(UOMConversion, null=True, blank=True, on_delete=models.SET_NULL, db_column="conversion_id")
     item_bar_code = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
@@ -178,7 +180,7 @@ class InventoryItem(BaseModel):
     def save(self, *args, **kwargs):
         creating = self.pk is None
         if not self.code:
-            prefix = (self.item_class.class_code or "ITM").upper()
+            prefix = ((self.item_class.class_code if self.item_class_id else "") or "ITM").upper()
             last = InventoryItem.all_objects.filter(code__startswith=prefix).order_by("-id").values_list("id", flat=True).first() or 0
             self.code = f"{prefix}-{last + 1:04d}"
         self.full_clean()
