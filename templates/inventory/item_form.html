@@ -25,29 +25,37 @@
     {% endif %}
 
     {# ── Identity row ───────────────────────────────────────────────────── #}
-    <div class="grid gap-4 px-6 py-5 sm:grid-cols-2 lg:grid-cols-4">
+    {# Inline grid: the compiled Tailwind bundle has no 5-column utility, so the #}
+    {# columns are declared here rather than needing a CSS rebuild to appear. #}
+    <div class="items-start px-6 py-5" style="display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:1rem;">
       <div>
         <label class="mb-1.5 block text-sm font-medium" for="{{ form.item_name.id_for_label }}">Item Name <span class="text-rose-500">*</span></label>
         {{ form.item_name }}
         {% for error in form.item_name.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
       <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.item_class.id_for_label }}">Category <span class="text-rose-500">*</span></label>
-        {{ form.item_class }}
-        {% for error in form.item_class.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.category.id_for_label }}">Category</label>
+        {{ form.category }}
+        <datalist id="category-options">
+          {% for title in form.category_options %}<option value="{{ title }}"></option>{% endfor %}
+        </datalist>
+        <p class="mt-1 text-xs text-slate-400">{{ form.category.help_text }}</p>
+        {% for error in form.category.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
       <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.uom.id_for_label }}">Unit <span class="text-rose-500">*</span></label>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.uom.id_for_label }}">Base Unit <span class="text-rose-500">*</span></label>
         {{ form.uom }}
         {% for error in form.uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
       <div>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.secondary_uom.id_for_label }}">Secondary Unit</label>
+        {{ form.secondary_uom }}
+        <p class="mt-1 text-xs text-slate-400">Optional. Quantities are still held in the base unit.</p>
+        {% for error in form.secondary_uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div>
         <label class="mb-1.5 block text-sm font-medium" for="{{ form.code.id_for_label }}">Item Code</label>
-        <div class="flex gap-2">
-          {{ form.code }}
-          {# Blank is what the model reads as "assign one"; this only says so on screen. #}
-          <button type="button" id="assign-code" class="shrink-0 rounded-lg bg-sky-50 px-3 text-sm font-semibold text-sky-700 hover:bg-sky-100 dark:bg-sky-950 dark:text-sky-300">Assign Code</button>
-        </div>
+        {{ form.code }}
         <p class="mt-1 text-xs text-slate-400">Left blank, a code is generated from the category.</p>
         {% for error in form.code.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
@@ -196,16 +204,6 @@
     }));
     kind.addEventListener('change', paintKind);
     paintKind();
-  }
-
-  // ----- Assign Code -----
-  const codeInput = document.getElementById('{{ form.code.auto_id }}');
-  const assign = document.getElementById('assign-code');
-  if (assign && codeInput) {
-    assign.addEventListener('click', () => {
-      codeInput.value = '';
-      codeInput.placeholder = 'Assigned on save';
-    });
   }
 })();
 </script>

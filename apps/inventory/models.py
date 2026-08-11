@@ -155,7 +155,10 @@ class Supplier(BaseModel):
 class InventoryItem(BaseModel):
     item_name = models.CharField(max_length=180)
     code = models.CharField(max_length=60, unique=True, blank=True)
-    uom = models.ForeignKey(UOM, on_delete=models.PROTECT, db_column="inv_config_uom_id")
+    uom = models.ForeignKey(UOM, on_delete=models.PROTECT, related_name="items", db_column="inv_config_uom_id")
+    # Optional second unit the item is also handled in — bought by the bag,
+    # issued by the kilo. Quantities are still held in the base unit.
+    secondary_uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, related_name="secondary_items", db_column="inv_config_secondary_uom_id")
     # Optional: an item can be filed before anyone decides which category it
     # belongs to. Uncategorised items fall back to the generic code prefix.
     item_class = models.ForeignKey(InventoryClass, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_class_id")

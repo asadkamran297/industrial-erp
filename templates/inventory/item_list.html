@@ -53,7 +53,7 @@
           <tr>
             <td class="px-4 py-3">{{ row.item_name }}</td>
             <td class="px-4 py-3">{{ row.code }}</td>
-            <td class="px-4 py-3">{{ row.item_class.title }}</td>
+            <td class="px-4 py-3">{{ row.item_class.title|default:"—" }}</td>
             <td class="px-4 py-3">{{ row.uom }}</td>
             {# An item created before its stock row exists shows a dash rather than a zero it never earned. #}
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>

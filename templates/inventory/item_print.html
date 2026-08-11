@@ -24,7 +24,7 @@
         <td>{{ forloop.counter }}</td>
         <td>{{ row.item_name }}</td>
         <td>{{ row.code }}</td>
-        <td>{{ row.item_class.title }}</td>
+        <td>{{ row.item_class.title|default:"—" }}</td>
         <td>{{ row.uom }}</td>
         <td class="num">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
         <td class="num">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>

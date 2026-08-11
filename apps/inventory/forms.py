@@ -167,7 +167,7 @@ class InventoryItemForm(StyledModelForm):
     class Meta:
         model = InventoryItem
         fields = (
-            "item_name", "code", "item_kind", "uom", "conversion",
+            "item_name", "code", "item_kind", "uom", "secondary_uom", "conversion",
             "item_bar_code", "status", "imported", "inventory", "price", "purchase_price",
         )
 
@@ -176,7 +176,10 @@ class InventoryItemForm(StyledModelForm):
         self.fields["code"].required = False  # the model assigns one from the class
         self.fields["price"].label = "Sale Price"
         self.fields["purchase_price"].label = "Purchase Price"
-        self.fields["uom"].label = "Unit"
+        self.fields["uom"].label = "Base Unit"
+        self.fields["secondary_uom"].label = "Secondary Unit"
+        self.fields["secondary_uom"].required = False
+        self.fields["secondary_uom"].empty_label = "None"
         self.fields["opening_date"].initial = timezone.localdate()
         if self.instance.pk and self.instance.item_class_id:
             self.initial.setdefault("category", self.instance.item_class.title)
@@ -239,6 +242,8 @@ class InventoryItemForm(StyledModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        if cleaned_data.get("secondary_uom") and cleaned_data.get("secondary_uom") == cleaned_data.get("uom"):
+            self.add_error("secondary_uom", "Secondary unit must differ from the base unit.")
         quantity = cleaned_data.get("opening_quantity")
         if not quantity:
             return cleaned_data
@@ -267,14 +272,14 @@ class InventoryItemImportForm(forms.Form):
     never post quantities behind the ledger's back.
     """
 
-    COLUMNS = ("item_name", "item_class", "uom", "price", "item_bar_code")
+    COLUMNS = ("item_name", "item_class", "uom", "price", "purchase_price", "item_bar_code")
     # .xls is the old binary format openpyxl cannot read; Excel saves either of
     # these from "Save As" without any add-in.
     EXTENSIONS = (".csv", ".xlsx")
 
     file = forms.FileField(
         label="Excel or CSV file",
-        help_text="Columns: item_name, item_class, uom, price, item_bar_code. The first row must be the header.",
+        help_text="Columns: item_name, item_class, uom, price, purchase_price, item_bar_code. The first row must be the header.",
         widget=forms.ClearableFileInput(attrs={"class": "form-input", "accept": ".csv,.xlsx,text/csv"}),
     )
     update_existing = forms.BooleanField(

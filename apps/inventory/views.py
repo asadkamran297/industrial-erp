@@ -499,7 +499,7 @@ class ItemExportView(ItemStockListMixin, ListView):
             writer.writerow([
                 row.item_name,
                 row.code,
-                row.item_class.title,
+                row.item_class.title if row.item_class_id else "",
                 str(row.uom),
                 stock.current_quantity if stock else "",
                 stock.current_price if stock else "",
@@ -633,10 +633,14 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
                         # Left blank on purpose: the model derives the code from
                         # the class prefix, so imports match hand-added items.
                         "code": existing.code if existing else "",
-                        "item_class": item_class.pk,
+                        "category": item_class.title,
                         "uom": uom.pk,
                         "item_bar_code": row.get("item_bar_code", ""),
                         "price": row.get("price") or "0",
+                        "purchase_price": row.get("purchase_price") or "0",
+                        # Bulk-loaded rows are stocked goods; a service is added
+                        # one at a time from the Add Item screen.
+                        "item_kind": INVENTORY_KIND_PRODUCT,
                         "status": STATUS_ACTIVE,
                         "imported": "L",
                         "inventory": "I",
@@ -693,6 +697,7 @@ class ItemImportSampleView(PagePermissionRequiredMixin, View):
             item_class.title if item_class else "Raw Material",
             uom.title if uom else "Each",
             "100.00",
+            "80.00",
             "8901234567890",
         ]
 
@@ -778,7 +783,9 @@ class ItemCreateView(InventoryManageMixin, CreateView):
         # "Save & New" keeps the operator on a blank form for the next item.
         if "save_and_new" in self.request.POST:
             return reverse_lazy("inventory:item_create")
-        return str(self.success_url)
+        # Otherwise stay on the record just saved, so it can be checked or
+        # corrected without hunting for it in the list.
+        return reverse_lazy("inventory:item_update", kwargs={"pk": self.object.pk})
 
 
 class ItemUpdateView(ItemCreateView, UpdateView):
