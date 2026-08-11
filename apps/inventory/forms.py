@@ -131,6 +131,42 @@ class InventoryItemForm(StyledModelForm):
         return (self.cleaned_data.get("code") or "").strip().upper()
 
 
+class InventoryItemImportForm(forms.Form):
+    """CSV upload for creating items in bulk.
+
+    Deliberately master-data only: an imported item starts at zero stock, which
+    is then moved by a Stock Adjustment or a goods receipt, so an import can
+    never post quantities behind the ledger's back.
+    """
+
+    COLUMNS = ("item_name", "item_class", "uom", "price", "item_bar_code")
+    # .xls is the old binary format openpyxl cannot read; Excel saves either of
+    # these from "Save As" without any add-in.
+    EXTENSIONS = (".csv", ".xlsx")
+
+    file = forms.FileField(
+        label="Excel or CSV file",
+        help_text="Columns: item_name, item_class, uom, price, item_bar_code. The first row must be the header.",
+        widget=forms.ClearableFileInput(attrs={"class": "form-input", "accept": ".csv,.xlsx,text/csv"}),
+    )
+    update_existing = forms.BooleanField(
+        label="Update items that already exist",
+        required=False,
+        help_text="Matched on item name. Left off, an existing name is reported and skipped.",
+        widget=forms.CheckboxInput(attrs={"class": "h-4 w-4 rounded border-slate-300"}),
+    )
+
+    def clean_file(self):
+        upload = self.cleaned_data["file"]
+        if not upload.name.lower().endswith(self.EXTENSIONS):
+            raise ValidationError("Upload a .xlsx or .csv file. The older .xls format is not supported — re-save it as .xlsx.")
+        # 5 MB is far beyond any hand-kept item list, and stops a stray upload
+        # from being read into memory.
+        if upload.size > 5 * 1024 * 1024:
+            raise ValidationError("File is larger than 5 MB.")
+        return upload
+
+
 class PurchaseOrderForm(StyledModelForm):
     class Meta:
         model = PurchaseOrder

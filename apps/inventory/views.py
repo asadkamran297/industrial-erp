@@ -1,4 +1,5 @@
 import csv
+import io
 import json
 
 from django.contrib import messages
@@ -9,7 +10,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, View
 
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -20,7 +21,7 @@ from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
-from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
+from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -493,6 +494,226 @@ class ItemExportView(ItemStockListMixin, ListView):
                 row.get_status_display(),
             ])
         writer.writerow(["Totals", "", "", "", total_quantity, "", "", total_value, ""])
+        return response
+
+
+class ItemImportView(PagePermissionRequiredMixin, FormView):
+    """Create items in bulk from a CSV.
+
+    Every row is validated through ``InventoryItemForm`` so an import cannot
+    write anything the Add Item screen would have rejected, and the whole file
+    is applied in one transaction: a partly-imported list is worse than none.
+    """
+
+    page = "inventory.items"
+    action = "add"
+    form_class = InventoryItemImportForm
+    template_name = "inventory/item_import.html"
+    success_url = reverse_lazy("inventory:item_list")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = "Import Items"
+        context["sample_url"] = reverse_lazy("inventory:item_import_sample")
+        return context
+
+    @staticmethod
+    def _lookup(model, value, fields):
+        """Find a master record by any of ``fields``, case-insensitively."""
+        value = (value or "").strip()
+        if not value:
+            return None
+        for field in fields:
+            match = model.objects.filter(**{f"{field}__iexact": value}).first()
+            if match:
+                return match
+        return None
+
+    @staticmethod
+    def _read_csv(upload):
+        """(header names, row dicts) from a CSV upload."""
+        # utf-8-sig: a CSV saved by Excel carries a BOM, which would otherwise
+        # become part of the first header name.
+        text = upload.read().decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        headers = [(name or "").strip().lower() for name in (reader.fieldnames or [])]
+        rows = [{(k or "").strip().lower(): str(v or "").strip() for k, v in raw.items() if k} for raw in reader]
+        return headers, rows
+
+    @staticmethod
+    def _read_xlsx(upload):
+        """(header names, row dicts) from the first sheet of an .xlsx upload."""
+        from openpyxl import load_workbook
+
+        # data_only: a sheet built with formulas hands over the cached results
+        # rather than "=A1*2". read_only keeps a long sheet off the heap.
+        workbook = load_workbook(upload, data_only=True, read_only=True)
+        try:
+            sheet = workbook.worksheets[0]
+            grid = sheet.iter_rows(values_only=True)
+            try:
+                header_row = next(grid)
+            except StopIteration:
+                return [], []
+            headers = [str(name or "").strip().lower() for name in header_row]
+            rows = []
+            for values in grid:
+                row = {}
+                for index, name in enumerate(headers):
+                    if not name:
+                        continue
+                    value = values[index] if index < len(values) else None
+                    # A price typed as a number arrives as 100.0; str() of that
+                    # is still what the item form parses, so no rounding here.
+                    row[name] = "" if value is None else str(value).strip()
+                rows.append(row)
+            return headers, rows
+        finally:
+            workbook.close()
+
+    def form_valid(self, form):
+        upload = form.cleaned_data["file"]
+        update_existing = form.cleaned_data["update_existing"]
+        try:
+            if upload.name.lower().endswith(".xlsx"):
+                headers, data_rows = self._read_xlsx(upload)
+            else:
+                headers, data_rows = self._read_csv(upload)
+        except UnicodeDecodeError:
+            form.add_error("file", "File is not valid UTF-8 text. Re-save it as CSV UTF-8, or upload the .xlsx instead.")
+            return self.form_invalid(form)
+        except Exception:
+            # Anything openpyxl throws on a corrupt or mislabelled workbook.
+            form.add_error("file", "File could not be read. Check it is a real .xlsx workbook or a plain CSV.")
+            return self.form_invalid(form)
+
+        missing = [name for name in ("item_name", "item_class", "uom") if name not in headers]
+        if missing:
+            form.add_error("file", f"Missing required column(s): {', '.join(missing)}.")
+            return self.form_invalid(form)
+
+        created = updated = 0
+        errors = []
+        try:
+            with transaction.atomic():
+                for line_no, row in enumerate(data_rows, start=2):  # row 1 is the header
+                    if not any(row.values()):
+                        continue  # trailing blank line
+
+                    item_class = self._lookup(InventoryClass, row.get("item_class"), ("title", "class_code"))
+                    uom = self._lookup(UOM, row.get("uom"), ("title", "code"))
+                    if not item_class:
+                        errors.append(f"Row {line_no}: unknown item class '{row.get('item_class', '')}'.")
+                        continue
+                    if not uom:
+                        errors.append(f"Row {line_no}: unknown UOM '{row.get('uom', '')}'.")
+                        continue
+
+                    existing = InventoryItem.objects.filter(item_name__iexact=row.get("item_name", "")).first()
+                    if existing and not update_existing:
+                        errors.append(f"Row {line_no}: '{existing.item_name}' already exists.")
+                        continue
+
+                    data = {
+                        "item_name": row.get("item_name", ""),
+                        # Left blank on purpose: the model derives the code from
+                        # the class prefix, so imports match hand-added items.
+                        "code": existing.code if existing else "",
+                        "item_class": item_class.pk,
+                        "uom": uom.pk,
+                        "item_bar_code": row.get("item_bar_code", ""),
+                        "price": row.get("price") or "0",
+                        "status": STATUS_ACTIVE,
+                        "imported": "L",
+                        "inventory": "I",
+                    }
+                    item_form = InventoryItemForm(data, instance=existing)
+                    if not item_form.is_valid():
+                        detail = "; ".join(f"{field}: {msg[0]}" for field, msg in item_form.errors.items())
+                        errors.append(f"Row {line_no}: {detail}")
+                        continue
+
+                    item = item_form.save(commit=False)
+                    if not existing:
+                        item.created_by = self.request.user
+                    item.updated_by = self.request.user
+                    item.save()
+                    if existing:
+                        updated += 1
+                    else:
+                        created += 1
+
+                if errors:
+                    # Nothing is kept when any row failed, so the file can be
+                    # corrected and re-uploaded without hunting for duplicates.
+                    raise _ImportRowError
+        except _ImportRowError:
+            context = self.get_context_data(form=form)
+            context["row_errors"] = errors
+            return self.render_to_response(context)
+
+        messages.success(self.request, f"{created} item(s) created, {updated} updated.")
+        return super().form_valid(form)
+
+
+class _ImportRowError(Exception):
+    """Internal: rolls the import transaction back when any row is rejected."""
+
+
+class ItemImportSampleView(PagePermissionRequiredMixin, View):
+    """A one-row template in the shape the importer expects.
+
+    Defaults to .xlsx, since that is what most item lists are kept in;
+    ``?format=csv`` hands back the same row as CSV.
+    """
+
+    page = "inventory.items"
+    action = "add"
+
+    @staticmethod
+    def _sample_row():
+        item_class = InventoryClass.objects.order_by("title").first()
+        uom = UOM.objects.order_by("title").first()
+        return [
+            "Example Item",
+            item_class.title if item_class else "Raw Material",
+            uom.title if uom else "Each",
+            "100.00",
+            "8901234567890",
+        ]
+
+    def get(self, request, *args, **kwargs):
+        columns = list(InventoryItemImportForm.COLUMNS)
+        if request.GET.get("format") == "csv":
+            response = HttpResponse(content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = 'attachment; filename="item-import-sample.csv"'
+            # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
+            response.write("﻿")
+            writer = csv.writer(response)
+            writer.writerow(columns)
+            writer.writerow(self._sample_row())
+            return response
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Items"
+        sheet.append(columns)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True)
+        sheet.append(self._sample_row())
+        for index, name in enumerate(columns, start=1):
+            sheet.column_dimensions[sheet.cell(row=1, column=index).column_letter].width = max(len(name) + 4, 16)
+
+        buffer = io.BytesIO()
+        workbook.save(buffer)
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="item-import-sample.xlsx"'
         return response
 
 

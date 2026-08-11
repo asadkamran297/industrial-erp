@@ -7,7 +7,18 @@
       {# Both carry the current search/filter query, so what is printed or exported is what is on screen. #}
       <a href="{% url 'inventory:item_export' %}{% if page_query %}?{{ page_query }}{% endif %}" class="toolbar-btn h-10 px-4">&#128202; Export Excel</a>
       <a href="{% url 'inventory:item_print' %}{% if page_query %}?{{ page_query }}{% endif %}" target="_blank" class="toolbar-btn h-10 px-4">&#128438; Print</a>
-      {% if can_add %}<a href="{{ create_url }}" class="btn-primary inline-flex h-10 items-center gap-2 px-5 text-sm font-semibold"><span class="text-base leading-none">&plus;</span> Add Item</a>{% endif %}
+      {% if can_add %}
+      {# Split button: the main half adds one item, the caret opens the bulk route. #}
+      <div class="relative" id="add-item-split">
+        <div class="flex">
+          <a href="{{ create_url }}" class="btn-primary inline-flex h-10 items-center gap-2 rounded-r-none px-5 text-sm font-semibold"><span class="text-base leading-none">&plus;</span> Add Item</a>
+          <button type="button" id="add-item-caret" class="btn-primary inline-flex h-10 items-center rounded-l-none border-l border-white/30 px-3 text-sm" aria-haspopup="true" aria-expanded="false" aria-label="More add options">&#9662;</button>
+        </div>
+        <div id="add-item-menu" class="absolute right-0 z-20 mt-1 hidden w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+          <a href="{% url 'inventory:item_import' %}" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">&#128196; Import Items</a>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -77,4 +88,25 @@
   </div>
   {% include "components/table/pagination.html" %}
 </section>
+
+<script>
+(function () {
+  const caret = document.getElementById('add-item-caret');
+  const menu = document.getElementById('add-item-menu');
+  if (!caret || !menu) return;
+
+  function close() {
+    menu.classList.add('hidden');
+    caret.setAttribute('aria-expanded', 'false');
+  }
+
+  caret.addEventListener('click', (e) => {
+    e.stopPropagation();  // the document handler below would close it again
+    const open = menu.classList.toggle('hidden');
+    caret.setAttribute('aria-expanded', open ? 'false' : 'true');
+  });
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+})();
+</script>
 {% endblock %}
