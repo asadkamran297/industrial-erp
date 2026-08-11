@@ -8,11 +8,13 @@ from django.utils import timezone
 from apps.core.constants import (
     INV_CUSTOMER_LEDGER_TRANSACTION_TYPE_CHOICES,
     INV_IMPORTED_CHOICES,
+    INV_ITEM_KIND_CHOICES,
     INV_ITEM_TYPE_CHOICES,
     INV_POS_STATUS_CHOICES,
     INV_PURCHASE_ORDER_STATUS_CHOICES,
     INV_RETURN_STATUS_CHOICES,
     INV_TRANSACTION_TYPE_CHOICES,
+    INVENTORY_KIND_PRODUCT,
     NO,
     PAY_MODE_CHOICES,
     RECORD_STATUS_CHOICES,
@@ -160,7 +162,13 @@ class InventoryItem(BaseModel):
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
     imported = models.CharField(max_length=1, choices=INV_IMPORTED_CHOICES, default="L")
     inventory = models.CharField(max_length=1, choices=INV_ITEM_TYPE_CHOICES, default="I")
-    price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    # A service is sold but never stocked, so it carries no quantity and no
+    # opening balance; everything else on the record behaves the same.
+    item_kind = models.CharField(max_length=1, choices=INV_ITEM_KIND_CHOICES, default=INVENTORY_KIND_PRODUCT)
+    price = models.DecimalField("Sale Price", max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    # What the item is expected to cost. A goods receipt still sets the real
+    # landed cost on the stock record; this is the figure quoted before one.
+    purchase_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
     class Meta:
         db_table = "inv_inventory_codes"

@@ -1,0 +1,212 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section>
+  <form method="post" id="item-form" class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+
+    {# ── Header: title + Product/Service switch ─────────────────────────── #}
+    <div class="flex flex-wrap items-center gap-5 border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+      <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">{% if object %}Edit Item{% else %}Add Item{% endif %}</h1>
+      <div class="flex items-center gap-5">
+        <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
+        <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          <input type="radio" name="item_kind_choice" class="kind-option h-4 w-4 accent-[var(--primary-color)]" value="{{ product_value }}" checked>
+          Product
+        </label>
+        <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          <input type="radio" name="item_kind_choice" class="kind-option h-4 w-4 accent-[var(--primary-color)]" value="{{ service_value }}">
+          Service
+        </label>
+      </div>
+      <a href="{% url 'inventory:item_list' %}" class="ml-auto text-2xl leading-none text-slate-400 hover:text-slate-600" title="Close">&times;</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="mx-6 mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {# ── Identity row ───────────────────────────────────────────────────── #}
+    <div class="grid gap-4 px-6 py-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.item_name.id_for_label }}">Item Name <span class="text-rose-500">*</span></label>
+        {{ form.item_name }}
+        {% for error in form.item_name.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.item_class.id_for_label }}">Category <span class="text-rose-500">*</span></label>
+        {{ form.item_class }}
+        {% for error in form.item_class.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.uom.id_for_label }}">Unit <span class="text-rose-500">*</span></label>
+        {{ form.uom }}
+        {% for error in form.uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div>
+        <label class="mb-1.5 block text-sm font-medium" for="{{ form.code.id_for_label }}">Item Code</label>
+        <div class="flex gap-2">
+          {{ form.code }}
+          {# Blank is what the model reads as "assign one"; this only says so on screen. #}
+          <button type="button" id="assign-code" class="shrink-0 rounded-lg bg-sky-50 px-3 text-sm font-semibold text-sky-700 hover:bg-sky-100 dark:bg-sky-950 dark:text-sky-300">Assign Code</button>
+        </div>
+        <p class="mt-1 text-xs text-slate-400">Left blank, a code is generated from the category.</p>
+        {% for error in form.code.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+
+    {# ── Tabs ───────────────────────────────────────────────────────────── #}
+    <div class="border-b border-slate-200 px-6 dark:border-slate-800">
+      <nav class="flex gap-6" role="tablist">
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="pricing" role="tab">Pricing</button>
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="stock" role="tab">Stock</button>
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="other" role="tab">Other</button>
+      </nav>
+    </div>
+
+    <div class="space-y-5 px-6 py-6">
+
+      {# ── Pricing ──────────────────────────────────────────────────────── #}
+      <div class="tab-panel space-y-5" data-panel="pricing">
+        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Sale Price</p>
+          <div class="mt-3 max-w-xs">
+            {{ form.price }}
+            {% for error in form.price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Purchase Price</p>
+          <div class="mt-3 max-w-xs">
+            {{ form.purchase_price }}
+            {% for error in form.purchase_price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+          <p class="mt-2 text-xs text-slate-400">What the item is expected to cost. A goods receipt still sets the real landed cost.</p>
+        </div>
+      </div>
+
+      {# ── Stock ────────────────────────────────────────────────────────── #}
+      <div class="tab-panel hidden space-y-5" data-panel="stock">
+        {% if form.opening_stock_allowed %}
+        <div id="opening-stock-box" class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Opening Stock</p>
+          <p class="mt-1 text-xs text-slate-500">What is already on hand. Saved as an opening movement on the item ledger, so it can be traced later.</p>
+          <div class="mt-3 grid gap-4 sm:grid-cols-3">
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_quantity.id_for_label }}">{{ form.opening_quantity.label }}</label>
+              {{ form.opening_quantity }}
+              {% for error in form.opening_quantity.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_price.id_for_label }}">{{ form.opening_price.label }}</label>
+              {{ form.opening_price }}
+              <p class="mt-1 text-xs text-slate-400">{{ form.opening_price.help_text }}</p>
+              {% for error in form.opening_price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_date.id_for_label }}">{{ form.opening_date.label }}</label>
+              {{ form.opening_date }}
+              {% for error in form.opening_date.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+          </div>
+          <p class="mt-3 rounded-lg bg-white p-3 text-xs text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+            The Inventory control account is brought in line from the Inventory Valuation screen, the same as any other stock movement outside a goods receipt.
+          </p>
+        </div>
+        <p id="service-no-stock" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">A service is not stocked, so it carries no opening quantity.</p>
+        {% else %}
+        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
+          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Current Stock</p>
+          <dl class="mt-3 grid gap-4 sm:grid-cols-3 text-sm">
+            <div><dt class="text-xs uppercase tracking-wide text-slate-500">Quantity</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide text-slate-500">Current Price</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.current_price|amount }}{% else %}&mdash;{% endif %}</dd></div>
+            <div><dt class="text-xs uppercase tracking-wide text-slate-500">Last Price</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.last_price|amount }}{% else %}&mdash;{% endif %}</dd></div>
+          </dl>
+          <p class="mt-3 text-xs text-slate-500">Quantities move through Stock Adjustment or a goods receipt, never by editing the item.</p>
+        </div>
+        {% endif %}
+      </div>
+
+      {# ── Other: the remaining model fields, kept off the first screen ─── #}
+      <div class="tab-panel hidden" data-panel="other">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {% for field in form %}{% if field.name in other_fields %}
+          <div>
+            <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          </div>
+          {% endif %}{% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    {# ── Footer ─────────────────────────────────────────────────────────── #}
+    <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 px-6 py-4 dark:border-slate-800">
+      <a href="{% url 'inventory:item_list' %}" class="toolbar-btn h-10 px-5">Cancel</a>
+      {% if not object %}<button type="submit" name="save_and_new" value="1" class="toolbar-btn h-10 px-5">Save &amp; New</button>{% endif %}
+      <button type="submit" class="btn-primary h-10 px-8">Save</button>
+    </div>
+  </form>
+</section>
+
+<script>
+(function () {
+  // ----- Pricing / Stock / Other tabs -----
+  const ON = ['border-[var(--primary-color)]', 'text-[var(--primary-color)]'];
+  const buttons = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  function show(name) {
+    panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+    buttons.forEach(b => {
+      const on = b.dataset.tab === name;
+      ON.forEach(c => b.classList.toggle(c, on));
+      b.classList.toggle('text-slate-400', !on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+  buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
+  // A field rejected on an inner tab must not be left hidden behind it.
+  const firstError = document.querySelector('.tab-panel .text-rose-600');
+  show(firstError ? firstError.closest('.tab-panel').dataset.panel : 'pricing');
+
+  // ----- Product / Service radios, driving the real select -----
+  const kind = document.getElementById('{{ form.item_kind.auto_id }}');
+  const options = document.querySelectorAll('.kind-option');
+  const openingBox = document.getElementById('opening-stock-box');
+  const serviceNote = document.getElementById('service-no-stock');
+  const SERVICE = '{{ service_value }}';
+
+  function paintKind() {
+    if (!kind) return;
+    const isService = kind.value === SERVICE;
+    options.forEach(option => { option.checked = option.value === kind.value; });
+    // A service holds no stock, so the opening boxes go away and are cleared.
+    if (openingBox) {
+      openingBox.classList.toggle('hidden', isService);
+      if (isService) openingBox.querySelectorAll('input').forEach(i => { i.value = ''; });
+    }
+    if (serviceNote) serviceNote.classList.toggle('hidden', !isService);
+  }
+
+  if (kind && options.length) {
+    options.forEach(option => option.addEventListener('change', () => {
+      kind.value = option.value;
+      paintKind();
+    }));
+    kind.addEventListener('change', paintKind);
+    paintKind();
+  }
+
+  // ----- Assign Code -----
+  const codeInput = document.getElementById('{{ form.code.auto_id }}');
+  const assign = document.getElementById('assign-code');
+  if (assign && codeInput) {
+    assign.addEventListener('click', () => {
+      codeInput.value = '';
+      codeInput.placeholder = 'Assigned on save';
+    });
+  }
+})();
+</script>
+{% endblock %}

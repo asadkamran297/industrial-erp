@@ -15,7 +15,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Upd
 from decimal import Decimal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
+from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
@@ -23,7 +23,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import amount_in_words, finalize_manual_transaction, set_opening_stock, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
 class InventoryListMixin(SearchFilterPaginationMixin, PagePermissionRequiredMixin):
@@ -732,10 +732,39 @@ class ItemCreateView(InventoryManageMixin, CreateView):
     page = "inventory.items"
     model = InventoryItem
     form_class = InventoryItemForm
-    template_name = "inventory/simple_form.html"
+    template_name = "inventory/item_form.html"
     success_url = reverse_lazy("inventory:item_list")
     success_message = "Item saved."
-    extra_context = {"title": "Inventory Item"}
+    # Everything the first screen does not ask for; the Other tab renders these
+    # by name so the layout never silently drops a field the form still posts.
+    other_fields = ("conversion", "item_bar_code", "imported", "inventory", "status")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["title"] = "Inventory Item"
+        context["other_fields"] = list(self.other_fields)
+        context["product_value"] = INVENTORY_KIND_PRODUCT
+        context["service_value"] = INVENTORY_KIND_SERVICE
+        return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        quantity = form.cleaned_data.get("opening_quantity")
+        if quantity:
+            set_opening_stock(
+                inventory_item=self.object,
+                quantity=quantity,
+                price=form.cleaned_data.get("opening_price"),
+                opening_date=form.cleaned_data.get("opening_date"),
+                user=self.request.user,
+            )
+        return response
+
+    def get_success_url(self):
+        # "Save & New" keeps the operator on a blank form for the next item.
+        if "save_and_new" in self.request.POST:
+            return reverse_lazy("inventory:item_create")
+        return str(self.success_url)
 
 
 class ItemUpdateView(ItemCreateView, UpdateView):

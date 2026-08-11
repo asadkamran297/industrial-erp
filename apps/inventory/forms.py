@@ -4,6 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
 from .models import (
@@ -123,12 +124,82 @@ class SupplierForm(StyledModelForm):
 
 
 class InventoryItemForm(StyledModelForm):
+    """Add/edit an item, with the opening stock a brand-new item starts from.
+
+    Opening quantity is not a model field: it is a one-off movement recorded
+    through the item ledger on save, so it can never be silently re-applied by
+    editing the item later.
+    """
+
+    opening_quantity = forms.DecimalField(
+        label="Opening Quantity",
+        required=False,
+        max_digits=18,
+        decimal_places=4,
+        min_value=Decimal("0"),
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0", "placeholder": "0"}),
+    )
+    opening_date = forms.DateField(
+        label="As of Date",
+        required=False,
+        widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+    )
+    opening_price = forms.DecimalField(
+        label="Opening Rate",
+        required=False,
+        max_digits=18,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        help_text="Left blank, the purchase price is used.",
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0", "placeholder": "0.00"}),
+    )
+
     class Meta:
         model = InventoryItem
-        fields = ("item_name", "code", "uom", "item_class", "conversion", "item_bar_code", "status", "imported", "inventory", "price")
+        fields = (
+            "item_name", "code", "item_kind", "uom", "item_class", "conversion",
+            "item_bar_code", "status", "imported", "inventory", "price", "purchase_price",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["code"].required = False  # the model assigns one from the class
+        self.fields["price"].label = "Sale Price"
+        self.fields["purchase_price"].label = "Purchase Price"
+        self.fields["item_class"].label = "Category"
+        self.fields["uom"].label = "Unit"
+        self.fields["opening_date"].initial = timezone.localdate()
+
+    @property
+    def opening_stock_allowed(self):
+        """Only a brand-new product can be given an opening quantity."""
+        if self.instance.pk:
+            return False
+        return (self.data.get("item_kind") or self.initial.get("item_kind") or INVENTORY_KIND_PRODUCT) == INVENTORY_KIND_PRODUCT
 
     def clean_code(self):
         return (self.cleaned_data.get("code") or "").strip().upper()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        quantity = cleaned_data.get("opening_quantity")
+        if not quantity:
+            return cleaned_data
+
+        # Reported against the form rather than the field: in both cases the
+        # opening boxes are hidden on the re-rendered page, so a field-level
+        # error would be raised into a panel the operator cannot see.
+        if self.instance.pk:
+            # Editing must not re-open a stock balance; that is what the Stock
+            # Adjustment screen is for.
+            self.add_error(None, "Opening stock can only be set when the item is first created. Use Stock Adjustment instead.")
+        elif cleaned_data.get("item_kind") == INVENTORY_KIND_SERVICE:
+            self.add_error(None, "A service is not stocked, so it cannot carry an opening quantity.")
+        if not cleaned_data.get("opening_date"):
+            cleaned_data["opening_date"] = timezone.localdate()
+        if cleaned_data.get("opening_price") in (None, ""):
+            cleaned_data["opening_price"] = cleaned_data.get("purchase_price") or Decimal("0.00")
+        return cleaned_data
 
 
 class InventoryItemImportForm(forms.Form):

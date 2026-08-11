@@ -343,6 +343,17 @@ INV_ITEM_TYPE_CHOICES: Final[StatusChoices] = (
     (INVENTORY_TYPE_FIXED_ASSET, "Fixed Asset"),
 )
 
+# What is being sold: something stocked and counted, or labour that never
+# carries a quantity. Separate from INV_ITEM_TYPE_CHOICES, which says how an
+# item is held on the balance sheet.
+INVENTORY_KIND_PRODUCT: Final = "P"
+INVENTORY_KIND_SERVICE: Final = "S"
+
+INV_ITEM_KIND_CHOICES: Final[StatusChoices] = (
+    (INVENTORY_KIND_PRODUCT, "Product"),
+    (INVENTORY_KIND_SERVICE, "Service"),
+)
+
 INV_TRANSACTION_TYPE_CHOICES: Final[StatusChoices] = (
     (LEDGER_OPENING, "Opening"),
     (LEDGER_RECEIVE, "Receive"),

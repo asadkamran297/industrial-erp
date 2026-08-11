@@ -41,7 +41,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, STATUS_SUBMITTED, YES
+from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, STATUS_SUBMITTED, YES
 
 from .models import (
     ItemLedger,
@@ -84,6 +84,54 @@ def create_ledger_entry(*, stock, inventory_item, transaction_id, transaction_no
         created_by=user,
         updated_by=user,
     )
+
+
+@transaction.atomic
+def set_opening_stock(*, inventory_item, quantity, price, opening_date, user):
+    """Record the stock an item already had when it was put on the system.
+
+    Written the same way a stock adjustment is — the Stock row moves and an
+    ItemLedger row records the movement — so the opening figure is auditable
+    rather than a quantity that simply appeared. The Inventory control account
+    is brought in line from the Inventory Valuation screen, which is how every
+    other stock movement outside a goods receipt reaches the general ledger.
+    """
+    if quantity is None or quantity <= 0:
+        return None
+
+    stock = Stock.objects.select_for_update().get(inventory_item=inventory_item)
+    old_quantity = stock.current_quantity
+    old_price = stock.current_price
+    if old_quantity:
+        raise ValidationError("Opening stock can only be set while the item has no stock movement.")
+
+    unit_price = (price or Decimal("0.00")).quantize(Decimal("0.01"))
+    stock.last_price = old_price
+    stock.current_price = unit_price
+    stock.current_quantity = quantity
+    stock.updated_by = user
+    stock.save(update_fields=["last_price", "current_price", "current_quantity", "updated_by", "updated_at"])
+
+    transaction_id = generate_transaction_id("OPEN", ItemLedger)
+    create_ledger_entry(
+        stock=stock,
+        inventory_item=inventory_item,
+        transaction_id=transaction_id,
+        transaction_no=transaction_id,
+        transaction_type=LEDGER_OPENING,
+        transaction_date=opening_date,
+        ref_table="inv_inventory_codes",
+        ref_id=inventory_item.pk,
+        ref_no=inventory_item.code,
+        quantity=quantity,
+        old_quantity=old_quantity,
+        new_quantity=quantity,
+        old_price=old_price,
+        current_price=unit_price,
+        remarks="Opening stock",
+        user=user,
+    )
+    return stock
 
 
 @transaction.atomic
