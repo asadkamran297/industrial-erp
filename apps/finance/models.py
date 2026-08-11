@@ -292,6 +292,9 @@ class AccountVoucher(BaseModel):
     cheque_date = models.DateField(null=True, blank=True)
     wallet_operator = models.CharField(max_length=80, blank=True)
     transaction_ref = models.CharField(max_length=80, blank=True)
+    # Scan of the slip the bank gave for the transfer/cheque. Only bank-side
+    # money has such a document, so cash vouchers never carry one.
+    payment_receipt = models.FileField(upload_to="finance/payment_receipts/%Y/%m/", blank=True)
     status = models.CharField(max_length=20, choices=FIN_VOUCHER_STATUS_CHOICES, default=STATUS_CREATED)
     posted = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     adj_entry = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)

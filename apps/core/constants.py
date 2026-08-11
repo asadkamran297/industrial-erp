@@ -187,6 +187,10 @@ FIN_PAYMENT_CONDITIONAL_FIELDS: Final = ("bank_name", "cheque_no", "cheque_date"
 # office after the voucher is written.
 FIN_PAYMENT_OPTIONAL_FIELDS: Final = ("transaction_ref",)
 
+# Voucher types that can carry a scanned bank slip, and only while the money
+# side is a bank account — cash across the counter produces no such document.
+FIN_RECEIPT_UPLOAD_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_RECEIPT)
+
 # Chart-of-accounts titles the automatic sales posting needs. Each entry is the
 # (root, sub-heading, leaf) path used to find-or-create the account, so a fresh
 # install posts without any manual chart setup.

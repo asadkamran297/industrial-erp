@@ -3,7 +3,7 @@ from datetime import timedelta
 from django import forms
 from django.core.exceptions import ValidationError
 
-from apps.core.constants import ACCOUNT_LEDGER_GENERAL, NO, STATUS_ACTIVE
+from apps.core.constants import ACCOUNT_LEDGER_GENERAL, FIN_RECEIPT_UPLOAD_TYPES, NO, STATUS_ACTIVE
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalYear
@@ -91,6 +91,7 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
             "cheque_date",
             "wallet_operator",
             "transaction_ref",
+            "payment_receipt",
             "status",
             "adj_entry",
             "adj_voucher",
@@ -108,6 +109,7 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
             "cheque_date": forms.DateInput(attrs={"class": "form-input", "type": "date"}),
             "wallet_operator": forms.TextInput(attrs={"class": "form-input", "placeholder": "JazzCash, EasyPaisa, …"}),
             "transaction_ref": forms.TextInput(attrs={"class": "form-input", "placeholder": "Bank transaction / reference no"}),
+            "payment_receipt": forms.ClearableFileInput(attrs={"class": "form-input", "accept": "image/*,application/pdf"}),
             "status": forms.Select(attrs={"class": "form-select"}),
             "adj_entry": forms.Select(attrs={"class": "form-select"}),
             "adj_voucher": forms.Select(attrs={"class": "form-select"}),
@@ -132,12 +134,38 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
         # entry or a cheque handed over in person has neither.
         self.fields["bank_name"].required = False
         self.fields["transaction_ref"].required = False
+        self.fields["payment_receipt"].required = False
+        self.fields["payment_receipt"].label = "Payment Receipt"
 
     def clean_account_no(self):
         return (self.cleaned_data.get("account_no") or "").strip()
 
     def clean_party_account_no(self):
         return (self.cleaned_data.get("party_account_no") or "").strip()
+
+    def clean(self):
+        """Drop the slip whenever the money side is not a bank account.
+
+        The upload box is hidden on cash entries, but a type or account changed
+        after the file was chosen would otherwise still carry it through.
+        """
+        cleaned_data = super().clean()
+        if not cleaned_data.get("payment_receipt"):
+            return cleaned_data
+        if cleaned_data.get("voucher_type") not in FIN_RECEIPT_UPLOAD_TYPES or not self._header_is_bank(cleaned_data):
+            cleaned_data["payment_receipt"] = self.instance.payment_receipt if self.instance.pk else ""
+        return cleaned_data
+
+    @staticmethod
+    def _header_is_bank(cleaned_data):
+        from .services import account_role, money_account_codes, receivable_account_codes
+
+        account = ChartOfAccount.objects.filter(
+            code=cleaned_data.get("account_no") or "", status=STATUS_ACTIVE, children__isnull=True
+        ).first()
+        if not account:
+            return False
+        return account_role(account, money_account_codes(), receivable_account_codes()) == "bank"
 
 
 class AccountVoucherLineForm(AutoSelectSingleChoiceMixin, forms.ModelForm):

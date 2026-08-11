@@ -46,6 +46,9 @@
         <div><dt class="kpi-label">Cheque</dt><dd class="mt-0.5">{{ voucher.cheque_no }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|date:"d M Y" }}{% endif %}</dd></div>
       {% endif %}
       {% if voucher.transaction_ref %}<div><dt class="kpi-label">Reference</dt><dd class="mt-0.5">{{ voucher.transaction_ref }}</dd></div>{% endif %}
+      {% if voucher.payment_receipt %}
+        <div><dt class="kpi-label">Payment Receipt</dt><dd class="mt-0.5"><a href="{{ voucher.payment_receipt.url }}" target="_blank" class="font-semibold text-[var(--primary-color)] hover:underline">View slip</a></dd></div>
+      {% endif %}
       {% if voucher.source_ref %}
         <div><dt class="kpi-label">Source Document</dt><dd class="mt-0.5 text-slate-500">{{ voucher.source_ref }}</dd></div>
       {% endif %}
