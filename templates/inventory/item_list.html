@@ -7,7 +7,7 @@
       {# Both carry the current search/filter query, so what is printed or exported is what is on screen. #}
       <a href="{% url 'inventory:item_export' %}{% if page_query %}?{{ page_query }}{% endif %}" class="toolbar-btn h-10 px-4">&#128202; Export Excel</a>
       <a href="{% url 'inventory:item_print' %}{% if page_query %}?{{ page_query }}{% endif %}" target="_blank" class="toolbar-btn h-10 px-4">&#128438; Print</a>
-      {% if can_add %}<a href="{{ create_url }}" class="btn-primary h-10 px-5">New</a>{% endif %}
+      {% if can_add %}<a href="{{ create_url }}" class="btn-primary inline-flex h-10 items-center gap-2 px-5 text-sm font-semibold"><span class="text-base leading-none">&plus;</span> Add Item</a>{% endif %}
     </div>
   </div>
 
