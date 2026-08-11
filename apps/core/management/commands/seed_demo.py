@@ -219,7 +219,7 @@ class Command(BaseCommand):
                     debit_amount=debit,
                     credit_amount=credit,
                     remarks=remarks,
-                    person_organization="Customer/Vendor",
+                    person_organization="Customer/Supplier",
                     person_organization_title="Demo Trading Partner",
                 )
 

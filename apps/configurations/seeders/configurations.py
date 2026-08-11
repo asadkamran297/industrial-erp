@@ -212,8 +212,8 @@ def seed_configurations() -> int:
     )
 
     for code, title, scope in [
-        ("LOCAL_VENDOR", "Local Vendor", SCOPE_LOCAL),
-        ("GLOBAL_VENDOR", "Global Vendor", SCOPE_GLOBAL),
+        ("LOCAL_SUPPLIER", "Local Supplier", SCOPE_LOCAL),
+        ("GLOBAL_SUPPLIER", "Global Supplier", SCOPE_GLOBAL),
         ("LOCAL_MANUFACTURER", "Local Manufacturer", SCOPE_LOCAL),
         ("GLOBAL_MANUFACTURER", "Global Manufacturer", SCOPE_GLOBAL),
     ]:

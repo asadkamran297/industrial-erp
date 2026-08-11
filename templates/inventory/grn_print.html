@@ -9,9 +9,9 @@
   .ref-table td { padding:3px 5px; font-size:11px; vertical-align:top; }
   .ref-table .lbl { font-weight:700; width:38%; color:#444; border-right:1px solid #ddd; }
   .ref-table tr { border-bottom:1px solid #f0f0f0; }
-  .vendor-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
-  .vendor-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#1e3a5f; text-transform:uppercase; letter-spacing:.5px; }
-  .vendor-box .vrow { font-size:11px; color:#333; margin:1px 0; }
+  .supplier-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
+  .supplier-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#1e3a5f; text-transform:uppercase; letter-spacing:.5px; }
+  .supplier-box .vrow { font-size:11px; color:#333; margin:1px 0; }
   table.items tfoot td, table.items tfoot th { background:#f0f0f0; font-weight:700; border-top:2px solid #1e3a5f; }
   .totals-box { display:flex; justify-content:flex-end; margin-top:10px; }
   .totals-inner { border:1px solid #ccc; padding:8px 16px; min-width:280px; }
@@ -49,14 +49,14 @@
       </table>
     </div>
     <div class="grn-ref-right">
-      <div class="vendor-box">
+      <div class="supplier-box">
         <div class="vtitle">Supplier</div>
-        <div class="vrow"><b>{{ order.vendor.name }}</b></div>
-        {% if order.vendor.addr1 %}<div class="vrow">{{ order.vendor.addr1 }}{% if order.vendor.addr2 %}, {{ order.vendor.addr2 }}{% endif %}</div>{% endif %}
-        {% if order.vendor.tel1 %}<div class="vrow"><b>Tel:</b> {{ order.vendor.tel1 }}{% if order.vendor.tel2 %} / {{ order.vendor.tel2 }}{% endif %}</div>{% endif %}
-        {% if order.vendor.email %}<div class="vrow"><b>Email:</b> {{ order.vendor.email }}</div>{% endif %}
-        {% if order.vendor.ntn_number %}<div class="vrow"><b>NTN:</b> {{ order.vendor.ntn_number }}</div>{% endif %}
-        {% if order.vendor.sale_tax_num %}<div class="vrow"><b>Sales Tax Reg#:</b> {{ order.vendor.sale_tax_num }}</div>{% endif %}
+        <div class="vrow"><b>{{ order.supplier.name }}</b></div>
+        {% if order.supplier.addr1 %}<div class="vrow">{{ order.supplier.addr1 }}{% if order.supplier.addr2 %}, {{ order.supplier.addr2 }}{% endif %}</div>{% endif %}
+        {% if order.supplier.tel1 %}<div class="vrow"><b>Tel:</b> {{ order.supplier.tel1 }}{% if order.supplier.tel2 %} / {{ order.supplier.tel2 }}{% endif %}</div>{% endif %}
+        {% if order.supplier.email %}<div class="vrow"><b>Email:</b> {{ order.supplier.email }}</div>{% endif %}
+        {% if order.supplier.ntn_number %}<div class="vrow"><b>NTN:</b> {{ order.supplier.ntn_number }}</div>{% endif %}
+        {% if order.supplier.sale_tax_num %}<div class="vrow"><b>Sales Tax Reg#:</b> {{ order.supplier.sale_tax_num }}</div>{% endif %}
       </div>
     </div>
   </div>

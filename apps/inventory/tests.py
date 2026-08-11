@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED
 
-from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Vendor, PurchaseMaster
+from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseMaster
 from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -19,7 +19,7 @@ class InventoryFlowTests(TestCase):
         self.uom = UOM.objects.create(title="Kilogram", code="KG", status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
         self.item_class = InventoryClass.objects.create(title="Raw Material", class_code="RM", status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
         self.item = InventoryItem.objects.create(item_name="Steel Rod", uom=self.uom, item_class=self.item_class, price=Decimal("100.00"), created_by=self.user, updated_by=self.user)
-        self.vendor = Vendor.objects.create(name="ABC Supplies", code="ABC1", city=self.city, status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
+        self.supplier = Supplier.objects.create(name="ABC Supplies", code="ABC1", city=self.city, status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
         self.customer = Customer.objects.create(customer_name="Walk In", city=self.city, status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
 
     def test_item_creates_zero_stock_row(self):
@@ -41,7 +41,7 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(response.context["items_json"], [])
 
     def test_receive_sale_and_returns_update_stock(self):
-        po = PurchaseOrder.objects.create(vendor=self.vendor, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
+        po = PurchaseOrder.objects.create(supplier=self.supplier, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
         po_item = PurchaseOrderItem.objects.create(purchase_order=po, inventory_item=self.item, quantity=Decimal("10.0000"), rate=Decimal("100.00"), unit_rate=Decimal("100.0000"), uom=self.uom, descr=self.item.item_name, created_by=self.user, updated_by=self.user)
         receive_purchase_order_item(purchase_order_item=po_item, quantity=Decimal("10.0000"), extra_qty=Decimal("0.0000"), retail_price=Decimal("120.00"), receive_date=timezone.localdate(), invoice_num="INV-1", invoice_date=timezone.localdate(), rv_number="RV-1", remarks="Receive test", user=self.user)
         self.item.stock.refresh_from_db()
@@ -68,7 +68,7 @@ class InventoryFlowTests(TestCase):
         self.item.stock.refresh_from_db()
         self.assertEqual(self.item.stock.current_quantity, Decimal("8.0000"))
     def test_purchase_order_status_moves_from_created_to_partial_to_fully_received(self):
-        po = PurchaseOrder.objects.create(vendor=self.vendor, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
+        po = PurchaseOrder.objects.create(supplier=self.supplier, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
         po_item = PurchaseOrderItem.objects.create(
             purchase_order=po,
             inventory_item=self.item,

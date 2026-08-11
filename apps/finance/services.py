@@ -487,10 +487,10 @@ def get_payables_group(*, user=None):
 
 
 @transaction.atomic
-def create_vendor_payable_account(*, vendor, user=None):
+def create_supplier_payable_account(*, supplier, user=None):
     """Postable payable account for a supplier (idempotent by name)."""
     payables = get_payables_group(user=user)
-    existing = ChartOfAccount.objects.filter(parent=payables, title=vendor.name).first()
+    existing = ChartOfAccount.objects.filter(parent=payables, title=supplier.name).first()
     if existing:
         return existing
     next_order = (
@@ -498,7 +498,7 @@ def create_vendor_payable_account(*, vendor, user=None):
     ) + 1
     node = ChartOfAccount.objects.create(
         parent=payables,
-        title=vendor.name,
+        title=supplier.name,
         account_type=payables.account_type,
         is_group=False,
         sort_order=next_order,
@@ -673,11 +673,11 @@ def post_sale_return_to_gl(*, sale_return, cost_of_goods, user=None):
 
 
 @transaction.atomic
-def post_purchase_receipt_to_gl(*, receipt, vendor, amount, user=None):
+def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
     """Book goods received against a purchase order.
 
         Dr Inventory            landed cost of the goods received
-            Cr Supplier payable     amount now owed to the vendor
+            Cr Supplier payable     amount now owed to the supplier
 
     Landed cost includes apportioned freight, so the asset carries what the
     goods actually cost to bring in — which is what the later COGS entry
@@ -685,9 +685,9 @@ def post_purchase_receipt_to_gl(*, receipt, vendor, amount, user=None):
     """
     zero = Decimal("0.00")
     value = (amount or zero).quantize(TWO_DP)
-    if not vendor:
-        raise ValidationError("A vendor is required to post a goods receipt to the general ledger.")
-    vendor_account = create_vendor_payable_account(vendor=vendor, user=user)
+    if not supplier:
+        raise ValidationError("A supplier is required to post a goods receipt to the general ledger.")
+    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
     return _post_voucher(
@@ -695,11 +695,11 @@ def post_purchase_receipt_to_gl(*, receipt, vendor, amount, user=None):
         voucher_type=VOUCHER_TYPE_PURCHASE,
         voucher_date=receipt.receive_date,
         settlement_mode=SETTLEMENT_CREDIT,
-        account_no=vendor_account.code,
+        account_no=supplier_account.code,
         remarks=f"Auto-posted from goods receipt {receipt.grn_number}",
         entries=[
             (inventory.code, value, zero, f"Stock received on {receipt.grn_number}"),
-            (vendor_account.code, zero, value, f"Payable to {vendor.name} on {receipt.grn_number}"),
+            (supplier_account.code, zero, value, f"Payable to {supplier.name} on {receipt.grn_number}"),
         ],
         user=user,
     )
@@ -714,21 +714,21 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
     """
     zero = Decimal("0.00")
     returned = (purchase_return.returned_amount or zero).quantize(TWO_DP)
-    vendor = getattr(purchase_return.purchase_master, "vendor", None) or getattr(purchase_return.purchase_order, "vendor", None)
-    if not vendor:
-        raise ValidationError("A vendor is required to post a purchase return to the general ledger.")
-    vendor_account = create_vendor_payable_account(vendor=vendor, user=user)
+    supplier = getattr(purchase_return.purchase_master, "supplier", None) or getattr(purchase_return.purchase_order, "supplier", None)
+    if not supplier:
+        raise ValidationError("A supplier is required to post a purchase return to the general ledger.")
+    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
     return _post_voucher(
         source_ref=f"inv_purchase_return_masters:{purchase_return.pk}",
         voucher_type=VOUCHER_TYPE_JOURNAL,
         voucher_date=purchase_return.return_date,
-        account_no=vendor_account.code,
+        account_no=supplier_account.code,
         remarks=f"Auto-posted from purchase return {purchase_return.return_num}",
         entries=[
-            (vendor_account.code, returned, zero, f"Payable reduced on {purchase_return.return_num}"),
-            (inventory.code, zero, returned, f"Stock returned to {vendor.name} on {purchase_return.return_num}"),
+            (supplier_account.code, returned, zero, f"Payable reduced on {purchase_return.return_num}"),
+            (inventory.code, zero, returned, f"Stock returned to {supplier.name} on {purchase_return.return_num}"),
         ],
         user=user,
     )
@@ -1212,7 +1212,7 @@ def account_ledger(account_no, *, date_from=None, date_to=None):
 
 
 @transaction.atomic
-def sync_vendor_opening_balance(*, vendor, user=None):
+def sync_supplier_opening_balance(*, supplier, user=None):
     """Carry a supplier's opening balance onto their payable account.
 
     The master screen is where the figure is typed, but the ledger is where it
@@ -1221,14 +1221,14 @@ def sync_vendor_opening_balance(*, vendor, user=None):
     is given one) and its opening set to match. Returns the account, or None
     when there is nothing to record.
     """
-    amount = vendor.opening_balance or Decimal("0.00")
-    account = ChartOfAccount.objects.filter(title=vendor.name, is_group=False).first()
+    amount = supplier.opening_balance or Decimal("0.00")
+    account = ChartOfAccount.objects.filter(title=supplier.name, is_group=False).first()
     if account is None:
         if not amount:
             # No balance and no account yet: nothing to open. The account is
             # created on the supplier's first posting instead.
             return None
-        account = create_vendor_payable_account(vendor=vendor, user=user)
+        account = create_supplier_payable_account(supplier=supplier, user=user)
     if account.opening_balance != amount:
         account.opening_balance = amount
         account.updated_by = user

@@ -21,7 +21,7 @@ from .models import (
     PurchaseReturnMaster,
     UOM,
     UOMConversion,
-    Vendor,
+    Supplier,
 )
 
 
@@ -67,12 +67,12 @@ class UOMConversionForm(StyledModelForm):
         fields = ("uom_from", "uom_to", "conversion_factor", "status")
 
 
-class VendorForm(StyledModelForm):
+class SupplierForm(StyledModelForm):
     class Meta:
-        model = Vendor
+        model = Supplier
         fields = (
             "name", "code", "web_url", "email", "fax", "ntn_number", "sale_tax_num",
-            "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "vendor_current_status",
+            "addr1", "addr2", "city", "tel1", "tel2", "status", "remarks", "supplier_current_status",
             "opening_balance", "opening_balance_date", "credit_limit", "credit_period_days",
         )
         widgets = {
@@ -100,7 +100,7 @@ class VendorForm(StyledModelForm):
         self.fields["code"].disabled = True
         self.fields["code"].help_text = "Assigned automatically."
         if not self.instance.pk:
-            self.initial["code"] = Vendor.next_code()
+            self.initial["code"] = Supplier.next_code()
         self.fields["opening_balance"].required = False
         # The date only matters once there is a figure to date; clean() ties them.
         self.fields["opening_balance_date"].required = False
@@ -134,7 +134,7 @@ class InventoryItemForm(StyledModelForm):
 class PurchaseOrderForm(StyledModelForm):
     class Meta:
         model = PurchaseOrder
-        fields = ("vendor", "descr", "purchase_date", "quot_num", "quot_date")
+        fields = ("supplier", "descr", "purchase_date", "quot_num", "quot_date")
         labels = {"descr": "Comments"}
         widgets = {"descr": forms.TextInput(), "purchase_date": forms.DateInput(attrs={"type": "date"}), "quot_date": forms.DateInput(attrs={"type": "date"})}
 
@@ -166,8 +166,8 @@ class ManualTransactionForm(StyledModelForm):
 
     class Meta:
         model = ManualTransaction
-        fields = ("vendor", "inventory_item", "qty", "price", "descr")
-        labels = {"vendor": "Vendor", "inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
+        fields = ("supplier", "inventory_item", "qty", "price", "descr")
+        labels = {"supplier": "Supplier", "inventory_item": "Item", "qty": "Qty", "price": "Price", "descr": "Description"}
         widgets = {"descr": forms.TextInput()}
 
 

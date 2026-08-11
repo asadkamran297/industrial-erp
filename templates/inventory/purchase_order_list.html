@@ -26,7 +26,7 @@
     </div>
 
     <!-- Add item selector -->
-    <div x-show="vendorSelected && !openPo" x-cloak class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div x-show="supplierSelected && !openPo" x-cloak class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <label class="mb-1 block text-xs font-medium">Add Item</label>
       <select class="form-select max-w-md" x-model="picker" @change="addItem()">
         <option value="">-- Select item to add --</option>
@@ -34,9 +34,9 @@
       </select>
     </div>
 
-    <!-- Vendor not selected message -->
-    <div x-show="!vendorSelected && !openPo" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-      Please select a vendor first to add items.
+    <!-- Supplier not selected message -->
+    <div x-show="!supplierSelected && !openPo" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      Please select a supplier first to add items.
     </div>
 
     <!-- PO expanded — block new PO item entry -->
@@ -45,7 +45,7 @@
     </div>
 
     <!-- Items grid -->
-    <div x-show="vendorSelected && !openPo" x-cloak class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div x-show="supplierSelected && !openPo" x-cloak class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <table class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr><th class="px-3 py-3 w-10">#</th><th class="px-3 py-3">Item</th><th class="px-3 py-3 w-20">UOM</th><th class="px-3 py-3 w-28">Qty</th><th class="px-3 py-3 w-32">Rate</th><th class="px-3 py-3 w-32">Discount</th><th class="px-3 py-3 w-32">Net</th><th class="px-3 py-3 w-12"></th></tr>
@@ -71,7 +71,7 @@
     <!-- hidden inputs synced on submit -->
     <div x-ref="hidden"></div>
 
-    <div x-show="vendorSelected && !openPo" x-cloak class="flex justify-end">
+    <div x-show="supplierSelected && !openPo" x-cloak class="flex justify-end">
       <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">&#128438; Save &amp; Print Purchase Order</button>
     </div>
   </form>
@@ -85,7 +85,7 @@
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr>
             <th class="px-4 py-3">PO</th>
-            <th class="px-4 py-3">Vendor</th>
+            <th class="px-4 py-3">Supplier</th>
             <th class="px-4 py-3">Date</th>
             <th class="px-4 py-3">Status</th>
             <th class="px-4 py-3 text-right">Actions</th>
@@ -105,7 +105,7 @@
                   <span>{{ order.purchase_num }}</span>
                 </button>
               </td>
-              <td class="px-4 py-3">{{ order.vendor }}</td>
+              <td class="px-4 py-3">{{ order.supplier }}</td>
               <td class="px-4 py-3">{{ order.purchase_date }}</td>
               <td class="px-4 py-3">
                 <span class="rounded-full px-2.5 py-1 text-xs font-medium
@@ -130,7 +130,7 @@
                 <div class="space-y-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
 
                   <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div><p class="text-xs text-slate-500">Vendor</p><p class="font-semibold">{{ order.vendor.name }}</p></div>
+                    <div><p class="text-xs text-slate-500">Supplier</p><p class="font-semibold">{{ order.supplier.name }}</p></div>
                     <div><p class="text-xs text-slate-500">Status</p><p class="font-semibold">{{ order.get_status_display }}</p></div>
                     <div><p class="text-xs text-slate-500">Quotation</p><p class="font-semibold">{{ order.quot_num|default:'-' }}</p></div>
                     <div><p class="text-xs text-slate-500">Date</p><p class="font-semibold">{{ order.purchase_date }}</p></div>
@@ -257,15 +257,15 @@
       map: Object.fromEntries(items.map(it => [String(it.id), it])),
       uidSeq: 1,
       picker: "",
-      vendorSelected: false,
+      supplierSelected: false,
       draftPk: null,
       draftCreating: false,
       lines: [],
       init() {
-        var vendorEl = this.$el.querySelector("select[name=vendor]");
-        if (vendorEl) {
-          this.vendorSelected = !!vendorEl.value;
-          vendorEl.addEventListener("change", () => { this.vendorSelected = !!vendorEl.value; this.draftPk = null; });
+        var supplierEl = this.$el.querySelector("select[name=supplier]");
+        if (supplierEl) {
+          this.supplierSelected = !!supplierEl.value;
+          supplierEl.addEventListener("change", () => { this.supplierSelected = !!supplierEl.value; this.draftPk = null; });
         }
       },
       async ensureDraft() {
@@ -273,7 +273,7 @@
         if (this.draftCreating) return false;
         var form = this.$refs.poForm;
         var fd = new FormData(form);
-        if (!fd.get("vendor")) { alert("Select a vendor first."); return false; }
+        if (!fd.get("supplier")) { alert("Select a supplier first."); return false; }
         this.draftCreating = true;
         try {
           var res = await fetch("{% url 'inventory:purchase_order_draft_init' %}", { method: "POST", body: fd });

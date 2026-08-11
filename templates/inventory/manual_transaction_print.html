@@ -10,9 +10,9 @@
     <td class="lbl">Date:</td><td>{{ tx_date|date:"d-M-Y H:i" }}</td>
     <td class="lbl">Prepared By:</td><td>{{ prepared_by }}</td>
   </tr>
-  {% if vendor %}
+  {% if supplier %}
   <tr>
-    <td class="lbl">Vendor:</td><td colspan="5">{{ vendor.name }}</td>
+    <td class="lbl">Supplier:</td><td colspan="5">{{ supplier.name }}</td>
   </tr>
   {% endif %}
   {% if descr %}

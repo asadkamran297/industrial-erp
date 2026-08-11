@@ -173,14 +173,14 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         purchase_order=po,
         defaults={
             "transaction_id": generate_transaction_id("PUR", PurchaseMaster),
-            "vendor": po.vendor,
+            "supplier": po.supplier,
             "inv_purchase_order_inv_num": invoice_num,
             "created_by": user,
             "updated_by": user,
         },
     )
     purchase_master.inv_purchase_order_inv_num = invoice_num
-    purchase_master.vendor = po.vendor
+    purchase_master.supplier = po.supplier
     purchase_master.total_amount = sum((item.total_receive_qty or 0) * (item.rate or 0) for item in po.items.all())
     purchase_master.updated_by = user
     purchase_master.save()
@@ -201,7 +201,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     from apps.finance.services import post_purchase_receipt_to_gl  # lazy: finance imports inventory
 
     post_purchase_receipt_to_gl(
-        receipt=receipt, vendor=po.vendor, amount=landed_price * received_units, user=user
+        receipt=receipt, supplier=po.supplier, amount=landed_price * received_units, user=user
     )
     return receipt
 

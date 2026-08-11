@@ -75,7 +75,7 @@ class UOMConversion(BaseModel):
         return f"{self.uom_from} -> {self.uom_to}"
 
 
-class Vendor(BaseModel):
+class Supplier(BaseModel):
     name = models.CharField(max_length=180)
     # Assigned by save(); nobody types a supplier code.
     code = models.CharField(max_length=40, unique=True, blank=True)
@@ -91,7 +91,7 @@ class Vendor(BaseModel):
     tel2 = models.CharField(max_length=40, blank=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
     remarks = models.TextField(blank=True)
-    vendor_current_status = models.CharField(max_length=60, blank=True)
+    supplier_current_status = models.CharField(max_length=60, blank=True)
 
     # ── Credit & balance ────────────────────────────────────────────────
     # What was already owed when the supplier was put on the system, and the
@@ -105,10 +105,10 @@ class Vendor(BaseModel):
     credit_period_days = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = "inv_config_vendors"
+        db_table = "inv_config_suppliers"
         ordering = ["name"]
 
-    CODE_PREFIX = "VEN"
+    CODE_PREFIX = "SUP"
 
     def clean(self):
         code = (self.code or "").strip().upper()
@@ -121,7 +121,7 @@ class Vendor(BaseModel):
 
     @classmethod
     def next_code(cls):
-        """Next code in the supplier sequence: VEN-0001, VEN-0002, …
+        """Next code in the supplier sequence: SUP-0001, SUP-0002, …
 
         Read off the highest number already issued rather than the row count, so
         a deleted supplier never lets its code be handed out twice.
@@ -141,7 +141,7 @@ class Vendor(BaseModel):
             self.code = self.next_code()
             # A second save racing this one would take the same number, so the
             # collision is walked past rather than raised at the user.
-            while Vendor.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
+            while Supplier.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = self.next_code()
         self.full_clean()
         super().save(*args, **kwargs)
@@ -195,7 +195,7 @@ class InventoryItem(BaseModel):
 
 
 class PurchaseOrder(BaseModel):
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column="inv_config_vendor_id")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     purchase_num = models.CharField(max_length=40, unique=True, blank=True)
     descr = models.TextField(blank=True)
@@ -305,7 +305,7 @@ class PurchaseMaster(BaseModel):
     adjusted_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     return_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     purchase_order = models.ForeignKey(PurchaseOrder, related_name="purchase_masters", on_delete=models.PROTECT, db_column="inv_purchase_order_id")
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column="inv_config_vendor_id")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
 
     class Meta:
         db_table = "inv_purchase_master"
@@ -584,7 +584,7 @@ class PurchaseReturnMaster(BaseModel):
     return_num = models.CharField(max_length=40, unique=True, blank=True)
     purchase_master = models.ForeignKey(PurchaseMaster, related_name="purchase_returns", on_delete=models.PROTECT, db_column="inv_purchase_master_id")
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, db_column="inv_purchase_order_id")
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column="inv_config_vendor_id")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
     return_date = models.DateField(default=timezone.localdate)
     total_purchase_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     adjusted_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
@@ -604,7 +604,7 @@ class PurchaseReturnMaster(BaseModel):
             self.return_seq_num = last + 1
         self.return_num = f"PR-{self.return_seq_num}"
         self.purchase_order = self.purchase_master.purchase_order
-        self.vendor = self.purchase_master.vendor
+        self.supplier = self.purchase_master.supplier
         self.total_purchase_amount = self.purchase_master.total_amount
         self.full_clean()
         super().save(*args, **kwargs)
@@ -639,7 +639,7 @@ MANUAL_TRANSACTION_STATUS_CHOICES = (
 
 class ManualTransaction(BaseModel):
     transaction_id = models.CharField(max_length=60, db_index=True)
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, blank=False, db_column="inv_config_vendor_id")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, null=True, blank=False, db_column="inv_config_supplier_id")
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)

@@ -137,8 +137,8 @@ FIN_VOUCHER_TYPE_PICKER_META: Final = tuple(
     entry for entry in FIN_VOUCHER_TYPE_META if entry[0] not in FIN_VOUCHER_TYPE_HIDDEN
 )
 
-# Account-nature groups: vendor (payable) vs customer (receivable) voucher types.
-VOUCHER_VENDOR_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
+# Account-nature groups: supplier (payable) vs customer (receivable) voucher types.
+VOUCHER_SUPPLIER_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
 VOUCHER_CUSTOMER_TYPES: Final = (VOUCHER_TYPE_RECEIPT, VOUCHER_TYPE_SALES)
 
 # Simple-mode vouchers hide the debit/credit choice: the voucher type fixes both
@@ -149,11 +149,11 @@ VOUCHER_SIMPLE_SIDES: Final[dict[str, tuple[str, str]]] = {
     VOUCHER_TYPE_PAYMENT: ("credit", "debit"),  # money out of Cash/Bank
     VOUCHER_TYPE_RECEIPT: ("debit", "credit"),  # money into Cash/Bank
     VOUCHER_TYPE_SALES: ("debit", "credit"),  # Dr money or customer, Cr revenue
-    VOUCHER_TYPE_PURCHASE: ("credit", "debit"),  # Dr expense, Cr money or vendor
+    VOUCHER_TYPE_PURCHASE: ("credit", "debit"),  # Dr expense, Cr money or supplier
 }
 
 # Sales and Purchase settle either on the spot (money account) or on account
-# (customer receivable / vendor payable). The mode picks the header account.
+# (customer receivable / supplier payable). The mode picks the header account.
 SETTLEMENT_CASH: Final = "cash"
 SETTLEMENT_CREDIT: Final = "credit"
 
@@ -237,7 +237,7 @@ FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
     "cash": "Cash",
     "bank": "Bank",
     "customer": "Customers",
-    "vendor": "Vendors & Payables",
+    "supplier": "Suppliers & Payables",
     "expense": "Expenses",
     "revenue": "Income",
     "other": "Other Accounts",
@@ -245,7 +245,7 @@ FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
 
 # Fallback role by account_type, for accounts outside Cash/Bank/Receivables.
 FIN_ACCOUNT_TYPE_ROLES: Final[dict[str, str]] = {
-    ACCOUNT_TYPE_LIABILITY: "vendor",
+    ACCOUNT_TYPE_LIABILITY: "supplier",
     ACCOUNT_TYPE_EXPENSE: "expense",
     ACCOUNT_TYPE_REVENUE: "revenue",
 }
@@ -259,7 +259,7 @@ FIN_VOUCHER_HEADER_ROLES: Final[dict[str, tuple[str, ...]]] = {
 FIN_VOUCHER_LINE_ROLES: Final[dict[str, tuple[str, ...]]] = {
     # "customer" included: money is also paid out to a customer — a refund, or
     # an advance being returned — which lands on the receivable ledger.
-    VOUCHER_TYPE_PAYMENT: ("vendor", "expense", "customer"),
+    VOUCHER_TYPE_PAYMENT: ("supplier", "expense", "customer"),
     VOUCHER_TYPE_RECEIPT: ("customer", "revenue"),
     VOUCHER_TYPE_SALES: ("revenue",),
     VOUCHER_TYPE_PURCHASE: ("expense", "other"),
@@ -268,14 +268,14 @@ FIN_VOUCHER_LINE_ROLES: Final[dict[str, tuple[str, ...]]] = {
 # Settlement mode overrides the header roles for Sales and Purchase.
 FIN_SETTLEMENT_HEADER_ROLES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     VOUCHER_TYPE_SALES: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("customer",)},
-    VOUCHER_TYPE_PURCHASE: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("vendor",)},
+    VOUCHER_TYPE_PURCHASE: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("supplier",)},
 }
 
 # On a cash sale/purchase the header is a money account, so the counterparty is
 # recorded separately in party_account_no. On credit it *is* the header account.
 FIN_VOUCHER_PARTY_ROLES: Final[dict[str, tuple[str, ...]]] = {
     VOUCHER_TYPE_SALES: ("customer",),
-    VOUCHER_TYPE_PURCHASE: ("vendor",),
+    VOUCHER_TYPE_PURCHASE: ("supplier",),
 }
 
 # On-screen captions per voucher type. "header_credit" overrides "header" when

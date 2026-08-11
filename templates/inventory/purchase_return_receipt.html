@@ -9,9 +9,9 @@
   .ref-table td { padding:3px 5px; font-size:11px; vertical-align:top; }
   .ref-table .lbl { font-weight:700; width:38%; color:#444; border-right:1px solid #ddd; }
   .ref-table tr { border-bottom:1px solid #f0f0f0; }
-  .vendor-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
-  .vendor-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#1e3a5f; text-transform:uppercase; letter-spacing:.5px; }
-  .vendor-box .vrow { font-size:11px; color:#333; margin:1px 0; }
+  .supplier-box { border:1px solid #ccc; padding:8px 10px; border-radius:3px; background:#fafafa; }
+  .supplier-box .vtitle { font-weight:800; font-size:12px; margin-bottom:4px; color:#1e3a5f; text-transform:uppercase; letter-spacing:.5px; }
+  .supplier-box .vrow { font-size:11px; color:#333; margin:1px 0; }
   table.items th { background:#1e3a5f; color:#fff; font-size:10px; }
   table.items td { font-size:11px; }
   table.items tfoot td { background:#f0f0f0; font-weight:700; border-top:2px solid #1e3a5f; }
@@ -41,14 +41,14 @@
       </table>
     </div>
     <div class="pr-ref-right">
-      <div class="vendor-box">
-        <div class="vtitle">Vendor</div>
-        <div class="vrow"><b>{{ pr.vendor.name }}</b></div>
-        {% if pr.vendor.addr1 %}<div class="vrow">{{ pr.vendor.addr1 }}{% if pr.vendor.addr2 %}, {{ pr.vendor.addr2 }}{% endif %}</div>{% endif %}
-        {% if pr.vendor.tel1 %}<div class="vrow"><b>Tel:</b> {{ pr.vendor.tel1 }}{% if pr.vendor.tel2 %} / {{ pr.vendor.tel2 }}{% endif %}</div>{% endif %}
-        {% if pr.vendor.email %}<div class="vrow"><b>Email:</b> {{ pr.vendor.email }}</div>{% endif %}
-        {% if pr.vendor.ntn_number %}<div class="vrow"><b>NTN:</b> {{ pr.vendor.ntn_number }}</div>{% endif %}
-        {% if pr.vendor.sale_tax_num %}<div class="vrow"><b>Sales Tax Reg#:</b> {{ pr.vendor.sale_tax_num }}</div>{% endif %}
+      <div class="supplier-box">
+        <div class="vtitle">Supplier</div>
+        <div class="vrow"><b>{{ pr.supplier.name }}</b></div>
+        {% if pr.supplier.addr1 %}<div class="vrow">{{ pr.supplier.addr1 }}{% if pr.supplier.addr2 %}, {{ pr.supplier.addr2 }}{% endif %}</div>{% endif %}
+        {% if pr.supplier.tel1 %}<div class="vrow"><b>Tel:</b> {{ pr.supplier.tel1 }}{% if pr.supplier.tel2 %} / {{ pr.supplier.tel2 }}{% endif %}</div>{% endif %}
+        {% if pr.supplier.email %}<div class="vrow"><b>Email:</b> {{ pr.supplier.email }}</div>{% endif %}
+        {% if pr.supplier.ntn_number %}<div class="vrow"><b>NTN:</b> {{ pr.supplier.ntn_number }}</div>{% endif %}
+        {% if pr.supplier.sale_tax_num %}<div class="vrow"><b>Sales Tax Reg#:</b> {{ pr.supplier.sale_tax_num }}</div>{% endif %}
       </div>
     </div>
   </div>

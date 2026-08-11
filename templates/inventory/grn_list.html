@@ -23,7 +23,7 @@
           <tr>
             <th class="w-8 px-3 py-3"></th>
             <th class="px-4 py-3">PO #</th>
-            <th class="px-4 py-3">Vendor</th>
+            <th class="px-4 py-3">Supplier</th>
             <th class="px-4 py-3">Date</th>
             <th class="px-4 py-3 text-right">Amount</th>
             <th class="px-4 py-3">Status</th>
@@ -40,7 +40,7 @@
               </button>
             </td>
             <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
-            <td class="px-4 py-3">{{ order.vendor.name }}</td>
+            <td class="px-4 py-3">{{ order.supplier.name }}</td>
             <td class="px-4 py-3">{{ order.purchase_date|date:"d-m-Y" }}</td>
             <td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>
             <td class="px-4 py-3">

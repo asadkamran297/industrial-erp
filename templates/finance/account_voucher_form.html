@@ -204,7 +204,7 @@
   }
 
   // Sales/Purchase swap the header account between a money account (cash) and the
-  // customer/vendor ledger (credit), so the roles depend on both type and mode.
+  // customer/supplier ledger (credit), so the roles depend on both type and mode.
   function headerRoles() {
     const bySettlement = SETTLEMENT_HEADER_ROLES[hidden.value];
     const mode = settlementMode();

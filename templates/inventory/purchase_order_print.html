@@ -11,17 +11,17 @@
       <td class="lbl">Quot Num:</td><td>{{ order.quot_num|default:"N/A" }}</td>
     </tr>
     <tr>
-      <td class="lbl">Vendor Name:</td><td>{{ order.vendor.name }}</td>
-      <td class="lbl">Phone:</td><td>{{ order.vendor.tel1|default:order.vendor.tel2|default:"N/A" }}</td>
-      <td class="lbl">Email:</td><td>{{ order.vendor.email|default:"N/A" }}</td>
+      <td class="lbl">Supplier Name:</td><td>{{ order.supplier.name }}</td>
+      <td class="lbl">Phone:</td><td>{{ order.supplier.tel1|default:order.supplier.tel2|default:"N/A" }}</td>
+      <td class="lbl">Email:</td><td>{{ order.supplier.email|default:"N/A" }}</td>
     </tr>
     <tr>
-      <td class="lbl">NTN:</td><td>{{ order.vendor.ntn_number|default:"N/A" }}</td>
-      <td class="lbl">Sales Tax:</td><td>{{ order.vendor.sale_tax_num|default:"N/A" }}</td>
+      <td class="lbl">NTN:</td><td>{{ order.supplier.ntn_number|default:"N/A" }}</td>
+      <td class="lbl">Sales Tax:</td><td>{{ order.supplier.sale_tax_num|default:"N/A" }}</td>
       <td class="lbl">Quot Date:</td><td>{{ order.quot_date|default:"N/A" }}</td>
     </tr>
     <tr>
-      <td class="lbl">Address:</td><td colspan="5">{{ order.vendor.addr1 }} {{ order.vendor.addr2 }}</td>
+      <td class="lbl">Address:</td><td colspan="5">{{ order.supplier.addr1 }} {{ order.supplier.addr2 }}</td>
     </tr>
     {% if order.descr %}<tr><td class="lbl">Descr:</td><td colspan="5">{{ order.descr }}</td></tr>{% endif %}
   </table>

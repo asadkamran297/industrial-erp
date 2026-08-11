@@ -15,11 +15,11 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from apps.core.constants import INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_vendor_opening_balance
+from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
-from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, VendorForm
-from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Vendor
+from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
+from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .services import amount_in_words, finalize_manual_transaction, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
@@ -203,54 +203,54 @@ class UOMConversionUpdateView(UOMConversionCreateView, UpdateView):
     success_message = "UOM conversion updated."
 
 
-class VendorListView(SortableListMixin, BaseSimpleListView):
+class SupplierListView(SortableListMixin, BaseSimpleListView):
     """Suppliers, each row opening onto what the business has bought from them."""
 
-    page = "inventory.vendors"
-    model = Vendor
-    template_name = "inventory/vendor_list.html"
+    page = "inventory.suppliers"
+    model = Supplier
+    template_name = "inventory/supplier_list.html"
     # Newest first: a supplier just added is the one being looked for.
-    queryset = Vendor.objects.select_related("city").order_by("-id")
+    queryset = Supplier.objects.select_related("city").order_by("-id")
     search_fields = ("name", "code", "email", "tel1")
     sort_fields = {"name": "name", "code": "code", "city": "city__title", "status": ("status", "name"), "added": "-id"}
     # Rolled up per row after the query, so the database cannot order by it.
     python_sort_fields = {"payable": "payable_balance"}
     default_sort = "added"
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Vendors", "create_url": reverse_lazy("inventory:vendor_create"), "edit_url_name": "inventory:vendor_update", "status_toggle_url_name": "inventory:vendor_toggle_status"}
+    extra_context = {"title": "Suppliers", "create_url": reverse_lazy("inventory:supplier_create"), "edit_url_name": "inventory:supplier_update", "status_toggle_url_name": "inventory:supplier_toggle_status"}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        vendors = list(context.get("records") or [])
-        if not vendors:
+        suppliers = list(context.get("records") or [])
+        if not suppliers:
             return context
 
         zero = Decimal("0.00")
         # One query per kind for the whole page rather than per expanded row:
         # the panels are open by default, so every row's figures are needed.
         purchases = {
-            row["vendor_id"]: row
-            for row in PurchaseMaster.objects.filter(vendor__in=vendors)
-            .values("vendor_id")
+            row["supplier_id"]: row
+            for row in PurchaseMaster.objects.filter(supplier__in=suppliers)
+            .values("supplier_id")
             .annotate(total=Sum("total_amount"), count=Count("id"))
         }
         returns = {
-            row["vendor_id"]: row
-            for row in PurchaseReturnMaster.objects.filter(vendor__in=vendors)
-            .values("vendor_id")
+            row["supplier_id"]: row
+            for row in PurchaseReturnMaster.objects.filter(supplier__in=suppliers)
+            .values("supplier_id")
             .annotate(total=Sum("returned_amount"), count=Count("id"))
         }
         orders = {
-            row["vendor_id"]: row["count"]
-            for row in PurchaseOrder.objects.filter(vendor__in=vendors).values("vendor_id").annotate(count=Count("id"))
+            row["supplier_id"]: row["count"]
+            for row in PurchaseOrder.objects.filter(supplier__in=suppliers).values("supplier_id").annotate(count=Count("id"))
         }
         # A supplier's payable account is named after them, so the ledger the
         # panel links to is found the same way the posting created it.
         payable_codes = dict(
-            ChartOfAccount.objects.filter(title__in=[vendor.name for vendor in vendors])
+            ChartOfAccount.objects.filter(title__in=[supplier.name for supplier in suppliers])
             .values_list("title", "code")
         )
         balances = account_balances()
@@ -278,59 +278,59 @@ class VendorListView(SortableListMixin, BaseSimpleListView):
                 rows.append({"line": line, "debit": debit, "credit": credit, "balance": running})
             return rows[::-1][:8]  # newest first, the last few dealings
 
-        for vendor in vendors:
-            bought = purchases.get(vendor.id) or {}
-            sent_back = returns.get(vendor.id) or {}
-            vendor.purchase_total = bought.get("total") or zero
-            vendor.purchase_count = bought.get("count") or 0
-            vendor.return_total = sent_back.get("total") or zero
-            vendor.return_count = sent_back.get("count") or 0
-            vendor.order_count = orders.get(vendor.id, 0)
-            vendor.payable_code = payable_codes.get(vendor.name, "")
-            vendor.payable_balance = (balances.get(vendor.payable_code) or {}).get("closing") or zero
-            vendor.ledger_rows = ledger_rows(vendor.payable_code) if vendor.payable_code else []
+        for supplier in suppliers:
+            bought = purchases.get(supplier.id) or {}
+            sent_back = returns.get(supplier.id) or {}
+            supplier.purchase_total = bought.get("total") or zero
+            supplier.purchase_count = bought.get("count") or 0
+            supplier.return_total = sent_back.get("total") or zero
+            supplier.return_count = sent_back.get("count") or 0
+            supplier.order_count = orders.get(supplier.id, 0)
+            supplier.payable_code = payable_codes.get(supplier.name, "")
+            supplier.payable_balance = (balances.get(supplier.payable_code) or {}).get("closing") or zero
+            supplier.ledger_rows = ledger_rows(supplier.payable_code) if supplier.payable_code else []
 
         # The payable column is computed above, so its sort happens here.
-        context["records"] = self.sort_rows(vendors)
+        context["records"] = self.sort_rows(suppliers)
         # The tiles report the whole filtered set, not just the page in front of
         # you: "10 suppliers" on page 1 of 4 would be a lie.
-        all_vendors = self.get_queryset()
-        context["supplier_count"] = all_vendors.count()
+        all_suppliers = self.get_queryset()
+        context["supplier_count"] = all_suppliers.count()
         context["purchased_total"] = (
-            PurchaseMaster.objects.filter(vendor__in=all_vendors).aggregate(total=Sum("total_amount"))["total"] or zero
+            PurchaseMaster.objects.filter(supplier__in=all_suppliers).aggregate(total=Sum("total_amount"))["total"] or zero
         )
         all_codes = ChartOfAccount.objects.filter(
-            title__in=all_vendors.values_list("name", flat=True), is_group=False
+            title__in=all_suppliers.values_list("name", flat=True), is_group=False
         ).values_list("code", flat=True)
         context["payable_total"] = sum(((balances.get(code) or {}).get("closing") or zero for code in all_codes), zero)
         return context
 
 
-class VendorDetailView(PagePermissionRequiredMixin, DetailView):
+class SupplierDetailView(PagePermissionRequiredMixin, DetailView):
     """Everything on file for one supplier, with their ledger underneath."""
 
-    page = "inventory.vendors"
-    model = Vendor
-    template_name = "inventory/vendor_detail.html"
-    context_object_name = "vendor"
+    page = "inventory.suppliers"
+    model = Supplier
+    template_name = "inventory/supplier_detail.html"
+    context_object_name = "supplier"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        vendor = self.object
+        supplier = self.object
         zero = Decimal("0.00")
 
-        bought = PurchaseMaster.objects.filter(vendor=vendor).aggregate(total=Sum("total_amount"), count=Count("id"))
-        sent_back = PurchaseReturnMaster.objects.filter(vendor=vendor).aggregate(total=Sum("returned_amount"), count=Count("id"))
+        bought = PurchaseMaster.objects.filter(supplier=supplier).aggregate(total=Sum("total_amount"), count=Count("id"))
+        sent_back = PurchaseReturnMaster.objects.filter(supplier=supplier).aggregate(total=Sum("returned_amount"), count=Count("id"))
         context["purchase_total"] = bought["total"] or zero
         context["purchase_count"] = bought["count"] or 0
         context["return_total"] = sent_back["total"] or zero
         context["return_count"] = sent_back["count"] or 0
-        context["order_count"] = PurchaseOrder.objects.filter(vendor=vendor).count()
-        context["recent_receipts"] = PurchaseMaster.objects.filter(vendor=vendor).order_by("-id")[:10]
+        context["order_count"] = PurchaseOrder.objects.filter(supplier=supplier).count()
+        context["recent_receipts"] = PurchaseMaster.objects.filter(supplier=supplier).order_by("-id")[:10]
 
         # The supplier's payable account is named after them, the same way the
         # posting created it, so the ledger here is the ledger the books hold.
-        account = ChartOfAccount.objects.filter(title=vendor.name, is_group=False).first()
+        account = ChartOfAccount.objects.filter(title=supplier.name, is_group=False).first()
         context["payable_code"] = account.code if account else ""
         ledger = account_ledger(account.code) if account else None
         context["ledger"] = ledger
@@ -338,48 +338,48 @@ class VendorDetailView(PagePermissionRequiredMixin, DetailView):
         return context
 
 
-class VendorToggleStatusView(InventoryManageMixin, View):
-    page = "inventory.vendors"
+class SupplierToggleStatusView(InventoryManageMixin, View):
+    page = "inventory.suppliers"
     action = "edit"
     def post(self, request, pk):
-        record = get_object_or_404(Vendor, pk=pk)
+        record = get_object_or_404(Supplier, pk=pk)
         record.status = STATUS_INACTIVE if record.status == STATUS_ACTIVE else STATUS_ACTIVE
         record.updated_by = request.user
         record.save(update_fields=["status", "updated_by", "updated_at"])
-        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:vendor_list"))
+        return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:supplier_list"))
 
 
-class VendorCreateView(InventoryManageMixin, CreateView):
-    page = "inventory.vendors"
-    model = Vendor
-    form_class = VendorForm
-    template_name = "inventory/vendor_form.html"
-    success_url = reverse_lazy("inventory:vendor_list")
-    success_message = "Vendor saved."
+class SupplierCreateView(InventoryManageMixin, CreateView):
+    page = "inventory.suppliers"
+    model = Supplier
+    form_class = SupplierForm
+    template_name = "inventory/supplier_form.html"
+    success_url = reverse_lazy("inventory:supplier_list")
+    success_message = "Supplier saved."
     extra_context = {
-        "title": "Vendor",
+        "title": "Supplier",
         # Name, phone, address and the credit block are placed by hand; the rest
         # are grouped behind their own tabs so the first screen stays short.
         "registration_fields": ("code", "ntn_number", "sale_tax_num", "web_url"),
-        "extra_fields": ("fax", "tel2", "status", "vendor_current_status", "remarks"),
+        "extra_fields": ("fax", "tel2", "status", "supplier_current_status", "remarks"),
     }
 
     def form_valid(self, form):
         response = super().form_valid(form)
         # The opening balance belongs in the ledger, not only on the master.
-        sync_vendor_opening_balance(vendor=self.object, user=self.request.user)
+        sync_supplier_opening_balance(supplier=self.object, user=self.request.user)
         return response
 
     def get_success_url(self):
         # "Save & New" is for entering suppliers in a run: it comes straight back
         # to an empty form instead of the list.
         if "save_and_new" in self.request.POST:
-            return reverse_lazy("inventory:vendor_create")
+            return reverse_lazy("inventory:supplier_create")
         return super().get_success_url()
 
 
-class VendorUpdateView(VendorCreateView, UpdateView):
-    success_message = "Vendor updated."
+class SupplierUpdateView(SupplierCreateView, UpdateView):
+    success_message = "Supplier updated."
 
 
 class ItemListView(BaseSimpleListView):
@@ -661,20 +661,20 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
     page = "inventory.purchase_orders"
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
-    search_fields = ("purchase_num", "vendor__name", "quot_num")
-    filter_fields = {"status": "status", "vendor": "vendor_id", "item": "items__inventory_item_id"}
+    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
+    search_fields = ("purchase_num", "supplier__name", "quot_num")
+    filter_fields = {"status": "status", "supplier": "supplier_id", "item": "items__inventory_item_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
 
     def get_queryset(self):
         return super().get_queryset().distinct()
 
     def get_filter_specs(self):
-        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
         item_choices = list(InventoryItem.objects.filter(status=STATUS_ACTIVE).order_by("item_name").values_list("id", "item_name"))
         return [
             {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
-            {"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")},
+            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
             {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
         ]
 
@@ -715,20 +715,20 @@ class PurchaseReportView(InventoryListMixin, ListView):
     page = "inventory.purchase_report"
     template_name = "inventory/purchase_report.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items").order_by("-purchase_date", "-id")
-    search_fields = ("purchase_num", "vendor__name", "quot_num")
-    filter_fields = {"status": "status", "vendor": "vendor_id", "item": "items__inventory_item_id"}
+    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items").order_by("-purchase_date", "-id")
+    search_fields = ("purchase_num", "supplier__name", "quot_num")
+    filter_fields = {"status": "status", "supplier": "supplier_id", "item": "items__inventory_item_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
 
     def get_queryset(self):
         return super().get_queryset().distinct()
 
     def get_filter_specs(self):
-        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
         item_choices = list(InventoryItem.objects.filter(status=STATUS_ACTIVE).order_by("item_name").values_list("id", "item_name"))
         return [
             {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
-            {"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")},
+            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
             {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
         ]
 
@@ -921,10 +921,10 @@ class ManualTransactionView(InventoryManageMixin, View):
         used_item_ids = list(rows.values_list("inventory_item_id", flat=True))
         items = InventoryItem.objects.select_related("uom", "stock").exclude(pk__in=used_item_ids).order_by("item_name")
         batch_descr = rows.values_list("descr", flat=True).first() or ""
-        batch_vendor = rows.values_list("vendor_id", flat=True).first()
-        form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1, "vendor": batch_vendor})
+        batch_supplier = rows.values_list("supplier_id", flat=True).first()
+        form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1, "supplier": batch_supplier})
         form.fields["inventory_item"].queryset = items
-        form.fields["vendor"].queryset = Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name")
+        form.fields["supplier"].queryset = Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name")
         # group posted transactions by transaction_id for history table
         from itertools import groupby as _groupby
         posted_qs = ManualTransaction.objects.filter(status=STATUS_POSTED).order_by("transaction_id", "id")
@@ -966,7 +966,7 @@ class ManualTransactionAddView(InventoryManageMixin, View):
             row.updated_by = request.user
             row.save()
             batch = ManualTransaction.objects.filter(transaction_id=draft_tx_id, status=STATUS_DRAFT)
-            batch.update(vendor=row.vendor)
+            batch.update(supplier=row.supplier)
             if row.descr:
                 batch.update(descr=row.descr)
             messages.success(request, "Entry added to draft.")
@@ -1022,7 +1022,7 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
 
     def get(self, request, tx_id):
         from django.shortcuts import render
-        rows = ManualTransaction.objects.filter(transaction_id=tx_id, status=STATUS_POSTED).select_related("inventory_item__uom", "vendor").order_by("id")
+        rows = ManualTransaction.objects.filter(transaction_id=tx_id, status=STATUS_POSTED).select_related("inventory_item__uom", "supplier").order_by("id")
         if not rows.exists():
             messages.error(request, "Transaction not found.")
             return redirect("inventory:manual_transaction")
@@ -1035,7 +1035,7 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
             "amount_in_words": amount_in_words(grand_total),
             "tx_date": rows[0].created_at,
             "descr": rows[0].descr,
-            "vendor": rows[0].vendor,
+            "supplier": rows[0].supplier,
             "prepared_by": rows[0].created_by,
         })
         return render(request, self.template_name, context)
@@ -1439,14 +1439,14 @@ class GRNListView(InventoryListMixin, ListView):
     page = "inventory.grn"
     template_name = "inventory/grn_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
-    search_fields = ("purchase_num", "vendor__name", "quot_num")
-    filter_fields = {"vendor": "vendor_id"}
+    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
+    search_fields = ("purchase_num", "supplier__name", "quot_num")
+    filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
 
     def get_filter_specs(self):
-        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")}]
+        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        return [{"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1568,18 +1568,18 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
     page = "inventory.purchase_returns"
     template_name = "inventory/purchase_return_list.html"
     context_object_name = "returns"
-    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "vendor").order_by("-return_date", "-id")
+    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "supplier").order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "purchase_order__purchase_num")
-    filter_fields = {"vendor": "vendor_id"}
+    filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "return_date", "label": "Return date"}]
 
     def get_filter_specs(self):
-        vendor_choices = list(Vendor.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "vendor", "label": "All vendors", "choices": vendor_choices, "value": self.request.GET.get("vendor", "")}]
+        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        return [{"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        all_orders = PurchaseOrder.objects.select_related("vendor").prefetch_related("items__inventory_item", "items__uom").filter(
+        all_orders = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__inventory_item", "items__uom").filter(
             status__in=[STATUS_PARTIAL_RECEIVED, STATUS_FULLY_RECEIVED]
         ).order_by("-purchase_date", "-id")
         returnable_pks = []
@@ -1597,7 +1597,7 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
                     break
         orders = all_orders.filter(pk__in=returnable_pks)
         pos_json = [
-            {"id": o.pk, "purchase_num": o.purchase_num, "vendor": o.vendor.name, "date": str(o.purchase_date)}
+            {"id": o.pk, "purchase_num": o.purchase_num, "supplier": o.supplier.name, "date": str(o.purchase_date)}
             for o in orders
         ]
         items_json = {}
