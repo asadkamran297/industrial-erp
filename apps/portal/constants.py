@@ -107,7 +107,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # Everything configured once. Item classes and UOMs live here rather
     # than under Stock: they are defined at setup, not touched on a shift.
     NavigationItem("Master Data", permission=None, section=SECTION_SETUP, icon="M", children=(
-        NavigationItem("Item Classes", permission="inventory.classes.index", url_name="inventory:class_list"),
+        NavigationItem("Item Categories", permission="inventory.classes.index", url_name="inventory:class_list"),
         NavigationItem("Units of Measure", permission="inventory.uoms.index", url_name="inventory:uom_list"),
         NavigationItem("UOM Conversions", permission="inventory.uom_conversions.index", url_name="inventory:conversion_list"),
         NavigationItem("Departments", permission="configurations.departments.index", href="/masters/departments/"),

@@ -1,0 +1,54 @@
+<style>
+  .uom-split { display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .uom-split { grid-template-columns: minmax(0, 1fr); } }
+
+  .uom-panel { border: 1px solid var(--border-soft, #e2e8f0); border-radius: .75rem; background: #fff; overflow: hidden; }
+  .dark .uom-panel { background: #0f172a; border-color: #1e293b; }
+
+  /* The list scrolls inside its own box, so the right pane never runs off. */
+  .uom-scroll { max-height: 32rem; overflow-y: auto; }
+  .uom-scroll.is-busy { opacity: .5; }
+
+  .uom-row { display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid #f1f5f9; }
+  .dark .uom-row { border-bottom-color: #1e293b; }
+  .uom-row:hover { background: #f8fafc; }
+  .dark .uom-row:hover { background: rgba(30, 41, 59, .5); }
+  .uom-row.is-selected { background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
+  .dark .uom-row.is-selected { background: color-mix(in srgb, var(--primary-color) 24%, #0f172a); }
+  .uom-row.is-selected .uom-row-title { color: var(--primary-color); font-weight: 600; }
+
+  .uom-row-link { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; justify-content: space-between; gap: .75rem; padding: .625rem .875rem; }
+  .uom-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .875rem; color: #334155; }
+  .dark .uom-row-title { color: #e2e8f0; }
+  .uom-row-code { flex: 0 0 auto; font-size: .75rem; font-weight: 600; color: #94a3b8; }
+
+  .uom-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem .875rem; border-bottom: 1px solid #e2e8f0; }
+  .dark .uom-head { border-bottom-color: #1e293b; }
+  .uom-subhead { padding: .5rem .875rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .dark .uom-subhead { background: rgba(30, 41, 59, .5); border-bottom-color: #1e293b; }
+
+  .uom-empty { padding: 3rem 1rem; text-align: center; font-size: .875rem; color: #94a3b8; }
+
+  /* Modal, plain CSS so it does not depend on a Tailwind rebuild. */
+  .uom-modal { position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .45); }
+  .uom-modal.is-open { display: flex; }
+  .uom-modal-box { width: 100%; max-width: 34rem; border-radius: .75rem; background: #fff; box-shadow: 0 20px 45px rgba(15, 23, 42, .25); }
+  .dark .uom-modal-box { background: #0f172a; }
+  .uom-modal-head { display: flex; align-items: center; justify-content: space-between; padding: .875rem 1.25rem; border-bottom: 1px solid #e2e8f0; }
+  .dark .uom-modal-head { border-bottom-color: #1e293b; }
+  .uom-modal-foot { display: flex; justify-content: flex-end; gap: .625rem; padding: .875rem 1.25rem; border-top: 1px solid #e2e8f0; }
+  .dark .uom-modal-foot { border-top-color: #1e293b; }
+
+  .uom-rate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 7rem) minmax(0, 1fr); gap: .75rem; align-items: end; }
+  @media (max-width: 640px) { .uom-rate-row { grid-template-columns: minmax(0, 1fr); } .uom-rate-eq { display: none; } }
+  .uom-rate-eq { padding-bottom: .625rem; font-size: 1rem; font-weight: 700; color: #94a3b8; }
+
+  .uom-error { margin-top: .25rem; font-size: .75rem; color: #e11d48; }
+
+  /* One toast for every exchange, so a save that changed nothing on screen is
+     still reported. */
+  .uom-toast { position: fixed; right: 1rem; bottom: 1rem; z-index: 70; display: none; border-radius: .5rem; padding: .625rem 1rem; font-size: .8125rem; font-weight: 600; color: #fff; box-shadow: 0 10px 25px rgba(15, 23, 42, .25); }
+  .uom-toast.is-open { display: block; }
+  .uom-toast.is-ok { background: #059669; }
+  .uom-toast.is-bad { background: #e11d48; }
+</style>

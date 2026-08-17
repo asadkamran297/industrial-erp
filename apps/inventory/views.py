@@ -6,16 +6,18 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, View
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
+from apps.access_control.selectors import user_has_permission
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
@@ -23,7 +25,16 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .services import amount_in_words, finalize_manual_transaction, set_opening_stock, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import amount_in_words, create_direct_purchase, finalize_manual_transaction, set_opening_stock, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+
+
+def uom_title(record):
+    """The unit shown against a record, blank where it carries none.
+
+    An item is allowed to have no unit, so every screen that prints one has to
+    survive the empty case rather than reaching through a null relation.
+    """
+    return record.uom.title if record and record.uom_id else ""
 
 
 class InventoryListMixin(SearchFilterPaginationMixin, PagePermissionRequiredMixin):
@@ -46,15 +57,221 @@ class BaseSimpleListView(InventoryListMixin, ListView):
 
 
 class InventoryClassListView(BaseSimpleListView):
+    """Categories on the left, the items filed under one of them on the right.
+
+    Same shape as the units screen: nothing here navigates, every exchange
+    swaps the two panes. "Items not in any category" is a row in the list but
+    not a record -- it stands for item_class being null.
+    """
+
     page = "inventory.classes"
     model = InventoryClass
+    template_name = "inventory/class_list.html"
     queryset = InventoryClass.objects.order_by("title")
+    # A picker in a scrolling panel, not a page of results.
+    paginate_by = 100
     search_fields = ("title", "class_code")
-    filter_fields = {"status": "status"}
-    extra_context = {"title": "Inventory Classes", "create_url": reverse_lazy("inventory:class_create"), "edit_url_name": "inventory:class_update", "status_toggle_url_name": "inventory:class_toggle_status", "active_tab": "category", "columns": [("Class Name", "title"), ("Class Code", "class_code"), ("Status", "status_toggle")]}
+    extra_context = {"title": "Item Categories", "active_tab": "category"}
 
-    def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+    # The left row that stands for "no category at all".
+    UNFILED = "none"
+
+    def _is_ajax(self):
+        return self.request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    def get_queryset(self):
+        # The count beside each category is what the left column shows.
+        return super().get_queryset().annotate(item_count=Count("inventoryitem", distinct=True))
+
+    def get_selected(self):
+        """The category on show, or the sentinel for the unfiled row.
+
+        Returns (selected_class, is_unfiled). Nothing chosen means the unfiled
+        row, so the screen always opens on something.
+        """
+        raw = self.request.GET.get("selected_class") or self.request.POST.get("selected_class") or ""
+        if raw in ("", self.UNFILED):
+            return None, True
+        return InventoryClass.objects.filter(pk=raw).first(), False
+
+    def get_items(self, selected_class, is_unfiled, search=""):
+        items = InventoryItem.objects.select_related("stock").order_by("item_name")
+        items = items.filter(item_class__isnull=True) if is_unfiled else items.filter(item_class=selected_class)
+        if search:
+            items = items.filter(Q(item_name__icontains=search) | Q(code__icontains=search))
+        return items
+
+    @staticmethod
+    def _decorate_items(rows):
+        """Stock value per row, so the table does no arithmetic of its own."""
+        rows = list(rows)
+        for row in rows:
+            stock = getattr(row, "stock", None)
+            quantity = stock.current_quantity if stock else Decimal("0.0000")
+            price = stock.current_price if stock else Decimal("0.00")
+            row.stock_quantity = quantity
+            row.stock_value = (quantity * price).quantize(Decimal("0.01"))
+        return rows
+
+    def _pane_context(self, selected_class, is_unfiled):
+        self.object_list = self.get_queryset()
+        context = self.get_context_data()
+        context["selected_class"] = selected_class
+        context["is_unfiled"] = is_unfiled
+        context["item_search"] = self.request.GET.get("item_q", "").strip()
+        context["items"] = self._decorate_items(
+            self.get_items(selected_class, is_unfiled, context["item_search"])
+        )
+        return context
+
+    def _fragments(self, selected_class, is_unfiled):
+        context = self._pane_context(selected_class, is_unfiled)
+        return {
+            "rows_html": render_to_string("inventory/_class_rows.html", context, request=self.request),
+            "detail_html": render_to_string("inventory/_class_detail.html", context, request=self.request),
+            "selected_class": "" if is_unfiled else selected_class.pk,
+        }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["unfiled_count"] = InventoryItem.objects.filter(item_class__isnull=True).count()
+        context["category_form"] = InventoryClassForm()
+        context.setdefault("selected_class", None)
+        context.setdefault("is_unfiled", True)
+        return context
+
+    # ---- AJAX -----------------------------------------------------------
+    def get(self, request, *args, **kwargs):
+        if not self._is_ajax():
+            return super().get(request, *args, **kwargs)
+        selected_class, is_unfiled = self.get_selected()
+        if request.GET.get("mode") == "picker":
+            return JsonResponse({"picker_html": self._picker_html(selected_class, is_unfiled)})
+        return JsonResponse(self._fragments(selected_class, is_unfiled))
+
+    def _picker_html(self, selected_class, is_unfiled):
+        """Rows for the Select Items dialog: everything not already filed here."""
+        search = self.request.GET.get("pick_q", "").strip()
+        items = InventoryItem.objects.select_related("item_class", "stock").order_by("item_name")
+        items = items.filter(item_class__isnull=False) if is_unfiled else items.exclude(item_class=selected_class)
+        if search:
+            items = items.filter(Q(item_name__icontains=search) | Q(code__icontains=search))
+        context = {"items": self._decorate_items(items[:200])}
+        return render_to_string("inventory/_class_picker.html", context, request=self.request)
+
+    def _refused(self, message, status):
+        if self._is_ajax():
+            return JsonResponse({"ok": False, "errors": {"__all__": [message]}}, status=status)
+        messages.error(self.request, message)
+        return redirect("inventory:class_list")
+
+    def _saved(self, selected_class, is_unfiled, message):
+        if self._is_ajax():
+            payload = self._fragments(selected_class, is_unfiled)
+            payload.update(ok=True, message=message)
+            return JsonResponse(payload)
+        messages.success(self.request, message)
+        base = str(reverse_lazy("inventory:class_list"))
+        return redirect(base if is_unfiled else f"{base}?selected_class={selected_class.pk}")
+
+    def _rejected(self, form):
+        if self._is_ajax():
+            errors = {field: [str(e) for e in errs] for field, errs in form.errors.items()}
+            return JsonResponse({"ok": False, "errors": errors}, status=400)
+        for errs in form.errors.values():
+            for error in errs:
+                messages.error(self.request, error)
+        return redirect("inventory:class_list")
+
+    def post(self, request, *args, **kwargs):
+        if not user_has_permission(request.user, f"{self.page}.add"):
+            return self._refused("You cannot change categories.", 403)
+
+        action = request.POST.get("action")
+        if action == "category":
+            return self._save_category(request)
+        if action == "category_delete":
+            return self._delete_category(request)
+        if action == "move":
+            return self._move_items(request)
+        return self._refused("Unknown action.", 400)
+
+    def _save_category(self, request):
+        category_id = request.POST.get("category_id")
+        instance = InventoryClass.objects.filter(pk=category_id).first() if category_id else None
+        if category_id and not instance:
+            return self._refused("That category no longer exists.", 404)
+
+        data = request.POST.copy()
+        # The dialog asks for a name only; the code is derived the same way the
+        # item form derives it, so two screens never invent different codes.
+        if not data.get("class_code"):
+            data["class_code"] = instance.class_code if instance else InventoryItemForm._next_class_code(data.get("title", ""))
+        data.setdefault("status", STATUS_ACTIVE)
+
+        form = InventoryClassForm(data, instance=instance)
+        if form.is_valid():
+            category = form.save(commit=False)
+            category.created_by = category.created_by or request.user
+            category.updated_by = request.user
+            category.save()
+            return self._saved(category, False, "Category updated." if instance else "Category created.")
+        return self._rejected(form)
+
+    def _delete_category(self, request):
+        if not user_has_permission(request.user, f"{self.page}.delete"):
+            return self._refused("You cannot delete categories.", 403)
+
+        category = InventoryClass.objects.filter(pk=request.POST.get("category_id")).first()
+        if not category:
+            return self._refused("That category no longer exists.", 404)
+
+        # An item is moved out of a category, never deleted with it, so a
+        # category still holding items is refused until it is emptied.
+        held = InventoryItem.objects.filter(item_class=category).count()
+        if held:
+            return self._refused(
+                f"{category.title} still holds {held} item{'s' if held > 1 else ''}. Move them out first.", 400
+            )
+
+        category.soft_delete(user=request.user)
+        return self._saved(None, True, f"{category.title} deleted.")
+
+    def _move_items(self, request):
+        """File the ticked items under the open category.
+
+        item_class holds one category, so a move is a reassignment. Items that
+        already sit somewhere else are only touched when the operator says so,
+        which is what the tick box on the dialog asks.
+        """
+        selected_class, is_unfiled = self.get_selected()
+        if not is_unfiled and not selected_class:
+            return self._refused("That category no longer exists.", 404)
+
+        ids = request.POST.getlist("item_ids")
+        if not ids:
+            return self._refused("Pick at least one item.", 400)
+
+        items = InventoryItem.objects.filter(pk__in=ids)
+        take_filed = request.POST.get("remove_existing") == "1"
+        if not take_filed:
+            already = items.filter(item_class__isnull=False).count()
+            items = items.filter(item_class__isnull=True)
+            if not items.exists():
+                return self._refused(
+                    f"{already} of those already sit in another category. "
+                    "Tick 'Remove selected items from existing category' to move them.", 400
+                )
+
+        moved = 0
+        for item in items:
+            item.item_class = None if is_unfiled else selected_class
+            item.updated_by = request.user
+            item.save(update_fields=["item_class", "updated_by", "updated_at"])
+            moved += 1
+
+        where = "no category" if is_unfiled else selected_class.title
+        return self._saved(selected_class, is_unfiled, f"{moved} item{'s' if moved > 1 else ''} moved to {where}.")
 
 
 class InventoryClassToggleStatusView(InventoryManageMixin, View):
@@ -86,7 +303,7 @@ class InventoryClassCreateView(InventoryManageMixin, CreateView):
     template_name = "inventory/simple_form.html"
     success_url = reverse_lazy("inventory:class_list")
     success_message = "Inventory class saved."
-    extra_context = {"title": "Inventory Class"}
+    extra_context = {"title": "Item Category"}
 
 
 class InventoryClassUpdateView(InventoryClassCreateView, UpdateView):
@@ -98,6 +315,9 @@ class UOMListView(BaseSimpleListView):
     model = UOM
     template_name = "inventory/uom_list.html"
     queryset = UOM.objects.order_by("title")
+    # The list is a picker in a scrolling panel, not a page of results, so it
+    # holds a full alphabet rather than ten rows.
+    paginate_by = 100
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
     extra_context = {"title": "Units of Measure", "create_url": reverse_lazy("inventory:uom_create"), "edit_url_name": "inventory:uom_update", "active_tab": "units", "columns": [("Title", "title"), ("Code", "code"), ("Status", "get_status_display")]}
@@ -111,47 +331,222 @@ class UOMListView(BaseSimpleListView):
             return None
         return UOM.objects.filter(pk=selected_uom_id).first()
 
-    def get_selected_conversion(self, selected_uom):
-        if not selected_uom:
-            return None
-        return UOMConversion.objects.filter(uom_from=selected_uom).select_related("uom_from", "uom_to").first()
+    def get_conversions(self, selected_uom):
+        """Every conversion held against the selected unit.
 
-    def get_conversion_form(self, selected_uom, selected_conversion=None, data=None):
-        form = UOMConversionForm(data=data, instance=selected_conversion)
+        A unit can be measured more than one way -- a bag is 20kg on one line
+        and 50kg on another -- so the panel lists them rather than holding one.
+        """
+        if not selected_uom:
+            return UOMConversion.objects.none()
+        return UOMConversion.objects.filter(uom_from=selected_uom).select_related("uom_from", "uom_to")
+
+    def get_conversion_form(self, selected_uom, instance=None, data=None):
+        form = UOMConversionForm(data=data, instance=instance)
+        # The base is the unit already open on the left; only the other side is
+        # a choice, and it can never be the same unit.
         form.fields["uom_from"].queryset = UOM.objects.filter(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
         form.fields["uom_to"].queryset = UOM.objects.exclude(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
         if selected_uom and not form.is_bound:
             form.initial.setdefault("uom_from", selected_uom.pk)
         return form
 
+    # ---- AJAX plumbing ---------------------------------------------------
+    # The screen never navigates: it asks for the two panes and swaps them in.
+    # Every handler answers JSON to an AJAX caller; a plain request still gets
+    # the whole page, which is what the first load and a reload go through.
+
+    def _is_ajax(self):
+        return self.request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    def _fragments(self, selected_uom, **extra):
+        self.object_list = self.get_queryset()
+        context = self.get_context_data(**extra)
+        context["selected_uom"] = selected_uom
+        context["uom_conversions"] = self.get_conversions(selected_uom)
+        payload = {
+            "rows_html": render_to_string("inventory/_uom_rows.html", context, request=self.request),
+            "detail_html": render_to_string("inventory/_uom_detail.html", context, request=self.request),
+            "selected_uom": selected_uom.pk if selected_uom else "",
+        }
+        return payload
+
+    @staticmethod
+    def _errors(form):
+        return {field: [str(e) for e in errors] for field, errors in form.errors.items()}
+
+    def get(self, request, *args, **kwargs):
+        if not self._is_ajax():
+            return super().get(request, *args, **kwargs)
+        return JsonResponse(self._fragments(self.get_selected_uom()))
+
+    def _redirect_to_unit(self, selected_uom):
+        base = str(reverse_lazy("inventory:uom_list"))
+        return redirect(f"{base}?selected_uom={selected_uom.pk}" if selected_uom else base)
+
+    def _saved(self, selected_uom, message):
+        if self._is_ajax():
+            payload = self._fragments(selected_uom)
+            payload.update(ok=True, message=message)
+            return JsonResponse(payload)
+        messages.success(self.request, message)
+        return self._redirect_to_unit(selected_uom)
+
+    def _not_found(self, message):
+        return self._refused(message, status=404)
+
+    def _forbidden(self, message):
+        return self._refused(message, status=403)
+
+    def _rejected_message(self, message):
+        return self._refused(message, status=400)
+
+    def _refused(self, message, status):
+        if self._is_ajax():
+            return JsonResponse({"ok": False, "errors": {"__all__": [message]}}, status=status)
+        messages.error(self.request, message)
+        return redirect("inventory:uom_list")
+
+    def _rejected(self, form):
+        # Only the modal that was submitted needs to know, and it is on screen
+        # already, so the errors go back on their own.
+        if self._is_ajax():
+            return JsonResponse({"ok": False, "errors": self._errors(form)}, status=400)
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(self.request, error)
+        return self._redirect_to_unit(self.get_selected_uom())
+
     def post(self, request, *args, **kwargs):
+        # The list itself only needs index rights; writing needs add.
+        if not user_has_permission(request.user, f"{self.page}.add"):
+            return self._forbidden("You cannot change units.")
+
+        action = request.POST.get("action")
+        if action == "unit":
+            return self._save_unit(request)
+        if action == "unit_delete":
+            return self._delete_unit(request)
+        if action == "conversion_delete":
+            return self._delete_conversion(request)
+        return self._save_conversion(request)
+
+    def _save_unit(self, request):
+        # A posted id edits that unit; without one this is a new one.
+        unit_id = request.POST.get("unit_id")
+        instance = UOM.objects.filter(pk=unit_id).first() if unit_id else None
+        if unit_id and not instance:
+            return self._not_found("That unit no longer exists.")
+
+        form = UOMForm(request.POST, instance=instance)
+        if form.is_valid():
+            unit = form.save(commit=False)
+            unit.created_by = unit.created_by or request.user
+            unit.updated_by = request.user
+            unit.save()
+            # A unit saved from here becomes the one on show.
+            return self._saved(unit, "Unit updated." if instance else "Unit saved.")
+        return self._rejected(form)
+
+    @staticmethod
+    def _usage(record, ignore=()):
+        """Everything in the database still pointing at this record.
+
+        Walked off the model's own relations rather than a hand-written list,
+        so a table added later is counted without anyone remembering to come
+        back here. A figure that was measured in a unit has to keep reading
+        back the same way, so anything still referenced is never deleted.
+        """
+        found = []
+        for relation in record._meta.related_objects:
+            model = relation.related_model
+            if model in ignore:
+                continue
+            manager = getattr(model, "objects", model._default_manager)
+            count = manager.filter(**{relation.field.name: record}).count()
+            if count:
+                label = model._meta.verbose_name if count == 1 else model._meta.verbose_name_plural
+                found.append(f"{count} {label}")
+        return found
+
+    def _delete_unit(self, request):
+        """Retire a unit, provided nothing anywhere is measured in it."""
+        if not user_has_permission(request.user, f"{self.page}.delete"):
+            return self._forbidden("You cannot delete units.")
+
+        unit = UOM.objects.filter(pk=request.POST.get("unit_id")).first()
+        if not unit:
+            return self._not_found("That unit no longer exists.")
+
+        # Its own conversions are not a reason to stop -- they go with it --
+        # but a conversion that something else uses is, so they are checked in
+        # their own right below.
+        blockers = self._usage(unit, ignore=(UOMConversion,))
+        own_conversions = UOMConversion.objects.filter(Q(uom_from=unit) | Q(uom_to=unit))
+        for conversion in own_conversions:
+            blockers += self._usage(conversion)
+        if blockers:
+            return self._rejected_message(
+                f"{unit.title} cannot be deleted: it is still used by {', '.join(blockers)}. "
+                "Deactivate it instead, so past figures keep reading back."
+            )
+
+        for conversion in own_conversions:
+            conversion.soft_delete(user=request.user)
+        unit.soft_delete(user=request.user)
+
+        selected_uom = self.get_selected_uom()
+        if selected_uom and selected_uom.pk == unit.pk:
+            selected_uom = None  # the pane was showing what just went away
+        return self._saved(selected_uom, f"{unit.title} deleted.")
+
+    def _delete_conversion(self, request):
+        if not user_has_permission(request.user, f"{self.page}.delete"):
+            return self._forbidden("You cannot delete conversions.")
+
+        selected_uom = self.get_selected_uom()
+        conversion = self.get_conversions(selected_uom).filter(pk=request.POST.get("conversion_id")).first()
+        if not conversion:
+            return self._not_found("That conversion no longer exists.")
+
+        blockers = self._usage(conversion)
+        if blockers:
+            return self._rejected_message(
+                f"This conversion cannot be deleted: it is still used by {', '.join(blockers)}. "
+                "Deactivate it instead, so past figures keep reading back."
+            )
+
+        conversion.soft_delete(user=request.user)
+        return self._saved(selected_uom, "Conversion deleted.")
+
+    def _save_conversion(self, request):
         selected_uom = self.get_selected_uom()
         if not selected_uom:
-            messages.error(request, "Select a UOM first.")
-            return redirect("inventory:uom_list")
+            return self._rejected_message("Select a unit first.")
 
-        existing_conversion = self.get_selected_conversion(selected_uom)
-        form = self.get_conversion_form(selected_uom, selected_conversion=existing_conversion, data=request.POST)
+        # A posted id edits that row; without one this is a new conversion, so
+        # a unit can carry as many as it needs.
+        conversion_id = request.POST.get("conversion_id")
+        instance = self.get_conversions(selected_uom).filter(pk=conversion_id).first() if conversion_id else None
+
+        form = self.get_conversion_form(selected_uom, instance=instance, data=request.POST)
         if form.is_valid():
             conversion = form.save(commit=False)
             conversion.created_by = conversion.created_by or request.user
             conversion.updated_by = request.user
             conversion.save()
-            messages.success(request, "UOM conversion updated." if existing_conversion else "UOM conversion saved.")
-            return redirect(f"{reverse_lazy('inventory:uom_list')}?selected_uom={selected_uom.pk}")
-
-        self.object_list = self.get_queryset()
-        context = self.get_context_data(form=form)
-        return self.render_to_response(context)
+            return self._saved(selected_uom, "Conversion updated." if instance else "Conversion saved.")
+        return self._rejected(form)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         selected_uom = self.get_selected_uom()
-        selected_conversion = self.get_selected_conversion(selected_uom)
         context["selected_uom"] = selected_uom
-        context["selected_conversion"] = selected_conversion
-        context["uom_conversions"] = [selected_conversion] if selected_conversion else []
-        context["conversion_form"] = kwargs.get("form") or self.get_conversion_form(selected_uom, selected_conversion=selected_conversion)
+        context["uom_conversions"] = self.get_conversions(selected_uom)
+        context["unit_form"] = UOMForm()
+        # The secondary-unit picker is built once and reused for every unit, so
+        # it carries the whole list and hides the base unit in script.
+        context["all_units"] = UOM.objects.order_by("title")
         return context
 
 
@@ -189,6 +584,9 @@ class UOMConversionToggleStatusView(InventoryManageMixin, View):
         record.status = STATUS_INACTIVE if record.status == STATUS_ACTIVE else STATUS_ACTIVE
         record.updated_by = request.user
         record.save(update_fields=["status", "updated_by", "updated_at"])
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            # The units screen refreshes its own panes, so it only needs the word.
+            return JsonResponse({"ok": True, "status": record.status, "message": "Conversion activated." if record.status == STATUS_ACTIVE else "Conversion deactivated."})
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:conversion_list"))
 
 
@@ -493,14 +891,14 @@ class ItemExportView(ItemStockListMixin, ListView):
         # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
         response.write("﻿")
         writer = csv.writer(response)
-        writer.writerow(["Item Name", "Code", "Class", "UOM", "Stock Qty", "Current Price", "Last Price", "Stock Value", "Status"])
+        writer.writerow(["Item Name", "Code", "Category", "UOM", "Stock Qty", "Current Price", "Last Price", "Stock Value", "Status"])
         for row in rows:
             stock = getattr(row, "stock", None)
             writer.writerow([
                 row.item_name,
                 row.code,
                 row.item_class.title if row.item_class_id else "",
-                str(row.uom),
+                uom_title(row),
                 stock.current_quantity if stock else "",
                 stock.current_price if stock else "",
                 stock.last_price if stock else "",
@@ -619,7 +1017,9 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
                     if not item_class:
                         errors.append(f"Row {line_no}: unknown item class '{row.get('item_class', '')}'.")
                         continue
-                    if not uom:
+                    # A blank unit column is allowed, an unreadable one is not:
+                    # silently dropping a typo would file the item unmeasured.
+                    if not uom and (row.get("uom") or "").strip():
                         errors.append(f"Row {line_no}: unknown UOM '{row.get('uom', '')}'.")
                         continue
 
@@ -747,6 +1147,148 @@ class ItemToggleStatusView(InventoryManageMixin, View):
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:item_list"))
 
 
+class ItemNextCodeView(InventoryManageMixin, View):
+    """The code the item form would assign under a typed category.
+
+    A preview only: the number is settled again on save, so two operators
+    filling the form at once still end up with different codes.
+    """
+
+    page = "inventory.items"
+
+    def get(self, request, *args, **kwargs):
+        title = (request.GET.get("category") or "").strip()
+        item_class = InventoryClass.objects.filter(title__iexact=title).first() if title else None
+        if item_class:
+            prefix = (item_class.class_code or "ITM").upper()
+        elif title:
+            prefix = InventoryItemForm._next_class_code(title)
+        else:
+            prefix = "ITM"
+        return JsonResponse({"prefix": prefix, "code": InventoryItem.next_code(prefix)})
+
+
+class DirectPurchaseCreateView(InventoryManageMixin, View):
+    """Enter a supplier bill without raising an order first.
+
+    The screen is one form: the party at the top, the goods in the middle, the
+    money at the bottom. Everything it posts goes through the same service the
+    ordered route uses, so there is one set of books either way.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "add"
+    template_name = "inventory/direct_purchase_form.html"
+
+    def _context(self, **extra):
+        items = InventoryItem.objects.select_related("uom", "stock").filter(status=STATUS_ACTIVE).order_by("item_name")
+        context = {
+            "title": "Purchase",
+            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "units": UOM.objects.order_by("title"),
+            "today": timezone.localdate(),
+            "items_json": json.dumps([
+                {
+                    "id": item.pk,
+                    "name": item.item_name,
+                    "code": item.code,
+                    "uom": item.uom_id or "",
+                    "rate": float(item.purchase_price or 0),
+                }
+                for item in items
+            ]),
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request, *args, **kwargs):
+        posted = request.POST
+        supplier_id = (posted.get("supplier") or "").strip()
+        supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id.isdigit() else None
+
+        def money(name, default="0"):
+            raw = (posted.get(name) or "").strip() or default
+            try:
+                return Decimal(raw)
+            except (InvalidOperation, ValueError):
+                raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
+
+        # The rows arrive as parallel lists, so a blank row simply drops out.
+        lines = []
+        item_ids = posted.getlist("item_id")
+        quantities = posted.getlist("quantity")
+        rates = posted.getlist("rate")
+        for index, raw_id in enumerate(item_ids):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            item = InventoryItem.objects.filter(pk=raw_id).first()
+            if not item:
+                continue
+            try:
+                quantity = Decimal((quantities[index] or "0").strip() or "0")
+                rate = Decimal((rates[index] or "0").strip() or "0")
+            except (IndexError, InvalidOperation, ValueError):
+                continue
+            if quantity > 0:
+                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate})
+
+        try:
+            bill_date = posted.get("bill_date") or str(timezone.localdate())
+            order, net = create_direct_purchase(
+                supplier=supplier,
+                bill_number=(posted.get("bill_number") or "").strip(),
+                bill_date=bill_date,
+                lines=lines,
+                discount_amount=money("discount_amount"),
+                tax_amount=money("tax_amount"),
+                paid_amount=money("paid_amount"),
+                remarks=(posted.get("remarks") or "").strip(),
+                user=request.user,
+            )
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        messages.success(request, f"Purchase {order.purchase_num} saved for {net}.")
+        if "save_and_new" in posted:
+            return redirect("inventory:direct_purchase_create")
+        return redirect("inventory:purchase_order_detail", pk=order.pk)
+
+
+class ItemConversionOptionsView(InventoryManageMixin, View):
+    """The rates already on file between two units.
+
+    The item form offers these as a pick list rather than asking the operator
+    to retype a figure the units screen already holds.
+    """
+
+    page = "inventory.items"
+    action = "add"
+
+    def get(self, request, *args, **kwargs):
+        base = request.GET.get("base") or ""
+        secondary = request.GET.get("secondary") or ""
+        if not base or not secondary:
+            return JsonResponse({"options": []})
+
+        rows = UOMConversion.objects.filter(uom_from_id=base, uom_to_id=secondary).select_related("uom_from", "uom_to")
+        return JsonResponse({
+            "options": [
+                {
+                    "id": row.pk,
+                    "factor": f"{row.conversion_factor.normalize():f}",
+                    "base": row.uom_from.title,
+                    "secondary": row.uom_to.title,
+                }
+                for row in rows
+            ]
+        })
+
+
 class ItemCreateView(InventoryManageMixin, CreateView):
     page = "inventory.items"
     model = InventoryItem
@@ -756,7 +1298,8 @@ class ItemCreateView(InventoryManageMixin, CreateView):
     success_message = "Item saved."
     # Everything the first screen does not ask for; the Other tab renders these
     # by name so the layout never silently drops a field the form still posts.
-    other_fields = ("conversion", "item_bar_code", "imported", "inventory", "status")
+    # `conversion` is not here: the unit dialog owns it now.
+    other_fields = ("item_bar_code", "imported", "inventory", "status")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1023,7 +1566,7 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
             }
         context["po_summaries"] = po_summaries
         context["items_json"] = [
-            {"id": i.pk, "name": i.item_name, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price), "uom": i.uom.title}
+            {"id": i.pk, "name": i.item_name, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price), "uom": uom_title(i)}
             for i in InventoryItem.objects.select_related("uom", "stock").filter(status=STATUS_ACTIVE).order_by("item_name")
         ]
         for order in context["orders"]:
@@ -1034,9 +1577,9 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
             order.uom_map_id = f"uom-map-{order.pk}"
             form.fields["inventory_item"].widget.attrs["data-uom-source"] = order.uom_map_id
             order.add_form = form
-            order.uom_map = {str(i.pk): {"uom": i.uom.title} for i in available_items}
+            order.uom_map = {str(i.pk): {"uom": uom_title(i)} for i in available_items}
             order.avail_items_json = [
-                {"id": i.pk, "name": i.item_name, "uom": i.uom.title, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price)}
+                {"id": i.pk, "name": i.item_name, "uom": uom_title(i), "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price)}
                 for i in available_items
             ]
             order.avail_items_json_id = f"avail-items-{order.pk}"
@@ -1109,7 +1652,7 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         available_items = item_form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom")
         item_form.fields["inventory_item"].queryset = available_items
         context["item_form"] = item_form
-        context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": i.uom.title} for i in available_items}
+        context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": uom_title(i)} for i in available_items}
         receive_form = ReceivePOForm(initial={"purchase_order_item": self.object.items.first()})
         receive_form.fields["purchase_order_item"].queryset = self.object.items.all()
         context["receive_form"] = receive_form
@@ -1166,7 +1709,7 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_initial(self):
-        return {"uom_title": self.object.uom.title}
+        return {"uom_title": uom_title(self.object)}
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1275,7 +1818,7 @@ class ManualTransactionView(InventoryManageMixin, View):
             "form": form,
             "rows": rows,
             "transaction_id": draft_tx_id,
-            "item_price_map": {str(i.pk): {"price": str(getattr(i, "stock", None) and i.stock.current_price or i.price), "qty": str(getattr(i, "stock", None) and i.stock.current_quantity or 0), "uom": i.uom.title} for i in items},
+            "item_price_map": {str(i.pk): {"price": str(getattr(i, "stock", None) and i.stock.current_price or i.price), "qty": str(getattr(i, "stock", None) and i.stock.current_quantity or 0), "uom": uom_title(i)} for i in items},
             "history": history,
         }
         return render(request, self.template_name, context)
@@ -1954,7 +2497,7 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
                     "recv_qty": float(returnable),
                     "rate": float(i.rate),
                     "total": float(returnable * i.rate),
-                    "uom": i.uom.title,
+                    "uom": uom_title(i),
                 })
             items_json[str(o.pk)] = rows
         context["po_json"] = pos_json

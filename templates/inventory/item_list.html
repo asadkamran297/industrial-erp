@@ -38,7 +38,7 @@
           <tr>
             <th class="px-4 py-3">Name</th>
             <th class="px-4 py-3">Code</th>
-            <th class="px-4 py-3">Class</th>
+            <th class="px-4 py-3">Category</th>
             <th class="px-4 py-3">UOM</th>
             <th class="px-4 py-3 text-right">Stock Qty</th>
             <th class="px-4 py-3 text-right">Current Price</th>
@@ -54,7 +54,7 @@
             <td class="px-4 py-3">{{ row.item_name }}</td>
             <td class="px-4 py-3">{{ row.code }}</td>
             <td class="px-4 py-3">{{ row.item_class.title|default:"—" }}</td>
-            <td class="px-4 py-3">{{ row.uom }}</td>
+            <td class="px-4 py-3">{{ row.uom.title|default:"&mdash;" }}</td>
             {# An item created before its stock row exists shows a dash rather than a zero it never earned. #}
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>

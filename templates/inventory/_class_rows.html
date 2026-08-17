@@ -1,0 +1,29 @@
+{# Left column: the unfiled row first, then every category. #}
+<div class="uom-row{% if is_unfiled %} is-selected{% endif %}">
+  <a class="uom-row-link" data-class="none" data-title="Items not in any Category" href="?selected_class=none">
+    <span class="uom-row-title">Items not in any Category</span>
+    <span class="uom-row-code">{{ unfiled_count }}</span>
+  </a>
+</div>
+
+{% for row in records %}
+  <div class="uom-row{% if selected_class and selected_class.pk == row.pk %} is-selected{% endif %}">
+    <a class="uom-row-link" data-class="{{ row.pk }}" data-title="{{ row.title }}"
+       href="?selected_class={{ row.pk }}{% if search_query %}&q={{ search_query }}{% endif %}">
+      <span class="uom-row-title">{{ row.title }}</span>
+      <span class="uom-row-code">{{ row.item_count }}</span>
+    </a>
+    {% if can_edit %}
+    <button type="button" title="Rename category"
+            data-class-edit="{{ row.pk }}" data-title="{{ row.title }}"
+            class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-[var(--primary-color)] dark:hover:bg-slate-800">&#9998;</button>
+    {% endif %}
+    {% if can_delete %}
+    <button type="button" title="Delete category"
+            data-class-delete="{{ row.pk }}" data-title="{{ row.title }}"
+            class="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-slate-800">&#128465;</button>
+    {% endif %}
+  </div>
+{% empty %}
+  <p class="uom-empty">No categories yet.</p>
+{% endfor %}

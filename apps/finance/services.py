@@ -36,6 +36,7 @@ from apps.core.constants import (
     STATUS_ACTIVE,
     STATUS_SUBMITTED,
     VOUCHER_TYPE_JOURNAL,
+    VOUCHER_TYPE_PAYMENT,
     VOUCHER_TYPE_PURCHASE,
     VOUCHER_TYPE_SALES,
     YES,
@@ -700,6 +701,43 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
         entries=[
             (inventory.code, value, zero, f"Stock received on {receipt.grn_number}"),
             (supplier_account.code, zero, value, f"Payable to {supplier.name} on {receipt.grn_number}"),
+        ],
+        user=user,
+    )
+
+
+@transaction.atomic
+def post_supplier_payment_to_gl(*, source_ref, payment_date, supplier, amount, reference, user=None):
+    """Money paid to a supplier against what is owed.
+
+        Dr Supplier payable     the debt being settled
+            Cr Cash                 money leaving the till
+
+    Kept separate from the goods receipt on purpose: the goods arriving and
+    the money leaving are two events, and a bill can be paid in part, later,
+    or not at all without changing what was received.
+    """
+    zero = Decimal("0.00")
+    value = (amount or zero).quantize(TWO_DP)
+    if value <= zero:
+        return None
+    if not supplier:
+        raise ValidationError("A supplier is required to post a payment to the general ledger.")
+
+    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
+    cash = gl_account(GL_CASH_PATH, user=user)
+
+    return _post_voucher(
+        source_ref=source_ref,
+        voucher_type=VOUCHER_TYPE_PAYMENT,
+        voucher_date=payment_date,
+        settlement_mode=SETTLEMENT_CASH,
+        account_no=cash.code,
+        party_account_no=supplier_account.code,
+        remarks=f"Payment to {supplier.name} against {reference}",
+        entries=[
+            (supplier_account.code, value, zero, f"Paid against {reference}"),
+            (cash.code, zero, value, f"Cash paid to {supplier.name} on {reference}"),
         ],
         user=user,
     )

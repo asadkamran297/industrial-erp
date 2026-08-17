@@ -1,0 +1,258 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<style>
+  /* The line grid is declared here: the compiled Tailwind bundle carries no
+     six-column utility and rebuilding it is not worth one screen. */
+  .pur-grid { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 7rem 9rem 9rem 9rem 2.5rem; align-items: center; }
+  @media (max-width: 900px) { .pur-grid { grid-template-columns: 2rem minmax(0, 1fr) 5rem 6rem 6rem 6rem 2rem; } }
+
+  .pur-head { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .dark .pur-head { background: rgba(30, 41, 59, .5); border-bottom-color: #1e293b; }
+  .pur-head > div { padding: .625rem .75rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+
+  .pur-row { border-bottom: 1px solid #f1f5f9; }
+  .dark .pur-row { border-bottom-color: #1e293b; }
+  .pur-row > div { padding: .3125rem .5rem; }
+  /* Cell inputs sit flush in the grid; the row is the box, not each field. */
+  .pur-cell { width: 100%; border: 1px solid transparent; border-radius: .375rem; background: transparent; padding: .375rem .5rem; font-size: .875rem; color: #334155; outline: none; }
+  .pur-cell:hover { border-color: #e2e8f0; }
+  .pur-cell:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
+  .dark .pur-cell { color: #e2e8f0; }
+  .dark .pur-cell:focus { background: #0f172a; }
+  .pur-right { text-align: right; }
+  .pur-amount { padding: .375rem .5rem; font-size: .875rem; font-weight: 600; text-align: right; color: #334155; }
+  .dark .pur-amount { color: #e2e8f0; }
+
+  .pur-foot { background: #f8fafc; font-weight: 700; }
+  .dark .pur-foot { background: rgba(30, 41, 59, .5); }
+
+  .pur-total-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .4375rem 0; }
+  .pur-total-row .pur-label { font-size: .8125rem; color: #475569; }
+  .dark .pur-total-row .pur-label { color: #cbd5e1; }
+  .pur-total-row .pur-value { min-width: 9rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .pur-grand { border-top: 1px solid #e2e8f0; margin-top: .375rem; padding-top: .75rem; font-size: 1rem; font-weight: 700; }
+  .dark .pur-grand { border-top-color: #1e293b; }
+
+  .pur-bal { font-size: .6875rem; font-weight: 700; letter-spacing: .02em; color: #059669; }
+</style>
+
+<section>
+  <form method="post" id="purchase-form" class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+
+    {# ── Header ───────────────────────────────────────────────────────────── #}
+    <div class="flex flex-wrap items-center gap-4 border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+      <div>
+        <h1 class="text-lg font-bold leading-tight text-slate-900 dark:text-slate-100">Purchase</h1>
+        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">A supplier bill entered directly. Stock and the ledger move as it is saved.</p>
+      </div>
+      <a href="{% url 'inventory:purchase_order_list' %}" class="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" title="Close" aria-label="Close">
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </a>
+    </div>
+
+    {# ── Party and bill ───────────────────────────────────────────────────── #}
+    <div class="grid gap-4 px-6 py-5 lg:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2" style="align-content:start;">
+        <div>
+          <label class="field-label" for="supplier">Party <span class="text-rose-500">*</span></label>
+          <select name="supplier" id="supplier" class="form-select" required>
+            <option value="">Select supplier…</option>
+            {% for row in suppliers %}
+              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
+            {% endfor %}
+          </select>
+          <p id="party-balance" class="pur-bal mt-1 hidden"></p>
+        </div>
+        <div>
+          <label class="field-label" for="phone">Phone No.</label>
+          <input type="text" id="phone" class="form-input" placeholder="Phone No." readonly>
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2" style="align-content:start;">
+        <div>
+          <label class="field-label" for="bill_number">Bill Number</label>
+          <input type="text" name="bill_number" id="bill_number" class="form-input" value="{{ posted.bill_number|default:'' }}" autocomplete="off">
+        </div>
+        <div>
+          <label class="field-label" for="bill_date">Bill Date</label>
+          <input type="date" name="bill_date" id="bill_date" class="form-input" value="{{ posted.bill_date|default:today|date:'Y-m-d' }}">
+        </div>
+      </div>
+    </div>
+
+    {# ── Lines ────────────────────────────────────────────────────────────── #}
+    <div class="border-y border-slate-200 dark:border-slate-800">
+      <div class="pur-grid pur-head">
+        <div>#</div><div>Item</div><div class="pur-right">Qty</div><div>Unit</div>
+        <div class="pur-right">Price/Unit</div><div class="pur-right">Amount</div><div></div>
+      </div>
+
+      <div id="line-rows"></div>
+
+      <div class="pur-grid pur-foot border-t border-slate-200 dark:border-slate-800">
+        <div></div>
+        <div><button type="button" id="add-row" class="text-sm font-semibold text-[var(--primary-color)]">+ Add Row</button></div>
+        <div class="pur-right" id="total-qty">0</div>
+        <div></div>
+        <div class="pur-right text-xs uppercase tracking-wide text-slate-400">Total</div>
+        <div class="pur-amount" id="total-amount">0.00</div>
+        <div></div>
+      </div>
+    </div>
+
+    {# ── Money ────────────────────────────────────────────────────────────── #}
+    <div class="grid gap-6 px-6 py-6 lg:grid-cols-2">
+      <div>
+        <label class="field-label" for="remarks">Notes</label>
+        <textarea name="remarks" id="remarks" rows="4" class="form-input" placeholder="Anything worth recording against this bill">{{ posted.remarks|default:'' }}</textarea>
+      </div>
+
+      <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
+        <div class="pur-total-row">
+          <span class="pur-label">Sub Total</span>
+          <span class="pur-value" id="sub-total">0.00</span>
+        </div>
+        <div class="pur-total-row">
+          <label class="pur-label" for="discount_amount">Discount (Rs)</label>
+          <input type="number" step="0.01" min="0" name="discount_amount" id="discount_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.discount_amount|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="pur-total-row">
+          <label class="pur-label" for="tax_amount">Tax (Rs)</label>
+          <input type="number" step="0.01" min="0" name="tax_amount" id="tax_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.tax_amount|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="pur-total-row pur-grand">
+          <span>Total</span>
+          <span class="pur-value" id="grand-total">0.00</span>
+        </div>
+        <div class="pur-total-row">
+          <label class="pur-label" for="paid_amount">Paid</label>
+          <input type="number" step="0.01" min="0" name="paid_amount" id="paid_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.paid_amount|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="pur-total-row">
+          <span class="pur-label">Balance owed</span>
+          <span class="pur-value font-semibold text-rose-600" id="balance-owed">0.00</span>
+        </div>
+        <p class="mt-2 text-xs text-slate-400">Paid settles against the supplier's account. Leave it blank for a credit purchase.</p>
+      </div>
+    </div>
+
+    {# ── Footer ───────────────────────────────────────────────────────────── #}
+    <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/30">
+      <a href="{% url 'inventory:purchase_order_list' %}" class="toolbar-btn h-10 px-5">Cancel</a>
+      <button type="submit" name="save_and_new" value="1" class="toolbar-btn h-10 px-5">Save &amp; New</button>
+      <button type="submit" class="btn-primary h-10 px-8">Save</button>
+    </div>
+  </form>
+</section>
+
+<script id="items-data" type="application/json">{{ items_json|safe }}</script>
+<script>
+(function () {
+  const ITEMS = JSON.parse(document.getElementById('items-data').textContent);
+  const UNITS = [{% for unit in units %}{ id: {{ unit.pk }}, name: '{{ unit.title|escapejs }}' }{% if not forloop.last %},{% endif %}{% endfor %}];
+  const rowsBox = document.getElementById('line-rows');
+
+  const money = n => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+  const num = el => Number((el && el.value) || 0) || 0;
+
+  function itemOptions(selected) {
+    return '<option value="">Select item…</option>' + ITEMS.map(i =>
+      '<option value="' + i.id + '"' + (String(i.id) === String(selected) ? ' selected' : '') + '>' + i.name + '</option>'
+    ).join('');
+  }
+
+  function unitOptions(selected) {
+    return '<option value="">NONE</option>' + UNITS.map(u =>
+      '<option value="' + u.id + '"' + (String(u.id) === String(selected) ? ' selected' : '') + '>' + u.name + '</option>'
+    ).join('');
+  }
+
+  function addRow() {
+    const row = document.createElement('div');
+    row.className = 'pur-grid pur-row';
+    row.innerHTML =
+      '<div class="text-center text-xs text-slate-400 row-num"></div>' +
+      '<div><select name="item_id" class="pur-cell line-item">' + itemOptions('') + '</select></div>' +
+      '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0"></div>' +
+      '<div><select class="pur-cell line-unit">' + unitOptions('') + '</select></div>' +
+      '<div><input type="number" step="0.01" min="0" name="rate" class="pur-cell pur-right line-rate" placeholder="0.00"></div>' +
+      '<div class="pur-amount line-amount">0.00</div>' +
+      '<div><button type="button" class="line-drop grid h-7 w-7 place-items-center rounded-md text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove row">&times;</button></div>';
+    rowsBox.appendChild(row);
+    renumber();
+    return row;
+  }
+
+  function renumber() {
+    Array.from(rowsBox.children).forEach((row, index) => {
+      row.querySelector('.row-num').textContent = index + 1;
+    });
+  }
+
+  function recalc() {
+    let quantity = 0, goods = 0;
+    Array.from(rowsBox.children).forEach(row => {
+      const qty = num(row.querySelector('.line-qty'));
+      const rate = num(row.querySelector('.line-rate'));
+      const amount = qty * rate;
+      row.querySelector('.line-amount').textContent = money(amount);
+      quantity += qty;
+      goods += amount;
+    });
+
+    document.getElementById('total-qty').textContent = String(Math.round(quantity * 10000) / 10000);
+    document.getElementById('total-amount').textContent = money(goods);
+    document.getElementById('sub-total').textContent = money(goods);
+
+    const total = goods - num(document.getElementById('discount_amount')) + num(document.getElementById('tax_amount'));
+    document.getElementById('grand-total').textContent = money(total);
+    // What is still owed after whatever was handed over.
+    document.getElementById('balance-owed').textContent = money(Math.max(total - num(document.getElementById('paid_amount')), 0));
+  }
+
+  // Delegated: rows are built and dropped as the operator works.
+  rowsBox.addEventListener('input', recalc);
+  rowsBox.addEventListener('change', e => {
+    if (e.target.classList.contains('line-item')) {
+      // Picking an item brings its unit and its expected cost with it.
+      const chosen = ITEMS.find(i => String(i.id) === e.target.value);
+      const row = e.target.closest('.pur-row');
+      if (chosen) {
+        row.querySelector('.line-unit').value = chosen.uom || '';
+        const rate = row.querySelector('.line-rate');
+        if (!rate.value) rate.value = chosen.rate ? money(chosen.rate) : '';
+      }
+    }
+    recalc();
+  });
+  rowsBox.addEventListener('click', e => {
+    if (!e.target.closest('.line-drop')) return;
+    e.target.closest('.pur-row').remove();
+    // Never leave the operator with nothing to type into.
+    if (!rowsBox.children.length) addRow();
+    renumber();
+    recalc();
+  });
+
+  document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
+  ['discount_amount', 'tax_amount', 'paid_amount'].forEach(id =>
+    document.getElementById(id).addEventListener('input', recalc)
+  );
+
+  const supplier = document.getElementById('supplier');
+  const partyBalance = document.getElementById('party-balance');
+  supplier.addEventListener('change', () => {
+    const option = supplier.options[supplier.selectedIndex];
+    const balance = option ? option.dataset.balance : '';
+    const show = Boolean(supplier.value && balance);
+    partyBalance.classList.toggle('hidden', !show);
+    if (show) partyBalance.textContent = 'BAL: ' + money(balance);
+  });
+
+  addRow();
+  addRow();
+  recalc();
+})();
+</script>
+{% endblock %}

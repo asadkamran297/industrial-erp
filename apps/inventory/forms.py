@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from django import forms
@@ -153,6 +154,16 @@ class InventoryItemForm(StyledModelForm):
         help_text="Left blank, the purchase price is used.",
         widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0", "placeholder": "0.00"}),
     )
+    # The blank row on the unit dialog. Declared so the value is cleaned and
+    # reported like any other field rather than read raw off the POST.
+    new_conversion_factor = forms.DecimalField(
+        label="Conversion Rate",
+        required=False,
+        max_digits=18,
+        decimal_places=4,
+        min_value=Decimal("0"),
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0", "placeholder": "0"}),
+    )
     # Free text rather than a plain dropdown: an existing category is picked
     # from the list, and a name that is not on it is created on save, so
     # nobody has to break off and set the category up first.
@@ -177,6 +188,8 @@ class InventoryItemForm(StyledModelForm):
         self.fields["price"].label = "Sale Price"
         self.fields["purchase_price"].label = "Purchase Price"
         self.fields["uom"].label = "Base Unit"
+        self.fields["uom"].required = False
+        self.fields["uom"].empty_label = "None"
         self.fields["secondary_uom"].label = "Secondary Unit"
         self.fields["secondary_uom"].required = False
         self.fields["secondary_uom"].empty_label = "None"
@@ -207,19 +220,48 @@ class InventoryItemForm(StyledModelForm):
     def _next_class_code(title):
         """A short unique code for a category created from this form.
 
-        Built from the first letters of the name so the generated item codes
-        still read as something, with a number appended only on a clash.
+        Short, because the code is a prefix on every item code the category
+        ever issues and a long one makes those unreadable. Follows the shape
+        already in the books, "Consumables - Office Supplies" filed under
+        CS-OFF: a group/sub name splits on the dash into initials plus three
+        letters, anything else takes three letters of its own. A digit is
+        appended only on a clash.
         """
-        letters = "".join(ch for ch in title.upper() if ch.isalnum())[:6] or "CAT"
+
+        def initials(text, size):
+            """The leading letters of the leading word.
+
+            Not one initial per word: the seeded categories read ELC for
+            Electrical Fittings and OFF for Office Supplies, so the first word
+            carries the code and the rest only qualifies it.
+            """
+            words = [w for w in re.split(r"[^0-9A-Za-z]+", text.upper()) if w]
+            return words[0][:size] if words else ""
+
+        parts = [part for part in re.split(r"\s+[-–—]\s+", title, maxsplit=1)]
+        if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+            letters = f"{initials(parts[0], 2)}-{initials(parts[1], 3)}"
+        else:
+            letters = initials(title, 3)
+        letters = letters or "ITM"
+
         code = letters
         suffix = 1
         while InventoryClass.all_objects.filter(class_code__iexact=code).exists():
             suffix += 1
-            code = f"{letters[:5]}{suffix}"
+            code = f"{letters}{suffix}"
         return code
 
     def save(self, commit=True):
         item = super().save(commit=False)
+        # A rate typed on the unit dialog is filed alongside the item, so the
+        # units screen holds it from then on.
+        new_conversion = getattr(self, "_new_conversion", None)
+        if new_conversion is not None:
+            new_conversion.created_by = item.created_by
+            new_conversion.updated_by = item.updated_by
+            new_conversion.save()
+            item.conversion = new_conversion
         item_class = getattr(self, "_item_class", None)
         if item_class is not None and item_class.pk is None:
             item_class.created_by = item.created_by
@@ -240,10 +282,32 @@ class InventoryItemForm(StyledModelForm):
     def clean_code(self):
         return (self.cleaned_data.get("code") or "").strip().upper()
 
+    def clean_new_conversion_factor(self):
+        factor = self.cleaned_data.get("new_conversion_factor")
+        if factor is not None and factor <= 0:
+            raise ValidationError("The rate must be more than zero.")
+        return factor
+
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get("secondary_uom") and cleaned_data.get("secondary_uom") == cleaned_data.get("uom"):
             self.add_error("secondary_uom", "Secondary unit must differ from the base unit.")
+
+        # A typed rate needs both units to say anything, and it is only kept
+        # when the operator did not pick one already on file.
+        factor = cleaned_data.get("new_conversion_factor")
+        self._new_conversion = None
+        if factor and not cleaned_data.get("conversion"):
+            base, second = cleaned_data.get("uom"), cleaned_data.get("secondary_uom")
+            if not base or not second:
+                self.add_error("new_conversion_factor", "Pick both units before setting a rate.")
+            else:
+                existing = UOMConversion.objects.filter(uom_from=base, uom_to=second, conversion_factor=factor).first()
+                if existing:
+                    # Already on file: use it rather than storing it twice.
+                    cleaned_data["conversion"] = existing
+                else:
+                    self._new_conversion = UOMConversion(uom_from=base, uom_to=second, conversion_factor=factor)
         quantity = cleaned_data.get("opening_quantity")
         if not quantity:
             return cleaned_data

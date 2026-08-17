@@ -1,0 +1,63 @@
+{# Right pane: whatever the selected unit converts to. #}
+<div class="uom-panel">
+  <div class="uom-head">
+    <div>
+      <p class="text-sm font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100">{{ selected_uom.title|default:"No unit selected" }}</p>
+      {% if selected_uom %}<p class="mt-0.5 text-xs text-slate-500">Short name {{ selected_uom.code }}</p>{% endif %}
+    </div>
+    {% if can_add and selected_uom %}
+    <button type="button" class="btn-primary h-9 px-4 text-sm" data-conversion-add>Add Conversion</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="uom-panel mt-4">
+  <div class="uom-subhead">Conversions</div>
+  {% if not selected_uom %}
+    <p class="uom-empty">Pick a unit on the left to see what it converts to.</p>
+  {% else %}
+  <table class="w-full text-left text-sm">
+    <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <tr class="border-b border-slate-100 dark:border-slate-800">
+        <th class="w-16 px-4 py-2.5">#</th>
+        <th class="px-4 py-2.5">Conversion</th>
+        <th class="px-4 py-2.5 text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for row in uom_conversions %}
+      <tr{% if row.status != 'active' %} class="opacity-50"{% endif %}>
+        <td class="px-4 py-3 text-slate-500 tabular-nums">{{ forloop.counter }}</td>
+        <td class="px-4 py-3 uppercase text-slate-700 dark:text-slate-200">
+          1 {{ row.uom_from.title }} = {{ row.conversion_factor|floatformat:"-4" }} {{ row.uom_to.title }}
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex justify-end gap-2">
+            {% if can_edit %}
+            <button type="button" title="Edit conversion"
+                    class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800"
+                    data-conversion-edit="{{ row.pk }}"
+                    data-to="{{ row.uom_to_id }}"
+                    data-factor="{{ row.conversion_factor|floatformat:"-4" }}">&#9998;</button>
+            <button type="button" title="{% if row.status == 'active' %}Deactivate{% else %}Activate{% endif %}"
+                    data-conversion-toggle="{% url 'inventory:conversion_toggle_status' row.pk %}"
+                    class="grid h-8 w-8 place-items-center rounded-md {% if row.status == 'active' %}text-emerald-600{% else %}text-slate-400{% endif %} hover:bg-slate-100 dark:hover:bg-slate-800">
+              {% if row.status == 'active' %}&#10003;{% else %}&#10007;{% endif %}
+            </button>
+            {% endif %}
+            {% if can_delete %}
+            <button type="button" title="Delete conversion"
+                    data-conversion-delete="{{ row.pk }}"
+                    data-label="1 {{ row.uom_from.title }} = {{ row.conversion_factor|floatformat:"-4" }} {{ row.uom_to.title }}"
+                    class="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-slate-800">&#128465;</button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="uom-empty">{{ selected_uom.title }} has no conversions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

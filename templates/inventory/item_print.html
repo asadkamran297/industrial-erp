@@ -10,7 +10,7 @@
         <th>#</th>
         <th>Item Name</th>
         <th>Code</th>
-        <th>Class</th>
+        <th>Category</th>
         <th>UOM</th>
         <th class="num">Stock Qty</th>
         <th class="num">Current Price</th>
@@ -25,7 +25,7 @@
         <td>{{ row.item_name }}</td>
         <td>{{ row.code }}</td>
         <td>{{ row.item_class.title|default:"—" }}</td>
-        <td>{{ row.uom }}</td>
+        <td>{{ row.uom.title|default:"" }}</td>
         <td class="num">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
         <td class="num">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>
         <td class="num">{% if row.stock %}{{ row.stock.last_price|amount }}{% else %}&mdash;{% endif %}</td>

@@ -1,0 +1,50 @@
+{% load inventory_extras %}
+{# Right pane: the items filed under the open category. #}
+<div class="uom-panel">
+  <div class="uom-head">
+    <div>
+      <p class="text-sm font-bold uppercase tracking-wide text-slate-800 dark:text-slate-100">
+        {% if is_unfiled %}Items not in any Category{% else %}{{ selected_class.title }}{% endif %}
+      </p>
+      <p class="mt-0.5 text-xs text-slate-500">
+        {{ items|length }} item{{ items|length|pluralize }}{% if not is_unfiled %} &middot; code {{ selected_class.class_code }}{% endif %}
+      </p>
+    </div>
+    {% if can_edit %}
+    <button type="button" class="btn-primary h-9 px-4 text-sm" data-move-open>Move To This Category</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="uom-panel mt-4">
+  <div class="uom-head">
+    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Items</p>
+    <input type="search" id="item-search" value="{{ item_search }}" placeholder="Search items…"
+           class="form-input" style="max-width:18rem; height:2.25rem; padding-top:.375rem; padding-bottom:.375rem;">
+  </div>
+
+  <table class="w-full text-left text-sm">
+    <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <tr class="border-b border-slate-100 dark:border-slate-800">
+        <th class="px-4 py-2.5">Name</th>
+        <th class="px-4 py-2.5">Code</th>
+        <th class="px-4 py-2.5 text-right">Quantity</th>
+        <th class="px-4 py-2.5 text-right">Stock Value</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for row in items %}
+      <tr>
+        <td class="px-4 py-3 text-slate-700 dark:text-slate-200">{{ row.item_name }}</td>
+        <td class="px-4 py-3 text-slate-500">{{ row.code }}</td>
+        <td class="px-4 py-3 text-right tabular-nums {% if row.stock_quantity < 0 %}text-rose-600{% endif %}">{{ row.stock_quantity|qty }}</td>
+        <td class="px-4 py-3 text-right font-semibold tabular-nums text-emerald-600">{{ row.stock_value|amount }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="uom-empty">
+        {% if item_search %}No item matches that search.{% else %}Nothing filed here yet.{% endif %}
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

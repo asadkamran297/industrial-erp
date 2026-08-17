@@ -1,8 +1,10 @@
+import re
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import IntegerField, Max, Q
+from django.db.models.functions import Cast, Substr
 from django.utils import timezone
 
 from apps.core.constants import (
@@ -33,13 +35,17 @@ TWO_DP = Decimal("0.01")
 
 
 class InventoryClass(BaseModel):
-    title = models.CharField("Class Name", max_length=160)
-    class_code = models.CharField("Class Code", max_length=20, unique=True)
+    title = models.CharField("Category Name", max_length=160)
+    class_code = models.CharField("Category Code", max_length=20, unique=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
     class Meta:
         db_table = "inv_config_classess"
         ordering = ["title"]
+        # Called a category everywhere it is shown; the table name stays as it
+        # was so existing data and migrations are left alone.
+        verbose_name = "item category"
+        verbose_name_plural = "item categories"
 
     def __str__(self):
         return self.title
@@ -72,6 +78,15 @@ class UOMConversion(BaseModel):
     def clean(self):
         if self.uom_from_id and self.uom_from_id == self.uom_to_id:
             raise ValidationError({"uom_to": "From UOM and To UOM cannot be same."})
+        # One rate per pair. A second row for the same two units would leave
+        # every reader picking between two answers to the same question.
+        if self.uom_from_id and self.uom_to_id:
+            # Soft-deleted rows do not count: the pair is free again.
+            clash = UOMConversion.objects.filter(uom_from_id=self.uom_from_id, uom_to_id=self.uom_to_id)
+            if self.pk:
+                clash = clash.exclude(pk=self.pk)
+            if clash.exists():
+                raise ValidationError({"uom_to": f"{self.uom_from} already converts to {self.uom_to}. Edit that conversion instead."})
 
     def __str__(self):
         return f"{self.uom_from} -> {self.uom_to}"
@@ -155,7 +170,10 @@ class Supplier(BaseModel):
 class InventoryItem(BaseModel):
     item_name = models.CharField(max_length=180)
     code = models.CharField(max_length=60, unique=True, blank=True)
-    uom = models.ForeignKey(UOM, on_delete=models.PROTECT, related_name="items", db_column="inv_config_uom_id")
+    # Optional: a service, or an item filed before anyone settles how it is
+    # measured, carries no unit. Quantities are still held in the base unit
+    # wherever one is set.
+    uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, related_name="items", db_column="inv_config_uom_id")
     # Optional second unit the item is also handled in — bought by the bag,
     # issued by the kilo. Quantities are still held in the base unit.
     secondary_uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, related_name="secondary_items", db_column="inv_config_secondary_uom_id")
@@ -180,12 +198,39 @@ class InventoryItem(BaseModel):
         ordering = ["item_name"]
         indexes = [models.Index(fields=["code"]), models.Index(fields=["item_name"])]
 
+    @property
+    def code_prefix(self):
+        return ((self.item_class.class_code if self.item_class_id else "") or "ITM").upper()
+
+    @staticmethod
+    def next_code(prefix):
+        """The next free code under one category prefix.
+
+        The sequence is counted per prefix, not off the row id, so the first
+        pump reads PMP-0001 whatever else is already in the table. The regex is
+        anchored at both ends so a prefix is never counted against a longer one
+        that starts with the same letters (CAT against CATERING). Soft-deleted
+        rows still hold their number: a code that reached a posted voucher is
+        never handed to a second item.
+        """
+        prefix = prefix.upper()
+        last = (
+            InventoryItem.all_objects.filter(code__regex=rf"^{re.escape(prefix)}-[0-9]+$")
+            .annotate(seq=Cast(Substr("code", len(prefix) + 2), IntegerField()))
+            .aggregate(highest=Max("seq"))["highest"]
+            or 0
+        )
+        return f"{prefix}-{last + 1:04d}"
+
     def save(self, *args, **kwargs):
         creating = self.pk is None
+        self.code = (self.code or "").strip().upper()
         if not self.code:
-            prefix = ((self.item_class.class_code if self.item_class_id else "") or "ITM").upper()
-            last = InventoryItem.all_objects.filter(code__startswith=prefix).order_by("-id").values_list("id", flat=True).first() or 0
-            self.code = f"{prefix}-{last + 1:04d}"
+            self.code = self.next_code(self.code_prefix)
+            # A second save racing this one would take the same number, so the
+            # collision is walked past rather than raised at the user.
+            while InventoryItem.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = self.next_code(self.code_prefix)
         self.full_clean()
         super().save(*args, **kwargs)
         if creating:
@@ -216,6 +261,11 @@ class PurchaseOrder(BaseModel):
     quot_num = models.CharField(max_length=80, blank=True)
     quot_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_RAISED)
+    # A bill entered straight off the supplier's invoice, with no order raised
+    # beforehand. It still runs through the order and receipt tables so stock,
+    # the item ledger and the general ledger read the same as any other
+    # purchase; the flag only keeps it off the outstanding-orders list.
+    is_direct = models.BooleanField(default=False)
 
     class Meta:
         db_table = "inv_purchase_orders"
@@ -244,7 +294,8 @@ class PurchaseOrderItem(BaseModel):
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
     unit_rate = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    uom = models.ForeignKey(UOM, on_delete=models.PROTECT, db_column="inv_config_uom_id")
+    # Copied off the item, which is allowed to carry none.
+    uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
     last_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     curr_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     tax_perc = models.DecimalField(max_digits=9, decimal_places=2, default=Decimal("0.00"))

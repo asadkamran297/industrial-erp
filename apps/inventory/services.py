@@ -41,7 +41,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RETURNED, STATUS_SUBMITTED, YES
+from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_SUBMITTED, YES
 
 from .models import (
     ItemLedger,
@@ -50,6 +50,7 @@ from .models import (
     POSReturnMaster,
     PurchaseMaster,
     PurchaseMasterReturn,
+    PurchaseOrder,
     PurchaseOrderItem,
     PurchaseOrderItemReceived,
     PurchaseReturnMaster,
@@ -252,6 +253,97 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         receipt=receipt, supplier=po.supplier, amount=landed_price * received_units, user=user
     )
     return receipt
+
+
+@transaction.atomic
+def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_amount=Decimal("0"),
+                           tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", user):
+    """A purchase entered straight off the supplier's bill, with no order first.
+
+    The bill still lands in the order and receipt tables, and every line is
+    received in full as it is entered. That is deliberate: stock, the item
+    ledger and the general ledger then read exactly as they would for a
+    purchase that had gone through an order, so nothing downstream needs to
+    know which route the goods came in by.
+
+    ``lines`` is a list of dicts: inventory_item, quantity, rate, and an
+    optional description.
+    """
+    if not supplier:
+        raise ValidationError("Pick a supplier.")
+
+    clean_lines = [line for line in lines if line.get("inventory_item") and line.get("quantity")]
+    if not clean_lines:
+        raise ValidationError("Add at least one item with a quantity.")
+
+    order = PurchaseOrder.objects.create(
+        supplier=supplier,
+        purchase_date=bill_date,
+        status=STATUS_RAISED,
+        is_direct=True,
+        quot_num=bill_number or "",
+        descr=remarks or "",
+        created_by=user,
+        updated_by=user,
+    )
+
+    goods_total = Decimal("0.00")
+    for seq, line in enumerate(clean_lines, start=1):
+        quantity = Decimal(line["quantity"])
+        rate = Decimal(line.get("rate") or 0)
+        if quantity <= 0:
+            raise ValidationError("Every line needs a quantity greater than zero.")
+
+        item = line["inventory_item"]
+        po_item = PurchaseOrderItem.objects.create(
+            purchase_order=order,
+            seq_num=seq,
+            purchase_num=order.purchase_num,
+            purchase_date=order.purchase_date,
+            inventory_item=item,
+            quantity=quantity,
+            rate=rate,
+            unit_rate=rate,
+            uom=item.uom,
+            descr=(line.get("descr") or item.item_name)[:255],
+            created_by=user,
+            updated_by=user,
+        )
+        goods_total += (quantity * rate).quantize(Decimal("0.01"))
+
+        # Received as it is entered: the bill is the goods arriving.
+        receive_purchase_order_item(
+            purchase_order_item=po_item,
+            quantity=quantity,
+            extra_qty=Decimal("0"),
+            retail_price=rate,
+            receive_date=bill_date,
+            invoice_num=bill_number or order.purchase_num,
+            invoice_date=bill_date,
+            rv_number="",
+            remarks=line.get("descr") or "",
+            user=user,
+        )
+
+    net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+
+    paid = Decimal(paid_amount or 0).quantize(Decimal("0.01"))
+    if paid > net_amount:
+        raise ValidationError("Paid cannot be more than the bill total.")
+
+    if paid > 0:
+        from apps.finance.services import post_supplier_payment_to_gl
+
+        post_supplier_payment_to_gl(
+            source_ref=f"inv_purchase_orders_paid:{order.pk}",
+            payment_date=bill_date,
+            supplier=supplier,
+            amount=paid,
+            reference=bill_number or order.purchase_num,
+            user=user,
+        )
+
+    return order, net_amount
 
 
 @transaction.atomic

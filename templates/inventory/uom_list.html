@@ -1,44 +1,421 @@
 {% extends "layouts/portal.html" %}
-{% load inventory_extras %}
 {% block content %}
-<section class="space-y-4">{% if active_tab %}{% include "inventory/_item_tabs.html" %}{% endif %}
-  {% if can_add %}{% include "components/ui/page_header.html" with title=title action_label="New" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title=title %}{% endif %}
-  {% include "components/table/search_filters.html" %}
+{% include "inventory/_master_detail_css.html" %}
 
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Title</th>
-            <th class="px-4 py-3">Code</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for row in records %}
-            <tr class="{% if selected_uom and selected_uom.pk == row.pk %}bg-slate-50 dark:bg-slate-800/40{% endif %}">
-              <td class="px-4 py-3">
-                <a class="font-medium text-slate-900 hover:text-[var(--primary-color)] dark:text-slate-100" href="?selected_uom={{ row.pk }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ row.title }}</a>
-              </td>
-              <td class="px-4 py-3">{{ row.code }}</td>
-              <td class="px-4 py-3">{% if can_edit %}<form method="post" action="{% url 'inventory:uom_toggle_status' row.pk %}">{% csrf_token %}<label class="relative inline-flex cursor-pointer items-center"><input type="checkbox" class="peer sr-only" onchange="this.form.submit()" {% if row.status == 'active' %}checked{% endif %}><div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-5 dark:bg-slate-600"></div></label></form>{% else %}<span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ row.get_status_display }}</span>{% endif %}</td>
-              <td class="px-4 py-3">
-                <div class="flex justify-end gap-2">
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url edit_url_name row.pk %}" title="Edit"><span>&#9998;</span></a>
-                </div>
-              </td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No records found.</td></tr>
+<section class="space-y-4" id="uom-screen"
+         data-url="{% url 'inventory:uom_list' %}"
+         data-can-add="{{ can_add|yesno:'1,0' }}">
+  {% include "inventory/_item_tabs.html" %}
+
+  <div class="uom-split">
+
+    {# ── Units ────────────────────────────────────────────────────────────── #}
+    <div class="uom-panel">
+      <div class="uom-head">
+        <div class="flex-1">
+          <input type="search" id="uom-search" value="{{ search_query }}" placeholder="Search units…"
+                 class="form-input" style="height:2.25rem; padding-top:.375rem; padding-bottom:.375rem;">
+        </div>
+        {% if can_add %}
+        <button type="button" id="unit-add" class="btn-primary h-9 shrink-0 px-4 text-sm">+ Add Unit</button>
+        {% endif %}
+      </div>
+
+      <div class="uom-subhead" style="display:flex; justify-content:space-between;">
+        <span>Full name</span><span>Short name</span>
+      </div>
+
+      <div class="uom-scroll" id="uom-rows">{% include "inventory/_uom_rows.html" %}</div>
+    </div>
+
+    {# ── Conversions for the selected unit ────────────────────────────────── #}
+    <div id="uom-detail">{% include "inventory/_uom_detail.html" %}</div>
+  </div>
+
+  {# ── Add Unit ─────────────────────────────────────────────────────────── #}
+  {% if can_add %}
+  <div class="uom-modal" id="unit-modal">
+    <div class="uom-modal-box">
+      <form id="unit-form">{% csrf_token %}
+        <input type="hidden" name="action" value="unit">
+        <input type="hidden" name="unit_id" id="unit-id">
+        <div class="uom-modal-head">
+          <p class="text-sm font-bold text-slate-800 dark:text-slate-100" id="unit-title">Add Unit</p>
+          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
+        <p class="uom-error px-5 pt-4" data-error-for="__all__" hidden></p>
+        <div class="grid gap-4 px-5 py-5 sm:grid-cols-2">
+          {% for field in unit_form %}
+          <div>
+            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            <p class="uom-error" data-error-for="{{ field.name }}" hidden></p>
+          </div>
           {% endfor %}
-        </tbody>
-      </table>
+        </div>
+        <div class="uom-modal-foot">
+          <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
+          <button type="submit" class="btn-primary h-9 px-6 text-sm">Save</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  {% include "components/table/pagination.html" %}
+  {# ── Add / Edit Conversion: rendered once, reused for both ───────────── #}
+  <div class="uom-modal" id="conversion-modal">
+    <div class="uom-modal-box">
+      <form id="conversion-form">{% csrf_token %}
+        <input type="hidden" name="selected_uom" id="conv-selected">
+        <input type="hidden" name="uom_from" id="conv-from">
+        <input type="hidden" name="conversion_id" id="conv-id">
+        <input type="hidden" name="status" value="active">
+        <div class="uom-modal-head">
+          <p class="text-sm font-bold text-slate-800 dark:text-slate-100" id="conv-title">Add Conversion</p>
+          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
 
+        <div class="px-5 py-5">
+          <p class="uom-error mb-3" data-error-for="__all__" hidden></p>
+          <div class="uom-rate-row">
+            <div>
+              <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Base Unit</label>
+              <div class="form-input" id="conv-base" style="background:#f1f5f9; cursor:default;">&mdash;</div>
+              <p class="uom-error" data-error-for="uom_from" hidden></p>
+            </div>
+            <div class="uom-rate-eq">=</div>
+            <div>
+              <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="conv-rate">Rate</label>
+              <input type="number" step="0.0001" min="0" name="conversion_factor" id="conv-rate" class="form-input">
+              <p class="uom-error" data-error-for="conversion_factor" hidden></p>
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="conv-to">Secondary Unit</label>
+              <select name="uom_to" id="conv-to" class="form-select">
+                <option value="">None</option>
+                {% for choice in all_units %}<option value="{{ choice.pk }}">{{ choice.title }} ({{ choice.code }})</option>{% endfor %}
+              </select>
+              <p class="uom-error" data-error-for="uom_to" hidden></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="uom-modal-foot">
+          <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
+          <button type="submit" class="btn-primary h-9 px-6 text-sm">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Delete confirmation, shared by units and conversions ────────────── #}
+  {% if can_delete %}
+  <div class="uom-modal" id="delete-modal">
+    <div class="uom-modal-box" style="max-width:26rem;">
+      <form id="delete-form">{% csrf_token %}
+        <input type="hidden" name="action" id="del-action">
+        <input type="hidden" name="unit_id" id="del-unit">
+        <input type="hidden" name="conversion_id" id="del-conversion">
+        <input type="hidden" name="selected_uom" id="del-selected">
+        <div class="uom-modal-head">
+          <p class="text-sm font-bold text-slate-800 dark:text-slate-100" id="del-title">Delete</p>
+          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
+        <div class="px-5 py-5">
+          <p class="text-sm text-slate-600 dark:text-slate-300" id="del-body"></p>
+          <p class="mt-2 text-xs text-slate-400" id="del-note"></p>
+          <p class="uom-error mt-3" data-error-for="__all__" hidden></p>
+        </div>
+        <div class="uom-modal-foot">
+          <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
+          <button type="submit" class="h-9 rounded-lg bg-rose-600 px-6 text-sm font-semibold text-white hover:bg-rose-700">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="uom-toast" id="uom-toast"></div>
 </section>
+
+<script>
+(function () {
+  const screenEl = document.getElementById('uom-screen');
+  const URL_BASE = screenEl.dataset.url;
+  const rows = document.getElementById('uom-rows');
+  const detail = document.getElementById('uom-detail');
+  const search = document.getElementById('uom-search');
+  const toast = document.getElementById('uom-toast');
+  const csrf = document.querySelector('#uom-screen input[name="csrfmiddlewaretoken"]');
+
+  // The unit open on the right, and the text in the search box. Every request
+  // carries both, so a reply always describes the same screen state.
+  let selected = new URLSearchParams(location.search).get('selected_uom') || '';
+  let query = search.value.trim();
+  let searchTimer = null;
+  let toastTimer = null;
+
+  function say(message, ok) {
+    if (!message) return;
+    toast.textContent = message;
+    toast.className = 'uom-toast is-open ' + (ok ? 'is-ok' : 'is-bad');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.className = 'uom-toast'; }, 3000);
+  }
+
+  function paint(data) {
+    if (typeof data.rows_html === 'string') rows.innerHTML = data.rows_html;
+    if (typeof data.detail_html === 'string') detail.innerHTML = data.detail_html;
+    // The address bar follows the pane, so a reload or a shared link lands on
+    // the same unit.
+    const params = new URLSearchParams();
+    if (selected) params.set('selected_uom', selected);
+    if (query) params.set('q', query);
+    const qs = params.toString();
+    history.replaceState(null, '', qs ? URL_BASE + '?' + qs : URL_BASE);
+  }
+
+  function load(busy) {
+    if (busy) rows.classList.add('is-busy');
+    const params = new URLSearchParams();
+    if (selected) params.set('selected_uom', selected);
+    if (query) params.set('q', query);
+    return fetch(URL_BASE + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (data) paint(data); })
+      .catch(() => say('Could not reach the server.', false))
+      .finally(() => rows.classList.remove('is-busy'));
+  }
+
+  function post(form, extra) {
+    const body = new FormData(form);
+    if (extra) Object.keys(extra).forEach(k => body.set(k, extra[k]));
+    return fetch(URL_BASE, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: body
+    }).then(r => r.json());
+  }
+
+  // ----- errors, painted back into whichever modal was submitted -----
+  function clearErrors(form) {
+    form.querySelectorAll('[data-error-for]').forEach(p => { p.textContent = ''; p.hidden = true; });
+  }
+
+  function showErrors(form, errors) {
+    Object.keys(errors || {}).forEach(field => {
+      const slot = form.querySelector('[data-error-for="' + field + '"]');
+      const text = errors[field].join(' ');
+      if (slot) { slot.textContent = text; slot.hidden = false; }
+      else say(text, false);
+    });
+  }
+
+  // ----- modals -----
+  function openModal(id, open) {
+    const box = document.getElementById(id);
+    if (box) box.classList.toggle('is-open', open);
+  }
+
+  function closeAll() {
+    ['unit-modal', 'conversion-modal', 'delete-modal'].forEach(id => openModal(id, false));
+  }
+
+  document.querySelectorAll('.uom-close').forEach(b => b.addEventListener('click', closeAll));
+  document.querySelectorAll('.uom-modal').forEach(m => m.addEventListener('click', e => {
+    if (e.target === m) m.classList.remove('is-open');
+  }));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+
+  // ----- search -----
+  search.addEventListener('input', () => {
+    query = search.value.trim();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => load(true), 250);
+  });
+
+  // ----- picking a unit, and the buttons inside the right pane -----
+  // Delegated: both panes are replaced on every exchange, so nothing can be
+  // bound to the elements themselves.
+  document.addEventListener('click', e => {
+    const unitEdit = e.target.closest('[data-unit-edit]');
+    if (unitEdit) {
+      openUnit(unitEdit);
+      return;
+    }
+
+    const link = e.target.closest('#uom-rows .uom-row-link');
+    if (link) {
+      e.preventDefault();
+      selected = link.dataset.unit;
+      // Paint the highlight now; the reply confirms it.
+      rows.querySelectorAll('.uom-row').forEach(r => r.classList.remove('is-selected'));
+      link.closest('.uom-row').classList.add('is-selected');
+      load(false);
+      return;
+    }
+
+    const add = e.target.closest('[data-conversion-add]');
+    if (add) {
+      openConversion(null);
+      return;
+    }
+
+    const edit = e.target.closest('[data-conversion-edit]');
+    if (edit) {
+      openConversion(edit);
+      return;
+    }
+
+    const unitDelete = e.target.closest('[data-unit-delete]');
+    if (unitDelete) {
+      askDelete({
+        action: 'unit_delete',
+        unit: unitDelete.dataset.unitDelete,
+        conversion: '',
+        title: 'Delete Unit',
+        body: 'Delete ' + unitDelete.dataset.title + '?',
+        note: 'Its conversions go with it. A unit used anywhere in the system cannot be deleted, so reports keep reading back.'
+      });
+      return;
+    }
+
+    const convDelete = e.target.closest('[data-conversion-delete]');
+    if (convDelete) {
+      askDelete({
+        action: 'conversion_delete',
+        unit: '',
+        conversion: convDelete.dataset.conversionDelete,
+        title: 'Delete Conversion',
+        body: 'Delete ' + convDelete.dataset.label + '?',
+        note: 'The unit itself stays. A conversion used by an item cannot be deleted.'
+      });
+      return;
+    }
+
+    const toggle = e.target.closest('[data-conversion-toggle]');
+    if (toggle) {
+      const body = new FormData();
+      body.set('csrfmiddlewaretoken', csrf.value);
+      fetch(toggle.dataset.conversionToggle, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: body
+      })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => { say((data && data.message) || 'Conversion updated.', true); return load(false); })
+        .catch(() => say('Could not reach the server.', false));
+    }
+  });
+
+  const unitAdd = document.getElementById('unit-add');
+  const unitForm = document.getElementById('unit-form');
+  const convForm = document.getElementById('conversion-form');
+  const delForm = document.getElementById('delete-form');
+
+  // Nothing is deleted straight off a click: the row is named back at the
+  // operator first, and the refusal reasons land in the same box.
+  function askDelete(spec) {
+    if (!delForm) return;
+    clearErrors(delForm);
+    document.getElementById('del-action').value = spec.action;
+    document.getElementById('del-unit').value = spec.unit;
+    document.getElementById('del-conversion').value = spec.conversion;
+    document.getElementById('del-selected').value = selected;
+    document.getElementById('del-title').textContent = spec.title;
+    document.getElementById('del-body').textContent = spec.body;
+    document.getElementById('del-note').textContent = spec.note;
+    openModal('delete-modal', true);
+  }
+
+  if (delForm) {
+    delForm.addEventListener('submit', e => {
+      e.preventDefault();
+      clearErrors(delForm);
+      post(delForm).then(data => {
+        if (!data.ok) { showErrors(delForm, data.errors); return; }
+        // The pane may have been showing the unit that just went.
+        selected = data.selected_uom ? String(data.selected_uom) : '';
+        openModal('delete-modal', false);
+        say(data.message, true);
+        return load(false);
+      }).catch(() => say('Could not reach the server.', false));
+    });
+  }
+
+  function openConversion(editButton) {
+    if (!convForm) return;
+    clearErrors(convForm);
+    const title = document.getElementById('conv-title');
+    const chosen = rows.querySelector('.uom-row.is-selected .uom-row-link');
+    document.getElementById('conv-selected').value = selected;
+    document.getElementById('conv-from').value = selected;
+    document.getElementById('conv-base').textContent = chosen ? chosen.dataset.title + ' (' + chosen.dataset.code + ')' : '—';
+
+    // The base unit cannot also be the secondary one.
+    const to = document.getElementById('conv-to');
+    Array.from(to.options).forEach(o => { o.hidden = o.value === selected; o.disabled = o.value === selected; });
+
+    document.getElementById('conv-id').value = editButton ? editButton.dataset.conversionEdit : '';
+    document.getElementById('conv-rate').value = editButton ? editButton.dataset.factor : '';
+    to.value = editButton ? editButton.dataset.to : '';
+    title.textContent = editButton ? 'Edit Conversion' : 'Add Conversion';
+    openModal('conversion-modal', true);
+    document.getElementById('conv-rate').focus();
+  }
+
+  // Add and Edit share one modal: the same three fields, with an id posted
+  // alongside them when an existing unit is being changed.
+  function openUnit(editButton) {
+    if (!unitForm) return;
+    clearErrors(unitForm);
+    unitForm.reset();
+    document.getElementById('unit-id').value = editButton ? editButton.dataset.unitEdit : '';
+    document.getElementById('unit-title').textContent = editButton ? 'Edit Unit' : 'Add Unit';
+    if (editButton) {
+      const set = (name, value) => {
+        const field = unitForm.querySelector('[name="' + name + '"]');
+        if (field) field.value = value;
+      };
+      set('title', editButton.dataset.title);
+      set('code', editButton.dataset.code);
+      set('status', editButton.dataset.status);
+    }
+    openModal('unit-modal', true);
+    const first = unitForm.querySelector('[name="title"]');
+    if (first) first.focus();
+  }
+
+  if (unitAdd && unitForm) {
+    unitAdd.addEventListener('click', () => openUnit(null));
+
+    unitForm.addEventListener('submit', e => {
+      e.preventDefault();
+      clearErrors(unitForm);
+      post(unitForm).then(data => {
+        if (!data.ok) { showErrors(unitForm, data.errors); return; }
+        // A unit saved from here becomes the one on show.
+        selected = String(data.selected_uom || selected);
+        openModal('unit-modal', false);
+        unitForm.reset();
+        say(data.message, true);
+        return load(false);
+      }).catch(() => say('Could not reach the server.', false));
+    });
+  }
+
+  if (convForm) {
+    convForm.addEventListener('submit', e => {
+      e.preventDefault();
+      clearErrors(convForm);
+      post(convForm).then(data => {
+        if (!data.ok) { showErrors(convForm, data.errors); return; }
+        openModal('conversion-modal', false);
+        say(data.message, true);
+        return load(false);
+      }).catch(() => say('Could not reach the server.', false));
+    });
+  }
+})();
+</script>
 {% endblock %}

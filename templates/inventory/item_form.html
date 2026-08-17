@@ -1,23 +1,158 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
+{# Plain CSS, not utilities: the compiled Tailwind bundle is prebuilt and would need a rebuild for new classes. #}
+<style>
+  .field-label {
+    display: block;
+    margin-bottom: .375rem;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  .dark .field-label { color: #94a3b8; }
+
+  .section-card {
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #f8fafc;
+    padding: 1.25rem;
+  }
+  .dark .section-card { border-color: #1e293b; background: rgba(30, 41, 59, .4); }
+  .section-title { font-size: .875rem; font-weight: 600; color: #334155; }
+  .dark .section-title { color: #e2e8f0; }
+  .section-hint { margin-top: .25rem; font-size: .75rem; line-height: 1.5; color: #64748b; }
+
+  /* Segmented Product/Service switch: the checked half lifts, the other stays flat. */
+  .kind-pill:hover { color: #334155; }
+  .kind-pill:has(input:checked) {
+    background: #fff;
+    color: var(--primary-color);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+  }
+  .dark .kind-pill:has(input:checked) { background: #0f172a; }
+  .kind-pill:has(input:focus-visible) { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+  /* Notched field: the label rides the top border, the action rides inside. */
+  /* No label line above it, so the top margin stands in for one and the field
+     still lines up with its neighbours in the row. */
+  .notch-field { position: relative; margin-top: 1.125rem; }
+  .notch-field .notch-label {
+    position: absolute;
+    top: 0;
+    left: .625rem;
+    transform: translateY(-50%);
+    z-index: 1;
+    padding: 0 .3125rem;
+    background: #fff;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--primary-color);
+    pointer-events: none;
+  }
+  .dark .notch-field .notch-label { background: #0f172a; }
+
+  /* The label occupies the top-left, so the text starts clear of it. */
+  .notch-field .form-input { padding-top: .625rem; padding-bottom: .625rem; }
+  .notch-field--action .form-input { padding-right: 8.5rem; }
+
+  .notch-field .notch-action {
+    position: absolute;
+    top: 50%;
+    right: .3125rem;
+    transform: translateY(-50%);
+    border-radius: 9999px;
+    padding: .4375rem 1rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, #fff);
+    transition: background .15s ease;
+  }
+  .notch-field .notch-action:hover { background: color-mix(in srgb, var(--primary-color) 18%, #fff); }
+  .notch-field .notch-action:active { background: color-mix(in srgb, var(--primary-color) 26%, #fff); }
+  .notch-field .notch-action:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .notch-field .notch-action[disabled] { opacity: .55; cursor: default; }
+  .dark .notch-field .notch-action { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+
+  /* Conversion rows read as a sentence: 1 BAG = 20 KILOGRAM. */
+  .rate-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .375rem .5rem;
+    border-radius: .5rem;
+    cursor: pointer;
+    font-size: .875rem;
+    color: #475569;
+  }
+  .rate-row:hover { background: #f8fafc; }
+  .dark .rate-row { color: #cbd5e1; }
+  .dark .rate-row:hover { background: rgba(30, 41, 59, .5); }
+  .rate-row:has(input:checked) { background: color-mix(in srgb, var(--primary-color) 8%, #fff); }
+  .dark .rate-row:has(input:checked) { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+  .rate-num { font-weight: 600; color: #334155; }
+  .dark .rate-num { color: #e2e8f0; }
+  .rate-unit { text-transform: uppercase; letter-spacing: .01em; }
+  .rate-eq { font-weight: 700; color: #94a3b8; }
+  .rate-value { font-weight: 600; color: #334155; }
+  .dark .rate-value { color: #e2e8f0; }
+  /* A stored rate is chosen, not typed over. */
+  .rate-row--saved { cursor: pointer; }
+
+  /* The live rate reads as a badge, not as help text: it is a value the item
+     carries, so it is coloured like one. */
+  #unit-rate-hint { margin-top: .375rem; }
+  .rate-chip {
+    display: inline-block;
+    border-radius: 9999px;
+    padding: .1875rem .5rem;
+    font-size: .6875rem;
+    font-weight: 600;
+    letter-spacing: .01em;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+    border: 1px solid color-mix(in srgb, var(--primary-color) 28%, #fff);
+  }
+  .dark .rate-chip {
+    background: color-mix(in srgb, var(--primary-color) 26%, #0f172a);
+    border-color: color-mix(in srgb, var(--primary-color) 45%, #0f172a);
+  }
+
+  /* The unit trigger is a field, so it carries the field's height and metrics. */
+  .unit-trigger { cursor: pointer; font-weight: 500; line-height: 1.25rem; }
+  .unit-trigger.is-empty #unit-summary { color: #94a3b8; font-weight: 400; }
+</style>
 <section>
   <form method="post" id="item-form" class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
     {# ── Header: title + Product/Service switch ─────────────────────────── #}
-    <div class="flex flex-wrap items-center gap-5 border-b border-slate-100 px-6 py-4 dark:border-slate-800">
-      <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">{% if object %}Edit Item{% else %}Add Item{% endif %}</h1>
-      <div class="flex items-center gap-5">
-        <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
-        <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-          <input type="radio" name="item_kind_choice" class="kind-option h-4 w-4 accent-[var(--primary-color)]" value="{{ product_value }}" checked>
+    <div class="flex flex-wrap items-center gap-4 border-b border-slate-100 px-6 py-4 dark:border-slate-800">
+      <div>
+        <h1 class="text-lg font-bold leading-tight text-slate-900 dark:text-slate-100">{% if object %}Edit Item{% else %}Add Item{% endif %}</h1>
+        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{% if object %}Update the item master record.{% else %}Create a product you stock, or a service you sell.{% endif %}</p>
+      </div>
+
+      {# Segmented switch: one control, so the choice reads as a single setting. #}
+      <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
+      <div class="kind-switch flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/60" role="radiogroup" aria-label="Item kind">
+        <label class="kind-pill cursor-pointer rounded-md px-4 py-1.5 text-sm font-semibold text-slate-500 transition dark:text-slate-400">
+          <input type="radio" name="item_kind_choice" class="kind-option sr-only" value="{{ product_value }}" checked>
           Product
         </label>
-        <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-          <input type="radio" name="item_kind_choice" class="kind-option h-4 w-4 accent-[var(--primary-color)]" value="{{ service_value }}">
+        <label class="kind-pill cursor-pointer rounded-md px-4 py-1.5 text-sm font-semibold text-slate-500 transition dark:text-slate-400">
+          <input type="radio" name="item_kind_choice" class="kind-option sr-only" value="{{ service_value }}">
           Service
         </label>
       </div>
-      <a href="{% url 'inventory:item_list' %}" class="ml-auto text-2xl leading-none text-slate-400 hover:text-slate-600" title="Close">&times;</a>
+
+      <a href="{% url 'inventory:item_list' %}" class="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" title="Close" aria-label="Close">
+        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </a>
     </div>
 
     {% if form.non_field_errors %}
@@ -25,120 +160,178 @@
     {% endif %}
 
     {# ── Identity row ───────────────────────────────────────────────────── #}
-    {# Inline grid: the compiled Tailwind bundle has no 5-column utility, so the #}
-    {# columns are declared here rather than needing a CSS rebuild to appear. #}
-    <div class="items-start px-6 py-5" style="display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:1rem;">
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.item_name.id_for_label }}">Item Name <span class="text-rose-500">*</span></label>
+    {# Inline grid: the compiled Tailwind bundle carries no 4-column utility, so #}
+    {# the columns are declared here rather than needing a CSS rebuild. #}
+    <div class="px-6 pb-6 pt-5" style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem 1.25rem; align-items:start;">
+      <div style="min-width:0;">
+        <label class="field-label" for="{{ form.item_name.id_for_label }}">Item Name <span class="text-rose-500">*</span></label>
         {{ form.item_name }}
         {% for error in form.item_name.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.category.id_for_label }}">Category</label>
+      <div style="min-width:0;">
+        <label class="field-label" for="{{ form.category.id_for_label }}">Category</label>
         {{ form.category }}
         <datalist id="category-options">
           {% for title in form.category_options %}<option value="{{ title }}"></option>{% endfor %}
         </datalist>
-        <p class="mt-1 text-xs text-slate-400">{{ form.category.help_text }}</p>
         {% for error in form.category.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.uom.id_for_label }}">Base Unit <span class="text-rose-500">*</span></label>
-        {{ form.uom }}
+      {# Both units live behind one button so the row stays a single line; the #}
+      {# selects themselves stay in the form and post normally. #}
+      <div style="min-width:0;">
+        <label class="field-label">Unit</label>
+        {# Reads as a field, not a button: it opens a picker but sits in the input row. #}
+        <button type="button" id="unit-open" class="form-input unit-trigger flex items-center justify-between gap-2 text-left">
+          <span id="unit-summary" class="truncate">Select unit…</span>
+          <svg class="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+        </button>
+        {# The rate the item is on, once the dialog has been through. #}
+        <p id="unit-rate-hint" class="hidden"><span class="rate-chip"></span></p>
         {% for error in form.uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
-      </div>
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.secondary_uom.id_for_label }}">Secondary Unit</label>
-        {{ form.secondary_uom }}
-        <p class="mt-1 text-xs text-slate-400">Optional. Quantities are still held in the base unit.</p>
         {% for error in form.secondary_uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        {% for error in form.new_conversion_factor.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ form.code.id_for_label }}">Item Code</label>
-        {{ form.code }}
-        <p class="mt-1 text-xs text-slate-400">Left blank, a code is generated from the category.</p>
+      <div style="min-width:0;">
+        {# The label sits in the border and the action sits in the field, so the #}
+        {# code and the button that fills it read as one control. #}
+        <div class="notch-field{% if not object %} notch-field--action{% endif %}">
+          <label class="notch-label" for="{{ form.code.id_for_label }}">Item Code</label>
+          {{ form.code }}
+          {% if not object %}
+          <button type="button" id="assign-code" class="notch-action">Assign Code</button>
+          {% endif %}
+        </div>
+        <p class="mt-1 text-xs text-slate-400" id="code-hint">Assigned from the category on save.</p>
         {% for error in form.code.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
     </div>
 
+    {# ── Select Unit dialog ─────────────────────────────────────────────── #}
+    <div id="unit-modal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/40 p-4" style="z-index:60;">
+      {# No overflow-hidden: the unit pickers open an absolutely-positioned panel that would otherwise be clipped by this box. #}
+      <div class="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-slate-900">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-700">
+          <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Select Unit</p>
+          <button type="button" class="unit-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+        </div>
+        <div class="grid gap-4 px-5 pt-5 sm:grid-cols-2">
+          <div>
+            <label class="field-label" for="{{ form.uom.id_for_label }}">Base Unit</label>
+            {{ form.uom }}
+          </div>
+          <div>
+            <label class="field-label" for="{{ form.secondary_uom.id_for_label }}">Secondary Unit</label>
+            {{ form.secondary_uom }}
+          </div>
+        </div>
+
+        {# The rates already on file between the two units, plus a blank row for #}
+        {# one that is not on file yet. Only shown once both units are picked. #}
+        <div id="rate-box" class="hidden px-5 pt-5" style="min-height:10rem;">
+          <p class="field-label">Conversion Rates</p>
+          <div class="sr-only" aria-hidden="true">{{ form.conversion }}</div>
+          <div class="mt-1 space-y-1" id="rate-list" role="radiogroup" aria-label="Conversion rate">
+            <label class="rate-row">
+              <input type="radio" name="conversion_choice" value="new" class="rate-radio h-4 w-4 accent-[var(--primary-color)]" checked>
+              <span class="rate-num">1</span>
+              <span class="rate-unit" data-base-name>&mdash;</span>
+              <span class="rate-eq">=</span>
+              <input type="number" step="0.0001" min="0" name="new_conversion_factor" id="rate-new" class="form-input" style="width:8rem;" placeholder="0">
+              <span class="rate-unit" data-secondary-name>&mdash;</span>
+            </label>
+          </div>
+          {% for error in form.conversion.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+          <p id="rate-empty" class="mt-2 hidden text-xs text-slate-400">No rate on file for this pair yet. Type one above and it is saved with the item.</p>
+        </div>
+
+        <div class="mt-5 flex justify-end border-t border-slate-200 px-5 py-3 dark:border-slate-700">
+          <button type="button" class="unit-close btn-primary h-9 px-6 text-sm">Save</button>
+        </div>
+      </div>
+    </div>
+
     {# ── Tabs ───────────────────────────────────────────────────────────── #}
-    <div class="border-b border-slate-200 px-6 dark:border-slate-800">
-      <nav class="flex gap-6" role="tablist">
-        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="pricing" role="tab">Pricing</button>
-        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="stock" role="tab">Stock</button>
-        <button type="button" class="tab-btn border-b-2 border-transparent pb-2.5 text-sm font-semibold text-slate-400" data-tab="other" role="tab">Other</button>
+    <div class="border-y border-slate-200 bg-slate-50/60 px-6 dark:border-slate-800 dark:bg-slate-800/30">
+      {# Inline gap: the compiled bundle carries no gap-7 utility. #}
+      <nav class="flex" role="tablist" style="display:flex; gap:1.75rem;">
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-3 pt-3 text-sm font-semibold text-slate-400 transition hover:text-slate-600" data-tab="pricing" role="tab">Pricing</button>
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-3 pt-3 text-sm font-semibold text-slate-400 transition hover:text-slate-600" data-tab="stock" role="tab">Stock</button>
+        <button type="button" class="tab-btn border-b-2 border-transparent pb-3 pt-3 text-sm font-semibold text-slate-400 transition hover:text-slate-600" data-tab="other" role="tab">Other</button>
       </nav>
     </div>
 
     <div class="space-y-5 px-6 py-6">
 
       {# ── Pricing ──────────────────────────────────────────────────────── #}
-      <div class="tab-panel space-y-5" data-panel="pricing">
-        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
-          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Sale Price</p>
-          <div class="mt-3 max-w-xs">
-            {{ form.price }}
-            {% for error in form.price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      {# One card, two figures: the prices belong side by side, not stacked in empty boxes. #}
+      <div class="tab-panel" data-panel="pricing">
+        <div class="section-card">
+          <p class="section-title">Pricing</p>
+          <p class="section-hint">Defaults carried onto sales and purchase documents.</p>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="field-label" for="{{ form.price.id_for_label }}">Sale Price</label>
+              {{ form.price }}
+              {% for error in form.price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+            </div>
+            <div>
+              <label class="field-label" for="{{ form.purchase_price.id_for_label }}">Purchase Price</label>
+              {{ form.purchase_price }}
+              {% for error in form.purchase_price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+              <p class="mt-1.5 text-xs text-slate-400">Expected cost. A goods receipt still sets the real landed cost.</p>
+            </div>
           </div>
-        </div>
-        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
-          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Purchase Price</p>
-          <div class="mt-3 max-w-xs">
-            {{ form.purchase_price }}
-            {% for error in form.purchase_price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
-          </div>
-          <p class="mt-2 text-xs text-slate-400">What the item is expected to cost. A goods receipt still sets the real landed cost.</p>
         </div>
       </div>
 
       {# ── Stock ────────────────────────────────────────────────────────── #}
       <div class="tab-panel hidden space-y-5" data-panel="stock">
         {% if form.opening_stock_allowed %}
-        <div id="opening-stock-box" class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
-          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Opening Stock</p>
-          <p class="mt-1 text-xs text-slate-500">What is already on hand. Saved as an opening movement on the item ledger, so it can be traced later.</p>
-          <div class="mt-3 grid gap-4 sm:grid-cols-3">
+        <div id="opening-stock-box" class="section-card">
+          <p class="section-title">Opening Stock</p>
+          <p class="section-hint">What is already on hand. Saved as an opening movement on the item ledger, so it can be traced later.</p>
+          <div class="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
-              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_quantity.id_for_label }}">{{ form.opening_quantity.label }}</label>
+              <label class="field-label" for="{{ form.opening_quantity.id_for_label }}">{{ form.opening_quantity.label }}</label>
               {{ form.opening_quantity }}
               {% for error in form.opening_quantity.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
             </div>
             <div>
-              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_price.id_for_label }}">{{ form.opening_price.label }}</label>
+              <label class="field-label" for="{{ form.opening_price.id_for_label }}">{{ form.opening_price.label }}</label>
               {{ form.opening_price }}
-              <p class="mt-1 text-xs text-slate-400">{{ form.opening_price.help_text }}</p>
+              <p class="mt-1.5 text-xs text-slate-400">{{ form.opening_price.help_text }}</p>
               {% for error in form.opening_price.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
             </div>
             <div>
-              <label class="mb-1.5 block text-sm font-medium" for="{{ form.opening_date.id_for_label }}">{{ form.opening_date.label }}</label>
+              <label class="field-label" for="{{ form.opening_date.id_for_label }}">{{ form.opening_date.label }}</label>
               {{ form.opening_date }}
               {% for error in form.opening_date.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
             </div>
           </div>
-          <p class="mt-3 rounded-lg bg-white p-3 text-xs text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+          <p class="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
             The Inventory control account is brought in line from the Inventory Valuation screen, the same as any other stock movement outside a goods receipt.
           </p>
         </div>
-        <p id="service-no-stock" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">A service is not stocked, so it carries no opening quantity.</p>
+        <p id="service-no-stock" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">A service is not stocked, so it carries no opening quantity.</p>
         {% else %}
-        <div class="rounded-xl bg-slate-50 p-5 dark:bg-slate-800/40">
-          <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Current Stock</p>
-          <dl class="mt-3 grid gap-4 sm:grid-cols-3 text-sm">
+        <div class="section-card">
+          <p class="section-title">Current Stock</p>
+          <dl class="mt-4 grid gap-4 sm:grid-cols-3 text-sm">
             <div><dt class="text-xs uppercase tracking-wide text-slate-500">Quantity</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</dd></div>
             <div><dt class="text-xs uppercase tracking-wide text-slate-500">Current Price</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.current_price|amount }}{% else %}&mdash;{% endif %}</dd></div>
             <div><dt class="text-xs uppercase tracking-wide text-slate-500">Last Price</dt><dd class="mt-0.5 font-semibold tabular-nums">{% if object.stock %}{{ object.stock.last_price|amount }}{% else %}&mdash;{% endif %}</dd></div>
           </dl>
-          <p class="mt-3 text-xs text-slate-500">Quantities move through Stock Adjustment or a goods receipt, never by editing the item.</p>
+          <p class="mt-4 text-xs text-slate-500">Quantities move through Stock Adjustment or a goods receipt, never by editing the item.</p>
         </div>
         {% endif %}
       </div>
 
       {# ── Other: the remaining model fields, kept off the first screen ─── #}
       <div class="tab-panel hidden" data-panel="other">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="section-card grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {% for field in form %}{% if field.name in other_fields %}
           <div>
-            <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}
             {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
           </div>
@@ -149,7 +342,7 @@
     </div>
 
     {# ── Footer ─────────────────────────────────────────────────────────── #}
-    <div class="flex flex-wrap justify-end gap-3 border-t border-slate-100 px-6 py-4 dark:border-slate-800">
+    <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/30">
       <a href="{% url 'inventory:item_list' %}" class="toolbar-btn h-10 px-5">Cancel</a>
       {% if not object %}<button type="submit" name="save_and_new" value="1" class="toolbar-btn h-10 px-5">Save &amp; New</button>{% endif %}
       <button type="submit" class="btn-primary h-10 px-8">Save</button>
@@ -204,6 +397,193 @@
     }));
     kind.addEventListener('change', paintKind);
     paintKind();
+  }
+
+  {% if not object %}
+  // ----- Item code: typed, or fetched on demand from Assign Code -----
+  // The field stays editable either way. An assigned code is only the number
+  // free at that moment, so the server settles it again on save.
+  const categoryInput = document.getElementById('{{ form.category.auto_id }}');
+  const codeInput = document.getElementById('{{ form.code.auto_id }}');
+  const codeHint = document.getElementById('code-hint');
+  const assignBtn = document.getElementById('assign-code');
+  const CODE_URL = '{% url "inventory:item_next_code" %}';
+  const HINT_IDLE = 'Type a code, or let the category assign one.';
+  let codeRequest = 0;
+
+  function assignCode() {
+    const ticket = ++codeRequest;
+    assignBtn.disabled = true;
+    assignBtn.textContent = 'Assigning…';
+    fetch(CODE_URL + '?category=' + encodeURIComponent(categoryInput.value.trim()), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        // A later click already asked; that answer is the current one.
+        if (ticket !== codeRequest) return;
+        if (!data) {
+          codeHint.textContent = 'Could not reach the server. Type a code instead.';
+          return;
+        }
+        codeInput.value = data.code;
+        codeHint.textContent = 'Assigned from ' + data.prefix + '. Editable until saved.';
+        codeInput.focus();
+        codeInput.setSelectionRange(data.code.length, data.code.length);
+      })
+      .catch(() => { codeHint.textContent = 'Could not reach the server. Type a code instead.'; })
+      .finally(() => {
+        if (ticket !== codeRequest) return;
+        assignBtn.disabled = false;
+        assignBtn.textContent = 'Assign Code';
+      });
+  }
+
+  if (assignBtn && codeInput && categoryInput) {
+    codeHint.textContent = HINT_IDLE;
+    assignBtn.addEventListener('click', assignCode);
+    // Once the operator edits it, the hint stops claiming where it came from.
+    codeInput.addEventListener('input', () => { codeHint.textContent = HINT_IDLE; });
+  }
+  {% endif %}
+
+  // ----- Select Unit dialog -----
+  const unitModal = document.getElementById('unit-modal');
+  const unitOpen = document.getElementById('unit-open');
+  const unitSummary = document.getElementById('unit-summary');
+  const baseUom = document.getElementById('{{ form.uom.auto_id }}');
+  const secondUom = document.getElementById('{{ form.secondary_uom.auto_id }}');
+
+  function label(select) {
+    if (!select || !select.value) return '';
+    return select.options[select.selectedIndex].text;
+  }
+
+  const rateHint = document.getElementById('unit-rate-hint');
+
+  function paintUnits() {
+    const base = label(baseUom);
+    const second = label(secondUom);
+    unitOpen.classList.toggle('is-empty', !base);
+    unitSummary.textContent = base ? (second ? base + ' / ' + second : base) : 'Select unit…';
+    paintRateHint();
+  }
+
+  // The chosen rate, spelled out under the field, so the dialog does not have
+  // to be reopened to see which one the item is on.
+  function paintRateHint() {
+    if (!rateHint) return;
+    const picked = rateList && rateList.querySelector('input[name="conversion_choice"]:checked');
+    const factor = !picked ? '' : (picked.value === 'new' ? (rateNew.value || '').trim() : picked.dataset.factor || '');
+    const base = shortName(baseUom);
+    const second = shortName(secondUom);
+    const show = Boolean(factor && Number(factor) > 0 && base && second);
+    rateHint.classList.toggle('hidden', !show);
+    // Written into the chip, not the paragraph, so the badge styling survives.
+    if (show) rateHint.querySelector('.rate-chip').textContent = '1 ' + base + ' = ' + factor + ' ' + second;
+  }
+
+  function openUnits(open) {
+    unitModal.classList.toggle('hidden', !open);
+    unitModal.classList.toggle('flex', open);
+  }
+
+  // ----- Conversion rates for the chosen pair -----
+  // The rates already on file are offered as a pick list; the blank first row
+  // is the one that is not on file yet and is saved with the item.
+  const rateBox = document.getElementById('rate-box');
+  const rateList = document.getElementById('rate-list');
+  const rateEmpty = document.getElementById('rate-empty');
+  const rateNew = document.getElementById('rate-new');
+  const conversionField = document.getElementById('{{ form.conversion.auto_id }}');
+  const RATES_URL = '{% url "inventory:item_conversion_options" %}';
+  let rateRequest = 0;
+
+  function shortName(select) {
+    // "Bag (BAG)" reads as "Bag" once it is inside a sentence.
+    return label(select).replace(/\s*\(.*\)\s*$/, '');
+  }
+
+  function paintRateNames() {
+    const base = shortName(baseUom) || '—';
+    const second = shortName(secondUom) || '—';
+    rateBox.querySelectorAll('[data-base-name]').forEach(el => { el.textContent = base; });
+    rateBox.querySelectorAll('[data-secondary-name]').forEach(el => { el.textContent = second; });
+  }
+
+  // The chosen radio drives the real conversion field the form posts.
+  function syncConversion() {
+    if (!conversionField) return;
+    const picked = rateList.querySelector('input[name="conversion_choice"]:checked');
+    conversionField.value = picked && picked.value !== 'new' ? picked.value : '';
+  }
+
+  function loadRates() {
+    if (!rateBox) return;
+    const base = baseUom && baseUom.value;
+    const second = secondUom && secondUom.value;
+    // A rate needs two units to be a rate at all.
+    rateBox.classList.toggle('hidden', !(base && second));
+    if (!base || !second) return;
+
+    paintRateNames();
+    const ticket = ++rateRequest;
+    fetch(RATES_URL + '?base=' + encodeURIComponent(base) + '&secondary=' + encodeURIComponent(second), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data || ticket !== rateRequest) return;
+        rateList.querySelectorAll('.rate-row--saved').forEach(row => row.remove());
+        const chosen = conversionField ? conversionField.value : '';
+        data.options.forEach(option => {
+          const row = document.createElement('label');
+          row.className = 'rate-row rate-row--saved';
+          row.innerHTML =
+            '<input type="radio" name="conversion_choice" class="rate-radio h-4 w-4 accent-[var(--primary-color)]" value="' + option.id + '" data-factor="' + option.factor + '">' +
+            '<span class="rate-num">1</span>' +
+            '<span class="rate-unit">' + option.base + '</span>' +
+            '<span class="rate-eq">=</span>' +
+            '<span class="rate-value">' + option.factor + '</span>' +
+            '<span class="rate-unit">' + option.secondary + '</span>';
+          rateList.appendChild(row);
+          // An item already on this rate opens with it selected.
+          if (String(option.id) === String(chosen)) row.querySelector('input').checked = true;
+        });
+        rateEmpty.classList.toggle('hidden', data.options.length > 0);
+        syncConversion();
+        paintRateHint();
+      })
+      .catch(() => {});
+  }
+
+  if (rateList) {
+    rateList.addEventListener('change', () => {
+      syncConversion();
+      // Typing a figure only makes sense on the row that takes one.
+      const picked = rateList.querySelector('input[name="conversion_choice"]:checked');
+      if (picked && picked.value !== 'new') rateNew.value = '';
+      paintRateHint();
+    });
+    // A figure typed into the blank row claims that row.
+    rateNew.addEventListener('input', () => {
+      const fresh = rateList.querySelector('input[value="new"]');
+      if (fresh) { fresh.checked = true; syncConversion(); }
+      paintRateHint();
+    });
+  }
+
+  if (unitModal && unitOpen) {
+    unitOpen.addEventListener('click', () => openUnits(true));
+    unitModal.querySelectorAll('.unit-close').forEach(b => b.addEventListener('click', () => { paintUnits(); openUnits(false); }));
+    // Clicking the backdrop, but not the panel, closes it.
+    unitModal.addEventListener('click', (e) => { if (e.target === unitModal) { paintUnits(); openUnits(false); } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openUnits(false); });
+    [baseUom, secondUom].forEach(s => s && s.addEventListener('change', () => { paintUnits(); loadRates(); }));
+    paintUnits();
+    loadRates();
+    // A rejected unit must not be hidden behind a closed dialog.
+    if (document.querySelector('#unit-open ~ .text-rose-600')) openUnits(true);
   }
 })();
 </script>
