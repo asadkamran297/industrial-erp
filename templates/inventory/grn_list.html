@@ -1,5 +1,43 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
+<style>
+  /* A delivery is not a line of the order: it is what happened to one. The
+     history rows are drawn quieter and stepped in, so the ordered lines still
+     read as the list and the receipts read as the account under each. */
+  .grn-table .grn-line > td { border-top: 1px solid #e2e8f0; }
+  .dark .grn-table .grn-line > td { border-top-color: #1e293b; }
+  .grn-table .grn-history { background: #f8fafc; }
+  .dark .grn-table .grn-history { background: rgba(15, 23, 42, .55); }
+  .grn-table .grn-history td { font-size: .6875rem; }
+  .grn-step {
+    display: inline-grid;
+    place-items: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-right: .375rem;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    font-size: .5625rem;
+    font-weight: 700;
+    color: #475569;
+  }
+  .dark .grn-step { background: #1e293b; color: #cbd5e1; }
+  .grn-date { font-weight: 600; color: #475569; }
+  .dark .grn-date { color: #cbd5e1; }
+  .grn-ref {
+    margin-left: .375rem;
+    border-radius: .25rem;
+    background: #e0f2fe;
+    padding: .0625rem .3125rem;
+    font-size: .625rem;
+    font-weight: 600;
+    color: #0369a1;
+  }
+  .grn-ref--inv { background: #dcfce7; color: #15803d; }
+  .dark .grn-ref { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
+  .dark .grn-ref--inv { background: rgba(21, 128, 61, .25); color: #86efac; }
+</style>
+
 <section class="space-y-6" x-data="{ open: new URLSearchParams(location.search).get('open') ? Number(new URLSearchParams(location.search).get('open')) : null }">
 
   <div class="flex items-center justify-between">
@@ -10,7 +48,9 @@
     <span class="text-xs text-slate-400 dark:text-slate-500">Use &#128438; Print on each GRN row</span>
   </div>
 
-  {% include "components/table/search_filters.html" %}
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    {% include "components/table/filter_bar.html" with table_id="grn-table" date_filters_enabled=True search_placeholder="Search..." %}
+  </div>
 
   {# ── Purchase Orders ── #}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -18,16 +58,20 @@
       <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Purchase Orders</h2>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
+      <table id="grn-table" class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr>
             <th class="w-8 px-3 py-3"></th>
-            <th class="px-4 py-3">PO #</th>
-            <th class="px-4 py-3">Supplier</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3 text-right">Amount</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3"></th>
+            <th class="px-4 py-3">Order #</th>
+            {% if "supplier" in columns %}<th class="px-4 py-3">Supplier</th>{% endif %}
+            {% if "purchase_date" in columns %}<th class="px-4 py-3">Date</th>{% endif %}
+            {% if "expected" in columns %}<th class="px-4 py-3">Expected</th>{% endif %}
+            {% if "value" in columns %}<th class="px-4 py-3 text-right">Amount</th>{% endif %}
+            {% if "ordered" in columns %}<th class="px-4 py-3 text-right">Total ordered</th>{% endif %}
+            {% if "received" in columns %}<th class="px-4 py-3 text-right">Received</th>{% endif %}
+            {% if "balance" in columns %}<th class="px-4 py-3 text-right">Balance</th>{% endif %}
+            {% if "status" in columns %}<th class="px-4 py-3">Status</th>{% endif %}
+            <th class="px-4 py-3">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -40,9 +84,14 @@
               </button>
             </td>
             <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
-            <td class="px-4 py-3">{{ order.supplier.name }}</td>
-            <td class="px-4 py-3">{{ order.purchase_date|date:"d-m-Y" }}</td>
-            <td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>
+            {% if "supplier" in columns %}<td class="px-4 py-3">{{ order.supplier.name }}</td>{% endif %}
+            {% if "purchase_date" in columns %}<td class="px-4 py-3 whitespace-nowrap">{{ order.purchase_date|dmy }}</td>{% endif %}
+            {% if "expected" in columns %}<td class="px-4 py-3 whitespace-nowrap">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
+            {% if "value" in columns %}<td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>{% endif %}
+            {% if "ordered" in columns %}<td class="px-4 py-3 text-right text-slate-500">{{ order.ordered_total|qty }}</td>{% endif %}
+            {% if "received" in columns %}<td class="px-4 py-3 text-right {% if order.received_total %}font-medium text-emerald-700{% else %}text-slate-400{% endif %}">{{ order.received_total|qty }}</td>{% endif %}
+            {% if "balance" in columns %}<td class="px-4 py-3 text-right {% if order.balance_total %}font-medium text-amber-600{% else %}text-slate-400{% endif %}">{{ order.balance_total|qty }}</td>{% endif %}
+            {% if "status" in columns %}
             <td class="px-4 py-3">
               <span class="rounded-full px-2.5 py-1 text-xs font-medium
                 {% if order.status == 'draft' %}bg-amber-100 text-amber-700
@@ -52,6 +101,7 @@
                 {{ order.get_status_display }}
               </span>
             </td>
+            {% endif %}
             <td class="px-4 py-3">
               <a href="{% url 'inventory:grn_print' order.pk %}" target="_blank"
                 class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200">
@@ -61,66 +111,73 @@
           </tr>
           {# Expandable GRN rows #}
           <tr x-show="open === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
-            <td colspan="6" class="px-6 py-4" x-data="{ confirm: false }">
+            <td colspan="{{ column_span }}" class="px-6 py-4" x-data="{ confirm: false }">
               <form method="post" action="{% url 'inventory:grn_bulk_receive' order.pk %}" x-ref="recvForm_{{ order.pk }}">
               {% csrf_token %}
               {% with poi_list=order.items.all %}
               {% if poi_list %}
-              <table class="w-full text-left text-xs">
+              <table class="w-full text-left text-xs grn-table">
                 <thead class="bg-slate-100 text-slate-500 font-semibold uppercase dark:bg-slate-800">
                   <tr>
                     <th class="px-2 py-1.5">#</th>
                     <th class="px-2 py-1.5">Item</th>
-                    <th class="px-2 py-1.5 text-right">PO Qty</th>
+                    <th class="px-2 py-1.5 text-right">Ordered</th>
                     <th class="px-2 py-1.5 text-right">Rate</th>
                     <th class="px-2 py-1.5 text-right">Discount</th>
                     <th class="px-2 py-1.5 text-right">Amount</th>
-                    <th class="px-2 py-1.5 text-right">Rem Qty</th>
-                    <th class="px-2 py-1.5 text-right">Last Recv</th>
-                    <th class="px-2 py-1.5 text-right">Curr Received Qty</th>
-                    <th class="px-2 py-1.5 text-right">Total Recv</th>
+                    <th class="px-2 py-1.5 text-right">Received</th>
+                    <th class="px-2 py-1.5 text-right">Balance</th>
+                    <th class="px-2 py-1.5 text-right">Receiving now</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                   {% for poi in poi_list %}
-                  {% with poi_receipts=poi.receipts.all %}
-                  {% if poi_receipts %}
-                    {% for receipt in poi_receipts %}
-                    <tr class="bg-emerald-50/50 dark:bg-emerald-900/10">
-                      <td class="px-2 py-1.5 text-slate-400">{{ forloop.parentloop.counter }}</td>
-                      <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
-                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
-                      <td class="px-2 py-1.5 text-right {% if poi.pending_receive_qty == 0 %}text-slate-400{% else %}text-amber-600{% endif %}">{{ poi.pending_receive_qty|qty }}</td>
-                      <td class="px-2 py-1.5 text-right text-emerald-700">{{ poi.curr_receive_qty|qty }}</td>
-                      <td class="px-2 py-1.5 text-right">
-                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}" min="0" step="0.0001"
-                          class="form-input w-24 text-right">
-                      </td>
-                      <td class="px-2 py-1.5 text-right font-semibold text-emerald-700">{{ poi.total_receive_qty|qty }}</td>
-                    </tr>
-                    {% endfor %}
-                  {% else %}
-                    <tr class="bg-amber-50/50 dark:bg-amber-900/10">
-                      <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
-                      <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
-                      <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
-                      <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
-                      <td class="px-2 py-1.5 text-right text-amber-600">{{ poi.pending_receive_qty|qty }}</td>
-                      <td class="px-2 py-1.5 text-right text-slate-400">0</td>
-                      <td class="px-2 py-1.5 text-right">
-                        <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}" min="0" step="0.0001"
-                          class="form-input w-24 text-right">
-                      </td>
-                      <td class="px-2 py-1.5 text-right text-slate-400">0</td>
-                      <td class="px-2 py-1.5"></td>
-                    </tr>
-                  {% endif %}
-                  {% endwith %}
+                  {# One row per ordered line -- never one per delivery, or the #}
+                  {# line's own figures get repeated and the entry box is #}
+                  {# posted more than once for the same line. #}
+                  <tr class="grn-line">
+                    <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
+                    <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
+                    <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
+                    <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
+                    <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
+                    <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
+                    <td class="px-2 py-1.5 text-right font-semibold {% if poi.received_total %}text-emerald-700{% else %}text-slate-400{% endif %}">{{ poi.received_total|qty }}</td>
+                    <td class="px-2 py-1.5 text-right font-semibold {% if poi.remaining_qty %}text-amber-600{% else %}text-slate-400{% endif %}">{{ poi.remaining_qty|qty }}</td>
+                    <td class="px-2 py-1.5 text-right">
+                      {% if poi.remaining_qty %}
+                      <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}"
+                             min="0" max="{{ poi.remaining_qty|qty }}" step="0.0001"
+                             class="form-input w-24 text-right">
+                      {% else %}
+                      <span class="inline-flex items-center gap-1 text-emerald-700">&#10003; Complete</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+
+                  {# The account behind that one figure: every delivery, what it #}
+                  {# took the total to, and what was still owed afterwards. #}
+                  {% for entry in poi.history %}
+                  <tr class="grn-history">
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1" colspan="3">
+                      <span class="grn-step">{{ entry.seq }}</span>
+                      <span class="grn-date">{{ entry.receipt.receive_date|dmy }}</span>
+                      {% if entry.receipt.grn_number %}<span class="grn-ref">{{ entry.receipt.grn_number }}</span>{% endif %}
+                      {% if entry.receipt.invoice_num %}<span class="grn-ref grn-ref--inv">Inv {{ entry.receipt.invoice_num }}</span>{% endif %}
+                    </td>
+                    <td class="px-2 py-1 text-right text-slate-400">Received</td>
+                    <td class="px-2 py-1 text-right font-semibold text-emerald-700">+{{ entry.quantity|qty }}</td>
+                    <td class="px-2 py-1 text-right text-slate-500" title="Total received after this delivery">{{ entry.running|qty }}</td>
+                    <td class="px-2 py-1 text-right text-slate-500" title="Still owed after this delivery">{{ entry.balance|qty }}</td>
+                    <td class="px-2 py-1"></td>
+                  </tr>
+                  {% empty %}
+                  <tr class="grn-history">
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1 text-slate-400" colspan="8">Nothing received against this line yet.</td>
+                  </tr>
+                  {% endfor %}
                   {% endfor %}
                 </tbody>
               </table>
@@ -163,7 +220,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
+          <tr><td colspan="{{ column_span }}" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -10,6 +10,8 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.core.table_columns import Column, ColumnSet
+
 from apps.core.constants import (
     STATUS_CANCELLED,
     STATUS_DRAFT,
@@ -175,77 +177,57 @@ def summarise(orders, today=None):
 
 
 # ── Columns ────────────────────────────────────────────────────────────────
-# Which columns the table offers, in the order they are shown. ``locked`` ones
-# are not on offer: the order number is what a row *is*, and the action button
-# is the only thing on the row that does anything, so a screen without them is
-# not a screen. ``export`` is what the column writes into a spreadsheet cell,
-# so the file and the table can never drift apart.
-COLUMNS = (
-    {"key": "purchase_num", "label": "Order #", "locked": True,
-     "export": lambda order: order.purchase_num},
-    {"key": "purchase_date", "label": "Date",
-     "export": lambda order: order.purchase_date},
-    {"key": "supplier", "label": "Supplier",
-     "export": lambda order: order.supplier.name},
-    {"key": "buyer", "label": "Raised by",
-     "export": lambda order: (order.created_by.get_full_name() or order.created_by.username) if order.created_by else ""},
-    {"key": "expected", "label": "Expected",
-     "export": lambda order: order.expected_date or ""},
-    {"key": "value", "label": "Order value", "locked": True,
-     "export": lambda order: order.total_amount},
-    {"key": "received", "label": "Received",
-     "export": lambda order: f"{order.received_qty} of {order.ordered_qty} ({order.received_percent}%)"},
-    {"key": "grn", "label": "Goods receipt",
-     "export": lambda order: order.grn_number},
-    {"key": "billed", "label": "Invoiced",
-     "export": lambda order: ", ".join(order.invoice_numbers) or BILLED_LABELS[order.billed_state]},
-    {"key": "status", "label": "Status",
-     "export": lambda order: order.get_status_display()},
-    {"key": "actions", "label": "Actions", "locked": True, "export": None},
-)
+# Declared once; the burger menu, the table and every export read from here.
+BILLED_LABELS = {"none": "", "unbilled": "Not invoiced", "partial": "Part invoiced", "billed": ""}
 
-BILLED_LABELS = {"none": "", "unbilled": "Not billed", "partial": "Partial", "billed": ""}
-
-COLUMN_KEYS = [column["key"] for column in COLUMNS]
-LOCKED_KEYS = {column["key"] for column in COLUMNS if column.get("locked")}
-# Buyer and GRN are off to begin with: both are worth having, neither is worth
-# the width on a first look.
-DEFAULT_HIDDEN = {"buyer", "grn"}
-
-SESSION_KEY = "inventory.purchase_order_columns"
+COLUMNS = ColumnSet("inventory.purchase_orders", (
+    Column("purchase_num", "Order #", locked=True, export=lambda o: o.purchase_num),
+    Column("purchase_date", "Date", export=lambda o: o.purchase_date),
+    Column("supplier", "Supplier", export=lambda o: o.supplier.name),
+    # Worth having, not worth the width on a first look.
+    Column("buyer", "Raised by", default=False,
+           export=lambda o: (o.created_by.get_full_name() or o.created_by.username) if o.created_by else ""),
+    Column("expected", "Expected", export=lambda o: o.expected_date or ""),
+    Column("value", "Order value", locked=True, export=lambda o: o.total_amount),
+    Column("received", "Received",
+           export=lambda o: f"{o.received_qty} of {o.ordered_qty} ({o.received_percent}%)"),
+    Column("grn", "Goods receipt", default=False, export=lambda o: o.grn_number),
+    Column("billed", "Invoiced",
+           export=lambda o: ", ".join(o.invoice_numbers) or BILLED_LABELS[o.billed_state]),
+    Column("status", "Status", export=lambda o: o.get_status_display()),
+))
 
 
 def visible_columns(session):
-    """The column keys on show, as a set.
-
-    Held in the session rather than in the database: which columns one person
-    wants to look at is that person's business, and it should not change what
-    anybody else sees.
-    """
-    stored = session.get(SESSION_KEY)
-    if not isinstance(stored, list):
-        return {key for key in COLUMN_KEYS if key not in DEFAULT_HIDDEN}
-    chosen = {key for key in stored if key in COLUMN_KEYS}
-    return chosen | LOCKED_KEYS
+    return COLUMNS.visible(session)
 
 
 def set_visible_columns(session, keys):
-    """Remember what to show. Locked columns go back in whatever was asked."""
-    chosen = [key for key in COLUMN_KEYS if key in set(keys) or key in LOCKED_KEYS]
-    session[SESSION_KEY] = chosen
+    COLUMNS.choose(session, keys)
 
 
 def column_menu(session):
-    """The columns as the settings menu needs them: label, state, and locked."""
-    shown = visible_columns(session)
-    return [
-        {"key": column["key"], "label": column["label"],
-         "locked": bool(column.get("locked")), "on": column["key"] in shown}
-        for column in COLUMNS
-    ]
+    return COLUMNS.menu(session)
 
 
 def export_columns(session):
-    """The visible columns that can be written to a cell, in table order."""
-    shown = visible_columns(session)
-    return [column for column in COLUMNS if column["key"] in shown and column["export"]]
+    return COLUMNS.exportable(session)
+
+
+# ── Goods receipt screen ───────────────────────────────────────────────────
+# Its own table, its own choice: the two screens list the same records but are
+# read for different reasons, so what one person wants on show here is not what
+# they want on the purchase orders board.
+GRN_COLUMNS = ColumnSet("inventory.grn", (
+    Column("purchase_num", "Order #", locked=True, export=lambda o: o.purchase_num),
+    Column("supplier", "Supplier", export=lambda o: o.supplier.name),
+    Column("purchase_date", "Date", export=lambda o: o.purchase_date),
+    Column("expected", "Expected", default=False, export=lambda o: o.expected_date or ""),
+    Column("value", "Amount", export=lambda o: o.po_total),
+    # Off by default: the balance already says what is outstanding, so the
+    # quantity ordered is there for whoever wants to check the arithmetic.
+    Column("ordered", "Total ordered", default=False, export=lambda o: o.ordered_total),
+    Column("received", "Received", export=lambda o: o.received_total),
+    Column("balance", "Balance", export=lambda o: o.balance_total),
+    Column("status", "Status", export=lambda o: o.get_status_display()),
+))

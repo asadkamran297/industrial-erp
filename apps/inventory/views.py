@@ -21,6 +21,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
 from apps.access_control.selectors import user_has_permission
+from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
@@ -28,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -1849,8 +1850,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         # column lands, with the label stretched to meet it. "actions" is drawn
         # as its own trailing cell rather than from the column set, so it is
         # counted once here and not twice.
-        shown = [column["key"] for column in COLUMNS
-                 if column["key"] in context["columns"] and column["key"] != "actions"]
+        shown = [column.key for column in COLUMNS.columns if column.key in context["columns"]]
         span = len(shown) + 1
         context["column_span"] = span
         if "value" in shown:
@@ -1870,6 +1870,8 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
         # Whether anything is narrowing the list right now. Paging and column
         # choices are not filters, so they do not light the reset up.
+        context["export_url"] = reverse_lazy("inventory:purchase_order_export")
+        context["columns_url"] = reverse_lazy("inventory:purchase_order_columns")
         context["filters_active"] = any(
             (self.request.GET.get(key) or "").strip()
             for key in ("q", "supplier", "date_from", "date_to", "sort", "dir")
@@ -1877,126 +1879,21 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         return context
 
 
-class PurchaseOrderExportView(InventoryListMixin, View):
-    """The orders currently on screen, in whichever format was asked for.
+class PurchaseOrderExportView(InventoryListMixin, TableExportView):
+    """The orders on screen, in whichever format was asked for.
 
-    Deliberately the same filters *and the same columns* as the list whatever
-    the format: what comes down is what the operator was looking at, so the
-    file needs no explaining and the two can never drift apart.
+    Same filters and same columns as the list whatever the format, so the file
+    needs no explaining and the two can never drift apart.
     """
 
     page = "inventory.purchase_orders"
+    columns = COLUMNS
+    filename = "purchase-orders"
+    title = "Purchase Orders"
 
-    FORMATS = ("xlsx", "csv", "pdf", "doc", "json")
-
-    def get(self, request, *args, **kwargs):
-        listing = PurchaseOrderListView(request=request, kwargs={}, args=())
-        orders = decorate(list(listing.get_queryset()))
-        columns = export_columns(request.session)
-
-        # Rows once, as text, so every format below writes the same figures.
-        header = [column["label"] for column in columns]
-        rows = [[column["export"](order) for column in columns] for order in orders]
-
-        kind = request.GET.get("format", "csv")
-        if kind not in self.FORMATS:
-            kind = "csv"
-        return getattr(self, f"_{kind}")(request, header, rows)
-
-    # ── the formats ────────────────────────────────────────────────────────
-    def _csv(self, request, header, rows):
-        response = HttpResponse(content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = 'attachment; filename="purchase-orders.csv"'
-        # Excel reads a CSV as the machine's own encoding unless the file says
-        # otherwise, so the BOM is what keeps a supplier's name intact.
-        response.write("\ufeff")
-        writer = csv.writer(response)
-        writer.writerow(header)
-        writer.writerows(rows)
-        return response
-
-    def _xlsx(self, request, header, rows):
-        """A real spreadsheet, not a CSV wearing an .xlsx name.
-
-        Numbers land as numbers and dates as dates, so the file can be summed
-        and sorted in Excel without anyone retyping a column first.
-        """
-        from openpyxl import Workbook
-        from openpyxl.styles import Alignment, Font, PatternFill
-        from openpyxl.utils import get_column_letter
-
-        book = Workbook()
-        sheet = book.active
-        sheet.title = "Purchase Orders"
-        sheet.append(header)
-
-        heading = Font(bold=True, color="FFFFFF")
-        band = PatternFill("solid", fgColor="1E293B")
-        for cell in sheet[1]:
-            cell.font = heading
-            cell.fill = band
-            cell.alignment = Alignment(vertical="center")
-
-        for row in rows:
-            sheet.append([self._native(value) for value in row])
-
-        # Room to read, a frozen heading, and a filter row: what anybody would
-        # do to the sheet by hand the moment they opened it.
-        for index, label in enumerate(header, start=1):
-            longest = max([len(str(label))] + [len(str(row[index - 1])) for row in rows] or [0])
-            sheet.column_dimensions[get_column_letter(index)].width = min(max(longest + 2, 10), 42)
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
-
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response["Content-Disposition"] = 'attachment; filename="purchase-orders.xlsx"'
-        book.save(response)
-        return response
-
-    def _doc(self, request, header, rows):
-        """A Word document, written as the HTML Word has opened for decades.
-
-        No dependency for this one: Word reads an HTML table as a document and
-        keeps the formatting, which is all a table of orders needs.
-        """
-        html = render_to_string("inventory/purchase_order_export_doc.html", {
-            "header": header, "rows": rows, "printed_by": request.user,
-            "printed_on": timezone.localdate(),
-        })
-        response = HttpResponse(html, content_type="application/msword")
-        response["Content-Disposition"] = 'attachment; filename="purchase-orders.doc"'
-        return response
-
-    def _pdf(self, request, header, rows):
-        """A print-ready page that saves as PDF from the browser.
-
-        There is no PDF library in this project, and adding one to lay out a
-        table would be a lot of machinery for something every browser already
-        does properly -- including page breaks and repeated headings.
-        """
-        return render(request, "inventory/purchase_order_export_print.html", {
-            "header": header, "rows": rows, "printed_by": request.user,
-            "printed_on": timezone.localdate(),
-        })
-
-    def _json(self, request, header, rows):
-        """The same table, for whatever is reading it next."""
-        keys = [column["key"] for column in export_columns(request.session)]
-        payload = [dict(zip(keys, [str(value) for value in row])) for row in rows]
-        response = JsonResponse({"columns": header, "orders": payload}, json_dumps_params={"indent": 2})
-        response["Content-Disposition"] = 'attachment; filename="purchase-orders.json"'
-        return response
-
-    @staticmethod
-    def _native(value):
-        """Keep a number a number and a date a date; everything else is text."""
-        if isinstance(value, (int, float, date, datetime)):
-            return value
-        if isinstance(value, Decimal):
-            return float(value)
-        return str(value)
+    def get_rows(self):
+        listing = PurchaseOrderListView(request=self.request, kwargs={}, args=())
+        return decorate(list(listing.get_queryset()))
 
 
 class PurchaseOrderColumnsView(InventoryListMixin, View):
@@ -3071,20 +2968,119 @@ class GRNListView(InventoryListMixin, ListView):
     filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
 
+    PER_PAGE_OPTIONS = (10, 25, 50, 100)
+
+    def get_paginate_by(self, queryset):
+        raw = (self.request.GET.get("per_page") or "").strip()
+        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
+            return int(raw)
+        return self.paginate_by
+
     def get_filter_specs(self):
         supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
+        return [{"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
+                 "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # What the shared filter bar needs. No tabs, columns or export here --
+        # the component leaves out whatever it is not given.
+        carried = self.request.GET.copy()
+        for key in ("tab", "page"):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
+        context["per_page"] = self.get_paginate_by(None)
+        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        context["filters_active"] = any(
+            (self.request.GET.get(key) or "").strip()
+            for key in ("q", "supplier", "date_from", "date_to")
+        )
+        context["columns"] = GRN_COLUMNS.visible(self.request.session)
+        context["column_menu"] = GRN_COLUMNS.menu(self.request.session)
+        context["columns_url"] = reverse_lazy("inventory:grn_columns")
+        context["export_url"] = reverse_lazy("inventory:grn_export")
+        # The expander handle and the GRN button are cells the table draws
+        # itself rather than columns anyone may switch off.
+        context["column_span"] = len(context["columns"]) + 2
         context["grns"] = PurchaseOrderItemReceived.objects.select_related("purchase_order_item__purchase_order", "inventory_item").order_by("-receive_date", "-id")
         for order in context["orders"]:
             items = list(order.items.all())
             order.po_total = sum(i.total_amount for i in items)
+            order.ordered_total = Decimal("0")
+            order.received_total = Decimal("0")
+            order.balance_total = Decimal("0")
             for item in items:
                 remaining = (item.quantity or Decimal("0")) - (item.total_receive_qty or Decimal("0"))
                 item.remaining_qty = remaining if remaining > 0 else Decimal("0")
+
+                # Every delivery against this line, oldest first, each carrying
+                # what it took the running total to and what was still owed
+                # afterwards. Stored ordering is newest-first, which is right
+                # for a list and wrong for an account.
+                ordered_qty = item.quantity or Decimal("0")
+                running = Decimal("0")
+                history = []
+                for seq, receipt in enumerate(
+                    sorted(item.receipts.all(), key=lambda r: (r.receive_date, r.pk)), start=1
+                ):
+                    taken = (receipt.quantity or Decimal("0")) + (receipt.extra_qty or Decimal("0"))
+                    running += taken
+                    balance = ordered_qty - running
+                    history.append({
+                        "seq": seq,
+                        "receipt": receipt,
+                        "quantity": taken,
+                        "running": running,
+                        "balance": balance if balance > 0 else Decimal("0"),
+                    })
+                item.history = history
+                # What the line has actually taken in, read off the receipts
+                # rather than off the running column the row also carries -- if
+                # the two ever disagree, the receipts are the record.
+                item.received_total = running
+                order.ordered_total += ordered_qty
+                order.received_total += running
+                order.balance_total += item.remaining_qty
         return context
+
+
+class GRNExportView(InventoryListMixin, TableExportView):
+    """The goods receipt rows on screen, in whichever format was asked for."""
+
+    page = "inventory.grn"
+    columns = GRN_COLUMNS
+    filename = "goods-receipts"
+    title = "Goods Receipts"
+
+    def get_rows(self):
+        listing = GRNListView(request=self.request, kwargs={}, args=())
+        orders = list(listing.get_queryset())
+        # The two rolled-up figures the table shows are worked out on the way
+        # to the page, so they are worked out here too rather than exporting
+        # blanks for columns that are on screen.
+        for order in orders:
+            lines = list(order.items.all())
+            order.po_total = sum((line.total_amount for line in lines), Decimal("0.00"))
+            order.received_total = sum((line.total_receive_qty or Decimal("0") for line in lines), Decimal("0"))
+            order.ordered_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            balance = order.ordered_total - order.received_total
+            order.balance_total = balance if balance > 0 else Decimal("0")
+        return orders
+
+
+class GRNColumnsView(InventoryListMixin, View):
+    """Which columns this person wants on the goods receipt table."""
+
+    page = "inventory.grn"
+
+    def post(self, request, *args, **kwargs):
+        GRN_COLUMNS.choose(request.session, request.POST.getlist("columns"))
+        carried = urlencode([
+            (key, value) for key, value in parse_qsl(request.POST.get("back", ""), keep_blank_values=False)
+            if key in ("q", "supplier", "date_from", "date_to", "per_page", "page")
+        ])
+        target = reverse_lazy("inventory:grn_list")
+        return redirect(f"{target}?{carried}" if carried else str(target))
 
 
 class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):

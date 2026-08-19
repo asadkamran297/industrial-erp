@@ -17,7 +17,7 @@
         <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
         </svg>
-        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search voucher no, account, remarks"
+        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search..."
                class="search-input {% if request.GET.q %}pl-9{% endif %}">
         {# Only offered once there is something to clear. #}
         {% if request.GET.q %}

@@ -28,7 +28,7 @@
         <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
         </svg>
-        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search invoice no, customer, notes"
+        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search..."
                class="search-input {% if request.GET.q %}pl-9{% endif %}">
         {% if request.GET.q %}
         <a href="?customer={{ request.GET.customer }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}"

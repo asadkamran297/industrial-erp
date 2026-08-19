@@ -5,7 +5,7 @@ HTML reader is not a browser and ignores most of a modern stylesheet.
 {% endcomment %}<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head>
   <meta charset="utf-8">
-  <title>Purchase Orders</title>
+  <title>{{ title }}</title>
   <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
   <style>
     @page { size: A4 landscape; margin: 1.5cm; }
@@ -18,8 +18,8 @@ HTML reader is not a browser and ignores most of a modern stylesheet.
   </style>
 </head>
 <body>
-  <h1>Purchase Orders</h1>
-  <p class="meta">{{ rows|length }} order{{ rows|length|pluralize }} &middot; prepared by {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_on|dmy }}</p>
+  <h1>{{ title }}</h1>
+  <p class="meta">{{ rows|length }} row{{ rows|length|pluralize }} &middot; prepared by {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_on|dmy }}</p>
   <table>
     <thead>
       <tr>{% for label in header %}<th>{{ label }}</th>{% endfor %}</tr>

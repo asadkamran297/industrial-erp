@@ -165,7 +165,9 @@
   }
 
   function initSearchableSelects() {
-    document.querySelectorAll('select.form-select').forEach(enhanceSelect);
+    // Two ways in: the app-wide form control, and anything that opts in by
+    // name -- a filter chip is not a form field but still wants the search.
+    document.querySelectorAll('select.form-select, select[data-searchable]').forEach(enhanceSelect);
   }
 
   document.addEventListener('DOMContentLoaded', initSearchableSelects);

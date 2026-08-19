@@ -3,7 +3,7 @@
 {% url "access_control:permission_create" as create_url %}
 {% if can_add %}{% include "components/ui/page_header.html" with title="Permissions" subtitle="Maintain system capability codes used by roles and navigation." action_label="New Permission" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Permissions" subtitle="Maintain system capability codes used by roles and navigation." %}{% endif %}
 <section class="mt-6">
-  {% include "components/table/search_filters.html" with search_placeholder="Search permissions..." %}
+  {% include "components/table/search_filters.html" with search_placeholder="Search..." %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">

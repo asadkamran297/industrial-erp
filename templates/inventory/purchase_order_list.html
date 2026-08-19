@@ -81,37 +81,6 @@
   .po-tile-note--alert { color: var(--tone); font-weight: 600; }
 
   /* ── Tabs and filters ─────────────────────────────────────────────────── */
-  /* One row: tabs, the filters and the search box. Nothing here may be an
-     overflow container -- the date range drops a panel out of this bar, and a
-     scrolling ancestor would clip it and grow a scrollbar instead. Below the
-     width where the row genuinely cannot hold them, it wraps. */
-  .po-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; padding: .75rem 1rem; }
-  @media (max-width: 1024px) { .po-bar { flex-wrap: wrap; } }
-  .po-bar > * { flex: 0 0 auto; }
-  /* The search box is one of the controls, not the space between them: it sits
-     at the same width and height as a filter chip rather than stretching to
-     swallow whatever the row has left over. */
-  .po-search { flex: 0 1 13rem; min-width: 9rem; }
-  /* One gap in the row, before the first of the trailing controls. Everything
-     after it -- search, reset, export -- sits against it as one cluster, so
-     making Export a menu of its own does not open a second gap. */
-  .po-bar > .settings-menu--lead { margin-left: auto; }
-  .po-search .search-field { width: 100%; }
-  .po-search .search-input {
-    width: 100%;
-    height: 1.9375rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .625rem;
-    font-size: .8125rem;
-  }
-  .dark .po-search .search-input { border-color: #1e293b; }
-  .po-search .search-input::placeholder { color: #94a3b8; }
-  .po-filter-row { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; }
-  /* The pipeline stretch is a dropdown like the rest of the bar. Its own value
-     is drawn dark rather than muted: it is the one filter that changes which
-     orders exist on the screen, not merely which of them are shown. */
-  .po-filter--tab select { max-width: none; font-weight: 600; color: #0f172a; }
-  .dark .po-filter--tab select { color: #f1f5f9; }
 
   /* A filter reads as one control: what it filters, then what it is set to. */
   .po-filter {
@@ -125,126 +94,6 @@
     font-weight: 600;
     color: #475569;
     white-space: nowrap;
-  }
-  /* ── Date range: one control, both ends ───────────────────────────────── */
-  .po-range { position: relative; }
-  .po-range-btn { cursor: pointer; background: transparent; }
-  .po-range-btn svg { width: .875rem; height: .875rem; color: #94a3b8; }
-  .po-range-caret { margin-left: .125rem; }
-  .po-range-btn span { font-weight: 500; color: #64748b; }
-  .dark .po-range-btn span { color: #94a3b8; }
-
-  .po-range-panel {
-    position: absolute;
-    top: calc(100% + .375rem);
-    left: 0;
-    z-index: 70;
-    display: flex;
-    width: max-content;
-    border: 1px solid #e2e8f0;
-    border-radius: .75rem;
-    background: #fff;
-    box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
-  }
-  .dark .po-range-panel { border-color: #1e293b; background: #0f172a; }
-
-  .po-range-presets {
-    display: flex;
-    flex-direction: column;
-    gap: .0625rem;
-    border-right: 1px solid #f1f5f9;
-    padding: .375rem;
-  }
-  .dark .po-range-presets { border-right-color: #1e293b; }
-  .po-range-preset {
-    border-radius: .375rem;
-    padding: .375rem .625rem;
-    font-size: .75rem;
-    font-weight: 500;
-    text-align: left;
-    white-space: nowrap;
-    color: #475569;
-  }
-  .po-range-preset:hover { background: #f1f5f9; }
-  .dark .po-range-preset { color: #cbd5e1; }
-  .dark .po-range-preset:hover { background: rgba(30, 41, 59, .7); }
-  .po-range-preset.is-on { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); font-weight: 600; }
-  .dark .po-range-preset.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
-
-  .po-range-custom { display: grid; gap: .375rem; padding: .5rem; }
-  .po-range-field { display: grid; gap: .1875rem; font-size: .625rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
-  .po-range-field input {
-    border: 1px solid #e2e8f0;
-    border-radius: .375rem;
-    padding: .3125rem .5rem;
-    font-size: .75rem;
-    color: #334155;
-    outline: none;
-  }
-  .po-range-field input:focus { border-color: var(--primary-color); }
-  .dark .po-range-field input { border-color: #1e293b; background: transparent; color: #e2e8f0; }
-  .po-range-warn { font-size: .6875rem; font-weight: 600; color: #dc2626; }
-  .po-range-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .5rem;
-    margin-top: .125rem;
-    border-top: 1px solid #f1f5f9;
-    padding-top: .5rem;
-  }
-  .dark .po-range-actions { border-top-color: #1e293b; }
-
-  /* Clear is the quiet way out: a text button that only becomes solid on
-     hover, so it never competes with Apply for the eye. */
-  .po-range-clear {
-    height: 1.875rem;
-    border-radius: .4375rem;
-    padding: 0 .625rem;
-    font-size: .75rem;
-    font-weight: 600;
-    color: #94a3b8;
-    transition: color .15s ease, background .15s ease;
-  }
-  .po-range-clear:hover { color: #475569; background: #f1f5f9; }
-  .dark .po-range-clear:hover { color: #e2e8f0; background: rgba(30, 41, 59, .7); }
-
-  /* Apply is the one thing this panel is for. It reads as a raised surface --
-     a top-light gradient, a hairline of its own colour, and a shadow tinted to
-     match rather than a grey one, which is what makes it look printed on
-     rather than dropped on top. */
-  .po-range-apply {
-    display: inline-flex;
-    align-items: center;
-    height: 1.875rem;
-    border: 1px solid color-mix(in srgb, var(--primary-color) 88%, #000);
-    border-radius: .4375rem;
-    padding: 0 1rem;
-    font-size: .75rem;
-    font-weight: 600;
-    letter-spacing: .01em;
-    color: #fff;
-    background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 88%, #fff), var(--primary-color));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, .22),
-      0 1px 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
-    transition: box-shadow .15s ease, transform .1s ease, filter .15s ease;
-  }
-  .po-range-apply:hover {
-    filter: brightness(1.06);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, .28),
-      0 3px 8px -1px color-mix(in srgb, var(--primary-color) 45%, transparent);
-  }
-  /* Pressed sits back down into the panel rather than staying lifted. */
-  .po-range-apply:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(2, 6, 23, .25); }
-  .po-range-apply:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-  .po-range-apply:disabled {
-    cursor: not-allowed;
-    filter: none;
-    transform: none;
-    opacity: .45;
-    box-shadow: none;
   }
 
   /* A long supplier name is cut rather than allowed to push the row wider. */
@@ -315,49 +164,10 @@
   .po-pill--done { color: #047857; background: #d1fae5; }
   .po-pill--dead { color: #475569; background: #e2e8f0; }
 
-  .po-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 5rem;
-    height: 2.125rem;
-    border: 1px solid #cbd5e1;
-    border-radius: .5rem;
-    padding: 0 .875rem;
-    font-size: .8125rem;
-    font-weight: 600;
-    color: #334155;
-    background: #fff;
-  }
-  .po-action:hover { border-color: #94a3b8; background: #f8fafc; }
-  .po-bar .po-action { height: 2.125rem; min-width: 0; border-radius: .625rem; padding: 0 .75rem; font-size: .8125rem; }
-  /* Square, like the menu beside it, so the pair reads as two buttons rather
-     than a button and a stub of one. Scoped to the bar so it outweighs the
-     `.po-bar .po-action` padding above, which would otherwise squeeze the
-     glyph into what is left between two side paddings. */
-  .po-bar .po-action--icon { width: 2.125rem; padding: 0; }
-  /* Carrying the button on its own, so it is drawn a shade larger than the
-     menu icon beside it: the tray and arrow have more detail in them and read
-     smaller at the same nominal size. */
-  .po-bar .po-action--icon .po-action-icon { width: 1.25rem; height: 1.25rem; flex: none; opacity: .9; }
-  .po-bar .btn--icon { height: 2.125rem; width: 2.125rem; min-height: 0; padding: 0; border-radius: .625rem; }
-  .po-bar .btn--icon svg { width: 1.0625rem; height: 1.0625rem; }
-  /* An icon sits with the label, not instead of it: the glyph is quieter than
-     the word so the button still reads as text at a glance. */
-  .po-action { gap: .4375rem; }
-  .po-action-icon { width: .9375rem; height: .9375rem; opacity: .65; }
-  .dark .po-action { border-color: #334155; background: transparent; color: #cbd5e1; }
-  /* The one action this row is actually waiting on is drawn out; the rest are
-     there but not asking for anything. */
-  .po-action--go { border-color: var(--primary-color); color: var(--primary-color); }
-  .po-action--warn { border-color: #fca5a5; color: #dc2626; }
 
   /* ── Row actions ──────────────────────────────────────────────────────── */
   /* Icons, not buttons: a table of them reads as a column of choices rather
      than a wall of words, and the row stays as tall as its text. */
-  /* The heading sits over the icons rather than over the cell's right edge,
-     so it lines up with what it names. */
-  .po-actions-head { text-align: right; padding-right: 1.25rem; }
   .po-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; }
   .po-icon-btn {
     display: inline-grid;
@@ -372,12 +182,11 @@
   .po-icon-btn:hover { color: #334155; background: #f1f5f9; }
   .dark .po-icon-btn:hover { color: #e2e8f0; background: rgba(30, 41, 59, .8); }
   .po-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
-
   /* The one thing the row is actually waiting on carries its colour all the
-     time, so the eye finds it without hovering; the rest stay grey until
-     they are reached for. */
+     time; the rest stay grey until they are reached for. */
   .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
   .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+
   /* The one action that spends money keeps its label. An icon is fine for
      looking at something; it is not fine for committing to it. */
   .po-text-btn {
@@ -395,13 +204,6 @@
   .po-text-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
   .po-text-btn--go:hover { background: color-mix(in srgb, var(--primary-color) 20%, transparent); }
   .po-text-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
-
-  /* Clearing is a small undo, not a warning: it reads in the same red as the
-     figures that made someone filter in the first place, but stays quiet until
-     it is reached for. */
-  .po-bar .po-action--reset { color: #dc2626; border-color: #fecdd3; }
-  .po-bar .po-action--reset:hover { border-color: #fca5a5; background: #fef2f2; }
-  .dark .po-bar .po-action--reset { border-color: rgba(244, 63, 94, .35); }
 
   .po-icon-btn--warn { color: #dc2626; background: #fef2f2; }
   .po-icon-btn--warn:hover { color: #b91c1c; background: #fee2e2; }
@@ -567,57 +369,6 @@
   .approve-go:active { transform: translateY(1px); }
   .approve-go:disabled { opacity: .6; }
 
-  /* ── Settings menu ────────────────────────────────────────────────────── */
-  .settings-menu { position: relative; }
-  .settings-panel {
-    position: absolute;
-    top: calc(100% + .5rem);
-    right: 0;
-    z-index: 70;
-    width: 15rem;
-    padding: .375rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .75rem;
-    background: #fff;
-    box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
-  }
-  .dark .settings-panel { border-color: #1e293b; background: #0f172a; }
-  .export-panel { width: 17rem; }
-  .export-item {
-    display: flex;
-    align-items: center;
-    gap: .625rem;
-    width: 100%;
-    border-radius: .5rem;
-    padding: .375rem .5rem;
-    text-align: left;
-    color: #334155;
-  }
-  .export-item:hover { background: #f1f5f9; }
-  .dark .export-item { color: #cbd5e1; }
-  .dark .export-item:hover { background: rgba(30, 41, 59, .7); }
-  .export-item strong { display: block; font-size: .8125rem; font-weight: 600; }
-  .export-item em { display: block; font-size: .6875rem; font-style: normal; color: #94a3b8; }
-  /* A file type is recognised by its badge before its name is read, so each
-     one keeps the colour its application is known by. */
-  .export-badge {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 2rem;
-    height: 1.625rem;
-    border-radius: .375rem;
-    font-size: .5625rem;
-    font-weight: 800;
-    letter-spacing: .02em;
-    color: #fff;
-  }
-  .export-badge--xls { background: #15803d; }
-  .export-badge--csv { background: #0f766e; }
-  .export-badge--doc { background: #1d4ed8; }
-  .export-badge--pdf { background: #b91c1c; }
-  .export-badge--json { background: #7c3aed; font-size: .75rem; }
-  .export-badge--copy { background: #475569; font-size: .8125rem; }
 
   .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
   .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
@@ -664,7 +415,7 @@
   <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
     {% url 'inventory:purchase_order_create' as add_url %}
-    {% include "components/ui/button.html" with label="New Purchase Order" href=add_url variant="primary" icon="+" only %}
+    {% include "components/ui/button.html" with label="Purchase Order" href=add_url variant="primary" icon="+" only %}
     {% endif %}
 
   </div>
@@ -744,187 +495,7 @@
 
 {# ── Board ─────────────────────────────────────────────────────────────── #}
 <section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  <div class="po-bar">
-    {# One form: changing any filter reloads with the tab and search kept. #}
-    <form method="get" class="po-filter-row">
-      <input type="hidden" name="q" value="{{ request.GET.q }}">
-      <input type="hidden" name="per_page" value="{{ per_page }}">
-      {# Which stretch of the pipeline to look at. The count beside each is what #}
-      {# picking it would show, so the choice is made before the reload. #}
-      <label class="po-filter po-filter--tab">
-        Show
-        <select name="tab" onchange="this.form.submit()">
-          {% for tab in tabs %}
-          <option value="{{ tab.key }}" {% if tab.on %}selected{% endif %}>{{ tab.label }} ({{ tab.count }})</option>
-          {% endfor %}
-        </select>
-      </label>
-      {% for spec in filter_specs %}
-      <label class="po-filter">
-        Supplier
-        <select name="{{ spec.name }}" onchange="this.form.submit()">
-          <option value="">All</option>
-          {% for value, label in spec.choices %}
-          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      {% endfor %}
-      {# One control for the whole range. The two dates still post under the #}
-      {# names the view already reads, so nothing behind this changed -- they #}
-      {# live inside the control so it can reach them, and inside the form so #}
-      {# they still submit with it. #}
-      <div class="po-range" x-data="dateRange('{{ request.GET.date_from|escapejs }}', '{{ request.GET.date_to|escapejs }}')"
-           @keydown.escape.window="open = false" @click.outside="open = false">
-        <input type="hidden" name="date_from" x-ref="from" value="{{ request.GET.date_from }}">
-        <input type="hidden" name="date_to" x-ref="to" value="{{ request.GET.date_to }}">
-        <button type="button" class="po-filter po-range-btn" :aria-expanded="open.toString()" @click="open = !open">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
-            <path d="M8 3v4M16 3v4M3 10h18"></path>
-          </svg>
-          <span x-text="label"></span>
-          <svg class="po-range-caret" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M6 8l4 4 4-4"></path>
-          </svg>
-        </button>
-
-        <div class="po-range-panel" x-show="open" x-cloak x-transition.opacity>
-          {# The named stretches people actually ask for, so the common case is #}
-          {# one click and the two boxes are only there for the rest. #}
-          <div class="po-range-presets">
-            <template x-for="preset in presets" :key="preset.key">
-              <button type="button" class="po-range-preset" :class="{ 'is-on': preset.key === active }"
-                      @click="pick(preset)" x-text="preset.label"></button>
-            </template>
-          </div>
-          <div class="po-range-custom">
-            <label class="po-range-field">From
-              <input type="date" x-model="from" :max="to || null">
-            </label>
-            <label class="po-range-field">To
-              <input type="date" x-model="to" :min="from || null">
-            </label>
-            <p class="po-range-warn" x-show="from && to && to < from" x-cloak>The end date is before the start date.</p>
-            <div class="po-range-actions">
-              <button type="button" class="po-range-clear" @click="clear()">Clear</button>
-              <button type="button" class="po-range-apply" :disabled="from && to && to < from" @click="apply()">Apply</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </form>
-
-    <div class="settings-menu settings-menu--lead" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
-      <button type="button" class="btn btn-secondary btn--icon" title="Screen settings" aria-label="Screen settings"
-              :aria-expanded="open.toString()" @click="open = !open">
-        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>
-        </svg>
-      </button>
-      <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
-        {# Which columns to show. Its own form, applied in one trip rather than #}
-        {# a reload per tick. The choice follows through to Export. #}
-        <form method="post" action="{% url 'inventory:purchase_order_columns' %}">{% csrf_token %}
-          <input type="hidden" name="back" value="{{ base_query }}&amp;tab={{ current_tab }}">
-          <p class="settings-heading">Columns</p>
-          {% for column in column_menu %}
-          <label class="settings-check-row{% if column.locked %} is-locked{% endif %}">
-            <input type="checkbox" name="columns" value="{{ column.key }}"
-                   {% if column.on %}checked{% endif %} {% if column.locked %}disabled{% endif %}>
-            <span>{{ column.label }}</span>
-            {% if column.locked %}<span class="settings-lock" title="Always shown">&#128274;</span>{% endif %}
-          </label>
-          {% endfor %}
-          <div class="settings-apply">
-            <button type="submit" class="po-range-apply">Apply</button>
-          </div>
-        </form>
-
-        <p class="settings-heading">Rows per page</p>
-        <div class="settings-rows">
-          {% for size in per_page_options %}
-          <a class="settings-chip{% if size == per_page %} is-on{% endif %}" role="menuitemradio"
-             aria-checked="{% if size == per_page %}true{% else %}false{% endif %}"
-             href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}&amp;tab={{ current_tab }}&amp;per_page={{ size }}">{{ size }}</a>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    {# Its own form so searching keeps whatever the filter bar is set to. #}
-    <form method="get" class="po-search">
-      <input type="hidden" name="tab" value="{{ current_tab }}">
-      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
-      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
-      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
-      <input type="hidden" name="per_page" value="{{ per_page }}">
-      <div class="search-field">
-        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
-        </svg>
-        <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="search-input">
-      </div>
-    </form>
-
-    {% if filters_active %}
-    {# Only here when something is actually narrowing the list, so an empty #}
-    {# screen never offers to clear nothing. #}
-    <a class="po-action po-action--icon po-action--reset" href="{% url 'inventory:purchase_order_list' %}" title="Clear all filters" aria-label="Clear all filters">
-      <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 5h18l-7 8v6l-4 2v-8z"></path>
-        <path d="M15 4l6 6M21 4l-6 6"></path>
-      </svg>
-    </a>
-    {% endif %}
-
-    {# Export opens rather than fires: the same rows and the same columns, in #}
-    {# whichever shape the person on the other end can actually open. #}
-    <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
-      <button type="button" class="po-action po-action--icon" title="Export" aria-label="Export the rows and columns on screen"
-              :aria-expanded="open.toString()" @click="open = !open">
-        <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 3v11"></path><path d="M8 11l4 4 4-4"></path>
-          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-        </svg>
-      </button>
-
-      <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
-        <p class="settings-heading">Download</p>
-        {% with q=base_query %}
-        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=xlsx">
-          <span class="export-badge export-badge--xls">XLS</span>
-          <span><strong>Excel</strong><em>Figures stay numbers, ready to total</em></span>
-        </a>
-        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=csv">
-          <span class="export-badge export-badge--csv">CSV</span>
-          <span><strong>CSV</strong><em>Opens anywhere</em></span>
-        </a>
-        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=doc">
-          <span class="export-badge export-badge--doc">DOC</span>
-          <span><strong>Word</strong><em>For a document to mark up</em></span>
-        </a>
-        <a class="export-item" role="menuitem" target="_blank" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=pdf">
-          <span class="export-badge export-badge--pdf">PDF</span>
-          <span><strong>PDF / Print</strong><em>Opens the print sheet</em></span>
-        </a>
-        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=json">
-          <span class="export-badge export-badge--json">{ }</span>
-          <span><strong>JSON</strong><em>For another system to read</em></span>
-        </a>
-        {% endwith %}
-
-        <p class="settings-heading">Copy</p>
-        {# Straight to the clipboard, so a figure can go into an email or a #}
-        {# chat without a file being made and then thrown away. #}
-        <button type="button" class="export-item" role="menuitem" @click="copyTable($event); open = false">
-          <span class="export-badge export-badge--copy">&#9112;</span>
-          <span><strong>Copy table</strong><em>Paste straight into a sheet</em></span>
-        </button>
-      </div>
-    </div>
-
-  </div>
+  {% include "components/table/filter_bar.html" with table_id="order-table" date_filters_enabled=True search_placeholder="Search..." columns_action=columns_url export_url=export_url %}
 
   <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
     <table id="order-table" class="po-table">
@@ -1185,6 +756,21 @@
     };
   }
 
+  // The board's own state: which order, if any, is waiting on an approval
+  // decision. One dialog serves every row, so the row hands over what it says.
+  function poBoard() {
+    var LINES = JSON.parse(document.getElementById('approval-lines').textContent);
+    return {
+      approval: null,
+      // The lines belonging to whatever the dialog is currently asking about.
+      get lines() { return (this.approval && LINES[this.approval.pk]) || []; },
+      askApproval(order) { this.approval = order; },
+      money(value) {
+        return (Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+    };
+  }
+
   // Copy the table as it stands, tab separated, which is what a spreadsheet
   // pastes into cells rather than into one. Built from the rendered table so
   // it carries exactly the columns on screen.
@@ -1222,69 +808,5 @@
     try { document.execCommand('copy'); done(); } finally { box.remove(); }
   }
 
-  // The date range control. It owns nothing the server knows about: on Apply it
-  // writes the two hidden inputs the view already reads and submits the filter
-  // form, so the query string is exactly what the two boxes used to produce.
-  function dateRange(from, to) {
-    const iso = d => [
-      d.getFullYear(),
-      String(d.getMonth() + 1).padStart(2, '0'),
-      String(d.getDate()).padStart(2, '0'),
-    ].join('-');
-
-    const today = new Date();
-    const shift = days => { const d = new Date(today); d.setDate(d.getDate() + days); return d; };
-    const monthStart = back => new Date(today.getFullYear(), today.getMonth() - back, 1);
-    const monthEnd = back => new Date(today.getFullYear(), today.getMonth() - back + 1, 0);
-    // Quarters run Jan-Mar, Apr-Jun, and so on, whatever month it is now.
-    const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
-
-    const presets = [
-      { key: 'all',       label: 'All dates',    from: '',                    to: '' },
-      { key: 'today',     label: 'Today',        from: iso(today),            to: iso(today) },
-      { key: 'week',      label: 'Last 7 days',  from: iso(shift(-6)),        to: iso(today) },
-      { key: 'days30',    label: 'Last 30 days', from: iso(shift(-29)),       to: iso(today) },
-      { key: 'month',     label: 'This month',   from: iso(monthStart(0)),    to: iso(today) },
-      { key: 'lastmonth', label: 'Last month',   from: iso(monthStart(1)),    to: iso(monthEnd(1)) },
-      { key: 'quarter',   label: 'This quarter', from: iso(quarterStart),     to: iso(today) },
-      { key: 'year',      label: 'This year',    from: iso(new Date(today.getFullYear(), 0, 1)), to: iso(today) },
-    ];
-
-    const pretty = value => {
-      if (!value) return '';
-      const [y, m, d] = value.split('-');
-      const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      return Number(d) + ' ' + names[Number(m) - 1] + ' ' + y;
-    };
-
-    return {
-      open: false,
-      presets: presets,
-      from: from || '',
-      to: to || '',
-      // Which named stretch the current pair happens to be, so reopening the
-      // panel shows what is actually set rather than nothing.
-      get active() {
-        const match = presets.find(p => p.from === this.from && p.to === this.to);
-        return match ? match.key : 'custom';
-      },
-      get label() {
-        const named = presets.find(p => p.key === this.active);
-        if (named) return named.label;
-        if (this.from && this.to) return pretty(this.from) + ' \u2013 ' + pretty(this.to);
-        if (this.from) return 'From ' + pretty(this.from);
-        return 'Until ' + pretty(this.to);
-      },
-      pick(preset) { this.from = preset.from; this.to = preset.to; this.apply(); },
-      clear() { this.from = ''; this.to = ''; this.apply(); },
-      apply() {
-        if (this.from && this.to && this.to < this.from) return;
-        this.$refs.from.value = this.from;
-        this.$refs.to.value = this.to;
-        this.open = false;
-        this.$refs.from.form.submit();
-      },
-    };
-  }
 </script>
 {% endblock %}

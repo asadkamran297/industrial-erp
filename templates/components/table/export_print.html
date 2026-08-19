@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Purchase Orders</title>
+  <title>{{ title }}</title>
   <style>
     /* Landscape, because a purchase order table is wider than it is tall.
        The heading repeats on every sheet, which is the whole reason for
@@ -36,8 +36,8 @@
   </div>
 
   <header>
-    <h1>Purchase Orders</h1>
-    <p class="meta">{{ rows|length }} order{{ rows|length|pluralize }} &middot;
+    <h1>{{ title }}</h1>
+    <p class="meta">{{ rows|length }} row{{ rows|length|pluralize }} &middot;
       prepared by {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_on|dmy }}</p>
   </header>
 
@@ -49,7 +49,7 @@
       {% for row in rows %}
       <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
       {% empty %}
-      <tr><td colspan="{{ header|length }}" style="text-align:center;padding:24px;color:#64748b;">No purchase orders match these filters.</td></tr>
+      <tr><td colspan="{{ header|length }}" style="text-align:center;padding:24px;color:#64748b;">Nothing matches these filters.</td></tr>
       {% endfor %}
     </tbody>
   </table>

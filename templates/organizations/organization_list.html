@@ -4,7 +4,7 @@
 {% if can_add %}{% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." action_label="New Organization" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Organizations" subtitle="Manage company, group, and parent organization records." %}{% endif %}
 
 <section class="mt-6">
-  {% include "components/table/search_filters.html" with search_placeholder="Search organizations..." %}
+  {% include "components/table/search_filters.html" with search_placeholder="Search..." %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">

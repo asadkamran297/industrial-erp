@@ -3,7 +3,7 @@
 {% url "configurations:master_create" master_config.slug as create_url %}
 {% if can_add %}{% include "components/ui/page_header.html" with title=master_config.label subtitle="Maintain reusable master data used across ERP modules." action_label="New Record" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title=master_config.label subtitle="Maintain reusable master data used across ERP modules." %}{% endif %}
 <section class="mt-6">
-  {% include "components/table/search_filters.html" with search_placeholder="Search master data..." %}
+  {% include "components/table/search_filters.html" with search_placeholder="Search..." %}
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
