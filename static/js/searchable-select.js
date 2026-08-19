@@ -170,4 +170,7 @@
 
   document.addEventListener('DOMContentLoaded', initSearchableSelects);
   document.addEventListener('htmx:afterSettle', initSearchableSelects);
+  // Screens that build their own rows (the purchase invoice's lines) ask for the
+  // sweep by name, rather than borrowing htmx's event to mean something else.
+  document.addEventListener('searchable-select:refresh', initSearchableSelects);
 })();

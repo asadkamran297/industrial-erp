@@ -38,12 +38,15 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # customers, and what is sitting on the shelf in between.
     NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index", url_name="inventory:purchase_order_list"),
+        # Straight off the supplier's bill, no order first.
+        NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
         NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
     )),
     NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(
+        NavigationItem("Sale Invoices", permission="inventory.pos_sales.index", url_name="inventory:sale_invoice_list"),
         NavigationItem("New Sale (POS)", permission="inventory.pos_sales.index", url_name="inventory:pos_list"),
         NavigationItem("Sale Returns", permission="inventory.pos_returns.index", url_name="inventory:pos_return_list"),
         NavigationItem("Customers", permission="inventory.customers.index", url_name="inventory:customer_list"),

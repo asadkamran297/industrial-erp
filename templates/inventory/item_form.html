@@ -1,4 +1,4 @@
-{% extends "layouts/portal.html" %}
+{% extends embed_layout|default:"layouts/portal.html" %}
 {% block content %}
 {# Plain CSS, not utilities: the compiled Tailwind bundle is prebuilt and would need a rebuild for new classes. #}
 <style>
@@ -343,8 +343,12 @@
 
     {# ── Footer ─────────────────────────────────────────────────────────── #}
     <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/30">
+      {% if embed %}
+      <button type="button" onclick="window.parent.postMessage({ type: 'embed:cancel' }, window.location.origin);" class="toolbar-btn h-10 px-5">Cancel</button>
+      {% else %}
       <a href="{% url 'inventory:item_list' %}" class="toolbar-btn h-10 px-5">Cancel</a>
       {% if not object %}<button type="submit" name="save_and_new" value="1" class="toolbar-btn h-10 px-5">Save &amp; New</button>{% endif %}
+      {% endif %}
       <button type="submit" class="btn-primary h-10 px-8">Save</button>
     </div>
   </form>

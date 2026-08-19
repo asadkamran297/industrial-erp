@@ -1,0 +1,8 @@
+{# A page shown inside a modal on another screen: the same form, with the #}
+{# sidebar, header and quick-entry chrome dropped so only the entry shows. #}
+{% extends "base.html" %}
+{% block body %}
+<main class="p-4 sm:p-5">
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}

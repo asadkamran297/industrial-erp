@@ -116,7 +116,7 @@
   }
   .unit-note:empty { display: none; }
 
-  /* Stock standing on the line: what is on the shelf, and what this bill takes
+  /* Stock standing on the line: what is on the shelf, and what this sale takes
      it to. Red when there is none, amber when it is into single figures. */
   .stock-chip {
     display: inline-flex;
@@ -139,7 +139,7 @@
   .dark .stock-chip--low { color: #fcd34d; background: rgba(120, 53, 15, .35); }
   .dark .stock-chip--ok { color: #6ee7b7; background: rgba(6, 78, 59, .35); }
 
-  /* Same pill as the supplier field, sized down to sit in the column heading. */
+  /* Same pill as the customer field, sized down to sit in the column heading. */
   .pur-head-item { display: flex; align-items: center; gap: .5rem; }
   .head-action {
     display: grid;
@@ -159,7 +159,7 @@
   .head-action:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
   .dark .head-action { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 
-  /* Modal: the supplier and item forms are loaded whole rather than rebuilt here. */
+  /* Modal: the customer and item forms are loaded whole rather than rebuilt here. */
   .entity-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgba(2, 6, 23, .55); }
   .entity-modal[hidden] { display: none; }
   .entity-modal-card { display: flex; flex-direction: column; width: 100%; max-width: 62rem; height: min(88vh, 46rem); overflow: hidden; border-radius: 1rem; background: #fff; box-shadow: 0 25px 50px -12px rgba(2, 6, 23, .45); }
@@ -178,27 +178,26 @@
   .entity-modal iframe { flex: 1; width: 100%; border: 0; }
 </style>
 
-<h1 class="title-accent text-xl font-bold">Purchase Invoice</h1>
+<h1 class="title-accent text-xl font-bold">Sale Invoice</h1>
 
 <section class="mt-3">
-  <form method="post" id="purchase-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+  <form method="post" id="sale-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
     {# ── Header: who it is for on the left, which bill on the right ───────── #}
     <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
-      {# The label rides the border and the + rides inside, so picking a supplier #}
+      {# The label rides the border and the + rides inside, so picking a customer #}
       {# and adding one that is not on file read as the one control. #}
       <div class="w-full max-w-md">
         <div class="notch-field notch-field--action">
-          <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
-          <select name="supplier" id="supplier" class="form-select" required>
-            <option value="">Select supplier…</option>
-            {% for row in suppliers %}
-              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
+          <label class="notch-label" for="customer">Customer <span class="text-rose-500">*</span></label>
+          <select name="customer" id="customer" class="form-select" required>
+            <option value="">Select customer…</option>
+            {% for row in customers %}
+              <option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.customer_name }}</option>
             {% endfor %}
           </select>
-          <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
+          <button type="button" id="add-customer" class="notch-action" title="Add a new customer" aria-label="Add a new customer">+</button>
         </div>
-        <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
       </div>
 
       <div class="ml-auto flex flex-wrap items-end gap-4">
@@ -207,8 +206,8 @@
           <input type="text" id="invoice-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_invoice_no }}" readonly>
         </div>
         <div class="w-40">
-          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
-          <input type="date" name="bill_date" id="bill_date" class="form-input h-10 w-full" value="{{ posted.bill_date|default:today|date:'Y-m-d' }}">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="sale_date">Date</label>
+          <input type="date" name="sale_date" id="sale_date" class="form-input h-10 w-full" value="{{ posted.sale_date|default:today|date:'Y-m-d' }}">
         </div>
       </div>
     </div>
@@ -242,7 +241,7 @@
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
         <div class="sm:col-span-2">
           <label class="mb-1.5 block text-sm font-medium" for="remarks">Narration</label>
-          <textarea name="remarks" id="remarks" rows="2" class="form-input w-full" placeholder="Anything worth recording against this bill">{{ posted.remarks|default:'' }}</textarea>
+          <textarea name="remarks" id="remarks" rows="2" class="form-input w-full" placeholder="Anything worth recording against this sale">{{ posted.remarks|default:'' }}</textarea>
         </div>
 
       <div class="rounded-xl bg-slate-50 p-5 sm:col-span-2 dark:bg-slate-800/40">
@@ -267,14 +266,14 @@
           <input type="number" step="0.01" min="0" name="paid_amount" id="paid_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.paid_amount|default:'' }}" placeholder="0.00">
         </div>
         <div class="pur-total-row">
-          <span class="pur-label">Balance owed</span>
+          <span class="pur-label">Balance due</span>
           <span class="pur-value font-semibold text-rose-600" id="balance-owed">0.00</span>
         </div>
-        <p class="mt-2 text-xs text-slate-400">Paid settles against the supplier's account. Leave it blank for a credit purchase.</p>
+        <p class="mt-2 text-xs text-slate-400">Paid is what the customer handed over. Leave it blank for a credit sale; the rest lands on their account.</p>
       </div>
       </div>
 
-      {# What the bill comes to, spelled out — the figure the operator checks against the paper. #}
+      {# What the sale comes to, spelled out — the figure the operator checks against the paper. #}
       <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
         <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
         <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
@@ -289,7 +288,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">
-        {% url 'inventory:purchase_invoice_list' as cancel_url %}
+        {% url 'inventory:sale_invoice_list' as cancel_url %}
         {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
         {% include "components/ui/button.html" with label="Save & Print" icon="&#128438;" name="save_and_print" value="1" variant="secondary" only %}
         {% include "components/ui/button.html" with label="Save Invoice" variant="primary" extra="px-8" only %}
@@ -301,7 +300,7 @@
 <div class="entity-modal" id="entity-modal" hidden role="dialog" aria-modal="true" aria-labelledby="entity-modal-title">
   <div class="entity-modal-card entity-modal-card--lg">
     <div class="entity-modal-head">
-      <p class="text-sm font-bold" id="entity-modal-title">New Supplier</p>
+      <p class="text-sm font-bold" id="entity-modal-title">New Customer</p>
       <div class="flex items-center gap-1">
         <button type="button" id="entity-modal-max" class="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" aria-label="Maximize" title="Maximize" aria-pressed="false">
           <svg class="h-4 w-4 max-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h5v5M8 17H3v-5M17 3l-6 6M3 17l6-6"/></svg>
@@ -312,7 +311,7 @@
         </button>
       </div>
     </div>
-    <iframe id="entity-frame" title="New Supplier" src="about:blank"></iframe>
+    <iframe id="entity-frame" title="New Customer" src="about:blank"></iframe>
   </div>
 </div>
 
@@ -383,7 +382,7 @@
   }
 
   // ----- amount in words -----
-  // Same wording as the voucher screen, so a purchase and its payment read alike.
+  // Same wording as the voucher screen, so a sale and its receipt read alike.
   const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
     'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
   const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
@@ -427,7 +426,7 @@
   }
 
   // The stock standing behind a line: what is on the shelf, and — once a
-  // quantity is typed — what this bill takes it to. Bought twice on one bill,
+  // quantity is typed — what this sale takes it to. Bought twice on one bill,
   // the same item counts both lines, so the figure is the real closing stock.
   // Quantities are grouped too, but keep their real precision: 1,250 and 2.5
   // are both figures an operator types, so trailing zeros are not forced on.
@@ -478,26 +477,33 @@
     row.querySelector('.line-rate-unit').textContent = name ? 'per ' + name : '';
   }
 
-  // ``boughtSoFar`` arrives in the item's own unit, which is what stock is kept
+  // ``soldSoFar`` arrives in the item's own unit, which is what stock is kept
   // in. The chip is written in the unit the line is being entered in, so the
   // figure the operator checks is in the same terms as what they are typing.
-  function writeStock(row, boughtSoFar) {
+  // A sale takes stock off the shelf, so the figure counts down; selling more
+  // than is held is called out here rather than only when the save is refused.
+  function writeStock(row, soldSoFar) {
     const chip = row.querySelector('.line-stock');
     const chosen = ITEMS.find(i => String(i.id) === row.querySelector('.line-item').value);
     if (!chosen || !chosen.stocked) { chip.hidden = true; return; }
 
     const held = Number(chosen.stock) || 0;
+    const left = held - soldSoFar;
     const factor = baseFactor(row);
     const shown = unitName(row) || chosen.unit;
     const inUnit = value => value / factor;
     const unit = shown ? ' ' + shown : '';
-    // The tone reads the shelf itself, not the unit it is being said in, so a
-    // line does not change colour just because it switched to kilos.
-    const tone = held <= 0 ? 'none' : held < 10 ? 'low' : 'ok';
+    // What the shelf is left with decides the tone: short is red, whatever the
+    // unit it is being said in.
+    const tone = left < 0 ? 'none' : left === 0 ? 'low' : held <= 0 ? 'none' : left < 10 ? 'low' : 'ok';
     ['none', 'low', 'ok'].forEach(name => chip.classList.toggle('stock-chip--' + name, name === tone));
-    chip.textContent = boughtSoFar > 0
-      ? 'In stock ' + qtyOf(inUnit(held)) + ' → ' + qtyOf(inUnit(held + boughtSoFar)) + unit
-      : 'In stock ' + qtyOf(inUnit(held)) + unit;
+    if (left < 0) {
+      chip.textContent = 'Only ' + qtyOf(inUnit(held)) + unit + ' in stock — short ' + qtyOf(inUnit(-left)) + unit;
+    } else {
+      chip.textContent = soldSoFar > 0
+        ? 'In stock ' + qtyOf(inUnit(held)) + ' → ' + qtyOf(inUnit(left)) + unit
+        : 'In stock ' + qtyOf(inUnit(held)) + unit;
+    }
     chip.hidden = false;
   }
 
@@ -505,13 +511,13 @@
     let quantity = 0, goods = 0;
     // Per item, so two lines of the same thing add up rather than each showing
     // only its own share.
-    const bought = new Map();
+    const sold = new Map();
     Array.from(rowsBox.children).forEach(row => {
       const id = row.querySelector('.line-item').value;
       if (!id) return;
       // Lines may be written in different units of the same item, so each is
       // restated in the item's own unit before they are added up.
-      bought.set(id, (bought.get(id) || 0) + num(row.querySelector('.line-qty')) * baseFactor(row));
+      sold.set(id, (sold.get(id) || 0) + num(row.querySelector('.line-qty')) * baseFactor(row));
     });
 
     Array.from(rowsBox.children).forEach(row => {
@@ -520,7 +526,7 @@
       const amount = qty * rate;
       row.querySelector('.line-amount').textContent = moneyText(amount);
       writeUnitNotes(row);
-      writeStock(row, bought.get(row.querySelector('.line-item').value) || 0);
+      writeStock(row, sold.get(row.querySelector('.line-item').value) || 0);
       quantity += qty;
       goods += amount;
     });
@@ -570,27 +576,21 @@
     document.getElementById(id).addEventListener('input', recalc)
   );
 
-  const supplier = document.getElementById('supplier');
-  const supplierBalance = document.getElementById('supplier-balance');
-  supplier.addEventListener('change', () => {
-    const option = supplier.options[supplier.selectedIndex];
-    const balance = option ? option.dataset.balance : '';
-    const show = Boolean(supplier.value && balance);
-    supplierBalance.classList.toggle('hidden', !show);
-    if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
-  });
+  // A customer carries no opening balance on the master record, so there is no
+  // running figure to show beside the picker the way the purchase screen does.
+  const customer = document.getElementById('customer');
 
-  // ----- add a supplier or an item without leaving the bill -----
+  // ----- add a customer or an item without leaving the sale -----
   // The master screen is opened in a frame; it messages back what it saved and
   // the new record is dropped into the picker already chosen, so the operator
-  // carries straight on with the bill.
+  // carries straight on with the sale.
   const modal = document.getElementById('entity-modal');
   const modalFrame = document.getElementById('entity-frame');
   const modalTitle = document.getElementById('entity-modal-title');
   const modalCard = modal.querySelector('.entity-modal-card');
   // Each screen states how much room it needs: md, lg or xl.
   const SCREENS = {
-    'supplier:saved': { url: '{% url "inventory:supplier_create" %}?embed=1', title: 'New Supplier', size: 'lg' },
+    'customer:saved': { url: '{% url "inventory:customer_create" %}?embed=1', title: 'New Customer', size: 'lg' },
     'item:saved': { url: '{% url "inventory:item_create" %}?embed=1', title: 'New Item', size: 'xl' },
   };
   const SIZES = ['md', 'lg', 'xl'];
@@ -630,7 +630,7 @@
 
   maxBtn.addEventListener('click', () => setMaximized(!modalCard.classList.contains('entity-modal-card--max')));
 
-  document.getElementById('add-supplier').addEventListener('click', () => openModal('supplier:saved'));
+  document.getElementById('add-customer').addEventListener('click', () => openModal('customer:saved'));
   document.getElementById('entity-modal-close').addEventListener('click', closeModal);
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
@@ -650,13 +650,13 @@
     const saved = data.record;
     if (!saved) return;
 
-    if (data.type === 'supplier:saved') {
+    if (data.type === 'customer:saved') {
       const option = new Option(saved.name, saved.id, true, true);
       if (saved.balance) option.dataset.balance = saved.balance;
-      supplier.add(option);
-      // The picker redraws its label on change, so the new supplier has to be
+      customer.add(option);
+      // The picker redraws its label on change, so the new customer has to be
       // announced, not only assigned.
-      supplier.dispatchEvent(new Event('change', { bubbles: true }));
+      customer.dispatchEvent(new Event('change', { bubbles: true }));
     } else if (data.type === 'item:saved') {
       // Every row's list is built from ITEMS, so the new item is added there
       // first and the rows already on screen are given it too.
@@ -679,12 +679,12 @@
     closeModal();
   });
 
-  // ----- keyboard: one chain through the bill -----
-  // A bill is entered without the mouse: Tab (and Enter) walks supplier, dates,
+  // ----- keyboard: one chain through the sale -----
+  // A sale is entered without the mouse: Tab (and Enter) walks customer, dates,
   // then each line across — item, quantity, unit, price — and on to the money at
   // the bottom. The pickers are enhanced into buttons, so the chain walks those
   // rather than the hidden selects behind them.
-  const form = document.getElementById('purchase-form');
+  const form = document.getElementById('sale-form');
   const saveBtn = form.querySelector('button[type="submit"]:not([name])');
 
   function entryChain() {
@@ -714,7 +714,7 @@
     const back = isTab && e.shiftKey;
     const next = chain[here + (back ? -1 : 1)];
     if (!next) {
-      // Past the last box the bill is complete: go to Save rather than out of
+      // Past the last box the sale is complete: go to Save rather than out of
       // the form entirely.
       if (!back && saveBtn) { e.preventDefault(); saveBtn.focus(); }
       return;

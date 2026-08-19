@@ -1,0 +1,137 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<style>
+  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so a rule for this one
+     screen is written here rather than adding classes that need a rebuild.
+     Supplier names run long, so an option stays on one line and is cut with an
+     ellipsis instead of wrapping into a two-line row. */
+  #supplier-field .searchable-select-option,
+  #supplier-field .searchable-select-button > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Over the tiles below it, whichever way the page is scrolled. */
+  #supplier-field .searchable-select-panel { z-index: 60; }
+</style>
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="title-accent text-2xl font-bold">Purchase Invoices</h1>
+  </div>
+  <div class="flex flex-wrap items-center gap-3">
+    {# Its own form so searching keeps whatever the filter bar is set to. #}
+    <form method="get" class="flex items-center gap-2">
+      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
+      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
+      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
+      <div class="search-field">
+        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
+        </svg>
+        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search invoice no, supplier, notes"
+               class="search-input {% if request.GET.q %}pl-9{% endif %}">
+        {% if request.GET.q %}
+        <a href="?supplier={{ request.GET.supplier }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}"
+           title="Clear search"
+           class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
+        {% endif %}
+      </div>
+    </form>
+    {% if can_add %}
+    {% url 'inventory:direct_purchase_create' as add_url %}
+    {% include "components/ui/button.html" with label="Add Purchase Invoice" href=add_url variant="primary" icon="+" only %}
+    {% endif %}
+  </div>
+</div>
+
+<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+  {# Wide enough for a real supplier name: the picker shows one line, and a #}
+  {# name longer than the box is cut with an ellipsis rather than wrapping. #}
+  <div class="w-64" id="supplier-field">
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="supplier">Supplier</label>
+    <select name="supplier" id="supplier" class="form-select" onchange="this.form.submit()">
+      <option value="">All suppliers</option>
+      {% for spec in filter_specs %}{% if spec.name == "supplier" %}
+        {% for value, label in spec.choices %}
+          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      {% endif %}{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
+    <input type="date" name="date_from" id="date_from" value="{{ request.GET.date_from }}" class="form-input" onchange="this.form.submit()">
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
+    <input type="date" name="date_to" id="date_to" value="{{ request.GET.date_to }}" class="form-input" onchange="this.form.submit()">
+  </div>
+  <input type="hidden" name="q" value="{{ request.GET.q }}">
+  <div class="flex-1"></div>
+  <div class="flex shrink-0 items-center gap-2">
+    <button type="button" class="btn btn-secondary btn--icon" title="Print" aria-label="Print"
+            onclick="printSection('invoice-table', 'Purchase Invoices')">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+      </svg>
+    </button>
+  </div>
+</form>
+
+<div class="mt-4 grid gap-4 sm:grid-cols-2">
+  <div class="stat-tile">
+    <span class="stat-icon">&#8721;</span>
+    <div>
+      <p class="stat-label">Total on this page</p>
+      <p class="stat-value">{{ page_total|amount }}</p>
+    </div>
+  </div>
+  <div class="stat-tile">
+    <span class="stat-icon">#</span>
+    <div>
+      <p class="stat-label">Invoices</p>
+      <p class="stat-value">{{ invoice_count }}</p>
+      <p class="mt-0.5 text-xs text-slate-500">under the filters applied</p>
+    </div>
+  </div>
+</div>
+
+<section class="mt-4">
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table id="invoice-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Invoice No.</th>
+            <th class="px-4 py-3">Supplier</th>
+            <th class="px-4 py-3 text-right">Items</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3 text-right print-hide">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for invoice in invoices %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+            <td class="px-4 py-3 whitespace-nowrap">{{ invoice.purchase_date }}</td>
+            <td class="px-4 py-3 font-medium">{{ invoice.purchase_num }}</td>
+            <td class="px-4 py-3">{{ invoice.supplier.name }}</td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ invoice.line_count }}</td>
+            <td class="px-4 py-3 text-right font-bold tabular-nums">{{ invoice.total_amount|amount }}</td>
+            <td class="px-4 py-3 print-hide">
+              <div class="flex justify-end gap-2">
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_detail' invoice.pk %}" title="View">&#128065;</a>
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_print' invoice.pk %}" target="_blank" title="Print">&#128438;</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">No purchase invoices yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

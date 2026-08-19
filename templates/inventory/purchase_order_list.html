@@ -13,7 +13,7 @@
         <div class="flex items-center gap-3">
           <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Orders</h1>
           {# Goods bought without an order first go straight to a bill. #}
-          <a href="{% url 'inventory:direct_purchase_create' %}" class="toolbar-btn h-9 px-4 text-sm">+ Purchase without PO</a>
+          <a href="{% url 'inventory:direct_purchase_create' %}" class="toolbar-btn h-9 px-4 text-sm">+ Purchase Invoice</a>
         </div>
         <div class="flex flex-wrap items-end gap-3">
           {% for field in create_form %}

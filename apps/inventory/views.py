@@ -25,7 +25,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .services import amount_in_words, create_direct_purchase, finalize_manual_transaction, set_opening_stock, generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import amount_in_words, create_direct_purchase, create_direct_sale, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
 def uom_title(record):
@@ -35,6 +35,44 @@ def uom_title(record):
     survive the empty case rather than reaching through a null relation.
     """
     return record.uom.title if record and record.uom_id else ""
+
+
+def item_unit_options(item):
+    """The units an item is actually handled in, and what each is worth in its own.
+
+    Its own unit, the second one it is bought or issued in, and the other side
+    of whatever conversion is set against it. An item with none configured
+    returns nothing, and the caller falls back to the full list rather than
+    leaving the operator with an empty dropdown.
+
+    ``factor`` is how many base units one of that unit makes, so a screen can
+    show what a quantity comes to in stock terms without asking the server.
+    """
+    units, seen = [], set()
+    candidates = [item.uom, item.secondary_uom]
+    if item.conversion_id:
+        candidates += [item.conversion.uom_from, item.conversion.uom_to]
+    for unit in candidates:
+        if unit and unit.pk not in seen:
+            seen.add(unit.pk)
+            units.append({"id": unit.pk, "name": unit.title, "factor": unit_factor_to_base(item, unit)})
+    return units
+
+
+def unit_factor_to_base(item, unit):
+    """How many of the item's own units one ``unit`` makes; 0 where none is set."""
+    base = item.uom
+    if not base or not unit:
+        return 0
+    if unit.pk == base.pk:
+        return 1
+    down = UOMConversion.objects.filter(uom_from=base, uom_to=unit, status=STATUS_ACTIVE).first()
+    if down and down.conversion_factor:
+        return float(1 / down.conversion_factor)
+    up = UOMConversion.objects.filter(uom_from=unit, uom_to=base, status=STATUS_ACTIVE).first()
+    if up and up.conversion_factor:
+        return float(up.conversion_factor)
+    return 0
 
 
 class InventoryListMixin(SearchFilterPaginationMixin, PagePermissionRequiredMixin):
@@ -750,13 +788,56 @@ class SupplierToggleStatusView(InventoryManageMixin, View):
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:supplier_list"))
 
 
-class SupplierCreateView(InventoryManageMixin, CreateView):
+class EmbeddedCreateMixin:
+    """A create screen that can also be opened in a modal on another screen.
+
+    The whole form is framed rather than a thinner copy of it being written for
+    the modal, so a record added mid-entry is the same record, with the same
+    validation, as one added from its own menu. On save the frame tells the
+    screen underneath what was created and that screen closes the modal.
+    """
+
+    # What the saved record is called in the message the frame posts up.
+    embed_message_type = ""
+
+    def embed_payload(self, obj):
+        raise NotImplementedError
+
+    def is_embedded(self):
+        return self.request.GET.get("embed") == "1"
+
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        if self.is_embedded():
+            # The site denies framing outright; these screens are allowed to be
+            # framed by the portal itself, and by nothing else.
+            response.xframe_options_exempt = True
+            response["X-Frame-Options"] = "SAMEORIGIN"
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.is_embedded():
+            context["embed"] = True
+            context["embed_layout"] = "layouts/embed.html"
+        return context
+
+    def embed_saved_response(self):
+        # A redirect here would only reload the form inside the frame.
+        return render(self.request, "inventory/_embed_saved.html", {
+            "message_type": self.embed_message_type,
+            "payload_json": json.dumps(self.embed_payload(self.object)),
+        })
+
+
+class SupplierCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     page = "inventory.suppliers"
     model = Supplier
     form_class = SupplierForm
     template_name = "inventory/supplier_form.html"
     success_url = reverse_lazy("inventory:supplier_list")
     success_message = "Supplier saved."
+    embed_message_type = "supplier:saved"
     extra_context = {
         "title": "Supplier",
         # Name, phone, address and the credit block are placed by hand; the rest
@@ -765,10 +846,15 @@ class SupplierCreateView(InventoryManageMixin, CreateView):
         "extra_fields": ("fax", "tel2", "status", "supplier_current_status", "remarks"),
     }
 
+    def embed_payload(self, obj):
+        return {"id": obj.pk, "name": obj.name, "balance": str(obj.opening_balance or "")}
+
     def form_valid(self, form):
         response = super().form_valid(form)
         # The opening balance belongs in the ledger, not only on the master.
         sync_supplier_opening_balance(supplier=self.object, user=self.request.user)
+        if self.is_embedded():
+            return self.embed_saved_response()
         return response
 
     def get_success_url(self):
@@ -1181,9 +1267,15 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
     template_name = "inventory/direct_purchase_form.html"
 
     def _context(self, **extra):
-        items = InventoryItem.objects.select_related("uom", "stock").filter(status=STATUS_ACTIVE).order_by("item_name")
+        items = (
+            InventoryItem.objects
+            .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
+            .filter(status=STATUS_ACTIVE)
+            .order_by("item_name")
+        )
         context = {
-            "title": "Purchase",
+            "title": "Purchase Invoice",
+            "next_invoice_no": next_direct_purchase_number(),
             "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
             "units": UOM.objects.order_by("title"),
             "today": timezone.localdate(),
@@ -1194,6 +1286,12 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                     "code": item.code,
                     "uom": item.uom_id or "",
                     "rate": float(item.purchase_price or 0),
+                    # What is on the shelf now, so the line can show what this
+                    # bill takes it to. A service is never stocked.
+                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
+                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
+                    "unit": uom_title(item),
+                    "units": item_unit_options(item),
                 }
                 for item in items
             ]),
@@ -1209,10 +1307,16 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         supplier_id = (posted.get("supplier") or "").strip()
         supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id.isdigit() else None
 
+        # Money boxes are grouped with commas on screen. They are stripped before
+        # the form posts, but a figure that arrives grouped anyway must still be
+        # read as the number it is rather than rejected.
+        def decimal_of(raw, default="0"):
+            text = (raw or "").strip().replace(",", "") or default
+            return Decimal(text)
+
         def money(name, default="0"):
-            raw = (posted.get(name) or "").strip() or default
             try:
-                return Decimal(raw)
+                return decimal_of(posted.get(name), default)
             except (InvalidOperation, ValueError):
                 raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
 
@@ -1221,6 +1325,7 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         item_ids = posted.getlist("item_id")
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
+        uom_ids = posted.getlist("line_uom")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
                 continue
@@ -1228,12 +1333,19 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
             if not item:
                 continue
             try:
-                quantity = Decimal((quantities[index] or "0").strip() or "0")
-                rate = Decimal((rates[index] or "0").strip() or "0")
-            except (IndexError, InvalidOperation, ValueError):
-                continue
+                quantity = decimal_of(quantities[index] if index < len(quantities) else "")
+                rate = decimal_of(rates[index] if index < len(rates) else "")
+            except (InvalidOperation, ValueError):
+                # A line naming an item is never dropped in silence: the operator
+                # meant to buy it, so the figure gets corrected rather than lost.
+                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                return render(request, self.template_name, self._context(posted=posted))
             if quantity > 0:
-                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate})
+                # The unit the line was written in; the service restates it in
+                # the item's own unit before anything is booked.
+                raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
+                uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
+                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
         try:
             bill_date = posted.get("bill_date") or str(timezone.localdate())
@@ -1256,6 +1368,10 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         messages.success(request, f"Purchase {order.purchase_num} saved for {net}.")
         if "save_and_new" in posted:
             return redirect("inventory:direct_purchase_create")
+        # Straight to the printable copy of the bill just saved, rather than the
+        # record screen the operator would have to hunt the print link on.
+        if "save_and_print" in posted:
+            return redirect("inventory:purchase_order_print", pk=order.pk)
         return redirect("inventory:purchase_order_detail", pk=order.pk)
 
 
@@ -1289,13 +1405,14 @@ class ItemConversionOptionsView(InventoryManageMixin, View):
         })
 
 
-class ItemCreateView(InventoryManageMixin, CreateView):
+class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     page = "inventory.items"
     model = InventoryItem
     form_class = InventoryItemForm
     template_name = "inventory/item_form.html"
     success_url = reverse_lazy("inventory:item_list")
     success_message = "Item saved."
+    embed_message_type = "item:saved"
     # Everything the first screen does not ask for; the Other tab renders these
     # by name so the layout never silently drops a field the form still posts.
     # `conversion` is not here: the unit dialog owns it now.
@@ -1309,6 +1426,22 @@ class ItemCreateView(InventoryManageMixin, CreateView):
         context["service_value"] = INVENTORY_KIND_SERVICE
         return context
 
+    def embed_payload(self, obj):
+        # What a line fills in from a pick: unit, expected cost and the stock
+        # standing behind it, which an opening quantity may already have moved.
+        stock = getattr(obj, "stock", None)
+        return {
+            "id": obj.pk,
+            "name": obj.item_name,
+            "code": obj.code,
+            "uom": obj.uom_id or "",
+            "rate": float(obj.purchase_price or 0),
+            "stock": float(getattr(stock, "current_quantity", 0) or 0),
+            "stocked": obj.item_kind == INVENTORY_KIND_PRODUCT,
+            "unit": uom_title(obj),
+            "units": item_unit_options(obj),
+        }
+
     def form_valid(self, form):
         response = super().form_valid(form)
         quantity = form.cleaned_data.get("opening_quantity")
@@ -1320,6 +1453,8 @@ class ItemCreateView(InventoryManageMixin, CreateView):
                 opening_date=form.cleaned_data.get("opening_date"),
                 user=self.request.user,
             )
+        if self.is_embedded():
+            return self.embed_saved_response()
         return response
 
     def get_success_url(self):
@@ -1530,6 +1665,52 @@ class PurchaseOrderRaiseView(InventoryManageMixin, View):
         order.save(update_fields=["status", "updated_by", "updated_at"])
         messages.success(request, f"{order.purchase_num} raised.")
         return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+
+
+class PurchaseInvoiceListView(InventoryListMixin, ListView):
+    """Bills entered straight off the supplier's invoice, with no order first.
+
+    Kept apart from the purchase orders screen on purpose: an order is a thing
+    still owed, while these arrived and were received the moment they were
+    entered, so the two lists answer different questions.
+    """
+
+    page = "inventory.purchase_orders"
+    template_name = "inventory/purchase_invoice_list.html"
+    context_object_name = "invoices"
+    queryset = (
+        PurchaseOrder.objects
+        .filter(is_direct=True)
+        .select_related("supplier")
+        .prefetch_related("items")
+        .order_by("-purchase_date", "-id")
+    )
+    search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
+    filter_fields = {"supplier": "supplier_id"}
+    date_filters = [{"field": "purchase_date", "label": "Invoice date"}]
+
+    def get_filter_specs(self):
+        supplier_choices = list(
+            Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
+        )
+        return [
+            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
+             "value": self.request.GET.get("supplier", "")},
+        ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # What each bill came to, from its own lines, so the figure on screen is
+        # the one the books hold rather than a second total kept in step by hand.
+        page_total = Decimal("0.00")
+        for invoice in context["invoices"]:
+            lines = list(invoice.items.all())
+            invoice.line_count = len(lines)
+            invoice.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
+            page_total += invoice.total_amount
+        context["page_total"] = page_total
+        context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
+        return context
 
 
 class PurchaseOrderListView(InventoryListMixin, ListView):
@@ -1744,7 +1925,12 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         grand_total = sum((i.total_amount for i in items), Decimal("0"))
         context["grand_total"] = grand_total
         context["amount_in_words"] = amount_in_words(grand_total)
-        context["print_back_url"] = f"{reverse_lazy('inventory:purchase_order_list')}?open={self.object.pk}"
+        # Back to the list the document belongs to: a direct bill lives on the
+        # purchase invoices screen, which has no order row to reopen.
+        context["print_back_url"] = (
+            reverse_lazy("inventory:purchase_invoice_list") if self.object.is_direct
+            else f"{reverse_lazy('inventory:purchase_order_list')}?open={self.object.pk}"
+        )
         return context
 
 
@@ -1957,14 +2143,18 @@ class CustomerToggleDefaultView(InventoryManageMixin, View):
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:customer_list"))
 
 
-class CustomerCreateView(InventoryManageMixin, CreateView):
+class CustomerCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     page = "inventory.customers"
     model = Customer
     form_class = CustomerForm
     template_name = "inventory/simple_form.html"
     success_url = reverse_lazy("inventory:customer_list")
     success_message = "Customer saved."
+    embed_message_type = "customer:saved"
     extra_context = {"title": "Customer"}
+
+    def embed_payload(self, obj):
+        return {"id": obj.pk, "name": obj.customer_name}
 
     def form_valid(self, form):
         creating = self.object is None  # None on create, set on update
@@ -1975,11 +2165,156 @@ class CustomerCreateView(InventoryManageMixin, CreateView):
             if node and opening_balance:
                 node.opening_balance = opening_balance
                 node.save(update_fields=["opening_balance", "updated_at"])
+        if self.is_embedded():
+            return self.embed_saved_response()
         return response
 
 
 class CustomerUpdateView(CustomerCreateView, UpdateView):
     success_message = "Customer updated."
+
+
+class SaleInvoiceListView(InventoryListMixin, ListView):
+    """Sales entered as invoices, the counterpart of the purchase invoice list."""
+
+    page = "inventory.pos_sales"
+    template_name = "inventory/sale_invoice_list.html"
+    context_object_name = "invoices"
+    queryset = (
+        POSMaster.objects
+        .select_related("customer")
+        .prefetch_related("items")
+        .order_by("-sale_date", "-id")
+    )
+    search_fields = ("sale_num", "customer__customer_name", "invoice_num", "remarks")
+    filter_fields = {"customer": "customer_id"}
+    date_filters = [{"field": "sale_date", "label": "Sale date"}]
+
+    def get_filter_specs(self):
+        customer_choices = list(
+            Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name").values_list("id", "customer_name")
+        )
+        return [
+            {"name": "customer", "label": "All customers", "choices": customer_choices,
+             "value": self.request.GET.get("customer", "")},
+        ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        page_total = Decimal("0.00")
+        for invoice in context["invoices"]:
+            invoice.line_count = invoice.items.count()
+            page_total += invoice.net_amount or Decimal("0.00")
+        context["page_total"] = page_total
+        context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
+        return context
+
+
+class SaleInvoiceCreateView(InventoryManageMixin, View):
+    """A sale written up as an invoice, rather than rung through the POS screen.
+
+    Same entry as the purchase invoice, the other way round: the customer at the
+    top, the goods in the middle, the money at the bottom. It posts through the
+    same service the POS screen uses, so there is one set of books either way.
+    """
+
+    page = "inventory.pos_sales"
+    action = "add"
+    template_name = "inventory/sale_invoice_form.html"
+
+    def _context(self, **extra):
+        items = (
+            InventoryItem.objects
+            .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
+            .filter(status=STATUS_ACTIVE)
+            .order_by("item_name")
+        )
+        context = {
+            "title": "Sale Invoice",
+            "next_invoice_no": next_sale_invoice_number(),
+            "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
+            "units": UOM.objects.order_by("title"),
+            "today": timezone.localdate(),
+            "items_json": json.dumps([
+                {
+                    "id": item.pk,
+                    "name": item.item_name,
+                    "code": item.code,
+                    "uom": item.uom_id or "",
+                    # A sale is priced off the sale price, not what it cost.
+                    "rate": float(item.price or 0),
+                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
+                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
+                    "unit": uom_title(item),
+                    "units": item_unit_options(item),
+                }
+                for item in items
+            ]),
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request, *args, **kwargs):
+        posted = request.POST
+        customer_id = (posted.get("customer") or "").strip()
+        customer = Customer.objects.filter(pk=customer_id).first() if customer_id.isdigit() else None
+
+        def decimal_of(raw, default="0"):
+            text = (raw or "").strip().replace(",", "") or default
+            return Decimal(text)
+
+        def money(name, default="0"):
+            try:
+                return decimal_of(posted.get(name), default)
+            except (InvalidOperation, ValueError):
+                raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
+
+        lines = []
+        item_ids = posted.getlist("item_id")
+        quantities = posted.getlist("quantity")
+        prices = posted.getlist("rate")
+        uom_ids = posted.getlist("line_uom")
+        for index, raw_id in enumerate(item_ids):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            item = InventoryItem.objects.filter(pk=raw_id).first()
+            if not item:
+                continue
+            try:
+                quantity = decimal_of(quantities[index] if index < len(quantities) else "")
+                price = decimal_of(prices[index] if index < len(prices) else "")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                return render(request, self.template_name, self._context(posted=posted))
+            if quantity > 0:
+                raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
+                uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
+                lines.append({"inventory_item": item, "quantity": quantity, "price": price, "uom": uom})
+
+        try:
+            sale_date = posted.get("sale_date") or str(timezone.localdate())
+            sale, net = create_direct_sale(
+                customer=customer,
+                sale_date=sale_date,
+                lines=lines,
+                discount_amount=money("discount_amount"),
+                tax_amount=money("tax_amount"),
+                paid_amount=money("paid_amount"),
+                remarks=(posted.get("remarks") or "").strip(),
+                user=request.user,
+            )
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        messages.success(request, f"Sale {sale.sale_num} saved for {net}.")
+        if "save_and_print" in posted:
+            return redirect("inventory:pos_receipt", pk=sale.pk)
+        return redirect("inventory:pos_detail", pk=sale.pk)
 
 
 class POSListView(InventoryManageMixin, View):

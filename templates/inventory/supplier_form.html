@@ -1,7 +1,7 @@
-{% extends "layouts/portal.html" %}
+{% extends embed_layout|default:"layouts/portal.html" %}
 {% block content %}
 <section class="space-y-6">
-  {% include "components/ui/page_header.html" with title=title %}
+  {% if not embed %}{% include "components/ui/page_header.html" with title=title %}{% endif %}
 
   <form method="post" x-data="{ tab: 'address' }"
         class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -138,10 +138,15 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+      {% if embed %}
+      <button type="button" onclick="window.parent.postMessage({ type: 'embed:cancel' }, window.location.origin);" class="toolbar-btn h-10 px-5">Cancel</button>
+      {% include "components/ui/button.html" with label="Save" variant="primary" extra="px-8" only %}
+      {% else %}
       {% url 'inventory:supplier_list' as cancel_url %}
       {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
       {% include "components/ui/button.html" with label="Save & New" variant="secondary" name="save_and_new" value="1" only %}
       {% include "components/ui/button.html" with label="Save" variant="primary" extra="px-8" only %}
+      {% endif %}
     </div>
   </form>
 </section>

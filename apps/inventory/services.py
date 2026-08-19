@@ -41,11 +41,12 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_SUBMITTED, YES
+from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_SUBMITTED, YES
 
 from .models import (
     ItemLedger,
     ManualTransaction,
+    POSDetail,
     POSMaster,
     POSReturnMaster,
     PurchaseMaster,
@@ -55,6 +56,7 @@ from .models import (
     PurchaseOrderItemReceived,
     PurchaseReturnMaster,
     Stock,
+    UOMConversion,
 )
 
 
@@ -255,6 +257,128 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     return receipt
 
 
+def to_base_unit(*, item, uom, quantity, rate):
+    """A quantity and rate bought in one unit, restated in the item's own unit.
+
+    Stock, the item ledger and the general ledger are all kept in the item's
+    base unit, so a bill written in kilos for something stocked in bags is
+    converted here rather than each reader having to know the difference. The
+    amount is unchanged by the move: fewer bags at a higher rate per bag comes
+    to the same money as more kilos at the rate per kilo.
+    """
+    base = item.uom
+    if not uom or not base or uom.pk == base.pk:
+        return quantity, rate
+
+    # 1 base = factor picked  ->  the picked unit is the smaller of the two.
+    down = UOMConversion.objects.filter(uom_from=base, uom_to=uom, status=STATUS_ACTIVE).first()
+    if down and down.conversion_factor:
+        factor = Decimal(down.conversion_factor)
+        return quantity / factor, rate * factor
+
+    # 1 picked = factor base  ->  the picked unit is the larger of the two.
+    up = UOMConversion.objects.filter(uom_from=uom, uom_to=base, status=STATUS_ACTIVE).first()
+    if up and up.conversion_factor:
+        factor = Decimal(up.conversion_factor)
+        return quantity * factor, rate / factor
+
+    raise ValidationError(
+        f"{item.item_name} is stocked in {base.title}, and there is no conversion "
+        f"between {uom.title} and {base.title}. Set one up, or enter the line in {base.title}."
+    )
+
+
+def next_direct_purchase_number():
+    """What the next purchase invoice will be called.
+
+    Advisory only: the number is allocated by ``PurchaseOrder.save()`` off the
+    shared sequence, so a bill saved between this preview and the save takes it
+    and the next one moves up.
+    """
+    last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+    return f"PI-{last + 1:06d}"
+
+
+def next_sale_invoice_number():
+    """What the next sale invoice will be called; advisory, like the purchase one."""
+    last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first() or 0
+    return f"SAL-{last + 1}"
+
+
+@transaction.atomic
+def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0"),
+                       tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", user):
+    """A sale entered as an invoice, posted the moment it is saved.
+
+    The counterpart of ``create_direct_purchase``: the same shape of entry, and
+    it runs through ``post_sale()`` so stock, the item ledger and the general
+    ledger move exactly as they do for a sale rung up on the POS screen.
+
+    ``lines`` is a list of dicts: inventory_item, quantity, price, and an
+    optional uom the line was written in.
+    """
+    if not customer:
+        raise ValidationError("Pick a customer.")
+
+    clean_lines = [line for line in lines if line.get("inventory_item") and line.get("quantity")]
+    if not clean_lines:
+        raise ValidationError("Add at least one item with a quantity.")
+
+    sale = POSMaster.objects.create(
+        transaction_id=generate_transaction_id("SAL", POSMaster),
+        sale_date=sale_date,
+        customer=customer,
+        remarks=remarks or "",
+        created_by=user,
+        updated_by=user,
+    )
+
+    for seq, line in enumerate(clean_lines, start=1):
+        quantity = Decimal(line["quantity"])
+        price = Decimal(line.get("price") or 0)
+        if quantity <= 0:
+            raise ValidationError("Every line needs a quantity greater than zero.")
+
+        item = line["inventory_item"]
+        # A line may be written in a second unit the item is handled in; stock
+        # and the books are kept in its own unit either way.
+        quantity, price = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=price)
+        POSDetail.objects.create(
+            pos_master=sale,
+            seq_num=seq,
+            inventory_item=item,
+            quantity=quantity,
+            price=price,
+            created_by=user,
+            updated_by=user,
+        )
+
+    # The bill-level discount and tax ride on the first line, because the totals
+    # are derived from the lines when the sale is posted.
+    first = sale.items.first()
+    first.discount_amount = Decimal(discount_amount or 0).quantize(Decimal("0.01"))
+    first.tax_amount = Decimal(tax_amount or 0).quantize(Decimal("0.01"))
+    first.updated_by = user
+    first.save()
+
+    goods_total = sum((line.total_price for line in sale.items.all()), Decimal("0.00"))
+    net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+
+    paid = Decimal(paid_amount or 0).quantize(Decimal("0.01"))
+    if paid > net_amount:
+        raise ValidationError("Paid cannot be more than the invoice total.")
+
+    # Set before posting: the posting reads it to split the sale between cash
+    # collected and what the customer still owes.
+    sale.total_paid = paid
+    sale.pay_mode = "cash"
+    sale.updated_by = user
+    sale.save()
+
+    sale = post_sale(sale=sale, user=user)
+    return sale, sale.net_amount
+
+
 @transaction.atomic
 def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_amount=Decimal("0"),
                            tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", user):
@@ -295,6 +419,9 @@ def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_
             raise ValidationError("Every line needs a quantity greater than zero.")
 
         item = line["inventory_item"]
+        # The line may be written in a second unit the item is handled in; the
+        # books are kept in its own unit either way.
+        quantity, rate = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=rate)
         po_item = PurchaseOrderItem.objects.create(
             purchase_order=order,
             seq_num=seq,

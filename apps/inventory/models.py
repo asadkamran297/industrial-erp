@@ -276,7 +276,9 @@ class PurchaseOrder(BaseModel):
         if not self.seq_num:
             last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
             self.seq_num = last + 1
-        self.purchase_num = f"PO-{self.seq_num}"
+        # Directs are their own document — an invoice, not an order — so they
+        # read PI-… while sharing the one sequence, which keeps the number unique.
+        self.purchase_num = f"PI-{self.seq_num:06d}" if self.is_direct else f"PO-{self.seq_num}"
         self.full_clean()
         super().save(*args, **kwargs)
 

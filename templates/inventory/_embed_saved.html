@@ -1,0 +1,12 @@
+{# Rendered inside the modal frame after a save: it tells the screen underneath
+   what was created and then gets torn down with the modal. #}
+<!doctype html>
+<meta charset="utf-8">
+<title>Saved</title>
+<script id="saved-record" type="application/json">{{ payload_json|safe }}</script>
+<script>
+  window.parent.postMessage(
+    { type: '{{ message_type|escapejs }}', record: JSON.parse(document.getElementById('saved-record').textContent) },
+    window.location.origin
+  );
+</script>

@@ -29,9 +29,8 @@
       {# Enter submits; no button needed. #}
     </form>
     {% if can_add and can_add_type %}
-    <a href="{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}" class="btn-primary min-h-11">
-      + {{ add_label }}
-    </a>
+    {% url 'finance:account_voucher_create' as voucher_add_url %}
+    {% include "components/ui/button.html" with label=add_label href=voucher_add_url|add:"?voucher_type="|add:add_type variant="primary" icon="+" only %}
     {% endif %}
   </div>
 </div>
