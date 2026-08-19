@@ -3,6 +3,7 @@ import io
 import json
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
@@ -25,8 +26,11 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
+from .purchase_board import COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+
+User = get_user_model()
 
 
 def uom_title(record):
@@ -1715,38 +1719,35 @@ class PurchaseInvoiceListView(InventoryListMixin, ListView):
 
 
 class PurchaseOrderListView(InventoryListMixin, ListView):
-    """Orders raised on suppliers: goods asked for and still owed.
+    """Orders raised on suppliers: what is committed, and what it is waiting on.
 
-    Reads as the purchase invoice list does — same search, same filter bar,
-    same tiles — so an operator moving between the two screens is not learning
-    a second layout for the same kind of record.
+    The screen is built around the question an order actually poses -- is it
+    approved, has it arrived, has it been billed, is it late -- rather than
+    around the row in the table. The tabs sort orders by which of those they are
+    stuck on, and the tiles across the top count the same thing the rows below
+    show, because both are read from one decorated set.
     """
 
     page = "inventory.purchase_orders"
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
+    paginate_by = 25
     queryset = (
         PurchaseOrder.objects
         .filter(is_direct=False)
-        .select_related("supplier")
-        .prefetch_related("items")
+        .select_related("supplier", "created_by")
+        .prefetch_related("items__receipts")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
-    filter_fields = {"status": "status", "supplier": "supplier_id"}
+    filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Order date"}]
 
-    # What the settings menu offers for page size. Anything else in the query
-    # string falls back to the default rather than being honoured.
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
-    def show_received(self):
-        """Whether orders already closed out are on the list.
-
-        Off by default: the screen answers "what is still owed", and a fully
-        received order is finished business that belongs on the report.
-        """
-        return self.request.GET.get("received") == "1"
+    def current_tab(self):
+        tab = self.request.GET.get("tab", TAB_ALL)
+        return tab if tab in dict(TABS) else TAB_ALL
 
     def get_paginate_by(self, queryset):
         raw = (self.request.GET.get("per_page") or "").strip()
@@ -1754,44 +1755,126 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
             return int(raw)
         return self.paginate_by
 
+    def filtered_queryset(self):
+        """Everything the filter bar allows, before the tab narrows it.
+
+        The tiles are counted over this: switching to one tab should not make
+        the numbers above it change, because they are what the tabs are for.
+        """
+        return super().get_queryset().distinct()
+
     def get_queryset(self):
-        queryset = super().get_queryset()
-        if not self.show_received():
-            queryset = queryset.exclude(status=STATUS_FULLY_RECEIVED)
-        return queryset.distinct()
+        queryset = self.filtered_queryset()
+        statuses = TAB_STATUSES.get(self.current_tab())
+        if statuses:
+            queryset = queryset.filter(status__in=statuses)
+        return queryset
 
     def get_filter_specs(self):
         supplier_choices = list(
             Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
         )
-        statuses = list(INV_PURCHASE_ORDER_STATUS_CHOICES)
-        if not self.show_received():
-            # Offering a status the list is hiding would return nothing and
-            # look like a bug, so it is only on the menu once it can match.
-            statuses = [row for row in statuses if row[0] != STATUS_FULLY_RECEIVED]
         return [
             {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
              "value": self.request.GET.get("supplier", "")},
-            {"name": "status", "label": "All statuses", "choices": statuses,
-             "value": self.request.GET.get("status", "")},
         ]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # What each order comes to, from its own lines, so the figure on screen
-        # is the one the books hold rather than a second total kept by hand.
-        page_total = Decimal("0.00")
-        for order in context["orders"]:
-            lines = list(order.items.all())
-            order.line_count = len(lines)
-            order.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
-            page_total += order.total_amount
-        context["page_total"] = page_total
-        context["order_count"] = context["paginator"].count if context.get("paginator") else len(context["orders"])
-        context["show_received"] = self.show_received()
+        orders = list(context["orders"])
+        decorate(orders)
+        context["orders"] = orders
+        # The rows on show add up to the figure under them, which is what
+        # "Total shown" means -- not the whole filtered set.
+        context["page_total"] = sum((order.total_amount for order in orders), Decimal("0.00"))
+        context["order_count"] = context["paginator"].count if context.get("paginator") else len(orders)
+
+        # Counted over everything the filters allow, so the tiles hold still as
+        # the tabs are clicked through.
+        everything = list(self.filtered_queryset())
+        context["tiles"] = summarise(everything)
+        context["tabs"] = [
+            {"key": key, "label": label, "on": key == self.current_tab(),
+             "count": sum(1 for order in everything
+                          if not TAB_STATUSES.get(key) or order.status in TAB_STATUSES[key])}
+            for key, label in TABS
+        ]
+        # Which columns this person chose to look at. A set, so the template
+        # asks `{% if "billed" in columns %}` rather than walking a list per row.
+        context["columns"] = visible_columns(self.request.session)
+        context["column_menu"] = column_menu(self.request.session)
+        # Where the total row puts its figure: under PO Value wherever that
+        # column lands, with the label stretched to meet it. "actions" is drawn
+        # as its own trailing cell rather than from the column set, so it is
+        # counted once here and not twice.
+        shown = [column["key"] for column in COLUMNS
+                 if column["key"] in context["columns"] and column["key"] != "actions"]
+        span = len(shown) + 1
+        context["column_span"] = span
+        if "value" in shown:
+            context["foot_lead_span"] = shown.index("value")
+            context["foot_tail_span"] = span - shown.index("value") - 1
+        else:
+            context["foot_lead_span"] = span
+            context["foot_tail_span"] = 0
+        context["current_tab"] = self.current_tab()
+        # The current view as a query string with the tab left out, so a tab
+        # link only has to append its own and every other setting survives.
+        carried = self.request.GET.copy()
+        for key in ("tab", "page"):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
         context["per_page"] = self.get_paginate_by(None)
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
         return context
+
+
+class PurchaseOrderExportView(InventoryListMixin, View):
+    """The orders currently on screen, as a spreadsheet.
+
+    Deliberately the same filters *and the same columns* as the list: what comes
+    down is what the operator was looking at, so the file needs no explaining
+    and the two can never drift apart.
+    """
+
+    page = "inventory.purchase_orders"
+
+    def get(self, request, *args, **kwargs):
+        listing = PurchaseOrderListView(request=request, kwargs={}, args=())
+        orders = decorate(list(listing.get_queryset()))
+
+        columns = export_columns(request.session)
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="purchase-orders.csv"'
+        writer = csv.writer(response)
+        writer.writerow([column["label"] for column in columns])
+        for order in orders:
+            writer.writerow([column["export"](order) for column in columns])
+        return response
+
+
+class PurchaseOrderColumnsView(InventoryListMixin, View):
+    """Which columns this person wants on the purchase orders table.
+
+    Kept in the session, not the database: a column choice is how one operator
+    likes to look at the screen, and it should not change what anybody else
+    sees. Only the index permission is needed, because choosing what to look at
+    is not a change to anything.
+    """
+
+    page = "inventory.purchase_orders"
+
+    def post(self, request, *args, **kwargs):
+        set_visible_columns(request.session, request.POST.getlist("columns"))
+        # Back to the view they were on. Built from the posted filters rather
+        # than from the Referer, so nothing off this site can steer the redirect.
+        carried = request.POST.get("back", "")
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
+            if key in ("q", "tab", "supplier", "date_from", "date_to", "per_page", "page")
+        ])
+        target = reverse_lazy("inventory:purchase_order_list")
+        return redirect(f"{target}?{query}" if query else str(target))
 
 
 class PurchaseReportView(InventoryListMixin, ListView):
@@ -1848,7 +1931,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             # What this site has taken off the form and what it has added.
             "layout": get_layout(),
             "extra_field_types": EXTRA_FIELD_TYPES,
-            # A plain View builds its own context, so the permission the gear
+            # A plain View builds its own context, so the permission the menu
             # is gated on has to be put there by hand.
             "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "next_order_no": next_purchase_order_number(),
@@ -1928,6 +2011,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 quot_num=(posted.get("quot_num") or "").strip(),
                 quot_date=(posted.get("quot_date") or "") or None,
                 order_date=posted.get("order_date") or str(timezone.localdate()),
+                expected_date=(posted.get("expected_date") or "") or None,
                 lines=lines,
                 discount_amount=money("discount_amount"),
                 tax_amount=money("tax_amount"),
@@ -1950,7 +2034,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
 
 
 class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
-    """The gear on the purchase order form: what it shows, and what it adds.
+    """The settings menu on the purchase order form: what it shows, and what it adds.
 
     Everything arrives as a plain POST and sends the operator back to the form,
     so the menu never has to keep a half-applied state of its own. Configuring

@@ -306,7 +306,7 @@ def next_purchase_order_number():
 
 
 @transaction.atomic
-def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines,
+def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, expected_date=None,
                           discount_amount=Decimal("0"), tax_amount=Decimal("0"),
                           remarks="", status=STATUS_RAISED, extra_data=None, user):
     """An order raised on a supplier: goods asked for, none of them here yet.
@@ -332,6 +332,7 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines,
         is_direct=False,
         quot_num=quot_num or "",
         quot_date=quot_date or None,
+        expected_date=expected_date or None,
         descr=remarks or "",
         # Whatever the site added to its own form; nothing here reads it.
         extra_data=extra_data or {},

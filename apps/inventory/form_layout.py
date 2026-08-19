@@ -54,6 +54,8 @@ class OptionalField:
 # lines, quantity and rate are not here: without them there is nothing to save,
 # so they are never on offer.
 OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
+    OptionalField("expected_date", "Expected delivery date", "Header",
+                  "Off, nothing counts as an overdue delivery."),
     OptionalField("quot_num", "Quotation No", "Header"),
     OptionalField("quot_date", "Quotation Date", "Header"),
     OptionalField("line_uom", "Unit column", "Lines",

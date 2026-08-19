@@ -217,6 +217,14 @@
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order_date">Order Date</label>
           <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{{ posted.order_date|default:today|date:'Y-m-d' }}">
         </div>
+        {# When the goods were promised. What makes a delivery late, and the #}
+        {# only way an order quietly not arriving ever gets noticed. #}
+        {% if layout.shown.expected_date %}
+        <div class="w-36">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="expected_date">Expected</label>
+          <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full" value="{{ posted.expected_date|default:'' }}">
+        </div>
+        {% endif %}
         {# What the supplier quoted, so the order can be checked back against it. #}
         {% if layout.shown.quot_num %}
         <div class="w-40">

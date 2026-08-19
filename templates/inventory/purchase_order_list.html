@@ -1,20 +1,384 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 <style>
-  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so a rule for this one
-     screen is written here rather than adding classes that need a rebuild.
-     Supplier names run long, so an option stays on one line and is cut with an
-     ellipsis instead of wrapping into a two-line row. */
-  #supplier-field .searchable-select-option,
-  #supplier-field .searchable-select-button > span:first-child {
+  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so the rules for this
+     one screen are written here rather than adding classes that need a rebuild. */
+
+  /* ── Tiles ────────────────────────────────────────────────────────────── */
+  /* Each tile carries a colour for what it is waiting on, so the row is read by
+     hue before it is read by number: violet is money committed, amber is
+     waiting on one of us, sky is waiting on the supplier, rose is a payable the
+     books do not know about yet. One rule set serves all four -- the modifier
+     only sets the three custom properties. */
+  .po-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .po-tile {
+    --tone: #64748b;
+    --tone-soft: #f1f5f9;
+    --tone-line: #e2e8f0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
     overflow: hidden;
-    text-overflow: ellipsis;
+    border: 1px solid var(--tone-line);
+    border-radius: .75rem;
+    background: var(--tone-soft);
+    padding: .75rem 1rem;
+  }
+  /* The stripe down the edge is what makes four tiles read as one row of
+     categories rather than four unrelated cards. */
+  .po-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: .25rem;
+    background: var(--tone);
+  }
+
+  .po-tile--committed { --tone: #7c3aed; --tone-soft: #f5f3ff; --tone-line: #ddd6fe; }
+  .po-tile--approval  { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+  .po-tile--goods     { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .po-tile--payable   { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+
+  /* Dark: the same hues, dropped to a tint that sits on a dark ground rather
+     than glowing off it. */
+  .dark .po-tile { --tone-soft: rgba(30, 41, 59, .45); --tone-line: #1e293b; }
+  .dark .po-tile--committed { --tone: #a78bfa; --tone-soft: rgba(76, 29, 149, .22); --tone-line: rgba(139, 92, 246, .35); }
+  .dark .po-tile--approval  { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .35); }
+  .dark .po-tile--goods     { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
+  .dark .po-tile--payable   { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
+
+  .po-tile-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .625rem;
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--tone);
+  }
+  .po-tile-icon svg { width: 1.125rem; height: 1.125rem; }
+
+  .po-tile-body { min-width: 0; }
+  .po-tile-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tone); }
+  /* The count and the label share a line: the label says what is being counted,
+     so the two belong together and the tile keeps a row of height. */
+  .po-tile-head { display: flex; align-items: baseline; gap: .5rem; }
+  .po-tile-value { font-size: 1.5rem; font-weight: 800; line-height: 1.15; color: #0f172a; }
+  .dark .po-tile-value { color: #f1f5f9; }
+  .po-tile-note { margin-top: .125rem; font-size: .75rem; line-height: 1.35; color: #64748b; }
+  .dark .po-tile-note { color: #94a3b8; }
+  /* A figure that is somebody's problem right now is drawn in the tile's own
+     colour; one that is merely true stays grey. */
+  .po-tile-note--alert { color: var(--tone); font-weight: 600; }
+
+  /* ── Tabs and filters ─────────────────────────────────────────────────── */
+  /* One row: tabs, the filters and the search box. Nothing here may be an
+     overflow container -- the date range drops a panel out of this bar, and a
+     scrolling ancestor would clip it and grow a scrollbar instead. Below the
+     width where the row genuinely cannot hold them, it wraps. */
+  .po-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; padding: .75rem 1rem; }
+  @media (max-width: 1024px) { .po-bar { flex-wrap: wrap; } }
+  .po-bar > * { flex: 0 0 auto; }
+  /* The search box is one of the controls, not the space between them: it sits
+     at the same width and height as a filter chip rather than stretching to
+     swallow whatever the row has left over. */
+  .po-search { flex: 0 1 13rem; min-width: 9rem; margin-left: auto; }
+  .po-bar > .settings-menu, .po-bar > .po-action { margin-left: 0; }
+  .po-search .search-field { width: 100%; }
+  .po-search .search-input {
+    width: 100%;
+    height: 1.9375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .625rem;
+    font-size: .8125rem;
+  }
+  .dark .po-search .search-input { border-color: #1e293b; }
+  .po-search .search-input::placeholder { color: #94a3b8; }
+  .po-filter-row { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; }
+  /* The pipeline stretch is a dropdown like the rest of the bar. Its own value
+     is drawn dark rather than muted: it is the one filter that changes which
+     orders exist on the screen, not merely which of them are shown. */
+  .po-filter--tab select { max-width: none; font-weight: 600; color: #0f172a; }
+  .dark .po-filter--tab select { color: #f1f5f9; }
+
+  /* A filter reads as one control: what it filters, then what it is set to. */
+  .po-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .625rem;
+    padding: .3125rem .5rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #475569;
     white-space: nowrap;
   }
-  /* Over the tiles below it, whichever way the page is scrolled. */
-  #supplier-field .searchable-select-panel { z-index: 60; }
+  /* ── Date range: one control, both ends ───────────────────────────────── */
+  .po-range { position: relative; }
+  .po-range-btn { cursor: pointer; background: transparent; }
+  .po-range-btn svg { width: .875rem; height: .875rem; color: #94a3b8; }
+  .po-range-caret { margin-left: .125rem; }
+  .po-range-btn span { font-weight: 500; color: #64748b; }
+  .dark .po-range-btn span { color: #94a3b8; }
 
-  /* Settings menu: the gear beside Add, and the panel it drops. */
+  .po-range-panel {
+    position: absolute;
+    top: calc(100% + .375rem);
+    left: 0;
+    z-index: 70;
+    display: flex;
+    width: max-content;
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
+  }
+  .dark .po-range-panel { border-color: #1e293b; background: #0f172a; }
+
+  .po-range-presets {
+    display: flex;
+    flex-direction: column;
+    gap: .0625rem;
+    border-right: 1px solid #f1f5f9;
+    padding: .375rem;
+  }
+  .dark .po-range-presets { border-right-color: #1e293b; }
+  .po-range-preset {
+    border-radius: .375rem;
+    padding: .375rem .625rem;
+    font-size: .75rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    color: #475569;
+  }
+  .po-range-preset:hover { background: #f1f5f9; }
+  .dark .po-range-preset { color: #cbd5e1; }
+  .dark .po-range-preset:hover { background: rgba(30, 41, 59, .7); }
+  .po-range-preset.is-on { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); font-weight: 600; }
+  .dark .po-range-preset.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+
+  .po-range-custom { display: grid; gap: .375rem; padding: .5rem; }
+  .po-range-field { display: grid; gap: .1875rem; font-size: .625rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
+  .po-range-field input {
+    border: 1px solid #e2e8f0;
+    border-radius: .375rem;
+    padding: .3125rem .5rem;
+    font-size: .75rem;
+    color: #334155;
+    outline: none;
+  }
+  .po-range-field input:focus { border-color: var(--primary-color); }
+  .dark .po-range-field input { border-color: #1e293b; background: transparent; color: #e2e8f0; }
+  .po-range-warn { font-size: .6875rem; font-weight: 600; color: #dc2626; }
+  .po-range-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-top: .125rem;
+    border-top: 1px solid #f1f5f9;
+    padding-top: .5rem;
+  }
+  .dark .po-range-actions { border-top-color: #1e293b; }
+
+  /* Clear is the quiet way out: a text button that only becomes solid on
+     hover, so it never competes with Apply for the eye. */
+  .po-range-clear {
+    height: 1.875rem;
+    border-radius: .4375rem;
+    padding: 0 .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: #94a3b8;
+    transition: color .15s ease, background .15s ease;
+  }
+  .po-range-clear:hover { color: #475569; background: #f1f5f9; }
+  .dark .po-range-clear:hover { color: #e2e8f0; background: rgba(30, 41, 59, .7); }
+
+  /* Apply is the one thing this panel is for. It reads as a raised surface --
+     a top-light gradient, a hairline of its own colour, and a shadow tinted to
+     match rather than a grey one, which is what makes it look printed on
+     rather than dropped on top. */
+  .po-range-apply {
+    display: inline-flex;
+    align-items: center;
+    height: 1.875rem;
+    border: 1px solid color-mix(in srgb, var(--primary-color) 88%, #000);
+    border-radius: .4375rem;
+    padding: 0 1rem;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .01em;
+    color: #fff;
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 88%, #fff), var(--primary-color));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .22),
+      0 1px 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
+    transition: box-shadow .15s ease, transform .1s ease, filter .15s ease;
+  }
+  .po-range-apply:hover {
+    filter: brightness(1.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .28),
+      0 3px 8px -1px color-mix(in srgb, var(--primary-color) 45%, transparent);
+  }
+  /* Pressed sits back down into the panel rather than staying lifted. */
+  .po-range-apply:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(2, 6, 23, .25); }
+  .po-range-apply:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .po-range-apply:disabled {
+    cursor: not-allowed;
+    filter: none;
+    transform: none;
+    opacity: .45;
+    box-shadow: none;
+  }
+
+  /* A long supplier name is cut rather than allowed to push the row wider. */
+  .po-filter select { max-width: 7rem; text-overflow: ellipsis; }
+  .po-filter input[type="date"] { width: 8.25rem; border: 0; background: transparent; font-size: .75rem; color: #64748b; outline: none; }
+  .dark .po-filter input[type="date"] { color: #94a3b8; }
+  .dark .po-filter { border-color: #1e293b; color: #cbd5e1; }
+  .po-filter select {
+    border: 0;
+    background: transparent;
+    font-size: .8125rem;
+    font-weight: 500;
+    color: #64748b;
+    outline: none;
+  }
+  .dark .po-filter select { color: #94a3b8; }
+  .po-filter select option { color: #0f172a; }
+
+  /* ── Table ────────────────────────────────────────────────────────────── */
+  .po-table { width: 100%; text-align: left; font-size: .875rem; border-collapse: collapse; }
+  .po-table thead th {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-table thead th { border-bottom-color: #1e293b; }
+  .po-table tbody td { padding: .875rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .po-table tbody td { border-bottom-color: rgba(30, 41, 59, .8); }
+  .po-table tbody tr:hover { background: #f8fafc; }
+  .dark .po-table tbody tr:hover { background: rgba(30, 41, 59, .4); }
+  /* An order number is one token: never broken across two lines, however
+     tight the column gets. */
+  .po-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .po-table td:first-child, .po-table th:first-child { white-space: nowrap; width: 1%; }
+  .po-sub { display: block; font-size: .75rem; color: #94a3b8; }
+  .po-right { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* The received bar: how much of the order has actually turned up. Grey for
+     nothing, amber part way, green when it is all in. */
+  .po-bar-track { height: .375rem; border-radius: 9999px; background: #e2e8f0; overflow: hidden; }
+  .dark .po-bar-track { background: #1e293b; }
+  .po-bar-fill { height: 100%; border-radius: 9999px; background: #94a3b8; }
+  .po-bar-fill--part { background: #f59e0b; }
+  .po-bar-fill--full { background: #10b981; }
+  .po-bar-note { display: block; margin-top: .3125rem; font-size: .75rem; color: #64748b; text-align: center; }
+  .po-bar-note--late { color: #dc2626; font-weight: 600; }
+
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--draft { color: #7c3aed; background: #ede9fe; }
+  .po-pill--open { color: #b45309; background: #fef3c7; }
+  .po-pill--late { color: #dc2626; background: #fee2e2; }
+  .po-pill--bill { color: #dc2626; background: #fee2e2; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--dead { color: #475569; background: #e2e8f0; }
+
+  .po-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 5rem;
+    height: 2.125rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .5rem;
+    padding: 0 .875rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #334155;
+    background: #fff;
+  }
+  .po-action:hover { border-color: #94a3b8; background: #f8fafc; }
+  .po-bar .po-action { height: 2.125rem; min-width: 0; border-radius: .625rem; padding: 0 .75rem; font-size: .8125rem; }
+  /* Square, like the menu beside it, so the pair reads as two buttons rather
+     than a button and a stub of one. Scoped to the bar so it outweighs the
+     `.po-bar .po-action` padding above, which would otherwise squeeze the
+     glyph into what is left between two side paddings. */
+  .po-bar .po-action--icon { width: 2.125rem; padding: 0; }
+  /* Carrying the button on its own, so it is drawn a shade larger than the
+     menu icon beside it: the tray and arrow have more detail in them and read
+     smaller at the same nominal size. */
+  .po-bar .po-action--icon .po-action-icon { width: 1.25rem; height: 1.25rem; flex: none; opacity: .9; }
+  .po-bar .btn--icon { height: 2.125rem; width: 2.125rem; min-height: 0; padding: 0; border-radius: .625rem; }
+  .po-bar .btn--icon svg { width: 1.0625rem; height: 1.0625rem; }
+  /* An icon sits with the label, not instead of it: the glyph is quieter than
+     the word so the button still reads as text at a glance. */
+  .po-action { gap: .4375rem; }
+  .po-action-icon { width: .9375rem; height: .9375rem; opacity: .65; }
+  .dark .po-action { border-color: #334155; background: transparent; color: #cbd5e1; }
+  /* The one action this row is actually waiting on is drawn out; the rest are
+     there but not asking for anything. */
+  .po-action--go { border-color: var(--primary-color); color: var(--primary-color); }
+  .po-action--warn { border-color: #fca5a5; color: #dc2626; }
+
+  /* ── Row actions ──────────────────────────────────────────────────────── */
+  /* Icons, not buttons: a table of them reads as a column of choices rather
+     than a wall of words, and the row stays as tall as its text. */
+  /* The heading sits over the icons rather than over the cell's right edge,
+     so it lines up with what it names. */
+  .po-actions-head { text-align: right; padding-right: 1.25rem; }
+  .po-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; }
+  .po-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    color: #94a3b8;
+    transition: color .15s ease, background .15s ease;
+  }
+  .po-icon-btn svg { width: 1.0625rem; height: 1.0625rem; }
+  .po-icon-btn:hover { color: #334155; background: #f1f5f9; }
+  .dark .po-icon-btn:hover { color: #e2e8f0; background: rgba(30, 41, 59, .8); }
+  .po-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+  /* The one thing the row is actually waiting on carries its colour all the
+     time, so the eye finds it without hovering; the rest stay grey until
+     they are reached for. */
+  .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+  .po-icon-btn--warn { color: #dc2626; background: #fef2f2; }
+  .po-icon-btn--warn:hover { color: #b91c1c; background: #fee2e2; }
+  .dark .po-icon-btn--warn { background: rgba(127, 29, 29, .3); }
+
+  .po-unbilled { color: #dc2626; font-weight: 600; }
+  .po-muted { color: #cbd5e1; }
+  .dark .po-muted { color: #475569; }
+
+  .po-foot td { padding: .875rem 1rem; font-weight: 700; }
+
+  /* ── Settings menu ────────────────────────────────────────────────────── */
   .settings-menu { position: relative; }
   .settings-panel {
     position: absolute;
@@ -29,256 +393,462 @@
     box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
   }
   .dark .settings-panel { border-color: #1e293b; background: #0f172a; }
-
-  .settings-heading {
-    padding: .5rem .625rem .25rem;
-    font-size: .6875rem;
-    font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-
-  .settings-item {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    border-radius: .5rem;
-    padding: .4375rem .625rem;
-    font-size: .8125rem;
-    font-weight: 500;
-    color: #334155;
-  }
+  .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
   .settings-item:hover { background: #f1f5f9; }
   .settings-item--muted { color: #94a3b8; }
   .dark .settings-item { color: #cbd5e1; }
   .dark .settings-item:hover { background: rgba(30, 41, 59, .7); }
-
-  /* The tick box sits where a checkbox would, so a setting that is on reads as
-     on at a glance rather than needing the label to be compared. */
-  .settings-check {
-    display: grid;
-    place-items: center;
-    width: 1.125rem;
-    height: 1.125rem;
-    border: 1px solid #cbd5e1;
-    border-radius: .3125rem;
-    font-size: .75rem;
-    line-height: 1;
-    color: #fff;
+  .settings-check-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-radius: .5rem;
+    padding: .3125rem .625rem;
+    font-size: .8125rem;
+    color: #334155;
   }
-  .settings-check.is-on { border-color: var(--primary-color); background: var(--primary-color); }
-  .dark .settings-check { border-color: #475569; }
+  .settings-check-row:hover { background: #f1f5f9; }
+  .dark .settings-check-row { color: #cbd5e1; }
+  .dark .settings-check-row:hover { background: rgba(30, 41, 59, .7); }
+  /* A locked column still shows, ticked and greyed, so the list reads as the
+     whole table rather than as the part that happens to be adjustable. */
+  .settings-check-row.is-locked { color: #94a3b8; }
+  .settings-check-row.is-locked:hover { background: transparent; }
+  .settings-lock { margin-left: auto; font-size: .625rem; opacity: .5; }
+  .settings-apply { display: flex; justify-content: flex-end; padding: .25rem .625rem .5rem; }
 
   .settings-rows { display: flex; gap: .375rem; padding: .125rem .625rem .375rem; }
-  .settings-chip {
-    flex: 1;
-    border: 1px solid #e2e8f0;
-    border-radius: .5rem;
-    padding: .3125rem 0;
-    font-size: .75rem;
-    font-weight: 600;
-    text-align: center;
-    color: #475569;
-  }
+  .settings-chip { flex: 1; border: 1px solid #e2e8f0; border-radius: .5rem; padding: .3125rem 0; font-size: .75rem; font-weight: 600; text-align: center; color: #475569; }
   .settings-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
   .settings-chip.is-on { border-color: var(--primary-color); color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
   .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
   .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 </style>
-<div class="flex flex-wrap items-center justify-between gap-3">
-  <div>
+
+{# ── Head ──────────────────────────────────────────────────────────────── #}
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Purchase Orders</h1>
   </div>
-  <div class="flex flex-wrap items-center gap-3">
-    {# Its own form so searching keeps whatever the filter bar is set to. #}
-    <form method="get" class="flex items-center gap-2">
+
+  <div class="flex flex-wrap items-center gap-2">
+    {% if can_add %}
+    {% url 'inventory:purchase_order_create' as add_url %}
+    {% include "components/ui/button.html" with label="New Purchase Order" href=add_url variant="primary" icon="+" only %}
+    {% endif %}
+
+  </div>
+</div>
+
+{# ── Tiles: counted over everything the filters allow, so they hold still ── #}
+{# as the tabs are clicked through. #}
+<div class="po-tiles mt-5">
+  <div class="po-tile po-tile--committed">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h4"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.open_count }}</p>
+        <p class="po-tile-label">Open POs</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.open_value|amount }} committed</p>
+    </div>
+  </div>
+
+  <div class="po-tile po-tile--approval">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.pending_count }}</p>
+        <p class="po-tile-label">Awaiting approval</p>
+      </div>
+      <p class="po-tile-note{% if tiles.pending_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.pending_value|amount }} not yet committed</p>
+    </div>
+  </div>
+
+  <div class="po-tile po-tile--goods">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.awaiting_count }}</p>
+        <p class="po-tile-label">Awaiting goods</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.awaiting_value|amount }} on order</p>
+    </div>
+  </div>
+
+  <div class="po-tile po-tile--payable">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+        <circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
+        <p class="po-tile-label">Received, not billed</p>
+      </div>
+      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|amount }} payables unbooked</p>
+    </div>
+  </div>
+</div>
+
+{# ── Board ─────────────────────────────────────────────────────────────── #}
+<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="po-bar">
+    {# One form: changing any filter reloads with the tab and search kept. #}
+    <form method="get" class="po-filter-row">
+      <input type="hidden" name="q" value="{{ request.GET.q }}">
+      <input type="hidden" name="per_page" value="{{ per_page }}">
+      {# Which stretch of the pipeline to look at. The count beside each is what #}
+      {# picking it would show, so the choice is made before the reload. #}
+      <label class="po-filter po-filter--tab">
+        Show
+        <select name="tab" onchange="this.form.submit()">
+          {% for tab in tabs %}
+          <option value="{{ tab.key }}" {% if tab.on %}selected{% endif %}>{{ tab.label }} ({{ tab.count }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% for spec in filter_specs %}
+      <label class="po-filter">
+        Supplier
+        <select name="{{ spec.name }}" onchange="this.form.submit()">
+          <option value="">All</option>
+          {% for value, label in spec.choices %}
+          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+      {# One control for the whole range. The two dates still post under the #}
+      {# names the view already reads, so nothing behind this changed -- they #}
+      {# live inside the control so it can reach them, and inside the form so #}
+      {# they still submit with it. #}
+      <div class="po-range" x-data="dateRange('{{ request.GET.date_from|escapejs }}', '{{ request.GET.date_to|escapejs }}')"
+           @keydown.escape.window="open = false" @click.outside="open = false">
+        <input type="hidden" name="date_from" x-ref="from" value="{{ request.GET.date_from }}">
+        <input type="hidden" name="date_to" x-ref="to" value="{{ request.GET.date_to }}">
+        <button type="button" class="po-filter po-range-btn" :aria-expanded="open.toString()" @click="open = !open">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18"></path>
+          </svg>
+          <span x-text="label"></span>
+          <svg class="po-range-caret" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 8l4 4 4-4"></path>
+          </svg>
+        </button>
+
+        <div class="po-range-panel" x-show="open" x-cloak x-transition.opacity>
+          {# The named stretches people actually ask for, so the common case is #}
+          {# one click and the two boxes are only there for the rest. #}
+          <div class="po-range-presets">
+            <template x-for="preset in presets" :key="preset.key">
+              <button type="button" class="po-range-preset" :class="{ 'is-on': preset.key === active }"
+                      @click="pick(preset)" x-text="preset.label"></button>
+            </template>
+          </div>
+          <div class="po-range-custom">
+            <label class="po-range-field">From
+              <input type="date" x-model="from" :max="to || null">
+            </label>
+            <label class="po-range-field">To
+              <input type="date" x-model="to" :min="from || null">
+            </label>
+            <p class="po-range-warn" x-show="from && to && to < from" x-cloak>The end date is before the start date.</p>
+            <div class="po-range-actions">
+              <button type="button" class="po-range-clear" @click="clear()">Clear</button>
+              <button type="button" class="po-range-apply" :disabled="from && to && to < from" @click="apply()">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <form method="get" class="po-search">
+      <input type="hidden" name="tab" value="{{ current_tab }}">
       <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
-      <input type="hidden" name="status" value="{{ request.GET.status }}">
       <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
       <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
-      <input type="hidden" name="received" value="{% if show_received %}1{% endif %}">
       <input type="hidden" name="per_page" value="{{ per_page }}">
       <div class="search-field">
         <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
         </svg>
-        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search order no, supplier, notes"
-               class="search-input {% if request.GET.q %}pl-9{% endif %}">
-        {% if request.GET.q %}
-        <a href="?supplier={{ request.GET.supplier }}&amp;status={{ request.GET.status }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}{% if show_received %}&amp;received=1{% endif %}&amp;per_page={{ per_page }}"
-           title="Clear search"
-           class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
-        {% endif %}
+        <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search PO, supplier, notes" class="search-input">
       </div>
     </form>
-    {% if can_add %}
-    {% url 'inventory:purchase_order_create' as add_url %}
-    {% include "components/ui/button.html" with label="Add Purchase Order" href=add_url variant="primary" icon="+" only %}
-    {% endif %}
-    {# ── Settings: what the screen shows, and where the rest of the cycle is ── #}
-    {# Its own island, outside the filter form's submit path: every entry is a #}
-    {# link carrying the current query, so nothing here can post the form by #}
-    {# accident. #}
     <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
       <button type="button" class="btn btn-secondary btn--icon" title="Screen settings" aria-label="Screen settings"
               :aria-expanded="open.toString()" @click="open = !open">
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.6.77 1.02 1.51 1.02H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          <path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path>
         </svg>
       </button>
-
       <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
-        <p class="settings-heading">Show</p>
-        {# Fully received orders are finished business; off by default so the #}
-        {# list answers what is still owed. #}
-        <a class="settings-item" role="menuitemcheckbox" aria-checked="{% if show_received %}true{% else %}false{% endif %}"
-           href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier|urlencode }}&amp;status={{ request.GET.status|urlencode }}&amp;date_from={{ request.GET.date_from|urlencode }}&amp;date_to={{ request.GET.date_to|urlencode }}&amp;per_page={{ per_page }}{% if not show_received %}&amp;received=1{% endif %}">
-          <span class="settings-check{% if show_received %} is-on{% endif %}" aria-hidden="true">{% if show_received %}&#10003;{% endif %}</span>
-          Fully received orders
-        </a>
+        {# Which columns to show. Its own form, applied in one trip rather than #}
+        {# a reload per tick. The choice follows through to Export. #}
+        <form method="post" action="{% url 'inventory:purchase_order_columns' %}">{% csrf_token %}
+          <input type="hidden" name="back" value="{{ base_query }}&amp;tab={{ current_tab }}">
+          <p class="settings-heading">Columns</p>
+          {% for column in column_menu %}
+          <label class="settings-check-row{% if column.locked %} is-locked{% endif %}">
+            <input type="checkbox" name="columns" value="{{ column.key }}"
+                   {% if column.on %}checked{% endif %} {% if column.locked %}disabled{% endif %}>
+            <span>{{ column.label }}</span>
+            {% if column.locked %}<span class="settings-lock" title="Always shown">&#128274;</span>{% endif %}
+          </label>
+          {% endfor %}
+          <div class="settings-apply">
+            <button type="submit" class="po-range-apply">Apply</button>
+          </div>
+        </form>
 
         <p class="settings-heading">Rows per page</p>
         <div class="settings-rows">
           {% for size in per_page_options %}
-          <a class="settings-chip{% if size == per_page %} is-on{% endif %}" role="menuitemradio" aria-checked="{% if size == per_page %}true{% else %}false{% endif %}"
-             href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier|urlencode }}&amp;status={{ request.GET.status|urlencode }}&amp;date_from={{ request.GET.date_from|urlencode }}&amp;date_to={{ request.GET.date_to|urlencode }}{% if show_received %}&amp;received=1{% endif %}&amp;per_page={{ size }}">{{ size }}</a>
+          <a class="settings-chip{% if size == per_page %} is-on{% endif %}" role="menuitemradio"
+             aria-checked="{% if size == per_page %}true{% else %}false{% endif %}"
+             href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}&amp;tab={{ current_tab }}&amp;per_page={{ size }}">{{ size }}</a>
           {% endfor %}
         </div>
-
-        <p class="settings-heading">Go to</p>
-        <a class="settings-item" role="menuitem" href="{% url 'inventory:grn_list' %}">Goods Receipt (GRN)</a>
-        <a class="settings-item" role="menuitem" href="{% url 'inventory:purchase_invoice_list' %}">Purchase Invoices</a>
-        <a class="settings-item" role="menuitem" href="{% url 'inventory:purchase_return_list' %}">Purchase Returns</a>
-        <a class="settings-item" role="menuitem" href="{% url 'inventory:supplier_list' %}">Suppliers</a>
-        <a class="settings-item" role="menuitem" href="{% url 'inventory:report_purchase' %}">Purchase Report</a>
-
         <a class="settings-item settings-item--muted" role="menuitem" href="?">Reset this screen</a>
       </div>
     </div>
-  </div>
-</div>
-
-<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-  {# Wide enough for a real supplier name: the picker shows one line, and a #}
-  {# name longer than the box is cut with an ellipsis rather than wrapping. #}
-  <div class="w-64" id="supplier-field">
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="supplier">Supplier</label>
-    <select name="supplier" id="supplier" class="form-select" onchange="this.form.submit()">
-      <option value="">All suppliers</option>
-      {% for spec in filter_specs %}{% if spec.name == "supplier" %}
-        {% for value, label in spec.choices %}
-          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      {% endif %}{% endfor %}
-    </select>
-  </div>
-  <div class="w-48">
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="status">Status</label>
-    <select name="status" id="status" class="form-select" onchange="this.form.submit()">
-      <option value="">All statuses</option>
-      {% for spec in filter_specs %}{% if spec.name == "status" %}
-        {% for value, label in spec.choices %}
-          <option value="{{ value }}" {% if spec.value == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      {% endif %}{% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
-    <input type="date" name="date_from" id="date_from" value="{{ request.GET.date_from }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
-    <input type="date" name="date_to" id="date_to" value="{{ request.GET.date_to }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <input type="hidden" name="q" value="{{ request.GET.q }}">
-  {# Carried so a change made in the settings menu is not undone by the next #}
-  {# filter change, and vice versa. #}
-  <input type="hidden" name="received" value="{% if show_received %}1{% endif %}">
-  <input type="hidden" name="per_page" value="{{ per_page }}">
-  <div class="flex-1"></div>
-  <div class="flex shrink-0 items-center gap-2">
-    <button type="button" class="btn btn-secondary btn--icon" title="Print" aria-label="Print"
-            onclick="printSection('order-table', 'Purchase Orders')">
-      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+    {# Tray with an arrow coming down into it: what the button does, not the #}
+    {# file format it happens to produce. The word lives in the label. #}
+    <a class="po-action po-action--icon" href="{% url 'inventory:purchase_order_export' %}?{{ base_query }}&amp;tab={{ current_tab }}" title="Export &mdash; download the rows and columns on screen" aria-label="Export the rows and columns on screen">
+      <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3v11"></path><path d="M8 11l4 4 4-4"></path>
+        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
       </svg>
-    </button>
+    </a>
+  </div>
 
-  </div>
-</form>
+  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
+    <table id="order-table" class="po-table">
+      <thead>
+        <tr>
+          <th>PO #</th>
+          {% if "purchase_date" in columns %}<th>Date</th>{% endif %}
+          {% if "supplier" in columns %}<th>Supplier</th>{% endif %}
+          {% if "buyer" in columns %}<th>Buyer</th>{% endif %}
+          {% if "expected" in columns %}<th>Expected</th>{% endif %}
+          {% if "value" in columns %}<th class="po-right">PO Value</th>{% endif %}
+          {% if "received" in columns %}<th style="width: 10rem;">Received</th>{% endif %}
+          {% if "grn" in columns %}<th>GRN</th>{% endif %}
+          {% if "billed" in columns %}<th>Billed</th>{% endif %}
+          {% if "status" in columns %}<th>Status</th>{% endif %}
+          <th class="print-hide po-actions-head">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr>
+          <td>
+            <a class="po-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
+          </td>
+          {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|date:"d-M-Y" }}</td>{% endif %}
+          {% if "supplier" in columns %}
+          <td>
+            <span class="font-semibold">{{ order.supplier.name }}</span>
+            {# Who raised it, under the name, unless Buyer has a column of its own. #}
+            {% if "buyer" not in columns %}
+            <span class="po-sub">Buyer: {{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</span>
+            {% endif %}
+          </td>
+          {% endif %}
+          {% if "buyer" in columns %}
+          <td class="whitespace-nowrap">{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>
+          {% endif %}
+          {% if "expected" in columns %}<td class="whitespace-nowrap">{{ order.expected_date|date:"d-M-Y"|default:"—" }}</td>{% endif %}
+          {% if "value" in columns %}<td class="po-right font-semibold">{{ order.total_amount|amount }}</td>{% endif %}
+          {% if "received" in columns %}
+          <td>
+            <div class="po-bar-track">
+              <div class="po-bar-fill{% if order.received_percent >= 100 %} po-bar-fill--full{% elif order.received_percent > 0 %} po-bar-fill--part{% endif %}"
+                   style="width: {{ order.received_percent }}%;"></div>
+            </div>
+            <span class="po-bar-note{% if order.days_late %} po-bar-note--late{% endif %}">
+              {% if order.days_late %}{{ order.days_late }} day{{ order.days_late|pluralize }} late
+              {% elif order.grn_number %}{{ order.grn_number }}
+              {% elif order.received_percent %}{{ order.received_percent }}% received
+              {% else %}Not received{% endif %}
+            </span>
+          </td>
+          {% endif %}
+          {% if "grn" in columns %}
+          <td class="whitespace-nowrap">{% if order.grn_number %}{{ order.grn_number }}{% else %}<span class="po-muted">—</span>{% endif %}</td>
+          {% endif %}
+          {% if "billed" in columns %}
+          <td>
+            {% if order.billed_state == "billed" %}{{ order.invoice_numbers|join:", " }}
+            {% elif order.billed_state == "partial" %}Partial
+            {% elif order.billed_state == "unbilled" %}<span class="po-unbilled">Not billed</span>
+            {% else %}<span class="po-muted">—</span>{% endif %}
+          </td>
+          {% endif %}
+          {% if "status" in columns %}
+          <td>
+            {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
+            {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
+            {% elif order.next_action == "bill" %}<span class="po-pill po-pill--bill">Enter bill</span>
+            {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partially received</span>
+            {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Closed</span>
+            {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead">Cancelled</span>
+            {% else %}<span class="po-pill po-pill--open">Open</span>{% endif %}
+          </td>
+          {% endif %}
+          <td class="print-hide">
+            {# One action per row: the next thing this order is waiting for. It #}
+            {# is drawn as an icon, so the label the mouse and the screen reader #}
+            {# get is the only place the word lives. #}
+            <div class="po-row-actions">
+              {% if order.next_action == "approve" %}
+              <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
+                <button class="po-icon-btn po-icon-btn--go" title="Approve &mdash; raise this order on the supplier" aria-label="Approve this order">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 6L9 17l-5-5"></path>
+                  </svg>
+                </button>
+              </form>
+              {% elif order.next_action == "chase" %}
+              <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:supplier_detail' order.supplier_id %}" title="Chase &mdash; supplier contact details" aria-label="Chase this supplier">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"></path>
+                </svg>
+              </a>
+              {% elif order.next_action == "bill" %}
+              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_order_receive' order.pk %}" title="Bill &mdash; enter the supplier's invoice against what arrived" aria-label="Enter the bill for this order">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
+                  <path d="M9 8h6M9 12h6"></path>
+                </svg>
+              </a>
+              {% endif %}
 
-<div class="mt-4 grid gap-4 sm:grid-cols-2">
-  <div class="stat-tile">
-    <span class="stat-icon">&#8721;</span>
-    <div>
-      <p class="stat-label">Total on this page</p>
-      <p class="stat-value">{{ page_total|amount }}</p>
-    </div>
-  </div>
-  <div class="stat-tile">
-    <span class="stat-icon">#</span>
-    <div>
-      <p class="stat-label">Open orders</p>
-      <p class="stat-value">{{ order_count }}</p>
-      <p class="mt-0.5 text-xs text-slate-500">under the filters applied</p>
-    </div>
-  </div>
-</div>
+              {# Opening the order is always available, whatever it is waiting on. #}
+              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View this order" aria-label="View this order">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </a>
 
-<section class="mt-4">
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table id="order-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Order No.</th>
-            <th class="px-4 py-3">Supplier</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Items</th>
-            <th class="px-4 py-3 text-right">Amount</th>
-            <th class="px-4 py-3 text-right print-hide">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for order in orders %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-            <td class="px-4 py-3 whitespace-nowrap">{{ order.purchase_date }}</td>
-            <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
-            <td class="px-4 py-3">{{ order.supplier.name }}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2.5 py-1 text-xs font-medium
-                {% if order.status == 'draft' %}bg-amber-100 text-amber-700
-                {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
-                {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
-                {% else %}bg-slate-100 text-slate-600{% endif %}">{{ order.get_status_display }}</span>
-            </td>
-            <td class="px-4 py-3 text-right tabular-nums">{{ order.line_count }}</td>
-            <td class="px-4 py-3 text-right font-bold tabular-nums">{{ order.total_amount|amount }}</td>
-            <td class="px-4 py-3 print-hide">
-              <div class="flex justify-end gap-2">
-                {% if order.status == 'draft' %}
-                {# Raising is what turns an order from a sketch into a commitment. #}
-                <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
-                  <button class="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700" title="Raise this order">Raise</button>
-                </form>
-                {% endif %}
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View">&#128065;</a>
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_receive' order.pk %}" title="Receive">&#128230;</a>
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank" title="Print">&#128438;</a>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="7" class="px-4 py-10 text-center text-slate-500">No open purchase orders.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank" title="Print this order" aria-label="Print this order">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 8V3h10v5"></path>
+                  <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="7" y="14" width="10" height="7" rx="1"></rect>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ column_span }}" class="px-4 py-12 text-center text-slate-500">No purchase orders here.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if orders %}
+      <tfoot>
+        {# The total sits under PO Value wherever that lands, so the label #}
+        {# stretches to meet it and the rest of the row trails after. #}
+        <tr class="po-foot">
+          {% if foot_tail_span %}
+          <td colspan="{{ foot_lead_span }}">Total shown</td>
+          <td class="po-right">{{ page_total|amount }}</td>
+          <td colspan="{{ foot_tail_span }}"></td>
+          {% else %}
+          <td colspan="{{ foot_lead_span }}">Total shown</td>
+          {% endif %}
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
   </div>
-  {% include "components/table/pagination.html" %}
 </section>
+
+{% include "components/table/pagination.html" %}
+
+<script>
+  // The date range control. It owns nothing the server knows about: on Apply it
+  // writes the two hidden inputs the view already reads and submits the filter
+  // form, so the query string is exactly what the two boxes used to produce.
+  function dateRange(from, to) {
+    const iso = d => [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    const today = new Date();
+    const shift = days => { const d = new Date(today); d.setDate(d.getDate() + days); return d; };
+    const monthStart = back => new Date(today.getFullYear(), today.getMonth() - back, 1);
+    const monthEnd = back => new Date(today.getFullYear(), today.getMonth() - back + 1, 0);
+    // Quarters run Jan-Mar, Apr-Jun, and so on, whatever month it is now.
+    const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
+
+    const presets = [
+      { key: 'all',       label: 'All dates',    from: '',                    to: '' },
+      { key: 'today',     label: 'Today',        from: iso(today),            to: iso(today) },
+      { key: 'week',      label: 'Last 7 days',  from: iso(shift(-6)),        to: iso(today) },
+      { key: 'days30',    label: 'Last 30 days', from: iso(shift(-29)),       to: iso(today) },
+      { key: 'month',     label: 'This month',   from: iso(monthStart(0)),    to: iso(today) },
+      { key: 'lastmonth', label: 'Last month',   from: iso(monthStart(1)),    to: iso(monthEnd(1)) },
+      { key: 'quarter',   label: 'This quarter', from: iso(quarterStart),     to: iso(today) },
+      { key: 'year',      label: 'This year',    from: iso(new Date(today.getFullYear(), 0, 1)), to: iso(today) },
+    ];
+
+    const pretty = value => {
+      if (!value) return '';
+      const [y, m, d] = value.split('-');
+      const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return Number(d) + ' ' + names[Number(m) - 1] + ' ' + y;
+    };
+
+    return {
+      open: false,
+      presets: presets,
+      from: from || '',
+      to: to || '',
+      // Which named stretch the current pair happens to be, so reopening the
+      // panel shows what is actually set rather than nothing.
+      get active() {
+        const match = presets.find(p => p.from === this.from && p.to === this.to);
+        return match ? match.key : 'custom';
+      },
+      get label() {
+        const named = presets.find(p => p.key === this.active);
+        if (named) return named.label;
+        if (this.from && this.to) return pretty(this.from) + ' \u2013 ' + pretty(this.to);
+        if (this.from) return 'From ' + pretty(this.from);
+        return 'Until ' + pretty(this.to);
+      },
+      pick(preset) { this.from = preset.from; this.to = preset.to; this.apply(); },
+      clear() { this.from = ''; this.to = ''; this.apply(); },
+      apply() {
+        if (this.from && this.to && this.to < this.from) return;
+        this.$refs.from.value = this.from;
+        this.$refs.to.value = this.to;
+        this.open = false;
+        this.$refs.from.form.submit();
+      },
+    };
+  }
+</script>
 {% endblock %}
