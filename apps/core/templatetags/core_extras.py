@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from django import template
 
 from apps.access_control.selectors import user_has_permission
@@ -16,6 +18,30 @@ def qty(value):
 def amount(value):
     """Render an amount with thousands separators and fixed decimal precision."""
     return format_amount(value)
+
+
+@register.filter(name="short_amount")
+def short_amount(value):
+    """An amount sized for a glance rather than for a ledger.
+
+    A headline figure is read for its order of magnitude -- 28.5 M says what
+    28,547,037.00 makes the reader count digits to work out. Anything under a
+    lakh is left alone, because shortening it would lose more than it saves.
+    """
+    try:
+        number = Decimal(value or 0)
+    except (InvalidOperation, TypeError, ValueError):
+        return format_amount(value)
+
+    sign = "-" if number < 0 else ""
+    number = abs(number)
+    for size, suffix in ((Decimal("10000000"), " Cr"), (Decimal("100000"), " L")):
+        if number >= size:
+            scaled = (number / size).quantize(Decimal("0.01"))
+            # 3.00 Cr says nothing 3 Cr does not, so the zeros come off.
+            text = f"{scaled:f}".rstrip("0").rstrip(".")
+            return f"{sign}{text}{suffix}"
+    return f"{sign}{format_amount(number)}"
 
 
 @register.filter(name="dmy")

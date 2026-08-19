@@ -27,14 +27,16 @@ TAB_ALL = "all"
 TAB_PENDING = "pending"
 TAB_OPEN = "open"
 TAB_RECEIVED = "received"
+TAB_UNBILLED = "unbilled"
 TAB_CLOSED = "closed"
 
 TABS = (
     (TAB_ALL, "All"),
-    (TAB_PENDING, "Pending approval"),
-    (TAB_OPEN, "Open"),
+    (TAB_PENDING, "Awaiting approval"),
+    (TAB_OPEN, "Awaiting goods"),
     (TAB_RECEIVED, "Received"),
-    (TAB_CLOSED, "Closed"),
+    (TAB_UNBILLED, "Received, not billed"),
+    (TAB_CLOSED, "Cancelled"),
 )
 
 TAB_STATUSES = {
@@ -71,11 +73,26 @@ def decorate(orders, today=None):
         # bar is not a thing anyone can see.
         order.received_percent = int(received_qty / ordered_qty * 100) if ordered_qty else 0
 
-        # What has arrived, and under which note. The last GRN is the one worth
-        # showing: it is the most recent thing that happened to this order.
+        # What has arrived, and under which note. The last goods receipt is the
+        # one worth showing: it is the most recent thing that happened here.
         receipts = [receipt for line in lines for receipt in line.receipts.all()]
         grns = [receipt.grn_number for receipt in receipts if receipt.grn_number]
         order.grn_number = grns[-1] if grns else ""
+
+        # Money, split by what has actually happened to the goods rather than by
+        # the order's headline total. Three separate figures, because they
+        # answer three different questions and adding the wrong one to a tile is
+        # how a screen ends up claiming more is owed than was ever ordered.
+        still_to_come = ZERO      # ordered, not yet arrived
+        arrived_unbilled = ZERO   # arrived, no supplier invoice against it
+        for line in lines:
+            rate = line.rate or Decimal("0")
+            still_to_come += (line.pending_receive_qty * rate).quantize(Decimal("0.01"))
+            for receipt in line.receipts.all():
+                if not receipt.invoice_num:
+                    arrived_unbilled += ((receipt.quantity or Decimal("0")) * rate).quantize(Decimal("0.01"))
+        order.on_order_value = still_to_come
+        order.unbilled_value = arrived_unbilled
 
         # Billed is read off the receipts, because that is where the supplier's
         # invoice number is captured. Some receipts carrying one and some not is
@@ -125,26 +142,32 @@ def summarise(orders, today=None):
         "pending_count": 0, "pending_value": ZERO,
         "awaiting_count": 0, "awaiting_value": ZERO,
         "unbilled_count": 0, "unbilled_value": ZERO,
-        "overdue_count": 0,
+        "overdue_count": 0, "pending_empty": 0,
     }
 
     for order in orders:
         if order.status in LIVE_STATUSES:
             tiles["open_count"] += 1
             tiles["open_value"] += order.total_amount
-            # Still owed by the supplier: ordered but not yet arrived.
+            # Still owed by the supplier, priced line by line off what has not
+            # arrived -- not a percentage of the headline total, which charges
+            # the whole order to a tile about the quarter of it still missing.
             if order.received_percent < 100:
                 tiles["awaiting_count"] += 1
-                outstanding = Decimal(100 - order.received_percent) / Decimal(100)
-                tiles["awaiting_value"] += (order.total_amount * outstanding).quantize(Decimal("0.01"))
+                tiles["awaiting_value"] += order.on_order_value
         if order.status == STATUS_DRAFT:
             tiles["pending_count"] += 1
             tiles["pending_value"] += order.total_amount
-        # Goods in, supplier's invoice not yet against them: a payable the books
-        # do not know about yet.
-        if order.received_qty > 0 and order.billed_state in ("unbilled", "partial"):
+            # A draft nobody has put lines on yet has no figure to show, and a
+            # tile reading Rs 0.00 looks broken rather than empty.
+            if not order.line_count:
+                tiles["pending_empty"] += 1
+        # Goods in with no supplier invoice against them: a payable the books do
+        # not know about yet. Only the receipts that are actually unbilled
+        # count, so a part-received order contributes only what turned up.
+        if order.unbilled_value:
             tiles["unbilled_count"] += 1
-            tiles["unbilled_value"] += order.total_amount
+            tiles["unbilled_value"] += order.unbilled_value
         if order.days_late:
             tiles["overdue_count"] += 1
 
@@ -158,23 +181,23 @@ def summarise(orders, today=None):
 # not a screen. ``export`` is what the column writes into a spreadsheet cell,
 # so the file and the table can never drift apart.
 COLUMNS = (
-    {"key": "purchase_num", "label": "PO #", "locked": True,
+    {"key": "purchase_num", "label": "Order #", "locked": True,
      "export": lambda order: order.purchase_num},
     {"key": "purchase_date", "label": "Date",
      "export": lambda order: order.purchase_date},
     {"key": "supplier", "label": "Supplier",
      "export": lambda order: order.supplier.name},
-    {"key": "buyer", "label": "Buyer",
+    {"key": "buyer", "label": "Raised by",
      "export": lambda order: (order.created_by.get_full_name() or order.created_by.username) if order.created_by else ""},
     {"key": "expected", "label": "Expected",
      "export": lambda order: order.expected_date or ""},
-    {"key": "value", "label": "PO Value",
+    {"key": "value", "label": "Order value", "locked": True,
      "export": lambda order: order.total_amount},
     {"key": "received", "label": "Received",
      "export": lambda order: f"{order.received_qty} of {order.ordered_qty} ({order.received_percent}%)"},
-    {"key": "grn", "label": "GRN",
+    {"key": "grn", "label": "Goods receipt",
      "export": lambda order: order.grn_number},
-    {"key": "billed", "label": "Billed",
+    {"key": "billed", "label": "Invoiced",
      "export": lambda order: ", ".join(order.invoice_numbers) or BILLED_LABELS[order.billed_state]},
     {"key": "status", "label": "Status",
      "export": lambda order: order.get_status_display()},

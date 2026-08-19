@@ -1,4 +1,5 @@
 {% extends "layouts/portal.html" %}
+{% load core_extras %}
 {% block content %}
 <style>
   /* Plain CSS: the compiled Tailwind bundle is prebuilt, so the rules for this
@@ -48,6 +49,12 @@
   .dark .po-tile--goods     { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
   .dark .po-tile--payable   { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
 
+  /* Each tile is the filter it describes, so it lifts under the pointer the
+     way anything clickable should. */
+  .po-tile { cursor: pointer; transition: box-shadow .15s ease, transform .1s ease; }
+  .po-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(2, 6, 23, .35); }
+  .po-tile:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+
   .po-tile-icon {
     display: grid;
     place-items: center;
@@ -84,8 +91,8 @@
   /* The search box is one of the controls, not the space between them: it sits
      at the same width and height as a filter chip rather than stretching to
      swallow whatever the row has left over. */
-  .po-search { flex: 0 1 13rem; min-width: 9rem; margin-left: auto; }
-  .po-bar > .settings-menu, .po-bar > .po-action { margin-left: 0; }
+  .po-search { flex: 0 1 13rem; min-width: 9rem; }
+  .po-bar > .settings-menu { margin-left: auto; }
   .po-search .search-field { width: 100%; }
   .po-search .search-input {
     width: 100%;
@@ -368,6 +375,31 @@
      they are reached for. */
   .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
   .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+  /* The one action that spends money keeps its label. An icon is fine for
+     looking at something; it is not fine for committing to it. */
+  .po-text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .3125rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    padding: 0 .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-text-btn svg { width: .875rem; height: .875rem; }
+  .po-text-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .po-text-btn--go:hover { background: color-mix(in srgb, var(--primary-color) 20%, transparent); }
+  .po-text-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+  /* Clearing is a small undo, not a warning: it reads in the same red as the
+     figures that made someone filter in the first place, but stays quiet until
+     it is reached for. */
+  .po-bar .po-action--reset { color: #dc2626; border-color: #fecdd3; }
+  .po-bar .po-action--reset:hover { border-color: #fca5a5; background: #fef2f2; }
+  .dark .po-bar .po-action--reset { border-color: rgba(244, 63, 94, .35); }
+
   .po-icon-btn--warn { color: #dc2626; background: #fef2f2; }
   .po-icon-btn--warn:hover { color: #b91c1c; background: #fee2e2; }
   .dark .po-icon-btn--warn { background: rgba(127, 29, 29, .3); }
@@ -444,7 +476,7 @@
 {# ── Tiles: counted over everything the filters allow, so they hold still ── #}
 {# as the tabs are clicked through. #}
 <div class="po-tiles mt-5">
-  <div class="po-tile po-tile--committed">
+  <a class="po-tile po-tile--committed" href="?{{ base_query }}&amp;tab=open">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -456,11 +488,11 @@
         <p class="po-tile-value">{{ tiles.open_count }}</p>
         <p class="po-tile-label">Open POs</p>
       </div>
-      <p class="po-tile-note">Rs {{ tiles.open_value|amount }} committed</p>
+      <p class="po-tile-note">Rs {{ tiles.open_value|short_amount }} committed</p>
     </div>
-  </div>
+  </a>
 
-  <div class="po-tile po-tile--approval">
+  <a class="po-tile po-tile--approval" href="?{{ base_query }}&amp;tab=pending">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>
@@ -471,11 +503,17 @@
         <p class="po-tile-value">{{ tiles.pending_count }}</p>
         <p class="po-tile-label">Awaiting approval</p>
       </div>
-      <p class="po-tile-note{% if tiles.pending_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.pending_value|amount }} not yet committed</p>
+      {# A draft with no lines on it has no figure to show, and a tile reading #}
+      {# Rs 0.00 looks broken rather than empty. #}
+      <p class="po-tile-note{% if tiles.pending_value %} po-tile-note--alert{% endif %}">
+        {% if tiles.pending_value %}Rs {{ tiles.pending_value|short_amount }} not yet committed
+        {% elif tiles.pending_empty %}No items added yet
+        {% else %}Nothing waiting{% endif %}
+      </p>
     </div>
-  </div>
+  </a>
 
-  <div class="po-tile po-tile--goods">
+  <a class="po-tile po-tile--goods" href="?{{ base_query }}&amp;tab=open">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
@@ -486,11 +524,11 @@
         <p class="po-tile-value">{{ tiles.awaiting_count }}</p>
         <p class="po-tile-label">Awaiting goods</p>
       </div>
-      <p class="po-tile-note">Rs {{ tiles.awaiting_value|amount }} on order</p>
+      <p class="po-tile-note">Rs {{ tiles.awaiting_value|short_amount }} still to arrive</p>
     </div>
-  </div>
+  </a>
 
-  <div class="po-tile po-tile--payable">
+  <a class="po-tile po-tile--payable" href="?{{ base_query }}&amp;tab=unbilled">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="6" width="20" height="12" rx="2"></rect>
@@ -502,9 +540,9 @@
         <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
         <p class="po-tile-label">Received, not billed</p>
       </div>
-      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|amount }} payables unbooked</p>
+      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} arrived, not invoiced</p>
     </div>
-  </div>
+  </a>
 </div>
 
 {# ── Board ─────────────────────────────────────────────────────────────── #}
@@ -580,19 +618,6 @@
       </div>
     </form>
 
-    <form method="get" class="po-search">
-      <input type="hidden" name="tab" value="{{ current_tab }}">
-      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
-      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
-      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
-      <input type="hidden" name="per_page" value="{{ per_page }}">
-      <div class="search-field">
-        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
-        </svg>
-        <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search PO, supplier, notes" class="search-input">
-      </div>
-    </form>
     <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
       <button type="button" class="btn btn-secondary btn--icon" title="Screen settings" aria-label="Screen settings"
               :aria-expanded="open.toString()" @click="open = !open">
@@ -627,9 +652,35 @@
              href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}&amp;tab={{ current_tab }}&amp;per_page={{ size }}">{{ size }}</a>
           {% endfor %}
         </div>
-        <a class="settings-item settings-item--muted" role="menuitem" href="?">Reset this screen</a>
       </div>
     </div>
+
+    {# Its own form so searching keeps whatever the filter bar is set to. #}
+    <form method="get" class="po-search">
+      <input type="hidden" name="tab" value="{{ current_tab }}">
+      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
+      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
+      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
+      <input type="hidden" name="per_page" value="{{ per_page }}">
+      <div class="search-field">
+        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
+        </svg>
+        <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="search-input">
+      </div>
+    </form>
+
+    {% if filters_active %}
+    {# Only here when something is actually narrowing the list, so an empty #}
+    {# screen never offers to clear nothing. #}
+    <a class="po-action po-action--icon po-action--reset" href="{% url 'inventory:purchase_order_list' %}" title="Clear all filters" aria-label="Clear all filters">
+      <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 5h18l-7 8v6l-4 2v-8z"></path>
+        <path d="M15 4l6 6M21 4l-6 6"></path>
+      </svg>
+    </a>
+    {% endif %}
+
     {# Tray with an arrow coming down into it: what the button does, not the #}
     {# file format it happens to produce. The word lives in the label. #}
     <a class="po-action po-action--icon" href="{% url 'inventory:purchase_order_export' %}?{{ base_query }}&amp;tab={{ current_tab }}" title="Export &mdash; download the rows and columns on screen" aria-label="Export the rows and columns on screen">
@@ -638,22 +689,23 @@
         <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
       </svg>
     </a>
+
   </div>
 
   <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
     <table id="order-table" class="po-table">
       <thead>
         <tr>
-          <th>PO #</th>
-          {% if "purchase_date" in columns %}<th>Date</th>{% endif %}
-          {% if "supplier" in columns %}<th>Supplier</th>{% endif %}
-          {% if "buyer" in columns %}<th>Buyer</th>{% endif %}
-          {% if "expected" in columns %}<th>Expected</th>{% endif %}
-          {% if "value" in columns %}<th class="po-right">PO Value</th>{% endif %}
+          {% include "components/table/sort_header.html" with label="Order #" field="purchase_num" %}
+          {% if "purchase_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}{% endif %}
+          {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
+          {% if "buyer" in columns %}<th>Raised by</th>{% endif %}
+          {% if "expected" in columns %}{% include "components/table/sort_header.html" with label="Expected" field="expected" %}{% endif %}
+          {% if "value" in columns %}<th class="po-right">Order value</th>{% endif %}
           {% if "received" in columns %}<th style="width: 10rem;">Received</th>{% endif %}
-          {% if "grn" in columns %}<th>GRN</th>{% endif %}
-          {% if "billed" in columns %}<th>Billed</th>{% endif %}
-          {% if "status" in columns %}<th>Status</th>{% endif %}
+          {% if "grn" in columns %}<th>Goods receipt</th>{% endif %}
+          {% if "billed" in columns %}<th>Invoiced</th>{% endif %}
+          {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
           <th class="print-hide po-actions-head">Actions</th>
         </tr>
       </thead>
@@ -669,7 +721,7 @@
             <span class="font-semibold">{{ order.supplier.name }}</span>
             {# Who raised it, under the name, unless Buyer has a column of its own. #}
             {% if "buyer" not in columns %}
-            <span class="po-sub">Buyer: {{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</span>
+            <span class="po-sub">Raised by {{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</span>
             {% endif %}
           </td>
           {% endif %}
@@ -698,20 +750,21 @@
           {% if "billed" in columns %}
           <td>
             {% if order.billed_state == "billed" %}{{ order.invoice_numbers|join:", " }}
-            {% elif order.billed_state == "partial" %}Partial
-            {% elif order.billed_state == "unbilled" %}<span class="po-unbilled">Not billed</span>
-            {% else %}<span class="po-muted">—</span>{% endif %}
+            {% elif order.billed_state == "partial" %}<span class="po-unbilled">Part invoiced</span>
+            {% elif order.billed_state == "unbilled" %}<span class="po-unbilled">Not invoiced</span>
+            {% else %}<span class="po-muted" title="Nothing has arrived yet, so there is nothing to invoice">&mdash;</span>{% endif %}
           </td>
           {% endif %}
           {% if "status" in columns %}
           <td>
+            {# A state, never an instruction: what to do about it is the button #}
+            {# at the end of the row, and the two must not be spoken in one voice. #}
             {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
             {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
-            {% elif order.next_action == "bill" %}<span class="po-pill po-pill--bill">Enter bill</span>
-            {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partially received</span>
-            {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Closed</span>
+            {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partly received</span>
+            {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Received</span>
             {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead">Cancelled</span>
-            {% else %}<span class="po-pill po-pill--open">Open</span>{% endif %}
+            {% else %}<span class="po-pill po-pill--open">Awaiting goods</span>{% endif %}
           </td>
           {% endif %}
           <td class="print-hide">
@@ -720,11 +773,16 @@
             {# get is the only place the word lives. #}
             <div class="po-row-actions">
               {% if order.next_action == "approve" %}
-              <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
-                <button class="po-icon-btn po-icon-btn--go" title="Approve &mdash; raise this order on the supplier" aria-label="Approve this order">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {# Approving commits money to a supplier and cannot be taken back, #}
+              {# so it keeps its word rather than hiding behind a tick, and it #}
+              {# asks first. Everything else on the row is safe to click. #}
+              <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}"
+                    onsubmit="return confirm('Approve {{ order.purchase_num|escapejs }} for {{ order.supplier.name|escapejs }}?\n\nThis commits {{ order.total_amount|amount|escapejs }} to the supplier and cannot be undone.');">{% csrf_token %}
+                <button class="po-text-btn po-text-btn--go" title="Approve &mdash; raise this order on the supplier">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M20 6L9 17l-5-5"></path>
                   </svg>
+                  Approve
                 </button>
               </form>
               {% elif order.next_action == "chase" %}
@@ -770,11 +828,11 @@
         {# stretches to meet it and the rest of the row trails after. #}
         <tr class="po-foot">
           {% if foot_tail_span %}
-          <td colspan="{{ foot_lead_span }}">Total shown</td>
+          <td colspan="{{ foot_lead_span }}">Total on this page</td>
           <td class="po-right">{{ page_total|amount }}</td>
           <td colspan="{{ foot_tail_span }}"></td>
           {% else %}
-          <td colspan="{{ foot_lead_span }}">Total shown</td>
+          <td colspan="{{ foot_lead_span }}">Total on this page</td>
           {% endif %}
         </tr>
       </tfoot>

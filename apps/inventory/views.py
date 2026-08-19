@@ -26,7 +26,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -1718,7 +1718,7 @@ class PurchaseInvoiceListView(InventoryListMixin, ListView):
         return context
 
 
-class PurchaseOrderListView(InventoryListMixin, ListView):
+class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     """Orders raised on suppliers: what is committed, and what it is waiting on.
 
     The screen is built around the question an order actually poses -- is it
@@ -1742,6 +1742,18 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
     filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Order date"}]
+    # Only the columns the database can order by. What has arrived and what is
+    # billed are worked out per row after the query, so they cannot be sorted
+    # on without pulling the whole table into memory -- their headings stay
+    # plain rather than offering a sort that would quietly lie about the order.
+    sort_fields = {
+        "purchase_num": "seq_num",
+        "purchase_date": "purchase_date",
+        "supplier": "supplier__name",
+        "expected": "expected_date",
+        "status": "status",
+    }
+    default_sort = "purchase_date"
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
@@ -1765,7 +1777,11 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
 
     def get_queryset(self):
         queryset = self.filtered_queryset()
-        statuses = TAB_STATUSES.get(self.current_tab())
+        tab = self.current_tab()
+        if tab == TAB_UNBILLED:
+            # Goods booked in under a receipt that carries no supplier invoice.
+            queryset = queryset.filter(items__receipts__invoice_num="").distinct()
+        statuses = TAB_STATUSES.get(tab)
         if statuses:
             queryset = queryset.filter(status__in=statuses)
         return queryset
@@ -1793,10 +1809,15 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
         # the tabs are clicked through.
         everything = list(self.filtered_queryset())
         context["tiles"] = summarise(everything)
+        def tab_count(key):
+            if key == TAB_UNBILLED:
+                return sum(1 for order in everything if order.unbilled_value)
+            statuses = TAB_STATUSES.get(key)
+            return sum(1 for order in everything
+                       if not statuses or order.status in statuses)
+
         context["tabs"] = [
-            {"key": key, "label": label, "on": key == self.current_tab(),
-             "count": sum(1 for order in everything
-                          if not TAB_STATUSES.get(key) or order.status in TAB_STATUSES[key])}
+            {"key": key, "label": label, "on": key == self.current_tab(), "count": tab_count(key)}
             for key, label in TABS
         ]
         # Which columns this person chose to look at. A set, so the template
@@ -1826,6 +1847,12 @@ class PurchaseOrderListView(InventoryListMixin, ListView):
         context["base_query"] = carried.urlencode()
         context["per_page"] = self.get_paginate_by(None)
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        # Whether anything is narrowing the list right now. Paging and column
+        # choices are not filters, so they do not light the reset up.
+        context["filters_active"] = any(
+            (self.request.GET.get(key) or "").strip()
+            for key in ("q", "supplier", "date_from", "date_to", "sort", "dir")
+        ) or self.current_tab() != TAB_ALL
         return context
 
 
