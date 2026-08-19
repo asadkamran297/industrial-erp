@@ -299,6 +299,94 @@ def next_direct_purchase_number():
     return f"PI-{last + 1:06d}"
 
 
+def next_purchase_order_number():
+    """What the next purchase order will be called; advisory, like the bill one."""
+    last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+    return f"PO-{last + 1}"
+
+
+@transaction.atomic
+def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines,
+                          discount_amount=Decimal("0"), tax_amount=Decimal("0"),
+                          remarks="", status=STATUS_RAISED, extra_data=None, user):
+    """An order raised on a supplier: goods asked for, none of them here yet.
+
+    Same entry shape as ``create_direct_purchase`` so both purchase screens read
+    alike, but nothing is received: stock, the item ledger and the general
+    ledger stay untouched until the goods arrive through the receive screen.
+
+    ``lines`` is a list of dicts: inventory_item, quantity, rate, an optional
+    uom the line was written in, and an optional descr.
+    """
+    if not supplier:
+        raise ValidationError("Pick a supplier.")
+
+    clean_lines = [line for line in lines if line.get("inventory_item") and line.get("quantity")]
+    if not clean_lines:
+        raise ValidationError("Add at least one item with a quantity.")
+
+    order = PurchaseOrder.objects.create(
+        supplier=supplier,
+        purchase_date=order_date,
+        status=status,
+        is_direct=False,
+        quot_num=quot_num or "",
+        quot_date=quot_date or None,
+        descr=remarks or "",
+        # Whatever the site added to its own form; nothing here reads it.
+        extra_data=extra_data or {},
+        created_by=user,
+        updated_by=user,
+    )
+
+    # One discount typed at the foot is spread over the lines by their share of
+    # the goods, so the order's own lines still add up to what was agreed.
+    goods_total = Decimal("0.00")
+    prepared = []
+    for line in clean_lines:
+        quantity = Decimal(line["quantity"])
+        rate = Decimal(line.get("rate") or 0)
+        if quantity <= 0:
+            raise ValidationError("Every line needs a quantity greater than zero.")
+        item = line["inventory_item"]
+        quantity, rate = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=rate)
+        amount = (quantity * rate).quantize(Decimal("0.01"))
+        goods_total += amount
+        prepared.append((item, quantity, rate, amount, line.get("descr")))
+
+    discount = Decimal(discount_amount or 0).quantize(Decimal("0.01"))
+    if discount > goods_total:
+        raise ValidationError("Discount cannot be more than the order total.")
+
+    spread = Decimal("0.00")
+    for seq, (item, quantity, rate, amount, descr) in enumerate(prepared, start=1):
+        if seq == len(prepared):
+            # The last line carries whatever rounding the split left over, so
+            # the discounts on the lines add back to the one that was typed.
+            share = discount - spread
+        else:
+            share = (discount * amount / goods_total).quantize(Decimal("0.01")) if goods_total else Decimal("0.00")
+            spread += share
+        PurchaseOrderItem.objects.create(
+            purchase_order=order,
+            seq_num=seq,
+            purchase_num=order.purchase_num,
+            purchase_date=order.purchase_date,
+            inventory_item=item,
+            quantity=quantity,
+            rate=rate,
+            unit_rate=rate,
+            uom=item.uom,
+            discount_amount=share,
+            descr=(descr or item.item_name)[:255],
+            created_by=user,
+            updated_by=user,
+        )
+
+    net_amount = (goods_total - discount + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+    return order, net_amount
+
+
 def next_sale_invoice_number():
     """What the next sale invoice will be called; advisory, like the purchase one."""
     last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first() or 0

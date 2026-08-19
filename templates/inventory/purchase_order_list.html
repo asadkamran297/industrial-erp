@@ -1,364 +1,284 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{{ items_json|json_script:"po-items" }}
-{{ po_summaries|json_script:"po-summaries" }}
-<section class="space-y-4"
-  x-data="poTerminal()">
+<style>
+  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so a rule for this one
+     screen is written here rather than adding classes that need a rebuild.
+     Supplier names run long, so an option stays on one line and is cut with an
+     ellipsis instead of wrapping into a two-line row. */
+  #supplier-field .searchable-select-option,
+  #supplier-field .searchable-select-button > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Over the tiles below it, whichever way the page is scrolled. */
+  #supplier-field .searchable-select-panel { z-index: 60; }
 
-  <form x-ref="poForm" method="post" action="{% url 'inventory:purchase_order_draft_finalize' %}" @submit.prevent="submitPO($event)">{% csrf_token %}
+  /* Settings menu: the gear beside Add, and the panel it drops. */
+  .settings-menu { position: relative; }
+  .settings-panel {
+    position: absolute;
+    top: calc(100% + .5rem);
+    right: 0;
+    z-index: 70;
+    width: 15rem;
+    padding: .375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
+  }
+  .dark .settings-panel { border-color: #1e293b; background: #0f172a; }
 
-    <!-- Top: title + header fields + totals -->
-    <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div class="flex flex-wrap items-end justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Orders</h1>
-          {# Goods bought without an order first go straight to a bill. #}
-          <a href="{% url 'inventory:direct_purchase_create' %}" class="toolbar-btn h-9 px-4 text-sm">+ Purchase Invoice</a>
-        </div>
-        <div class="flex flex-wrap items-end gap-3">
-          {% for field in create_form %}
-            <div class="min-w-[150px]"><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>
+  .settings-heading {
+    padding: .5rem .625rem .25rem;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+
+  .settings-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-radius: .5rem;
+    padding: .4375rem .625rem;
+    font-size: .8125rem;
+    font-weight: 500;
+    color: #334155;
+  }
+  .settings-item:hover { background: #f1f5f9; }
+  .settings-item--muted { color: #94a3b8; }
+  .dark .settings-item { color: #cbd5e1; }
+  .dark .settings-item:hover { background: rgba(30, 41, 59, .7); }
+
+  /* The tick box sits where a checkbox would, so a setting that is on reads as
+     on at a glance rather than needing the label to be compared. */
+  .settings-check {
+    display: grid;
+    place-items: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .3125rem;
+    font-size: .75rem;
+    line-height: 1;
+    color: #fff;
+  }
+  .settings-check.is-on { border-color: var(--primary-color); background: var(--primary-color); }
+  .dark .settings-check { border-color: #475569; }
+
+  .settings-rows { display: flex; gap: .375rem; padding: .125rem .625rem .375rem; }
+  .settings-chip {
+    flex: 1;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    padding: .3125rem 0;
+    font-size: .75rem;
+    font-weight: 600;
+    text-align: center;
+    color: #475569;
+  }
+  .settings-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .settings-chip.is-on { border-color: var(--primary-color); color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
+  .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
+  .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+</style>
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="title-accent text-2xl font-bold">Purchase Orders</h1>
+  </div>
+  <div class="flex flex-wrap items-center gap-3">
+    {# Its own form so searching keeps whatever the filter bar is set to. #}
+    <form method="get" class="flex items-center gap-2">
+      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
+      <input type="hidden" name="status" value="{{ request.GET.status }}">
+      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
+      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
+      <input type="hidden" name="received" value="{% if show_received %}1{% endif %}">
+      <input type="hidden" name="per_page" value="{{ per_page }}">
+      <div class="search-field">
+        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
+        </svg>
+        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search order no, supplier, notes"
+               class="search-input {% if request.GET.q %}pl-9{% endif %}">
+        {% if request.GET.q %}
+        <a href="?supplier={{ request.GET.supplier }}&amp;status={{ request.GET.status }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}{% if show_received %}&amp;received=1{% endif %}&amp;per_page={{ per_page }}"
+           title="Clear search"
+           class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
+        {% endif %}
+      </div>
+    </form>
+    {% if can_add %}
+    {% url 'inventory:purchase_order_create' as add_url %}
+    {% include "components/ui/button.html" with label="Add Purchase Order" href=add_url variant="primary" icon="+" only %}
+    {% endif %}
+    {# ── Settings: what the screen shows, and where the rest of the cycle is ── #}
+    {# Its own island, outside the filter form's submit path: every entry is a #}
+    {# link carrying the current query, so nothing here can post the form by #}
+    {# accident. #}
+    <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+      <button type="button" class="btn btn-secondary btn--icon" title="Screen settings" aria-label="Screen settings"
+              :aria-expanded="open.toString()" @click="open = !open">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.6.77 1.02 1.51 1.02H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+
+      <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
+        <p class="settings-heading">Show</p>
+        {# Fully received orders are finished business; off by default so the #}
+        {# list answers what is still owed. #}
+        <a class="settings-item" role="menuitemcheckbox" aria-checked="{% if show_received %}true{% else %}false{% endif %}"
+           href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier|urlencode }}&amp;status={{ request.GET.status|urlencode }}&amp;date_from={{ request.GET.date_from|urlencode }}&amp;date_to={{ request.GET.date_to|urlencode }}&amp;per_page={{ per_page }}{% if not show_received %}&amp;received=1{% endif %}">
+          <span class="settings-check{% if show_received %} is-on{% endif %}" aria-hidden="true">{% if show_received %}&#10003;{% endif %}</span>
+          Fully received orders
+        </a>
+
+        <p class="settings-heading">Rows per page</p>
+        <div class="settings-rows">
+          {% for size in per_page_options %}
+          <a class="settings-chip{% if size == per_page %} is-on{% endif %}" role="menuitemradio" aria-checked="{% if size == per_page %}true{% else %}false{% endif %}"
+             href="?q={{ request.GET.q|urlencode }}&amp;supplier={{ request.GET.supplier|urlencode }}&amp;status={{ request.GET.status|urlencode }}&amp;date_from={{ request.GET.date_from|urlencode }}&amp;date_to={{ request.GET.date_to|urlencode }}{% if show_received %}&amp;received=1{% endif %}&amp;per_page={{ size }}">{{ size }}</a>
           {% endfor %}
         </div>
+
+        <p class="settings-heading">Go to</p>
+        <a class="settings-item" role="menuitem" href="{% url 'inventory:grn_list' %}">Goods Receipt (GRN)</a>
+        <a class="settings-item" role="menuitem" href="{% url 'inventory:purchase_invoice_list' %}">Purchase Invoices</a>
+        <a class="settings-item" role="menuitem" href="{% url 'inventory:purchase_return_list' %}">Purchase Returns</a>
+        <a class="settings-item" role="menuitem" href="{% url 'inventory:supplier_list' %}">Suppliers</a>
+        <a class="settings-item" role="menuitem" href="{% url 'inventory:report_purchase' %}">Purchase Report</a>
+
+        <a class="settings-item settings-item--muted" role="menuitem" href="?">Reset this screen</a>
       </div>
-      <div class="mt-4 flex gap-3">
-        <div class="flex-1 rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-900/30"><p class="text-xs font-medium text-violet-700 dark:text-violet-300">Total Items</p><p class="text-xl font-bold text-violet-800 dark:text-violet-200" x-text="openPo ? (poSum(openPo).items) : lines.length"></p></div>
-        <div class="flex-1 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-900/30"><p class="text-xs font-medium text-sky-700 dark:text-sky-300">Purchase Order Amount</p><p class="text-xl font-bold text-sky-800 dark:text-sky-200" x-text="openPo ? fmt(poSum(openPo).amount) : fmt(totalAmount)"></p></div>
-        <div class="flex-1 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/30"><p class="text-xs font-medium text-amber-700 dark:text-amber-300">Discount Amount</p><p class="text-xl font-bold text-amber-800 dark:text-amber-200" x-text="openPo ? fmt(poSum(openPo).discount) : fmt(discountAmount)"></p></div>
-        <div class="flex-1 rounded-lg border border-emerald-300 bg-emerald-100 p-3 dark:border-emerald-700 dark:bg-emerald-900/40"><p class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total Payable</p><p class="text-2xl font-extrabold text-emerald-800 dark:text-emerald-200" x-text="openPo ? fmt(poSum(openPo).amount - poSum(openPo).discount) : fmt(netTotal)"></p></div>
-      </div>
     </div>
+  </div>
+</div>
 
-    <!-- Add item selector -->
-    <div x-show="supplierSelected && !openPo" x-cloak class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <label class="mb-1 block text-xs font-medium">Add Item</label>
-      <select class="form-select max-w-md" x-model="picker" @change="addItem()">
-        <option value="">-- Select item to add --</option>
-        {% for it in items_json %}<option value="{{ it.id }}">{{ it.name }} ({{ it.uom }})</option>{% endfor %}
-      </select>
+<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+  {# Wide enough for a real supplier name: the picker shows one line, and a #}
+  {# name longer than the box is cut with an ellipsis rather than wrapping. #}
+  <div class="w-64" id="supplier-field">
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="supplier">Supplier</label>
+    <select name="supplier" id="supplier" class="form-select" onchange="this.form.submit()">
+      <option value="">All suppliers</option>
+      {% for spec in filter_specs %}{% if spec.name == "supplier" %}
+        {% for value, label in spec.choices %}
+          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      {% endif %}{% endfor %}
+    </select>
+  </div>
+  <div class="w-48">
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="status">Status</label>
+    <select name="status" id="status" class="form-select" onchange="this.form.submit()">
+      <option value="">All statuses</option>
+      {% for spec in filter_specs %}{% if spec.name == "status" %}
+        {% for value, label in spec.choices %}
+          <option value="{{ value }}" {% if spec.value == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      {% endif %}{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
+    <input type="date" name="date_from" id="date_from" value="{{ request.GET.date_from }}" class="form-input" onchange="this.form.submit()">
+  </div>
+  <div>
+    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
+    <input type="date" name="date_to" id="date_to" value="{{ request.GET.date_to }}" class="form-input" onchange="this.form.submit()">
+  </div>
+  <input type="hidden" name="q" value="{{ request.GET.q }}">
+  {# Carried so a change made in the settings menu is not undone by the next #}
+  {# filter change, and vice versa. #}
+  <input type="hidden" name="received" value="{% if show_received %}1{% endif %}">
+  <input type="hidden" name="per_page" value="{{ per_page }}">
+  <div class="flex-1"></div>
+  <div class="flex shrink-0 items-center gap-2">
+    <button type="button" class="btn btn-secondary btn--icon" title="Print" aria-label="Print"
+            onclick="printSection('order-table', 'Purchase Orders')">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+      </svg>
+    </button>
+
+  </div>
+</form>
+
+<div class="mt-4 grid gap-4 sm:grid-cols-2">
+  <div class="stat-tile">
+    <span class="stat-icon">&#8721;</span>
+    <div>
+      <p class="stat-label">Total on this page</p>
+      <p class="stat-value">{{ page_total|amount }}</p>
     </div>
-
-    <!-- Supplier not selected message -->
-    <div x-show="!supplierSelected && !openPo" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-      Please select a supplier first to add items.
+  </div>
+  <div class="stat-tile">
+    <span class="stat-icon">#</span>
+    <div>
+      <p class="stat-label">Open orders</p>
+      <p class="stat-value">{{ order_count }}</p>
+      <p class="mt-0.5 text-xs text-slate-500">under the filters applied</p>
     </div>
+  </div>
+</div>
 
-    <!-- PO expanded — block new PO item entry -->
-    <div x-show="openPo" x-cloak class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
-      Close the selected PO below to add items to a new purchase order.
-    </div>
-
-    <!-- Items grid -->
-    <div x-show="supplierSelected && !openPo" x-cloak class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr><th class="px-3 py-3 w-10">#</th><th class="px-3 py-3">Item</th><th class="px-3 py-3 w-20">UOM</th><th class="px-3 py-3 w-28">Qty</th><th class="px-3 py-3 w-32">Rate</th><th class="px-3 py-3 w-32">Discount</th><th class="px-3 py-3 w-32">Net</th><th class="px-3 py-3 w-12"></th></tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          <template x-for="(line, i) in lines" :key="line.uid">
-            <tr>
-              <td class="px-3 py-2" x-text="i + 1"></td>
-              <td class="px-3 py-2 font-medium max-w-[200px] truncate whitespace-nowrap" x-text="line.name" :title="line.name"></td>
-              <td class="px-3 py-2 text-slate-500" x-text="line.uom"></td>
-              <td class="px-3 py-2"><input type="number" step="1" min="1" class="form-input" x-model.number="line.qty" @input="line.qty = Math.max(1, Math.floor(line.qty || 1))"></td>
-              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.rate" @input="line.rate = round2(line.rate)"></td>
-              <td class="px-3 py-2"><input type="number" step="0.01" min="0" class="form-input" x-model.number="line.discount" @input="line.discount = round2(line.discount)"></td>
-              <td class="px-3 py-2 font-medium" x-text="fmt(lineNet(line))"></td>
-              <td class="px-3 py-2 text-right"><button type="button" @click="removeLine(i)" class="text-rose-600 hover:text-rose-700">&times;</button></td>
-            </tr>
-          </template>
-          <tr x-show="lines.length === 0"><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items. Select an item above to add.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- hidden inputs synced on submit -->
-    <div x-ref="hidden"></div>
-
-    <div x-show="supplierSelected && !openPo" x-cloak class="flex justify-end">
-      <button type="submit" class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-6 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">&#128438; Save &amp; Print Purchase Order</button>
-    </div>
-  </form>
-
-  {% include "components/table/search_filters.html" %}
-
-  <!-- Existing POs list -->
+<section class="mt-4">
   <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
+      <table id="order-table" class="w-full text-left text-sm">
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr>
-            <th class="px-4 py-3">PO</th>
-            <th class="px-4 py-3">Supplier</th>
             <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Order No.</th>
+            <th class="px-4 py-3">Supplier</th>
             <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Actions</th>
+            <th class="px-4 py-3 text-right">Items</th>
+            <th class="px-4 py-3 text-right">Amount</th>
+            <th class="px-4 py-3 text-right print-hide">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {% for order in orders %}
-            <tr class="align-top">
-              <td class="px-4 py-3">
-                <button
-                  type="button"
-                  class="flex items-center gap-2 font-medium text-slate-900 transition hover:text-[var(--primary-color)] dark:text-slate-100"
-                  @click="openPo = openPo === {{ order.pk }} ? null : {{ order.pk }}"
-                  :aria-expanded="(openPo === {{ order.pk }}).toString()"
-                >
-                  <span class="inline-grid h-5 w-5 place-items-center rounded-full border border-slate-200 text-[10px] dark:border-slate-700" x-text="openPo === {{ order.pk }} ? '-' : '+'"></span>
-                  <span>{{ order.purchase_num }}</span>
-                </button>
-              </td>
-              <td class="px-4 py-3">{{ order.supplier }}</td>
-              <td class="px-4 py-3">{{ order.purchase_date }}</td>
-              <td class="px-4 py-3">
-                <span class="rounded-full px-2.5 py-1 text-xs font-medium
-                  {% if order.status == 'draft' %}bg-amber-100 text-amber-700
-                  {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
-                  {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
-                  {% else %}bg-slate-100 text-slate-600{% endif %}">{{ order.get_status_display }}</span>
-              </td>
-              <td class="px-4 py-3">
-                <div class="flex justify-end gap-2">
-                  {% if order.status == 'draft' %}
-                  <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
-                    <button class="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700" title="Raise PO">Raise PO</button>
-                  </form>
-                  {% endif %}
-                  <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View">&#128065;</a>
-                </div>
-              </td>
-            </tr>
-            <tr x-show="openPo === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
-              <td colspan="5" class="px-4 py-4">
-                <div class="space-y-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-
-                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div><p class="text-xs text-slate-500">Supplier</p><p class="font-semibold">{{ order.supplier.name }}</p></div>
-                    <div><p class="text-xs text-slate-500">Status</p><p class="font-semibold">{{ order.get_status_display }}</p></div>
-                    <div><p class="text-xs text-slate-500">Quotation</p><p class="font-semibold">{{ order.quot_num|default:'-' }}</p></div>
-                    <div><p class="text-xs text-slate-500">Date</p><p class="font-semibold">{{ order.purchase_date }}</p></div>
-                  </div>
-
-                  <div x-data="poInlineAdd('{% url 'inventory:purchase_order_item_create' order.pk %}', [{% for item in order.items.all %}{{ item.inventory_item_id }}{% if not forloop.last %},{% endif %}{% endfor %}])">
-                    <div class="mb-2 flex items-center justify-between">
-                      <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">PO Items</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">{{ order.items.count }} item{{ order.items.count|pluralize }}</p>
-                    </div>
-                    <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                      <table class="w-full text-left text-xs sm:text-sm">
-                        <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-                          <tr>
-                            <th class="px-4 py-3">Seq #</th>
-                            <th class="px-4 py-3">Item</th>
-                            <th class="px-4 py-3">UOM</th>
-                            <th class="px-4 py-3">Rate</th>
-                            <th class="px-4 py-3">Qty</th>
-                            <th class="px-4 py-3">Discount</th>
-                            <th class="px-4 py-3">Amount</th>
-                            <th class="px-4 py-3">Remarks</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3"></th>
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                          {% for item in order.items.all %}
-                            <tr>
-                              <td class="px-4 py-3">{{ item.seq_num }}</td>
-                              <td class="px-4 py-3">{{ item.descr }}</td>
-                              <td class="px-4 py-3">{{ item.uom.title }}</td>
-                              <td class="px-4 py-3">{{ item.rate|amount }}</td>
-                              <td class="px-4 py-3">{{ item.quantity|qty }}</td>
-                              <td class="px-4 py-3">{{ item.discount_amount|amount }}</td>
-                              <td class="px-4 py-3 font-medium">{{ item.total_amount|amount }}</td>
-                              <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ item.remarks|default:"—" }}</td>
-                              <td class="px-4 py-3">
-                                <form method="post" action="{% url 'inventory:purchase_order_item_toggle_status' item.pk %}">{% csrf_token %}
-                                  <label class="relative inline-flex cursor-pointer items-center">
-                                    <input type="checkbox" class="peer sr-only" onchange="this.form.submit()" {% if item.status == 'Y' %}checked{% endif %}>
-                                    <div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-[var(--primary-color)] peer-checked:after:translate-x-5 dark:bg-slate-600"></div>
-                                  </label>
-                                </form>
-                              </td>
-                              <td class="px-4 py-3 whitespace-nowrap">
-                                {% if order.status == 'created' %}
-                                <a href="{% url 'inventory:purchase_order_item_update' item.pk %}" class="text-xs font-medium text-[var(--primary-color)]">Edit</a>
-                                {% if forloop.last %}<button type="button" @click="showRow = !showRow" class="ml-2 text-xs font-medium text-emerald-600 hover:text-emerald-700">+ Add</button>{% endif %}
-                                {% endif %}
-                              </td>
-                            </tr>
-                          {% empty %}
-                            <tr x-show="!showRow"><td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet.</td></tr>
-                          {% endfor %}
-                          <!-- Inline add row -->
-                          {% if order.status != 'fully_received' %}
-                          <tr x-show="showRow" x-cloak class="bg-emerald-50/60 dark:bg-emerald-900/10">
-                            <td class="px-2 py-2 text-slate-400">—</td>
-                            <td class="px-2 py-2">
-                              <select class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] dark:border-slate-600 dark:bg-slate-800" x-model="sel" @change="fill()">
-                                <option value="">-- Item --</option>
-                                <template x-for="it in items" :key="it.id">
-                                  <option :value="it.id" x-text="it.name"></option>
-                                </template>
-                              </select>
-                            </td>
-                            <td class="px-2 py-2 text-slate-500 text-xs" x-text="uom"></td>
-                            <td class="px-2 py-2"><input type="number" step="0.01" min="0" class="form-input text-xs w-24" x-model.number="rate"></td>
-                            <td class="px-2 py-2"><input type="number" step="1" min="1" class="form-input text-xs w-20" x-model.number="qty" @input="qty = Math.max(1, Math.floor(qty||1))"></td>
-                            <td class="px-2 py-2"><input type="number" step="0.01" min="0" class="form-input text-xs w-24" x-model.number="discount"></td>
-                            <td class="px-2 py-2 text-xs font-medium" x-text="fmt(qty*rate - discount)"></td>
-                            <td class="px-2 py-2"><input type="text" class="form-input text-xs w-40" x-model="remarks" placeholder="Remarks"></td>
-                            <td class="px-2 py-2"></td>
-                            <td class="px-2 py-2 whitespace-nowrap">
-                              <button type="button" @click="save()" :disabled="!sel" class="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40">&#10003;</button>
-                              <button type="button" @click="showRow=false; reset()" class="ml-1 rounded bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">✕</button>
-                            </td>
-                          </tr>
-                          {% endif %}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div class="mt-3 flex justify-end">
-                      <a href="javascript:void(0)" onclick="(function(url){var w=window.open(url,'_blank','width=900,height=700');w.onload=function(){w.print();w.onafterprint=function(){w.close();};};}('{% url 'inventory:purchase_order_print' order.pk %}'));" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
-                    </div>
-                    <!-- hidden CSRF form for inline save -->
-                    <form x-ref="addForm" method="post" :action="addUrl" class="is-hidden">{% csrf_token %}
-                      <input type="hidden" name="inventory_item" x-model="sel">
-                      <input type="hidden" name="uom_title" x-model="uom">
-                      <input type="hidden" name="quantity" x-model="qty">
-                      <input type="hidden" name="rate" x-model="rate">
-                      <input type="hidden" name="discount_amount" x-model="discount">
-                      <input type="hidden" name="remarks" x-model="remarks">
-                      <input type="hidden" name="status" value="Y">
-                    </form>
-                  </div>
-
-                </div>
-              </td>
-            </tr>
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+            <td class="px-4 py-3 whitespace-nowrap">{{ order.purchase_date }}</td>
+            <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
+            <td class="px-4 py-3">{{ order.supplier.name }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full px-2.5 py-1 text-xs font-medium
+                {% if order.status == 'draft' %}bg-amber-100 text-amber-700
+                {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
+                {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
+                {% else %}bg-slate-100 text-slate-600{% endif %}">{{ order.get_status_display }}</span>
+            </td>
+            <td class="px-4 py-3 text-right tabular-nums">{{ order.line_count }}</td>
+            <td class="px-4 py-3 text-right font-bold tabular-nums">{{ order.total_amount|amount }}</td>
+            <td class="px-4 py-3 print-hide">
+              <div class="flex justify-end gap-2">
+                {% if order.status == 'draft' %}
+                {# Raising is what turns an order from a sketch into a commitment. #}
+                <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
+                  <button class="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700" title="Raise this order">Raise</button>
+                </form>
+                {% endif %}
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View">&#128065;</a>
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_receive' order.pk %}" title="Receive">&#128230;</a>
+                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank" title="Print">&#128438;</a>
+              </div>
+            </td>
+          </tr>
           {% empty %}
-            <tr>
-              <td colspan="5" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td>
-            </tr>
+          <tr><td colspan="7" class="px-4 py-10 text-center text-slate-500">No open purchase orders.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
-
   {% include "components/table/pagination.html" %}
 </section>
-
-<script>
-  function poTerminal() {
-    var items = JSON.parse(document.getElementById("po-items").textContent);
-    var openParam = new URLSearchParams(location.search).get("open");
-    return {
-      openPo: openParam ? Number(openParam) : null,
-      poSummaries: JSON.parse(document.getElementById("po-summaries").textContent),
-      poSum(pk) { return this.poSummaries[pk] || {items: 0, amount: 0, discount: 0}; },
-      items: items,
-      map: Object.fromEntries(items.map(it => [String(it.id), it])),
-      uidSeq: 1,
-      picker: "",
-      supplierSelected: false,
-      draftPk: null,
-      draftCreating: false,
-      lines: [],
-      init() {
-        var supplierEl = this.$el.querySelector("select[name=supplier]");
-        if (supplierEl) {
-          this.supplierSelected = !!supplierEl.value;
-          supplierEl.addEventListener("change", () => { this.supplierSelected = !!supplierEl.value; this.draftPk = null; });
-        }
-      },
-      async ensureDraft() {
-        if (this.draftPk) return true;
-        if (this.draftCreating) return false;
-        var form = this.$refs.poForm;
-        var fd = new FormData(form);
-        if (!fd.get("supplier")) { alert("Select a supplier first."); return false; }
-        this.draftCreating = true;
-        try {
-          var res = await fetch("{% url 'inventory:purchase_order_draft_init' %}", { method: "POST", body: fd });
-          if (!res.ok) { alert("Could not create draft PO. Try again."); return false; }
-          var data = await res.json();
-          this.draftPk = data.pk;
-          return true;
-        } catch(e) { alert("Network error."); return false; }
-        finally { this.draftCreating = false; }
-      },
-      async addItem() {
-        var it = this.map[String(this.picker)];
-        this.picker = "";
-        if (!it) return;
-        var ok = await this.ensureDraft();
-        if (!ok) return;
-        var existing = this.lines.find(l => String(l.item) === String(it.id));
-        if (existing) { existing.qty = (Number(existing.qty) || 0) + 1; return; }
-        this.lines.push({ uid: this.uidSeq++, item: it.id, name: it.name, uom: it.uom, qty: 1, rate: it.price, discount: 0 });
-      },
-      removeLine(i) { this.lines.splice(i, 1); },
-      lineSub(l) { return (Number(l.qty) || 0) * (Number(l.rate) || 0); },
-      lineNet(l) { return this.lineSub(l) - (Number(l.discount) || 0); },
-      get totalAmount() { return this.lines.reduce((s, l) => s + this.lineSub(l), 0); },
-      get discountAmount() { return this.lines.reduce((s, l) => s + (Number(l.discount) || 0), 0); },
-      get netTotal() { return this.totalAmount - this.discountAmount; },
-      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
-      round2(v) { var n = Number(v); return isNaN(n) ? 0 : Math.round(n * 100) / 100; },
-      round4(v) { var n = Number(v); return isNaN(n) ? 0 : Math.round(n * 10000) / 10000; },
-      submitPO(event) {
-        if (!this.draftPk) { alert("Select an item first to create the draft PO."); return; }
-        if (this.lines.length === 0) { alert("Add at least one item before saving."); return; }
-        this.syncHidden();
-        this.$refs.poForm.submit();
-      },
-      syncHidden() {
-        var box = this.$refs.hidden; box.innerHTML = "";
-        var draftInp = document.createElement("input"); draftInp.type = "hidden"; draftInp.name = "draft_pk"; draftInp.value = this.draftPk; box.appendChild(draftInp);
-        this.lines.filter(l => l.item && Number(l.qty) > 0).forEach(l => {
-          [["item_id", l.item], ["qty", l.qty], ["rate", l.rate], ["discount", l.discount]].forEach(([n, v]) => {
-            var inp = document.createElement("input"); inp.type = "hidden"; inp.name = n; inp.value = v; box.appendChild(inp);
-          });
-        });
-      },
-    };
-  }
-
-  function poInlineAdd(addUrl, usedIds) {
-    var allItems = JSON.parse(document.getElementById("po-items").textContent);
-    var used = new Set((usedIds || []).map(String));
-    var items = allItems.filter(it => !used.has(String(it.id)));
-    return {
-      items: items,
-      map: Object.fromEntries(allItems.map(it => [String(it.id), it])),
-      addUrl: addUrl,
-      showRow: false,
-      sel: "", uom: "", rate: 0, qty: 1, discount: 0, remarks: "",
-      fill() {
-        var it = this.map[String(this.sel)];
-        if (!it) { this.uom = ""; this.rate = 0; return; }
-        this.uom = it.uom;
-        this.rate = it.price;
-      },
-      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
-      reset() { this.sel = ""; this.uom = ""; this.rate = 0; this.qty = 1; this.discount = 0; this.remarks = ""; },
-      save() {
-        if (!this.sel) return;
-        this.$refs.addForm.submit();
-      },
-    };
-  }
-
-  document.addEventListener("change", function (e) {
-    var sel = e.target;
-    if (!sel.matches("select[data-uom-source]")) return;
-    var mapEl = document.getElementById(sel.getAttribute("data-uom-source"));
-    if (!mapEl) return;
-    var map = JSON.parse(mapEl.textContent);
-    var form = sel.closest("form");
-    var uom = form ? form.querySelector("input[name=uom_title]") : null;
-    if (uom) uom.value = (map[sel.value] || {}).uom || "";
-  });
-</script>
 {% endblock %}

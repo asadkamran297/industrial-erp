@@ -25,7 +25,8 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .services import amount_in_words, create_direct_purchase, create_direct_sale, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
+from .services import amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 
 def uom_title(record):
@@ -1714,56 +1715,82 @@ class PurchaseInvoiceListView(InventoryListMixin, ListView):
 
 
 class PurchaseOrderListView(InventoryListMixin, ListView):
+    """Orders raised on suppliers: goods asked for and still owed.
+
+    Reads as the purchase invoice list does — same search, same filter bar,
+    same tiles — so an operator moving between the two screens is not learning
+    a second layout for the same kind of record.
+    """
+
     page = "inventory.purchase_orders"
     template_name = "inventory/purchase_order_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__inventory_item", "items__uom").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
-    search_fields = ("purchase_num", "supplier__name", "quot_num")
-    filter_fields = {"status": "status", "supplier": "supplier_id", "item": "items__inventory_item_id"}
-    date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+    queryset = (
+        PurchaseOrder.objects
+        .filter(is_direct=False)
+        .select_related("supplier")
+        .prefetch_related("items")
+        .order_by("-purchase_date", "-id")
+    )
+    search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
+    filter_fields = {"status": "status", "supplier": "supplier_id"}
+    date_filters = [{"field": "purchase_date", "label": "Order date"}]
+
+    # What the settings menu offers for page size. Anything else in the query
+    # string falls back to the default rather than being honoured.
+    PER_PAGE_OPTIONS = (10, 25, 50, 100)
+
+    def show_received(self):
+        """Whether orders already closed out are on the list.
+
+        Off by default: the screen answers "what is still owed", and a fully
+        received order is finished business that belongs on the report.
+        """
+        return self.request.GET.get("received") == "1"
+
+    def get_paginate_by(self, queryset):
+        raw = (self.request.GET.get("per_page") or "").strip()
+        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
+            return int(raw)
+        return self.paginate_by
 
     def get_queryset(self):
-        return super().get_queryset().distinct()
+        queryset = super().get_queryset()
+        if not self.show_received():
+            queryset = queryset.exclude(status=STATUS_FULLY_RECEIVED)
+        return queryset.distinct()
 
     def get_filter_specs(self):
-        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        item_choices = list(InventoryItem.objects.filter(status=STATUS_ACTIVE).order_by("item_name").values_list("id", "item_name"))
+        supplier_choices = list(
+            Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
+        )
+        statuses = list(INV_PURCHASE_ORDER_STATUS_CHOICES)
+        if not self.show_received():
+            # Offering a status the list is hiding would return nothing and
+            # look like a bug, so it is only on the menu once it can match.
+            statuses = [row for row in statuses if row[0] != STATUS_FULLY_RECEIVED]
         return [
-            {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES, "value": self.request.GET.get("status", "")},
-            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
-            {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
+            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
+             "value": self.request.GET.get("supplier", "")},
+            {"name": "status", "label": "All statuses", "choices": statuses,
+             "value": self.request.GET.get("status", "")},
         ]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["create_form"] = PurchaseOrderForm()
-        po_summaries = {}
+        # What each order comes to, from its own lines, so the figure on screen
+        # is the one the books hold rather than a second total kept by hand.
+        page_total = Decimal("0.00")
         for order in context["orders"]:
-            items = list(order.items.all())
-            po_summaries[order.pk] = {
-                "items": len(items),
-                "amount": float(sum(i.total_amount for i in items)),
-                "discount": float(sum(i.discount_amount or 0 for i in items)),
-            }
-        context["po_summaries"] = po_summaries
-        context["items_json"] = [
-            {"id": i.pk, "name": i.item_name, "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price), "uom": uom_title(i)}
-            for i in InventoryItem.objects.select_related("uom", "stock").filter(status=STATUS_ACTIVE).order_by("item_name")
-        ]
-        for order in context["orders"]:
-            form = PurchaseOrderItemForm()
-            used_item_ids = order.items.values_list("inventory_item_id", flat=True)
-            available_items = form.fields["inventory_item"].queryset.exclude(pk__in=used_item_ids).select_related("uom", "stock")
-            form.fields["inventory_item"].queryset = available_items
-            order.uom_map_id = f"uom-map-{order.pk}"
-            form.fields["inventory_item"].widget.attrs["data-uom-source"] = order.uom_map_id
-            order.add_form = form
-            order.uom_map = {str(i.pk): {"uom": uom_title(i)} for i in available_items}
-            order.avail_items_json = [
-                {"id": i.pk, "name": i.item_name, "uom": uom_title(i), "price": float(getattr(i, "stock", None) and i.stock.current_price or i.price)}
-                for i in available_items
-            ]
-            order.avail_items_json_id = f"avail-items-{order.pk}"
+            lines = list(order.items.all())
+            order.line_count = len(lines)
+            order.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
+            page_total += order.total_amount
+        context["page_total"] = page_total
+        context["order_count"] = context["paginator"].count if context.get("paginator") else len(context["orders"])
+        context["show_received"] = self.show_received()
+        context["per_page"] = self.get_paginate_by(None)
+        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
         return context
 
 
@@ -1796,14 +1823,174 @@ class PurchaseReportView(InventoryListMixin, ListView):
         return context
 
 
-class PurchaseOrderCreateView(InventoryManageMixin, CreateView):
+class PurchaseOrderCreateView(InventoryManageMixin, View):
+    """Raise an order on a supplier.
+
+    Deliberately the same screen as the purchase invoice — party at the top,
+    goods in the middle, money at the bottom — because it is the same entry an
+    operator makes; the difference is only that nothing is received here, so
+    there is no paid box and no stock impact until the goods arrive.
+    """
+
     page = "inventory.purchase_orders"
-    model = PurchaseOrder
-    form_class = PurchaseOrderForm
-    template_name = "inventory/simple_form.html"
-    success_url = reverse_lazy("inventory:purchase_order_list")
-    success_message = "Purchase order saved."
-    extra_context = {"title": "Purchase Order"}
+    action = "add"
+    template_name = "inventory/purchase_order_form.html"
+
+    def _context(self, **extra):
+        items = (
+            InventoryItem.objects
+            .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
+            .filter(status=STATUS_ACTIVE)
+            .order_by("item_name")
+        )
+        context = {
+            "title": "Purchase Order",
+            # What this site has taken off the form and what it has added.
+            "layout": get_layout(),
+            "extra_field_types": EXTRA_FIELD_TYPES,
+            # A plain View builds its own context, so the permission the gear
+            # is gated on has to be put there by hand.
+            "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
+            "next_order_no": next_purchase_order_number(),
+            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "units": UOM.objects.order_by("title"),
+            "today": timezone.localdate(),
+            "items_json": json.dumps([
+                {
+                    "id": item.pk,
+                    "name": item.item_name,
+                    "code": item.code,
+                    "uom": item.uom_id or "",
+                    "rate": float(item.purchase_price or 0),
+                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
+                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
+                    "unit": uom_title(item),
+                    "units": item_unit_options(item),
+                }
+                for item in items
+            ]),
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request, *args, **kwargs):
+        posted = request.POST
+        supplier_id = (posted.get("supplier") or "").strip()
+        supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id.isdigit() else None
+
+        def decimal_of(raw, default="0"):
+            text = (raw or "").strip().replace(",", "") or default
+            return Decimal(text)
+
+        def money(name, default="0"):
+            try:
+                return decimal_of(posted.get(name), default)
+            except (InvalidOperation, ValueError):
+                raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
+
+        lines = []
+        item_ids = posted.getlist("item_id")
+        quantities = posted.getlist("quantity")
+        rates = posted.getlist("rate")
+        uom_ids = posted.getlist("line_uom")
+        for index, raw_id in enumerate(item_ids):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            item = InventoryItem.objects.filter(pk=raw_id).first()
+            if not item:
+                continue
+            try:
+                quantity = decimal_of(quantities[index] if index < len(quantities) else "")
+                rate = decimal_of(rates[index] if index < len(rates) else "")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                return render(request, self.template_name, self._context(posted=posted))
+            if quantity > 0:
+                # With the unit column off nothing is posted, and the line is
+                # taken as written in the item's own unit.
+                raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
+                uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
+                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
+
+        # Whatever the site added to the form. A required one that was left
+        # blank stops the save, the same as any other required box.
+        extra_values, extra_error = read_extra_values(posted)
+        if extra_error:
+            messages.error(request, extra_error)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        try:
+            order, net = create_purchase_order(
+                supplier=supplier,
+                quot_num=(posted.get("quot_num") or "").strip(),
+                quot_date=(posted.get("quot_date") or "") or None,
+                order_date=posted.get("order_date") or str(timezone.localdate()),
+                lines=lines,
+                discount_amount=money("discount_amount"),
+                tax_amount=money("tax_amount"),
+                remarks=(posted.get("remarks") or "").strip(),
+                extra_data=extra_values,
+                # Saved as a draft until it is raised, unless the operator said
+                # to raise it here — the list screen offers the same step.
+                status=STATUS_RAISED if "save_and_raise" in posted else STATUS_DRAFT,
+                user=request.user,
+            )
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        messages.success(request, f"Purchase order {order.purchase_num} saved for {net}.")
+        if "save_and_print" in posted:
+            return redirect("inventory:purchase_order_print", pk=order.pk)
+        return redirect("inventory:purchase_order_detail", pk=order.pk)
+
+
+class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
+    """The gear on the purchase order form: what it shows, and what it adds.
+
+    Everything arrives as a plain POST and sends the operator back to the form,
+    so the menu never has to keep a half-applied state of its own. Configuring
+    the screen is an edit to how the site works, so it wants the manage
+    permission and not merely the right to raise an order.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "edit"
+
+    def post(self, request, *args, **kwargs):
+        step = request.POST.get("step")
+
+        if step == "fields":
+            # The menu posts what stays on; anything not ticked comes off.
+            shown = set(request.POST.getlist("shown"))
+            set_hidden([field["code"] for field in get_layout()["optional_fields"]
+                        if field["code"] not in shown])
+            messages.success(request, "Form fields updated.")
+
+        elif step == "add":
+            error = add_extra_field(
+                code=request.POST.get("code"),
+                label=request.POST.get("label"),
+                kind=request.POST.get("type"),
+                required=request.POST.get("required") == "1",
+                # One choice per line is how a list is typed; commas belong
+                # inside a choice, not between them.
+                options=(request.POST.get("options") or "").splitlines(),
+            )
+            if error:
+                messages.error(request, error)
+            else:
+                messages.success(request, "Field added to the form.")
+
+        elif step == "remove":
+            remove_extra_field((request.POST.get("code") or "").strip())
+            messages.success(request, "Field removed from the form. What earlier orders recorded under it is kept.")
+
+        return redirect("inventory:purchase_order_create")
 
 
 class PurchaseOrderUpdateView(InventoryManageMixin, View):

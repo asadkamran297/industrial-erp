@@ -1,0 +1,149 @@
+{# The gear on the purchase order form: which boxes it shows, and the ones this #}
+{# site added for itself. Every change is a plain POST that comes straight back #}
+{# here, so the menu never holds a half-applied state of its own. #}
+<style>
+  .form-settings { position: relative; }
+  .form-settings-panel {
+    position: absolute;
+    top: calc(100% + .5rem);
+    right: 0;
+    z-index: 70;
+    width: 22rem;
+    max-height: min(32rem, 70vh);
+    overflow-y: auto;
+    padding: .75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
+  }
+  .dark .form-settings-panel { border-color: #1e293b; background: #0f172a; }
+
+  .fs-heading {
+    padding: .5rem .25rem .25rem;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .fs-group {
+    margin-top: .375rem;
+    padding: 0 .25rem;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #cbd5e1;
+  }
+  .dark .fs-group { color: #475569; }
+
+  .fs-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    border-radius: .5rem;
+    padding: .375rem .25rem;
+    font-size: .8125rem;
+    color: #334155;
+  }
+  .fs-row:hover { background: #f8fafc; }
+  .dark .fs-row { color: #cbd5e1; }
+  .dark .fs-row:hover { background: rgba(30, 41, 59, .6); }
+  .fs-row input[type="checkbox"] { margin-top: .1875rem; }
+  .fs-note { display: block; font-size: .6875rem; color: #94a3b8; }
+
+  .fs-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    margin-bottom: .25rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    padding: .375rem .5rem;
+    font-size: .75rem;
+  }
+  .dark .fs-chip { border-color: #1e293b; }
+  .fs-chip code { font-size: .6875rem; color: #94a3b8; }
+
+  .fs-add { margin-top: .375rem; display: grid; gap: .375rem; }
+  .fs-add .form-input, .fs-add .form-select, .fs-add textarea { font-size: .75rem; }
+  .fs-actions { margin-top: .5rem; display: flex; justify-content: flex-end; gap: .5rem; }
+</style>
+
+<div class="form-settings" x-data="{ open: false, kind: 'text' }"
+     @keydown.escape.window="open = false" @click.outside="open = false">
+  <button type="button" class="btn btn-secondary btn--icon" title="Form settings" aria-label="Form settings"
+          :aria-expanded="open.toString()" @click="open = !open">
+    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.6.77 1.02 1.51 1.02H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
+  <div class="form-settings-panel" x-show="open" x-cloak x-transition.opacity>
+    {# ── Which boxes the form shows ─────────────────────────────────────── #}
+    {# Its own form, posted on Apply: ticking six boxes should be one trip, #}
+    {# not six. #}
+    <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}">{% csrf_token %}
+      <input type="hidden" name="step" value="fields">
+      <p class="fs-heading">Show on this form</p>
+      {% regroup layout.optional_fields by group as field_groups %}
+      {% for group in field_groups %}
+      <p class="fs-group">{{ group.grouper }}</p>
+      {% for field in group.list %}
+      <label class="fs-row">
+        <input type="checkbox" name="shown" value="{{ field.code }}" {% if field.on %}checked{% endif %}>
+        <span>
+          {{ field.label }}
+          {% if field.note %}<span class="fs-note">{{ field.note }}</span>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+      {% endfor %}
+      <div class="fs-actions">
+        <button type="submit" class="btn btn-primary h-8 px-4 text-xs">Apply</button>
+      </div>
+    </form>
+
+    {# ── The site's own fields ──────────────────────────────────────────── #}
+    <p class="fs-heading">Extra fields</p>
+    {% for field in layout.extra %}
+    <div class="fs-chip">
+      <span>
+        <strong>{{ field.label }}</strong>{% if field.required %} <span class="text-rose-500">*</span>{% endif %}
+        <code>{{ field.code }} &middot; {{ field.type }}</code>
+      </span>
+      {# Removing takes the box off the form; what earlier orders recorded #}
+      {# under it stays on those orders. #}
+      <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}">{% csrf_token %}
+        <input type="hidden" name="step" value="remove">
+        <input type="hidden" name="code" value="{{ field.code }}">
+        <button type="submit" class="text-rose-600 hover:text-rose-700" title="Remove this field" aria-label="Remove {{ field.label }}">&times;</button>
+      </form>
+    </div>
+    {% empty %}
+    <p class="px-1 text-xs text-slate-400">None yet. Add one below.</p>
+    {% endfor %}
+
+    <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}" class="fs-add">{% csrf_token %}
+      <input type="hidden" name="step" value="add">
+      <input type="text" name="label" class="form-input h-8" placeholder="Label, e.g. LC No" required>
+      {# The code is what the value is filed under on the order, so it is fixed #}
+      {# once the field exists — the label can be reworded, this cannot. #}
+      <input type="text" name="code" class="form-input h-8" placeholder="Code, e.g. lc_no" pattern="[a-z][a-z0-9_]*" required>
+      <select name="type" class="form-select h-8" x-model="kind">
+        {% for value, label in extra_field_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <textarea name="options" rows="3" class="form-input" placeholder="One choice per line" x-show="kind === 'select'" x-cloak></textarea>
+      <label class="fs-row">
+        <input type="checkbox" name="required" value="1">
+        <span>Required</span>
+      </label>
+      <div class="fs-actions">
+        <button type="submit" class="btn btn-secondary h-8 px-4 text-xs">Add field</button>
+      </div>
+    </form>
+  </div>
+</div>

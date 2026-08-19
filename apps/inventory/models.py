@@ -266,6 +266,11 @@ class PurchaseOrder(BaseModel):
     # the item ledger and the general ledger read the same as any other
     # purchase; the flag only keeps it off the outstanding-orders list.
     is_direct = models.BooleanField(default=False)
+    # Whatever the site added to the purchase order form for itself, keyed by
+    # the field's code. Held as JSON rather than as columns because the set is
+    # configured by the site and changes without a migration; nothing in the
+    # books reads it, so an order still posts the same with or without it.
+    extra_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "inv_purchase_orders"

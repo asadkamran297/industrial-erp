@@ -1,0 +1,787 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<style>
+  /* The line grid is declared here: the compiled Tailwind bundle carries no
+     six-column utility and rebuilding it is not worth one screen. */
+  .pur-grid { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 7rem 9rem 9rem 9rem 2.5rem; align-items: center; }
+  @media (max-width: 900px) { .pur-grid { grid-template-columns: 2rem minmax(0, 1fr) 5rem 6rem 6rem 6rem 2rem; } }
+  /* Unit column switched off in the form settings: the same grid, one column
+     lighter, so the remaining headings still line up with their cells. */
+  .pur-grid--no-unit { grid-template-columns: 3rem minmax(0, 1fr) 7rem 9rem 9rem 2.5rem; }
+  @media (max-width: 900px) { .pur-grid--no-unit { grid-template-columns: 2rem minmax(0, 1fr) 5rem 6rem 6rem 2rem; } }
+
+  .pur-head { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .dark .pur-head { background: rgba(30, 41, 59, .5); border-bottom-color: #1e293b; }
+  .pur-head > div { padding: .625rem .75rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+
+  .pur-row { border-bottom: 1px solid #f1f5f9; }
+  .dark .pur-row { border-bottom-color: #1e293b; }
+  .pur-row > div { padding: .3125rem .5rem; }
+  /* Cell inputs sit flush in the grid; the row is the box, not each field. */
+  .pur-cell { width: 100%; border: 1px solid transparent; border-radius: .375rem; background: transparent; padding: .375rem .5rem; font-size: .875rem; color: #334155; outline: none; }
+  .pur-cell:hover { border-color: #e2e8f0; }
+  .pur-cell:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
+  .dark .pur-cell { color: #e2e8f0; }
+  .dark .pur-cell:focus { background: #0f172a; }
+  .pur-right { text-align: right; }
+  .pur-amount { padding: .375rem .5rem; font-size: .875rem; font-weight: 600; text-align: right; color: #334155; }
+  .dark .pur-amount { color: #e2e8f0; }
+
+  .pur-foot { background: #f8fafc; font-weight: 700; }
+  .dark .pur-foot { background: rgba(30, 41, 59, .5); }
+
+  .pur-total-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .4375rem 0; }
+  .pur-total-row .pur-label { font-size: .8125rem; color: #475569; }
+  .dark .pur-total-row .pur-label { color: #cbd5e1; }
+  .pur-total-row .pur-value { min-width: 9rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .pur-grand { border-top: 1px solid #e2e8f0; margin-top: .375rem; padding-top: .75rem; font-size: 1rem; font-weight: 700; }
+  .dark .pur-grand { border-top-color: #1e293b; }
+
+  .pur-bal { font-size: .6875rem; font-weight: 700; letter-spacing: .02em; color: #059669; }
+
+  /* Notched field: the label rides the top border, the action rides inside.
+     The picker is enhanced into a button by searchable-select.js, so the
+     padding that clears the action is set on that button, not on the select. */
+  .notch-field { position: relative; margin-top: 1.125rem; }
+  .notch-field .notch-label {
+    position: absolute;
+    top: 0;
+    left: .625rem;
+    transform: translateY(-50%);
+    /* Above the picker: searchable-select.js replaces the field with its own
+       stacked wrapper, which would otherwise cover the label. */
+    z-index: 3;
+    padding: 0 .3125rem;
+    background: #fff;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--primary-color);
+    pointer-events: none;
+  }
+  .dark .notch-field .notch-label { background: #0f172a; }
+  /* The control carries the item form's height so the notch reads the same. */
+  .notch-field .searchable-select-button,
+  .notch-field .form-select { min-height: 2.75rem; padding-top: .625rem; padding-bottom: .625rem; }
+  /* Room for the pill, and for the picker's own arrow to sit clear of it. */
+  .notch-field--action .searchable-select-button,
+  .notch-field--action .form-select { padding-right: 4.25rem; }
+
+  .notch-field .notch-action {
+    position: absolute;
+    top: 50%;
+    right: .3125rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    min-width: 2.75rem;
+    height: 2rem;
+    padding: 0 1rem;
+    transform: translateY(-50%);
+    border-radius: 9999px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, #fff);
+    transition: background .15s ease;
+  }
+  .notch-field .notch-action:hover { background: color-mix(in srgb, var(--primary-color) 18%, #fff); }
+  .notch-field .notch-action:active { background: color-mix(in srgb, var(--primary-color) 26%, #fff); }
+  .notch-field .notch-action:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .dark .notch-field .notch-action { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+
+  /* The item cell is a searchable picker, flattened so the row still reads as
+     the box rather than each cell carrying its own. */
+  .pur-item-cell { position: relative; }
+  .pur-item-cell .searchable-select-button {
+    min-height: 2rem;
+    border-color: transparent;
+    background: transparent;
+    padding: .375rem 1.75rem .375rem .5rem;
+    box-shadow: none;
+  }
+  .pur-item-cell .searchable-select-button:hover { border-color: #e2e8f0; }
+  .pur-item-cell .searchable-select-button:focus { border-color: var(--primary-color); background: #fff; }
+  .dark .pur-item-cell .searchable-select-button:focus { background: #0f172a; }
+
+  /* The unit a figure is written in, under the box it is typed into, so nobody
+     has to look across at the Unit column to know what a price is per. */
+  .unit-note {
+    display: block;
+    padding: 0 .5rem;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-align: right;
+    text-transform: uppercase;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  .unit-note:empty { display: none; }
+
+  /* Stock standing on the line: what is on the shelf, and what this bill takes
+     it to. Red when there is none, amber when it is into single figures. */
+  .stock-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    margin: .1875rem 0 0 .5rem;
+    border-radius: 9999px;
+    padding: .0625rem .4375rem;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .01em;
+    white-space: nowrap;
+  }
+  .stock-chip[hidden] { display: none; }
+  .stock-chip .stock-after { font-weight: 800; }
+  .stock-chip--none { color: #b91c1c; background: #fef2f2; }
+  .stock-chip--low { color: #b45309; background: #fffbeb; }
+  .stock-chip--ok { color: #047857; background: #ecfdf5; }
+  .dark .stock-chip--none { color: #fca5a5; background: rgba(127, 29, 29, .35); }
+  .dark .stock-chip--low { color: #fcd34d; background: rgba(120, 53, 15, .35); }
+  .dark .stock-chip--ok { color: #6ee7b7; background: rgba(6, 78, 59, .35); }
+
+  /* Same pill as the supplier field, sized down to sit in the column heading. */
+  .pur-head-item { display: flex; align-items: center; gap: .5rem; }
+  .head-action {
+    display: grid;
+    place-items: center;
+    height: 1.375rem;
+    min-width: 1.875rem;
+    padding: 0 .5rem;
+    border-radius: 9999px;
+    font-size: .9375rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, #fff);
+    transition: background .15s ease;
+  }
+  .head-action:hover { background: color-mix(in srgb, var(--primary-color) 18%, #fff); }
+  .head-action:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .dark .head-action { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+
+  /* Modal: the supplier and item forms are loaded whole rather than rebuilt here. */
+  .entity-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgba(2, 6, 23, .55); }
+  .entity-modal[hidden] { display: none; }
+  .entity-modal-card { display: flex; flex-direction: column; width: 100%; max-width: 62rem; height: min(88vh, 46rem); overflow: hidden; border-radius: 1rem; background: #fff; box-shadow: 0 25px 50px -12px rgba(2, 6, 23, .45); }
+  /* Three widths, so a short form is not stretched across the screen and a
+     tabbed one is not squeezed. The card never exceeds the viewport either way. */
+  .entity-modal-card--md { max-width: 36rem; height: min(88vh, 34rem); }
+  .entity-modal-card--lg { max-width: 52rem; height: min(88vh, 42rem); }
+  .entity-modal-card--xl { max-width: 76rem; height: min(92vh, 52rem); }
+  /* Maximized: the whole window, whatever size the screen asked for. Declared
+     last and with the extra class so it beats every size above it. */
+  .entity-modal-card.entity-modal-card--max { max-width: none; width: 100%; height: 100%; border-radius: .625rem; }
+  .entity-modal.is-max { padding: .5rem; }
+  .dark .entity-modal-card { background: #0f172a; }
+  .entity-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e2e8f0; padding: .875rem 1.25rem; }
+  .dark .entity-modal-head { border-bottom-color: #1e293b; }
+  .entity-modal iframe { flex: 1; width: 100%; border: 0; }
+</style>
+
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="title-accent text-xl font-bold">Purchase Order</h1>
+  {% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}
+</div>
+
+<section class="mt-3">
+  <form method="post" id="order-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
+
+    {# ── Header: who it is for on the left, which bill on the right ───────── #}
+    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
+      {# The label rides the border and the + rides inside, so picking a supplier #}
+      {# and adding one that is not on file read as the one control. #}
+      <div class="w-full max-w-md">
+        <div class="notch-field notch-field--action">
+          <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
+          <select name="supplier" id="supplier" class="form-select" required>
+            <option value="">Select supplier…</option>
+            {% for row in suppliers %}
+              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
+        </div>
+        <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+      </div>
+
+      <div class="ml-auto flex flex-wrap items-end gap-4">
+        <div class="w-36">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order-no-preview">Order No</label>
+          <input type="text" id="order-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_order_no }}" readonly>
+        </div>
+        <div class="w-36">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order_date">Order Date</label>
+          <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{{ posted.order_date|default:today|date:'Y-m-d' }}">
+        </div>
+        {# What the supplier quoted, so the order can be checked back against it. #}
+        {% if layout.shown.quot_num %}
+        <div class="w-40">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="quot_num">Quotation No</label>
+          <input type="text" name="quot_num" id="quot_num" class="form-input h-10 w-full" value="{{ posted.quot_num|default:'' }}" placeholder="Optional">
+        </div>
+        {% endif %}
+        {% if layout.shown.quot_date %}
+        <div class="w-36">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="quot_date">Quotation Date</label>
+          <input type="date" name="quot_date" id="quot_date" class="form-input h-10 w-full" value="{{ posted.quot_date|default:'' }}">
+        </div>
+        {% endif %}
+
+        {# Whatever this site added to its own form. They sit with the header #}
+        {# boxes because that is what they describe: the order, not a line. #}
+        {% for field in layout.extra %}
+        <div class="w-44">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="extra__{{ field.code }}">
+            {{ field.label }}{% if field.required %} <span class="text-rose-500">*</span>{% endif %}
+          </label>
+          {% if field.type == "select" %}
+          <select name="extra__{{ field.code }}" id="extra__{{ field.code }}" class="form-select h-10 w-full" {% if field.required %}required{% endif %}>
+            <option value="">Select&hellip;</option>
+            {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+          </select>
+          {% else %}
+          <input type="{{ field.type }}" {% if field.type == "number" %}step="any"{% endif %}
+                 name="extra__{{ field.code }}" id="extra__{{ field.code }}" class="form-input h-10 w-full"
+                 {% if field.required %}required{% endif %}>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ── Lines ────────────────────────────────────────────────────────────── #}
+    <div class="border-y border-slate-200 dark:border-slate-800">
+      <div class="pur-grid pur-head{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
+        <div>#</div>
+        <div class="pur-head-item">Item
+          <button type="button" id="add-item" class="head-action" title="Add a new item" aria-label="Add a new item">+</button>
+        </div>
+        <div class="pur-right">Qty</div>{% if layout.shown.line_uom %}<div>Unit</div>{% endif %}
+        <div class="pur-right">Price/Unit</div><div class="pur-right">Amount</div><div></div>
+      </div>
+
+      <div id="line-rows"></div>
+
+      <div class="pur-grid pur-foot border-t border-slate-200 dark:border-slate-800{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
+        <div></div>
+        <div><button type="button" id="add-row" class="text-sm font-semibold text-[var(--primary-color)]">+ Add Row</button></div>
+        <div class="pur-right" id="total-qty">0</div>
+        {% if layout.shown.line_uom %}<div></div>{% endif %}
+        <div class="pur-right text-xs uppercase tracking-wide text-slate-400">Total</div>
+        <div class="pur-amount" id="total-amount">0.00</div>
+        <div></div>
+      </div>
+    </div>
+
+    {# ── Money ────────────────────────────────────────────────────────────── #}
+    <div class="grid gap-6 px-6 py-6 lg:grid-cols-3">
+      <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
+        {% if layout.shown.remarks %}
+        <div class="sm:col-span-2">
+          <label class="mb-1.5 block text-sm font-medium" for="remarks">Narration</label>
+          <textarea name="remarks" id="remarks" rows="2" class="form-input w-full" placeholder="Anything worth recording against this order">{{ posted.remarks|default:'' }}</textarea>
+        </div>
+        {% endif %}
+
+      <div class="rounded-xl bg-slate-50 p-5 sm:col-span-2 dark:bg-slate-800/40">
+        <div class="pur-total-row">
+          <span class="pur-label">Sub Total</span>
+          <span class="pur-value" id="sub-total">0.00</span>
+        </div>
+        {% if layout.shown.discount_amount %}
+        <div class="pur-total-row">
+          <label class="pur-label" for="discount_amount">Discount (Rs)</label>
+          <input type="number" step="0.01" min="0" name="discount_amount" id="discount_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.discount_amount|default:'' }}" placeholder="0.00">
+        </div>
+        {% endif %}
+        {% if layout.shown.tax_amount %}
+        <div class="pur-total-row">
+          <label class="pur-label" for="tax_amount">Tax (Rs)</label>
+          <input type="number" step="0.01" min="0" name="tax_amount" id="tax_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.tax_amount|default:'' }}" placeholder="0.00">
+        </div>
+        {% endif %}
+        <div class="pur-total-row pur-grand">
+          <span>Total</span>
+          <span class="pur-value" id="grand-total">0.00</span>
+        </div>
+        <p class="mt-2 text-xs text-slate-400">Nothing is paid or received here. Stock and the books move when the goods arrive against this order.</p>
+      </div>
+      </div>
+
+      {# What the order comes to, spelled out — the figure the operator checks against the paper. #}
+      {% if layout.shown.amount_words %}
+      <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+        <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
+        <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
+          <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
+          <span id="amount-figure" class="w-full text-center text-3xl font-bold tabular-nums text-slate-300 dark:text-slate-600">0</span>
+        </div>
+        <p id="amount-words" class="mt-2 text-center text-sm italic text-slate-400">Amount in words appears here</p>
+      </aside>
+      {% endif %}
+    </div>
+
+    {# ── Footer ───────────────────────────────────────────────────────────── #}
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+      <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
+      <div class="flex gap-3">
+        {% url 'inventory:purchase_order_list' as cancel_url %}
+        {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
+        {% include "components/ui/button.html" with label="Save & Print" icon="&#128438;" name="save_and_print" value="1" variant="secondary" only %}
+        {# Raising commits the order; saving without it leaves a draft to check first. #}
+        {% include "components/ui/button.html" with label="Save & Raise" name="save_and_raise" value="1" variant="secondary" only %}
+        {% include "components/ui/button.html" with label="Save Draft" variant="primary" extra="px-8" only %}
+      </div>
+    </div>
+  </form>
+</section>
+
+<div class="entity-modal" id="entity-modal" hidden role="dialog" aria-modal="true" aria-labelledby="entity-modal-title">
+  <div class="entity-modal-card entity-modal-card--lg">
+    <div class="entity-modal-head">
+      <p class="text-sm font-bold" id="entity-modal-title">New Supplier</p>
+      <div class="flex items-center gap-1">
+        <button type="button" id="entity-modal-max" class="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" aria-label="Maximize" title="Maximize" aria-pressed="false">
+          <svg class="h-4 w-4 max-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h5v5M8 17H3v-5M17 3l-6 6M3 17l6-6"/></svg>
+          <svg class="h-4 w-4 min-icon hidden" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h5V4M16 11h-5v5M9 9l-5-5M11 11l5 5"/></svg>
+        </button>
+        <button type="button" id="entity-modal-close" class="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" aria-label="Close" title="Close">
+          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+        </button>
+      </div>
+    </div>
+    <iframe id="entity-frame" title="New Supplier" src="about:blank"></iframe>
+  </div>
+</div>
+
+<script id="items-data" type="application/json">{{ items_json|safe }}</script>
+<script>
+(function () {
+  // What the form settings left on the screen. A box that is off is not
+  // rendered at all, so everything below asks this rather than the DOM.
+  const SHOW = {
+    unit: {{ layout.shown.line_uom|yesno:'true,false' }},
+    stock: {{ layout.shown.line_stock|yesno:'true,false' }},
+    words: {{ layout.shown.amount_words|yesno:'true,false' }},
+  };
+  const ITEMS = JSON.parse(document.getElementById('items-data').textContent);
+  const UNITS = [{% for unit in units %}{ id: {{ unit.pk }}, name: '{{ unit.title|escapejs }}' }{% if not forloop.last %},{% endif %}{% endfor %}];
+  const rowsBox = document.getElementById('line-rows');
+
+  const money = n => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+  // Grouped for reading; money() stays plain for anything typed back into a box.
+  const moneyText = n => (Math.round((Number(n) || 0) * 100) / 100)
+    .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Money boxes are grouped with commas by amount-format.js, so their text is
+  // stripped before it is read as a number — "2,200.00" is not a Number.
+  const num = el => parseFloat(String((el && el.value) || '').replace(/,/g, '')) || 0;
+
+  function itemOptions(selected) {
+    return '<option value="">Select item…</option>' + ITEMS.map(i =>
+      '<option value="' + i.id + '"' + (String(i.id) === String(selected) ? ' selected' : '') + '>' + i.name + '</option>'
+    ).join('');
+  }
+
+  // Only the units the item is actually handled in. An item with none set up
+  // falls back to the whole list, so a line is never left with nothing to pick.
+  function unitOptions(selected, units) {
+    const list = units && units.length ? units : UNITS;
+    // A placeholder only where there is nothing to preselect, so a line never
+    // shows a unit the item was not actually filed under.
+    const head = selected ? '' : '<option value="">Select unit…</option>';
+    return head + list.map(u =>
+      '<option value="' + u.id + '"' + (String(u.id) === String(selected) ? ' selected' : '') + '>' + u.name + '</option>'
+    ).join('');
+  }
+
+  function addRow() {
+    const row = document.createElement('div');
+    row.className = 'pur-grid pur-row' + (SHOW.unit ? '' : ' pur-grid--no-unit');
+    row.innerHTML =
+      '<div class="text-center text-xs text-slate-400 row-num"></div>' +
+      '<div class="pur-item-cell"><select name="item_id" class="form-select line-item">' + itemOptions('') + '</select>' +
+        (SHOW.stock ? '<span class="stock-chip line-stock" hidden></span>' : '') + '</div>' +
+      '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
+        '<span class="unit-note line-qty-unit"></span></div>' +
+      (SHOW.unit ? '<div><select name="line_uom" class="pur-cell line-unit">' + unitOptions('') + '</select></div>' : '') +
+      '<div><input type="number" step="0.01" min="0" name="rate" class="pur-cell pur-right line-rate" placeholder="0.00">' +
+        '<span class="unit-note line-rate-unit"></span></div>' +
+      '<div class="pur-amount line-amount">0.00</div>' +
+      '<div><button type="button" class="line-drop grid h-7 w-7 place-items-center rounded-md text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove row">&times;</button></div>';
+    rowsBox.appendChild(row);
+    // What the row's unit is currently worth in base units, so a later switch
+    // knows what it is restating from.
+    var unitCell = row.querySelector('.line-unit');
+    if (unitCell) unitCell.dataset.factor = String(baseFactor(row));
+    // The picker is turned into a searchable dropdown by searchable-select.js,
+    // which only sweeps the page on load; rows are built as the operator works,
+    // so each new one asks for the sweep to run again. It skips what it has
+    // already enhanced, so this stays cheap.
+    document.dispatchEvent(new Event('searchable-select:refresh'));
+    renumber();
+    return row;
+  }
+
+  function renumber() {
+    Array.from(rowsBox.children).forEach((row, index) => {
+      row.querySelector('.row-num').textContent = index + 1;
+    });
+  }
+
+  // ----- amount in words -----
+  // Same wording as the voucher screen, so a purchase and its payment read alike.
+  const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+  function underThousand(n) {
+    if (n < 20) return ONES[n];
+    if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '');
+    return ONES[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + underThousand(n % 100) : '');
+  }
+
+  // Crore / lakh / thousand grouping.
+  function inWords(n) {
+    if (!n) return '';
+    const parts = [];
+    [[10000000, 'crore'], [100000, 'lakh'], [1000, 'thousand']].forEach(([size, name]) => {
+      if (n >= size) { parts.push(underThousand(Math.floor(n / size)) + ' ' + name); n %= size; }
+    });
+    if (n) parts.push(underThousand(n));
+    return parts.join(' ');
+  }
+
+  function writeAmount(value) {
+    const figure = document.getElementById('amount-figure');
+    const line = document.getElementById('amount-words');
+    if (!figure || !line) return;
+    const has = value > 0;
+    figure.textContent = has ? moneyText(value) : '0';
+    figure.classList.toggle('text-slate-300', !has);
+    figure.classList.toggle('dark:text-slate-600', !has);
+    figure.classList.toggle('text-slate-900', has);
+    figure.classList.toggle('dark:text-white', has);
+    if (!has) {
+      line.textContent = 'Amount in words appears here';
+      line.classList.add('text-slate-400');
+      return;
+    }
+    const rupees = Math.floor(value);
+    const paisa = Math.round((value - rupees) * 100);
+    const words = inWords(rupees) + ' rupees' + (paisa ? ' and ' + inWords(paisa) + ' paisa' : '') + ' only';
+    line.textContent = words.charAt(0).toUpperCase() + words.slice(1);
+    line.classList.remove('text-slate-400');
+  }
+
+  // The stock standing behind a line: what is on the shelf, and — once a
+  // quantity is typed — what this bill takes it to. Bought twice on one bill,
+  // the same item counts both lines, so the figure is the real closing stock.
+  // Quantities are grouped too, but keep their real precision: 1,250 and 2.5
+  // are both figures an operator types, so trailing zeros are not forced on.
+  const qtyOf = n => (Math.round(n * 10000) / 10000)
+    .toLocaleString('en-US', { maximumFractionDigits: 4 });
+
+  // The unit the line is written in, spelled out under the quantity and the
+  // price, so "100" is never read as per bag when it was typed per kilo.
+  function unitName(row) {
+    const picker = row.querySelector('.line-unit');
+    // No unit column: the line is written in the item's own unit, which is what
+    // the picked item already told us it is stocked in.
+    if (!picker) {
+      const chosen = ITEMS.find(i => String(i.id) === row.querySelector('.line-item').value);
+      return chosen ? (chosen.unit || '') : '';
+    }
+    const option = picker.options[picker.selectedIndex];
+    return option && option.value ? option.text : '';
+  }
+
+  // How many of the item's own units one of the line's unit makes. Unknown
+  // pairings count as 1 here; the server refuses the save and says so.
+  function baseFactor(row) {
+    const picker = row.querySelector('.line-unit');
+    if (!picker) return 1;   // written in the item's own unit already
+    const chosen = ITEMS.find(i => String(i.id) === row.querySelector('.line-item').value);
+    if (!chosen || !chosen.units) return 1;
+    const picked = chosen.units.find(u => String(u.id) === picker.value);
+    return picked && picked.factor ? picked.factor : 1;
+  }
+
+  // Switching the unit rewrites the line in the new one: the same goods for the
+  // same money, said differently. 3 bag20kg at 2,000 becomes 60 Kilogram at 100.
+  function restateLine(row) {
+    const unit = row.querySelector('.line-unit');
+    if (!unit) return;
+    const was = Number(unit.dataset.factor) || 0;
+    const now = baseFactor(row);
+    unit.dataset.factor = String(now);
+    if (!was || !now || was === now) return;
+
+    const qty = row.querySelector('.line-qty');
+    const rate = row.querySelector('.line-rate');
+    const ratio = was / now;
+    if (num(qty)) qty.value = String(Math.round(num(qty) * ratio * 10000) / 10000);
+    // The price box is grouped as it is typed, so a restated figure is written
+    // the same way rather than waiting for the next keystroke to catch up.
+    if (num(rate)) {
+      const restated = money(num(rate) / ratio);
+      rate.value = window.formatAmount ? window.formatAmount(restated) : restated;
+    }
+  }
+
+  function writeUnitNotes(row) {
+    const name = unitName(row);
+    row.querySelector('.line-qty-unit').textContent = name;
+    row.querySelector('.line-rate-unit').textContent = name ? 'per ' + name : '';
+  }
+
+  // What is on the shelf now, written in the unit the line is being entered in,
+  // so the figure the operator checks is in the same terms as what they type.
+  function writeStock(row) {
+    const chip = row.querySelector('.line-stock');
+    if (!chip) return;
+    const chosen = ITEMS.find(i => String(i.id) === row.querySelector('.line-item').value);
+    if (!chosen || !chosen.stocked) { chip.hidden = true; return; }
+
+    const held = Number(chosen.stock) || 0;
+    const factor = baseFactor(row);
+    const shown = unitName(row) || chosen.unit;
+    const inUnit = value => value / factor;
+    const unit = shown ? ' ' + shown : '';
+    // The tone reads the shelf itself, not the unit it is being said in, so a
+    // line does not change colour just because it switched to kilos.
+    const tone = held <= 0 ? 'none' : held < 10 ? 'low' : 'ok';
+    ['none', 'low', 'ok'].forEach(name => chip.classList.toggle('stock-chip--' + name, name === tone));
+    // An order moves nothing, so the chip states the shelf as it stands rather
+    // than projecting what this document would take it to.
+    chip.textContent = 'In stock ' + qtyOf(inUnit(held)) + unit;
+    chip.hidden = false;
+  }
+
+  function recalc() {
+    let quantity = 0, goods = 0;
+
+    Array.from(rowsBox.children).forEach(row => {
+      const qty = num(row.querySelector('.line-qty'));
+      const rate = num(row.querySelector('.line-rate'));
+      const amount = qty * rate;
+      row.querySelector('.line-amount').textContent = moneyText(amount);
+      writeUnitNotes(row);
+      writeStock(row);
+      quantity += qty;
+      goods += amount;
+    });
+
+    document.getElementById('total-qty').textContent = qtyOf(quantity);
+    document.getElementById('total-amount').textContent = moneyText(goods);
+    document.getElementById('sub-total').textContent = moneyText(goods);
+
+    // A box that is off contributes nothing, which is what num() of a
+    // missing element already gives.
+    const total = goods - num(document.getElementById('discount_amount')) + num(document.getElementById('tax_amount'));
+    document.getElementById('grand-total').textContent = moneyText(total);
+    writeAmount(total);
+  }
+
+  // Delegated: rows are built and dropped as the operator works.
+  rowsBox.addEventListener('input', recalc);
+  rowsBox.addEventListener('change', e => {
+    if (e.target.classList.contains('line-item')) {
+      // Picking an item brings its unit and its expected cost with it.
+      const chosen = ITEMS.find(i => String(i.id) === e.target.value);
+      const row = e.target.closest('.pur-row');
+      const unit = row.querySelector('.line-unit');
+      if (unit) {
+        // The unit list is narrowed to what this item is handled in; clearing
+        // the item opens it back up, so the row is usable again before the
+        // next pick.
+        unit.innerHTML = unitOptions(chosen ? chosen.uom : '', chosen && chosen.units);
+        unit.dataset.factor = String(baseFactor(row));
+      }
+      if (chosen) {
+        const rate = row.querySelector('.line-rate');
+        if (!rate.value) rate.value = chosen.rate ? money(chosen.rate) : '';
+      }
+    }
+    if (e.target.classList.contains('line-unit')) restateLine(e.target.closest('.pur-row'));
+    recalc();
+  });
+  rowsBox.addEventListener('click', e => {
+    if (!e.target.closest('.line-drop')) return;
+    e.target.closest('.pur-row').remove();
+    // Never leave the operator with nothing to type into.
+    if (!rowsBox.children.length) addRow();
+    renumber();
+    recalc();
+  });
+
+  document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
+  ['discount_amount', 'tax_amount'].forEach(id => {
+    const box = document.getElementById(id);
+    if (box) box.addEventListener('input', recalc);
+  });
+
+  const supplier = document.getElementById('supplier');
+  const supplierBalance = document.getElementById('supplier-balance');
+  supplier.addEventListener('change', () => {
+    const option = supplier.options[supplier.selectedIndex];
+    const balance = option ? option.dataset.balance : '';
+    const show = Boolean(supplier.value && balance);
+    supplierBalance.classList.toggle('hidden', !show);
+    if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
+  });
+
+  // ----- add a supplier or an item without leaving the bill -----
+  // The master screen is opened in a frame; it messages back what it saved and
+  // the new record is dropped into the picker already chosen, so the operator
+  // carries straight on with the bill.
+  const modal = document.getElementById('entity-modal');
+  const modalFrame = document.getElementById('entity-frame');
+  const modalTitle = document.getElementById('entity-modal-title');
+  const modalCard = modal.querySelector('.entity-modal-card');
+  // Each screen states how much room it needs: md, lg or xl.
+  const SCREENS = {
+    'supplier:saved': { url: '{% url "inventory:supplier_create" %}?embed=1', title: 'New Supplier', size: 'lg' },
+    'item:saved': { url: '{% url "inventory:item_create" %}?embed=1', title: 'New Item', size: 'xl' },
+  };
+  const SIZES = ['md', 'lg', 'xl'];
+  // Which row asked for an item, so the saved one lands in that line and not
+  // in whichever row happens to be last.
+  let itemRow = null;
+
+  function openModal(kind) {
+    const screen = SCREENS[kind];
+    SIZES.forEach(size => modalCard.classList.toggle('entity-modal-card--' + size, size === screen.size));
+    modalTitle.textContent = screen.title;
+    modalFrame.src = screen.url;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    modalFrame.src = 'about:blank';   // drop the half-typed form with the modal
+    document.body.style.overflow = '';
+    setMaximized(false);              // the next screen opens at its own size
+    itemRow = null;
+  }
+
+  // Maximize/restore. The frame is left alone, so nothing typed is lost.
+  const maxBtn = document.getElementById('entity-modal-max');
+
+  function setMaximized(on) {
+    modalCard.classList.toggle('entity-modal-card--max', on);
+    modal.classList.toggle('is-max', on);
+    maxBtn.setAttribute('aria-pressed', String(on));
+    maxBtn.setAttribute('aria-label', on ? 'Restore' : 'Maximize');
+    maxBtn.title = on ? 'Restore' : 'Maximize';
+    maxBtn.querySelector('.max-icon').classList.toggle('hidden', on);
+    maxBtn.querySelector('.min-icon').classList.toggle('hidden', !on);
+  }
+
+  maxBtn.addEventListener('click', () => setMaximized(!modalCard.classList.contains('entity-modal-card--max')));
+
+  document.getElementById('add-supplier').addEventListener('click', () => openModal('supplier:saved'));
+  document.getElementById('entity-modal-close').addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+  document.getElementById('add-item').addEventListener('click', () => {
+    // The saved item goes into the first line still waiting for one; if every
+    // line is filled, it gets a line of its own.
+    itemRow = Array.from(rowsBox.children).find(row => !row.querySelector('.line-item').value) || addRow();
+    openModal('item:saved');
+  });
+
+  window.addEventListener('message', e => {
+    // Same-origin only: the frame is our own screen, nothing else may drive this.
+    if (e.origin !== window.location.origin) return;
+    const data = e.data || {};
+    if (data.type === 'embed:cancel') { closeModal(); return; }
+    const saved = data.record;
+    if (!saved) return;
+
+    if (data.type === 'supplier:saved') {
+      const option = new Option(saved.name, saved.id, true, true);
+      if (saved.balance) option.dataset.balance = saved.balance;
+      supplier.add(option);
+      // The picker redraws its label on change, so the new supplier has to be
+      // announced, not only assigned.
+      supplier.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (data.type === 'item:saved') {
+      // Every row's list is built from ITEMS, so the new item is added there
+      // first and the rows already on screen are given it too.
+      ITEMS.push({
+        id: saved.id, name: saved.name, code: saved.code, uom: saved.uom, rate: saved.rate,
+        stock: saved.stock, stocked: saved.stocked, unit: saved.unit, units: saved.units,
+      });
+      const target = itemRow;
+      Array.from(rowsBox.children).forEach(row => {
+        const picker = row.querySelector('.line-item');
+        picker.add(new Option(saved.name, saved.id));
+        if (row === target) {
+          picker.value = String(saved.id);
+          picker.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    } else {
+      return;
+    }
+    closeModal();
+  });
+
+  // ----- keyboard: one chain through the bill -----
+  // A bill is entered without the mouse: Tab (and Enter) walks supplier, dates,
+  // then each line across — item, quantity, unit, price — and on to the money at
+  // the bottom. The pickers are enhanced into buttons, so the chain walks those
+  // rather than the hidden selects behind them.
+  const form = document.getElementById('order-form');
+  const saveBtn = form.querySelector('button[type="submit"]:not([name])');
+
+  function entryChain() {
+    return Array.from(form.querySelectorAll(
+      'input:not([type=hidden]):not([readonly]):not(.searchable-select-search), textarea, ' +
+      'select:not(.sr-only):not([data-searchable-enhanced]), .searchable-select-button'
+    )).filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.searchable-select-panel'));
+  }
+
+  form.addEventListener('keydown', e => {
+    // An open picker belongs to itself: Enter opened it, and the arrows and
+    // Enter inside it are for choosing, not for moving on.
+    if (e.target.closest('.searchable-select[data-open="true"]')) return;
+
+    const isEnter = e.key === 'Enter';
+    const isTab = e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey;
+    if (!isEnter && !isTab) return;
+    // Enter in a note is a new line, and on a button it is the button.
+    if (isEnter && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON')) {
+      if (!e.target.classList.contains('searchable-select-button')) return;
+    }
+
+    const chain = entryChain();
+    const here = chain.indexOf(e.target);
+    if (here === -1) return;
+
+    const back = isTab && e.shiftKey;
+    const next = chain[here + (back ? -1 : 1)];
+    if (!next) {
+      // Past the last box the bill is complete: go to Save rather than out of
+      // the form entirely.
+      if (!back && saveBtn) { e.preventDefault(); saveBtn.focus(); }
+      return;
+    }
+    e.preventDefault();
+    next.focus();
+    if (next.select) next.select();
+  });
+
+  addRow();
+  addRow();
+  recalc();
+})();
+</script>
+{% endblock %}
+
