@@ -1,0 +1,63 @@
+{% load core_extras %}<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Purchase Orders</title>
+  <style>
+    /* Landscape, because a purchase order table is wider than it is tall.
+       The heading repeats on every sheet, which is the whole reason for
+       letting the browser paginate rather than drawing a PDF by hand. */
+    @page { size: A4 landscape; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, "Segoe UI", Arial, sans-serif; color: #0f172a; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 10px; }
+    h1 { margin: 0; font-size: 18px; }
+    .meta { font-size: 11px; color: #64748b; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    thead { display: table-header-group; }
+    th { background: #1e293b; color: #fff; text-align: left; padding: 6px 8px; font-size: 10px;
+         text-transform: uppercase; letter-spacing: .04em; }
+    td { border-bottom: 1px solid #e2e8f0; padding: 5px 8px; }
+    tr { page-break-inside: avoid; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+
+    .bar { display: flex; gap: 8px; padding: 10px 0; }
+    .bar button { border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+                  padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .bar .go { border-color: #1e293b; background: #1e293b; color: #fff; }
+    /* The controls are for the screen only; the sheet must not carry them. */
+    @media print { .bar { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <button type="button" class="go" onclick="window.print()">Save as PDF / Print</button>
+    <button type="button" onclick="window.close()">Close</button>
+  </div>
+
+  <header>
+    <h1>Purchase Orders</h1>
+    <p class="meta">{{ rows|length }} order{{ rows|length|pluralize }} &middot;
+      prepared by {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_on|dmy }}</p>
+  </header>
+
+  <table>
+    <thead>
+      <tr>{% for label in header %}<th>{{ label }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% empty %}
+      <tr><td colspan="{{ header|length }}" style="text-align:center;padding:24px;color:#64748b;">No purchase orders match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    // Straight into the print dialog, since that is the only reason this page
+    // was opened. Cancelling leaves the table on screen rather than closing it.
+    window.addEventListener('load', function () { setTimeout(window.print, 250); });
+  </script>
+</body>
+</html>

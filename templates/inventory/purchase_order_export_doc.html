@@ -1,0 +1,34 @@
+{% comment %}
+Word opens an HTML table as a document and keeps the formatting, so this is the
+whole of the .doc export. Styles are inline and old-fashioned on purpose: Word's
+HTML reader is not a browser and ignores most of a modern stylesheet.
+{% endcomment %}<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+  <meta charset="utf-8">
+  <title>Purchase Orders</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+  <style>
+    @page { size: A4 landscape; margin: 1.5cm; }
+    body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; color: #1e293b; }
+    h1 { font-size: 15pt; margin: 0 0 2pt; }
+    p.meta { margin: 0 0 10pt; font-size: 8.5pt; color: #64748b; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #1e293b; color: #ffffff; font-size: 8.5pt; text-align: left; padding: 5pt 6pt; }
+    td { border-bottom: 0.5pt solid #e2e8f0; padding: 4pt 6pt; font-size: 9.5pt; }
+  </style>
+</head>
+<body>
+  <h1>Purchase Orders</h1>
+  <p class="meta">{{ rows|length }} order{{ rows|length|pluralize }} &middot; prepared by {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_on|dmy }}</p>
+  <table>
+    <thead>
+      <tr>{% for label in header %}<th>{{ label }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

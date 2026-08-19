@@ -92,7 +92,10 @@
      at the same width and height as a filter chip rather than stretching to
      swallow whatever the row has left over. */
   .po-search { flex: 0 1 13rem; min-width: 9rem; }
-  .po-bar > .settings-menu { margin-left: auto; }
+  /* One gap in the row, before the first of the trailing controls. Everything
+     after it -- search, reset, export -- sits against it as one cluster, so
+     making Export a menu of its own does not open a second gap. */
+  .po-bar > .settings-menu--lead { margin-left: auto; }
   .po-search .search-field { width: 100%; }
   .po-search .search-input {
     width: 100%;
@@ -425,6 +428,43 @@
     box-shadow: 0 20px 35px -15px rgba(2, 6, 23, .35);
   }
   .dark .settings-panel { border-color: #1e293b; background: #0f172a; }
+  .export-panel { width: 17rem; }
+  .export-item {
+    display: flex;
+    align-items: center;
+    gap: .625rem;
+    width: 100%;
+    border-radius: .5rem;
+    padding: .375rem .5rem;
+    text-align: left;
+    color: #334155;
+  }
+  .export-item:hover { background: #f1f5f9; }
+  .dark .export-item { color: #cbd5e1; }
+  .dark .export-item:hover { background: rgba(30, 41, 59, .7); }
+  .export-item strong { display: block; font-size: .8125rem; font-weight: 600; }
+  .export-item em { display: block; font-size: .6875rem; font-style: normal; color: #94a3b8; }
+  /* A file type is recognised by its badge before its name is read, so each
+     one keeps the colour its application is known by. */
+  .export-badge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2rem;
+    height: 1.625rem;
+    border-radius: .375rem;
+    font-size: .5625rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    color: #fff;
+  }
+  .export-badge--xls { background: #15803d; }
+  .export-badge--csv { background: #0f766e; }
+  .export-badge--doc { background: #1d4ed8; }
+  .export-badge--pdf { background: #b91c1c; }
+  .export-badge--json { background: #7c3aed; font-size: .75rem; }
+  .export-badge--copy { background: #475569; font-size: .8125rem; }
+
   .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
   .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
   .settings-item:hover { background: #f1f5f9; }
@@ -618,7 +658,7 @@
       </div>
     </form>
 
-    <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+    <div class="settings-menu settings-menu--lead" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
       <button type="button" class="btn btn-secondary btn--icon" title="Screen settings" aria-label="Screen settings"
               :aria-expanded="open.toString()" @click="open = !open">
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -681,14 +721,51 @@
     </a>
     {% endif %}
 
-    {# Tray with an arrow coming down into it: what the button does, not the #}
-    {# file format it happens to produce. The word lives in the label. #}
-    <a class="po-action po-action--icon" href="{% url 'inventory:purchase_order_export' %}?{{ base_query }}&amp;tab={{ current_tab }}" title="Export &mdash; download the rows and columns on screen" aria-label="Export the rows and columns on screen">
-      <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 3v11"></path><path d="M8 11l4 4 4-4"></path>
-        <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-      </svg>
-    </a>
+    {# Export opens rather than fires: the same rows and the same columns, in #}
+    {# whichever shape the person on the other end can actually open. #}
+    <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+      <button type="button" class="po-action po-action--icon" title="Export" aria-label="Export the rows and columns on screen"
+              :aria-expanded="open.toString()" @click="open = !open">
+        <svg class="po-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v11"></path><path d="M8 11l4 4 4-4"></path>
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+        </svg>
+      </button>
+
+      <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
+        <p class="settings-heading">Download</p>
+        {% with q=base_query %}
+        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=xlsx">
+          <span class="export-badge export-badge--xls">XLS</span>
+          <span><strong>Excel</strong><em>Figures stay numbers, ready to total</em></span>
+        </a>
+        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=csv">
+          <span class="export-badge export-badge--csv">CSV</span>
+          <span><strong>CSV</strong><em>Opens anywhere</em></span>
+        </a>
+        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=doc">
+          <span class="export-badge export-badge--doc">DOC</span>
+          <span><strong>Word</strong><em>For a document to mark up</em></span>
+        </a>
+        <a class="export-item" role="menuitem" target="_blank" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=pdf">
+          <span class="export-badge export-badge--pdf">PDF</span>
+          <span><strong>PDF / Print</strong><em>Opens the print sheet</em></span>
+        </a>
+        <a class="export-item" role="menuitem" href="{% url 'inventory:purchase_order_export' %}?{{ q }}&amp;tab={{ current_tab }}&amp;format=json">
+          <span class="export-badge export-badge--json">{ }</span>
+          <span><strong>JSON</strong><em>For another system to read</em></span>
+        </a>
+        {% endwith %}
+
+        <p class="settings-heading">Copy</p>
+        {# Straight to the clipboard, so a figure can go into an email or a #}
+        {# chat without a file being made and then thrown away. #}
+        <button type="button" class="export-item" role="menuitem" @click="copyTable($event); open = false">
+          <span class="export-badge export-badge--copy">&#9112;</span>
+          <span><strong>Copy table</strong><em>Paste straight into a sheet</em></span>
+        </button>
+      </div>
+    </div>
 
   </div>
 
@@ -844,6 +921,43 @@
 {% include "components/table/pagination.html" %}
 
 <script>
+  // Copy the table as it stands, tab separated, which is what a spreadsheet
+  // pastes into cells rather than into one. Built from the rendered table so
+  // it carries exactly the columns on screen.
+  function copyTable(event) {
+    var table = document.getElementById('order-table');
+    var lines = [];
+    table.querySelectorAll('tr').forEach(function (row) {
+      var cells = Array.from(row.querySelectorAll('th, td'))
+        .filter(function (cell) { return !cell.classList.contains('print-hide'); })
+        .map(function (cell) { return cell.innerText.replace(/\s+/g, ' ').trim(); });
+      if (cells.length) lines.push(cells.join('\t'));
+    });
+    var text = lines.join('\n');
+
+    var done = function () {
+      var button = event.currentTarget;
+      var label = button.querySelector('strong');
+      var was = label.textContent;
+      label.textContent = 'Copied';
+      setTimeout(function () { label.textContent = was; }, 1500);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    // Plain HTTP, where the clipboard API is not handed out: the old way still
+    // works and this screen is served over it on the local network.
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); done(); } finally { box.remove(); }
+  }
+
   // The date range control. It owns nothing the server knows about: on Apply it
   // writes the two hidden inputs the view already reads and submits the filter
   // form, so the query string is exactly what the two boxes used to produce.

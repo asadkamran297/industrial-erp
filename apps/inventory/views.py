@@ -2,6 +2,8 @@ import csv
 import io
 import json
 
+from datetime import date, datetime
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -1748,12 +1750,15 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     # plain rather than offering a sort that would quietly lie about the order.
     sort_fields = {
         "purchase_num": "seq_num",
-        "purchase_date": "purchase_date",
+        "purchase_date": ("purchase_date", "id"),
         "supplier": "supplier__name",
         "expected": "expected_date",
         "status": "status",
     }
     default_sort = "purchase_date"
+    # Newest first: the order somebody raised this morning is the one they are
+    # looking for, not the one from last quarter.
+    default_sort_dir = "desc"
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
@@ -1857,27 +1862,125 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
 
 
 class PurchaseOrderExportView(InventoryListMixin, View):
-    """The orders currently on screen, as a spreadsheet.
+    """The orders currently on screen, in whichever format was asked for.
 
-    Deliberately the same filters *and the same columns* as the list: what comes
-    down is what the operator was looking at, so the file needs no explaining
-    and the two can never drift apart.
+    Deliberately the same filters *and the same columns* as the list whatever
+    the format: what comes down is what the operator was looking at, so the
+    file needs no explaining and the two can never drift apart.
     """
 
     page = "inventory.purchase_orders"
 
+    FORMATS = ("xlsx", "csv", "pdf", "doc", "json")
+
     def get(self, request, *args, **kwargs):
         listing = PurchaseOrderListView(request=request, kwargs={}, args=())
         orders = decorate(list(listing.get_queryset()))
-
         columns = export_columns(request.session)
-        response = HttpResponse(content_type="text/csv")
+
+        # Rows once, as text, so every format below writes the same figures.
+        header = [column["label"] for column in columns]
+        rows = [[column["export"](order) for column in columns] for order in orders]
+
+        kind = request.GET.get("format", "csv")
+        if kind not in self.FORMATS:
+            kind = "csv"
+        return getattr(self, f"_{kind}")(request, header, rows)
+
+    # ── the formats ────────────────────────────────────────────────────────
+    def _csv(self, request, header, rows):
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="purchase-orders.csv"'
+        # Excel reads a CSV as the machine's own encoding unless the file says
+        # otherwise, so the BOM is what keeps a supplier's name intact.
+        response.write("\ufeff")
         writer = csv.writer(response)
-        writer.writerow([column["label"] for column in columns])
-        for order in orders:
-            writer.writerow([column["export"](order) for column in columns])
+        writer.writerow(header)
+        writer.writerows(rows)
         return response
+
+    def _xlsx(self, request, header, rows):
+        """A real spreadsheet, not a CSV wearing an .xlsx name.
+
+        Numbers land as numbers and dates as dates, so the file can be summed
+        and sorted in Excel without anyone retyping a column first.
+        """
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Purchase Orders"
+        sheet.append(header)
+
+        heading = Font(bold=True, color="FFFFFF")
+        band = PatternFill("solid", fgColor="1E293B")
+        for cell in sheet[1]:
+            cell.font = heading
+            cell.fill = band
+            cell.alignment = Alignment(vertical="center")
+
+        for row in rows:
+            sheet.append([self._native(value) for value in row])
+
+        # Room to read, a frozen heading, and a filter row: what anybody would
+        # do to the sheet by hand the moment they opened it.
+        for index, label in enumerate(header, start=1):
+            longest = max([len(str(label))] + [len(str(row[index - 1])) for row in rows] or [0])
+            sheet.column_dimensions[get_column_letter(index)].width = min(max(longest + 2, 10), 42)
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="purchase-orders.xlsx"'
+        book.save(response)
+        return response
+
+    def _doc(self, request, header, rows):
+        """A Word document, written as the HTML Word has opened for decades.
+
+        No dependency for this one: Word reads an HTML table as a document and
+        keeps the formatting, which is all a table of orders needs.
+        """
+        html = render_to_string("inventory/purchase_order_export_doc.html", {
+            "header": header, "rows": rows, "printed_by": request.user,
+            "printed_on": timezone.localdate(),
+        })
+        response = HttpResponse(html, content_type="application/msword")
+        response["Content-Disposition"] = 'attachment; filename="purchase-orders.doc"'
+        return response
+
+    def _pdf(self, request, header, rows):
+        """A print-ready page that saves as PDF from the browser.
+
+        There is no PDF library in this project, and adding one to lay out a
+        table would be a lot of machinery for something every browser already
+        does properly -- including page breaks and repeated headings.
+        """
+        return render(request, "inventory/purchase_order_export_print.html", {
+            "header": header, "rows": rows, "printed_by": request.user,
+            "printed_on": timezone.localdate(),
+        })
+
+    def _json(self, request, header, rows):
+        """The same table, for whatever is reading it next."""
+        keys = [column["key"] for column in export_columns(request.session)]
+        payload = [dict(zip(keys, [str(value) for value in row])) for row in rows]
+        response = JsonResponse({"columns": header, "orders": payload}, json_dumps_params={"indent": 2})
+        response["Content-Disposition"] = 'attachment; filename="purchase-orders.json"'
+        return response
+
+    @staticmethod
+    def _native(value):
+        """Keep a number a number and a date a date; everything else is text."""
+        if isinstance(value, (int, float, date, datetime)):
+            return value
+        if isinstance(value, Decimal):
+            return float(value)
+        return str(value)
 
 
 class PurchaseOrderColumnsView(InventoryListMixin, View):
