@@ -1738,7 +1738,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         PurchaseOrder.objects
         .filter(is_direct=False)
         .select_related("supplier", "created_by")
-        .prefetch_related("items__receipts")
+        .prefetch_related("items__receipts", "items__uom")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
@@ -1827,6 +1827,22 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         ]
         # Which columns this person chose to look at. A set, so the template
         # asks `{% if "billed" in columns %}` rather than walking a list per row.
+        # What is actually on each order, for the approval dialog to show. Only
+        # the orders still awaiting approval need it, so the page does not carry
+        # a line list for rows that will never open the dialog.
+        context["approval_lines"] = {
+            order.pk: [
+                {
+                    "name": line.descr,
+                    "qty": f"{line.quantity.normalize():f}" if line.quantity else "0",
+                    "uom": line.uom.title if line.uom_id else "",
+                    "rate": float(line.rate or 0),
+                    "amount": float(line.total_amount or 0),
+                }
+                for line in order.items.all()
+            ]
+            for order in orders if order.status == STATUS_DRAFT
+        }
         context["columns"] = visible_columns(self.request.session)
         context["column_menu"] = column_menu(self.request.session)
         # Where the total row puts its figure: under PO Value wherever that

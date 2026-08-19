@@ -413,6 +413,160 @@
 
   .po-foot td { padding: .875rem 1rem; font-weight: 700; }
 
+  /* ── Approval dialog ──────────────────────────────────────────────────── */
+  .approve-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(2, 6, 23, .55);
+    backdrop-filter: blur(2px);
+  }
+  .approve-card {
+    width: 100%;
+    max-width: 25rem;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 1.25rem;
+    box-shadow: 0 30px 60px -20px rgba(2, 6, 23, .55);
+  }
+  .dark .approve-card { background: #0f172a; }
+
+  .approve-head { display: flex; align-items: flex-start; gap: .75rem; }
+  /* A shield with a tick: this is a control step, not a warning. */
+  .approve-mark {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: .75rem;
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  }
+  .approve-mark svg { width: 1.375rem; height: 1.375rem; }
+  .approve-title { margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; }
+  .dark .approve-title { color: #f1f5f9; }
+  .approve-sub { margin: .125rem 0 0; font-size: .8125rem; color: #64748b; }
+
+  .approve-facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: .375rem;
+    border-top: 1px solid #f1f5f9;
+    padding-top: .875rem;
+  }
+  .dark .approve-facts { border-top-color: #1e293b; }
+  .approve-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .approve-facts dt { font-size: .75rem; color: #94a3b8; }
+  .approve-facts dd { margin: 0; font-size: .8125rem; font-weight: 600; color: #334155; text-align: right; }
+  .dark .approve-facts dd { color: #e2e8f0; }
+
+  /* The figure is the decision, so it is given a block of its own rather than
+     another row in the list above it. */
+  .approve-amount {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: .875rem;
+    border-radius: .625rem;
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+    padding: .625rem .75rem;
+  }
+  .approve-amount span { font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
+  .approve-amount strong { font-size: 1.25rem; font-weight: 800; color: var(--primary-color); font-variant-numeric: tabular-nums; }
+
+  .approve-lines { margin-top: .875rem; }
+  .approve-lines-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 .25rem;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  /* Long orders scroll inside the dialog rather than pushing the amount and
+     the buttons off the bottom of the screen. */
+  .approve-lines-scroll {
+    max-height: 11rem;
+    overflow-y: auto;
+    border: 1px solid #f1f5f9;
+    border-radius: .5rem;
+  }
+  .dark .approve-lines-scroll { border-color: #1e293b; }
+  .approve-lines-scroll table { width: 100%; border-collapse: collapse; }
+  .approve-lines-scroll td { padding: .4375rem .625rem; border-bottom: 1px solid #f8fafc; vertical-align: top; }
+  .dark .approve-lines-scroll td { border-bottom-color: rgba(30, 41, 59, .7); }
+  .approve-lines-scroll tr:last-child td { border-bottom: 0; }
+  .approve-line-name span {
+    display: block;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #334155;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 13rem;
+  }
+  .dark .approve-line-name span { color: #e2e8f0; }
+  /* What the line is made of, under its name, so the amount beside it can be
+     checked rather than taken on trust. */
+  .approve-line-name em { display: block; font-size: .6875rem; font-style: normal; color: #94a3b8; }
+  .approve-line-amount { text-align: right; font-size: .8125rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: #334155; }
+  .dark .approve-line-amount { color: #e2e8f0; }
+
+  .approve-empty {
+    margin: .875rem 0 0;
+    border: 1px dashed #fecdd3;
+    border-radius: .5rem;
+    padding: .625rem .75rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: #b91c1c;
+    background: #fff1f2;
+  }
+  .dark .approve-empty { background: rgba(136, 19, 55, .2); border-color: rgba(244, 63, 94, .35); color: #fda4af; }
+
+  .approve-note { margin: .75rem 0 0; font-size: .75rem; line-height: 1.45; color: #94a3b8; }
+
+  .approve-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+  .approve-cancel {
+    height: 2.25rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    padding: 0 1rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #475569;
+    background: #fff;
+  }
+  .approve-cancel:hover { background: #f8fafc; }
+  .dark .approve-cancel { border-color: #1e293b; background: transparent; color: #cbd5e1; }
+  .approve-go {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    height: 2.25rem;
+    border: 1px solid color-mix(in srgb, var(--primary-color) 88%, #000);
+    border-radius: .5rem;
+    padding: 0 1.125rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    color: #fff;
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 88%, #fff), var(--primary-color));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 1px 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
+  }
+  .approve-go svg { width: .9375rem; height: .9375rem; }
+  .approve-go:hover { filter: brightness(1.06); }
+  .approve-go:active { transform: translateY(1px); }
+  .approve-go:disabled { opacity: .6; }
+
   /* ── Settings menu ────────────────────────────────────────────────────── */
   .settings-menu { position: relative; }
   .settings-panel {
@@ -497,6 +651,9 @@
   .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
   .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 </style>
+
+{{ approval_lines|json_script:"approval-lines" }}
+<div x-data="poBoard()">
 
 {# ── Head ──────────────────────────────────────────────────────────────── #}
 <div class="flex flex-wrap items-start justify-between gap-4">
@@ -852,16 +1009,24 @@
               {% if order.next_action == "approve" %}
               {# Approving commits money to a supplier and cannot be taken back, #}
               {# so it keeps its word rather than hiding behind a tick, and it #}
-              {# asks first. Everything else on the row is safe to click. #}
-              <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}"
-                    onsubmit="return confirm('Approve {{ order.purchase_num|escapejs }} for {{ order.supplier.name|escapejs }}?\n\nThis commits {{ order.total_amount|amount|escapejs }} to the supplier and cannot be undone.');">{% csrf_token %}
-                <button class="po-text-btn po-text-btn--go" title="Approve &mdash; raise this order on the supplier">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M20 6L9 17l-5-5"></path>
-                  </svg>
-                  Approve
-                </button>
-              </form>
+              {# asks in a dialog that shows what is being committed to whom. #}
+              <button type="button" class="po-text-btn po-text-btn--go"
+                      title="Approve &mdash; raise this order on the supplier"
+                      @click="askApproval({
+                        pk: '{{ order.pk }}',
+                        url: '{% url 'inventory:purchase_order_raise' order.pk %}',
+                        number: '{{ order.purchase_num|escapejs }}',
+                        supplier: '{{ order.supplier.name|escapejs }}',
+                        amount: '{{ order.total_amount|amount|escapejs }}',
+                        date: '{{ order.purchase_date|date:'d M Y'|escapejs }}',
+                        lines: '{{ order.line_count }}',
+                        expected: '{{ order.expected_date|date:'d M Y'|default:''|escapejs }}'
+                      })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Approve
+              </button>
               {% elif order.next_action == "chase" %}
               <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:supplier_detail' order.supplier_id %}" title="Chase &mdash; supplier contact details" aria-label="Chase this supplier">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -920,7 +1085,106 @@
 
 {% include "components/table/pagination.html" %}
 
+{# One dialog for the whole page: the row that opened it hands over what it #}
+{# needs to say, so there is not a copy of this per order. #}
+<div class="approve-backdrop" x-show="approval" x-cloak x-transition.opacity
+     @keydown.escape.window="approval = null" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+  <div class="approve-card" @click.outside="approval = null" x-transition>
+    <div class="approve-head">
+      <span class="approve-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l8 4v5c0 4.5-3.2 8.3-8 9.5-4.8-1.2-8-5-8-9.5V7z"></path>
+          <path d="M9 12l2 2 4-4"></path>
+        </svg>
+      </span>
+      <div>
+        <h2 class="approve-title" id="approve-title">Approve this purchase order?</h2>
+        <p class="approve-sub">It becomes a commitment to the supplier once approved.</p>
+      </div>
+    </div>
+
+    <dl class="approve-facts">
+      <div><dt>Order</dt><dd x-text="approval?.number"></dd></div>
+      <div><dt>Supplier</dt><dd x-text="approval?.supplier"></dd></div>
+      <div><dt>Ordered</dt><dd x-text="approval?.date"></dd></div>
+      <template x-if="approval?.expected">
+        <div><dt>Expected</dt><dd x-text="approval?.expected"></dd></div>
+      </template>
+    </dl>
+
+    {# What is actually being ordered. Nobody should approve a figure without #}
+    {# seeing what makes it up, and going to the order to check would mean #}
+    {# leaving the queue and finding their place in it again. #}
+    <div class="approve-lines" x-show="lines.length" x-cloak>
+      <p class="approve-lines-head">
+        <span>Items</span>
+        <span x-text="lines.length + (lines.length === 1 ? ' line' : ' lines')"></span>
+      </p>
+      <div class="approve-lines-scroll">
+        <table>
+          <tbody>
+            <template x-for="(line, i) in lines" :key="i">
+              <tr>
+                <td class="approve-line-name">
+                  <span x-text="line.name" :title="line.name"></span>
+                  <em x-text="line.qty + (line.uom ? ' ' + line.uom : '') + ' \u00d7 ' + money(line.rate)"></em>
+                </td>
+                <td class="approve-line-amount" x-text="money(line.amount)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# An order with nothing on it cannot be committed to, so the dialog says #}
+    {# so rather than offering an approval of nothing. #}
+    <p class="approve-empty" x-show="!lines.length" x-cloak>
+      This order has no items on it yet. Add items before approving it.
+    </p>
+
+    {# The figure is the decision, so it is not a row in the list above. #}
+    <div class="approve-amount">
+      <span>Committing</span>
+      <strong>Rs <span x-text="approval?.amount"></span></strong>
+    </div>
+
+    {# Said plainly rather than as a red banner: it is a fact about the action, #}
+    {# not an alarm about a mistake nobody has made yet. #}
+    <p class="approve-note">
+      Approval cannot be undone from this screen. Goods can then be received against the order.
+    </p>
+
+    <form method="post" :action="approval?.url" class="approve-actions">{% csrf_token %}
+      <button type="button" class="approve-cancel" @click="approval = null">Cancel</button>
+      <button type="submit" class="approve-go" x-ref="approveGo" :disabled="!lines.length">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6L9 17l-5-5"></path>
+        </svg>
+        Approve order
+      </button>
+    </form>
+  </div>
+</div>
+
+</div>
+
 <script>
+  // The board's own state: which order, if any, is waiting on an approval
+  // decision. One dialog serves every row, so the row hands over what it says.
+  function poBoard() {
+    var LINES = JSON.parse(document.getElementById('approval-lines').textContent);
+    return {
+      approval: null,
+      // The lines belonging to whatever the dialog is currently asking about.
+      get lines() { return (this.approval && LINES[this.approval.pk]) || []; },
+      askApproval(order) { this.approval = order; },
+      money(value) {
+        return (Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+    };
+  }
+
   // Copy the table as it stands, tab separated, which is what a spreadsheet
   // pastes into cells rather than into one. Built from the rendered table so
   // it carries exactly the columns on screen.
