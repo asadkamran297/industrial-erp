@@ -621,7 +621,12 @@
               {# Approved and waiting on the supplier. Booking the goods in is #}
               {# what happens next, so the row offers it rather than leaving   #}
               {# the reader to go and find the screen for themselves.          #}
-              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_order_detail' order.pk %}#receive"
+              {# Straight to the goods receipt screen with this order already #}
+              {# chosen. The store is booking a delivery in, not reading an     #}
+              {# order, so the row hands them the document rather than the page #}
+              {# the document is about.                                         #}
+              <a class="po-icon-btn po-icon-btn--go"
+                 href="{% url 'inventory:goods_receipt_create' %}?supplier={{ order.supplier_id }}&amp;order={{ order.pk }}"
                  title="Receive &mdash; book the goods in against this order" aria-label="Receive goods against this order">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>

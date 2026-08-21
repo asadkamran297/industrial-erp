@@ -45,7 +45,22 @@
       <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">GRN — Goods Receipt Notes</h1>
       <p class="text-xs text-slate-500 dark:text-slate-400">Purchase orders and their received items.</p>
     </div>
-    <span class="text-xs text-slate-400 dark:text-slate-500">Use &#128438; Print on each GRN row</span>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-400 dark:text-slate-500">Use &#128438; Print on each GRN row</span>
+      {# Booking a delivery in as its own document, for whoever is standing at #}
+      {# the gate with it. The rows below receive against one order already;   #}
+      {# this is the way in for somebody who has not got a row in mind yet.    #}
+      {% if can_edit %}
+      <a href="{% url 'inventory:goods_receipt_create' %}"
+         class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--primary-color)] px-3 text-sm font-semibold text-white transition hover:brightness-95"
+         title="New goods receipt">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14"></path>
+        </svg>
+        New GRN
+      </a>
+      {% endif %}
+    </div>
   </div>
 
   <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">

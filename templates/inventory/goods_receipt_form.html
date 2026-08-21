@@ -1,0 +1,317 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<style>
+  /* The hero: what this delivery is worth, stated once and large. The store
+     supervisor signing for it should not have to add the column up. */
+  .grn-hero {
+    border-radius: .75rem; padding: 1.125rem 1.25rem; color: #fff;
+    background: linear-gradient(135deg, #14532d, #16a34a);
+    box-shadow: 0 10px 24px -12px rgba(20, 83, 45, .55);
+  }
+  .grn-hero-cap { font-size: .6875rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; opacity: .8; }
+  .grn-hero-big { margin-top: .25rem; font-size: 1.875rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .grn-hero-cols { display: flex; gap: .75rem; margin-top: .875rem; border-top: 1px solid rgba(255, 255, 255, .25); padding-top: .75rem; }
+  .grn-hero-cols > div { flex: 1; }
+  .grn-hero-val { margin-top: .125rem; font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* The journal, drawn the way a journal is drawn: account, debit, credit. */
+  .grn-jrnl { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .grn-jrnl th { padding: 0 0 .375rem; font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; }
+  .grn-jrnl th:not(:first-child), .grn-jrnl td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+  .grn-jrnl td { padding: .3125rem 0; border-bottom: 1px dashed #e8eef5; }
+  .dark .grn-jrnl td { border-bottom-color: rgba(30, 41, 59, .9); }
+  /* The credit side is indented, as it is in any handwritten journal. */
+  .grn-jrnl tr.is-credit td:first-child { padding-left: 1rem; }
+  .grn-jrnl tfoot td { border-bottom: 0; border-top: 1.5px solid #cbd5e1; padding-top: .4375rem; font-weight: 800; }
+  .dark .grn-jrnl tfoot td { border-top-color: #334155; }
+  .grn-dash { color: #cbd5e1; }
+
+  .grn-cell { width: 6.5rem; }
+  .grn-cell input {
+    width: 100%; height: 2rem; border-radius: .4375rem; border: 1px solid #cbd5e1;
+    background: #fbfdff; padding: 0 .5rem; font-size: .8125rem; text-align: right;
+    font-variant-numeric: tabular-nums; outline: none;
+  }
+  .grn-cell input:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
+  .dark .grn-cell input { border-color: #334155; background: rgba(15, 23, 42, .6); color: #e2e8f0; }
+  .grn-cell input.is-over { border-color: #e11d48; background: #fff1f2; }
+  .dark .grn-cell input.is-over { border-color: #fb7185; background: rgba(136, 19, 55, .3); }
+</style>
+
+<section class="space-y-5"
+         x-data="grnForm([{% for line in lines %}{ qty: {{ line.max_now|stringformat:'f' }}, rej: 0, rate: {{ line.rate|stringformat:'f' }}, max: {{ line.max_now|stringformat:'f' }} }{% if not forloop.last %}, {% endif %}{% endfor %}])">
+
+  <div class="pur-head-row">
+    <div>
+      <p class="text-xs text-slate-400">Purchase &rsaquo; Goods Receipt</p>
+      <h1 class="pur-title title-accent">Goods Receipt Note (GRN)</h1>
+      <p class="pur-lede">
+        The document that makes stock trustworthy. Goods almost always arrive before the
+        supplier's bill does &mdash; the GRN records the stock the moment it enters the godown and
+        parks its value in a clearing account until the bill turns up.
+      </p>
+    </div>
+    <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:grn_list' %}">GRN Register</a>
+  </div>
+
+  {# Supplier and order are chosen first and reload the page, because the lines #}
+  {# that can be received depend entirely on which order they belong to.        #}
+  <form method="get" class="pur-card">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">What arrived, and against what</h2>
+    </div>
+    <div class="pur-card-body pur-grid">
+      <div>
+        <label class="pur-label" for="supplier">Supplier <span class="pur-req">*</span></label>
+        <select name="supplier" id="supplier" class="form-select" onchange="this.form.submit()">
+          <option value="">Choose a supplier…</option>
+          {% for row in suppliers %}
+          <option value="{{ row.pk }}" {% if selected_supplier and selected_supplier.pk == row.pk %}selected{% endif %}>{{ row.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="pur-label" for="order">Against purchase order <span class="pur-req">*</span></label>
+        <select name="order" id="order" class="form-select" onchange="this.form.submit()">
+          <option value="">Choose an order…</option>
+          {% for row in orders %}
+          <option value="{{ row.pk }}" {% if selected_order and selected_order.pk == row.pk %}selected{% endif %}>
+            {{ row.purchase_num }} &middot; {{ row.purchase_date|date:"d M Y" }} &middot; {{ row.supplier.name }}
+          </option>
+          {% endfor %}
+        </select>
+        <p class="pur-help">Only approved orders with something still outstanding appear here.</p>
+      </div>
+    </div>
+  </form>
+
+  {% if not selected_order %}
+  <div class="pur-card"><div class="pur-empty">
+    {% if orders %}
+      Choose the order this delivery arrived against and its outstanding lines will be listed here.
+    {% else %}
+      Nothing is on order{% if selected_supplier %} from {{ selected_supplier.name }}{% endif %}.<br>
+      Goods are received against an approved purchase order, so there is nothing to book in yet.
+    {% endif %}
+  </div></div>
+  {% else %}
+
+  <form method="post" action="{% url 'inventory:goods_receipt_create' %}">
+    {% csrf_token %}
+    <input type="hidden" name="supplier" value="{{ selected_order.supplier_id }}">
+    <input type="hidden" name="order" value="{{ selected_order.pk }}">
+
+    <div class="grid gap-5 lg:grid-cols-3">
+      <div class="space-y-5 lg:col-span-2">
+
+        <div class="pur-card">
+          <div class="pur-card-head"><h2 class="pur-card-title">Receipt details</h2></div>
+          <div class="pur-card-body">
+            <div class="pur-grid">
+              <div>
+                <label class="pur-label" for="receive_date">Receipt date <span class="pur-req">*</span></label>
+                <input type="date" name="receive_date" id="receive_date" class="form-input" value="{{ today|date:'Y-m-d' }}">
+              </div>
+              <div>
+                <label class="pur-label" for="dc_number">Supplier DC / bilty</label>
+                <input type="text" name="dc_number" id="dc_number" class="form-input" placeholder="DC-77120">
+              </div>
+              <div>
+                <label class="pur-label" for="vehicle">Vehicle</label>
+                <input type="text" name="vehicle" id="vehicle" class="form-input" placeholder="TLA-8842">
+              </div>
+              <div>
+                <label class="pur-label" for="inspected_by">Inspected by</label>
+                <input type="text" name="inspected_by" id="inspected_by" class="form-input" value="Store Supervisor">
+              </div>
+              <div>
+                <label class="pur-label" for="freight">Freight paid</label>
+                <input type="number" step="0.01" min="0" name="freight" id="freight"
+                       class="form-input pur-money" value="0" x-model.number="freight">
+                <p class="pur-help">Capitalised into the stock rate, split across the lines by value — landed cost.</p>
+              </div>
+            </div>
+            <div class="mt-4">
+              <label class="pur-label" for="remarks">Store remarks</label>
+              <textarea name="remarks" id="remarks" rows="2" class="form-input"
+                        placeholder="Quality remarks, condition on arrival, anything rejected and why"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="pur-card">
+          <div class="pur-card-head">
+            <h2 class="pur-card-title">Quantities received</h2>
+            <span class="pur-card-hint">Ordered vs received vs rejected — shortages are captured, not hidden</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="pur-table">
+              <thead>
+                <tr>
+                  <th style="width: 2.5rem;">#</th>
+                  <th>Item</th>
+                  <th class="pur-num">Ordered</th>
+                  <th class="pur-num">Already recd</th>
+                  <th class="pur-num">Max now</th>
+                  <th class="pur-num grn-cell">Received</th>
+                  <th class="pur-num grn-cell">Rejected</th>
+                  <th>Unit</th>
+                  <th class="pur-num grn-cell">Rate</th>
+                  <th class="pur-num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for line in lines %}
+                <tr x-data="{ row: lines[{{ forloop.counter0 }}], max: {{ line.max_now|stringformat:'f' }} }">
+                  <td class="pur-muted">{{ forloop.counter }}</td>
+                  <td>
+                    <span class="pur-strong">{{ line.descr }}</span>
+                    <span class="pur-sub">{{ line.inventory_item.item_code }}</span>
+                  </td>
+                  <td class="pur-num">{{ line.quantity|qty }}</td>
+                  <td class="pur-num">{{ line.total_receive_qty|qty }}</td>
+                  {# The ceiling, stated beside the box rather than discovered #}
+                  {# by having the entry refused after it was typed.           #}
+                  <td class="pur-num" style="color: var(--primary-color); font-weight: 600;">{{ line.max_now|qty }}</td>
+                  <td class="grn-cell">
+                    <input type="number" step="0.0001" min="0" name="qty_{{ line.pk }}"
+                           x-model.number="row.qty" :class="row.qty > max ? 'is-over' : ''"
+                           :max="max" value="{{ line.max_now|stringformat:'f' }}">
+                  </td>
+                  <td class="grn-cell">
+                    <input type="number" step="0.0001" min="0" name="rej_{{ line.pk }}"
+                           x-model.number="row.rej" :max="row.qty" value="0">
+                  </td>
+                  <td>{{ line.uom.title|default:"—" }}</td>
+                  <td class="grn-cell">
+                    <input type="number" step="0.01" min="0" name="rate_{{ line.pk }}"
+                           x-model.number="row.rate" value="{{ line.rate|stringformat:'f' }}">
+                  </td>
+                  <td class="pur-num pur-strong" x-text="money(Math.max(0, row.qty - row.rej) * row.rate)"></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="9">Accepted goods value</td>
+                  <td class="pur-num" x-text="money(goods())"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          <p class="mr-auto text-xs text-slate-500 dark:text-slate-400">
+            Dr Inventory &middot; Cr GRN Clearing. The payable appears only when the bill is entered.
+          </p>
+          <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:grn_list' %}">Cancel</a>
+          <button type="submit" class="pur-btn pur-btn--primary" :disabled="!goods() || over()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
+            Post goods receipt
+          </button>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <div class="grn-hero">
+          <p class="grn-hero-cap">Goods received value</p>
+          <p class="grn-hero-big" x-text="'Rs ' + money(landed())"></p>
+          <div class="grn-hero-cols">
+            <div><p class="grn-hero-cap">Accepted</p><p class="grn-hero-val" x-text="qtyText(accepted())"></p></div>
+            <div><p class="grn-hero-cap">Rejected</p><p class="grn-hero-val" x-text="qtyText(rejected())"></p></div>
+          </div>
+        </div>
+
+        <div class="pur-card">
+          <div class="pur-card-head"><h2 class="pur-card-title">Journal preview</h2></div>
+          <div class="pur-card-body">
+            <table class="grn-jrnl">
+              <thead><tr><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Inventory</td>
+                  <td x-text="money(landed())"></td>
+                  <td class="grn-dash">&mdash;</td>
+                </tr>
+                <tr class="is-credit">
+                  <td>GRN Clearing (received not invoiced)</td>
+                  <td class="grn-dash">&mdash;</td>
+                  <td x-text="money(landed())"></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style="color: #059669;">Balanced &check;</td>
+                  <td x-text="money(landed())"></td>
+                  <td x-text="money(landed())"></td>
+                </tr>
+              </tfoot>
+            </table>
+            <p class="pur-help">No payable yet, and no input tax yet — both arrive with the supplier's bill.</p>
+          </div>
+        </div>
+
+        <div class="pur-card">
+          <div class="pur-card-head"><h2 class="pur-card-title">GRN Clearing — what it is for</h2></div>
+          <div class="pur-card-body">
+            <p class="pur-help" style="margin-top: 0;">
+              When goods arrive without a bill, the value has to sit somewhere. It sits in
+              <b>GRN Clearing</b>, a liability.
+            </p>
+            <p class="pur-help">
+              When the supplier's bill arrives, the clearing account is debited and the real payable
+              is credited — the two net to zero.
+            </p>
+            <p class="pur-help">
+              <b>Whatever is left in GRN Clearing is exactly the goods received that nobody has been
+              billed for.</b> Without it, payables are understated and there is no way to say by how much.
+            </p>
+            <div class="pur-kv pur-kv--total" style="margin-top: .75rem;">
+              <span class="pur-kv-key">Balance now</span>
+              <span class="pur-kv-val">{{ clearing_balance|amount }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+</section>
+
+<script>
+  /* The figures on this page are arithmetic over the boxes, so they are worked
+     out in the browser as they are typed. Nothing here decides anything: the
+     server recomputes every one of them before posting, and refuses the entry
+     if a quantity is above what the order still has outstanding. */
+  function grnForm(rows) {
+    return {
+      freight: 0,
+      /* One row per order line, seeded with the balance outstanding. Every
+         figure on the page is arithmetic over this list. */
+      lines: rows,
+      accepted() { return this.lines.reduce((total, row) => total + Math.max(0, row.qty - row.rej), 0); },
+      rejected() { return this.lines.reduce((total, row) => total + (Number(row.rej) || 0), 0); },
+      goods() { return this.lines.reduce((total, row) => total + Math.max(0, row.qty - row.rej) * row.rate, 0); },
+      /* Freight is part of what the goods cost to bring in, so the value that
+         lands in stock -- and in the journal beside it -- carries it. */
+      landed() { return this.goods() + (Number(this.freight) || 0); },
+      /* A quantity above what the order still has outstanding is refused by the
+         server anyway; catching it here means it is refused before the page is
+         submitted rather than after. */
+      over() { return this.lines.some(row => row.qty > row.max); },
+      money(value) {
+        return (Math.round(value * 100) / 100).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+      qtyText(value) {
+        return (Math.round(value * 10000) / 10000).toLocaleString('en-PK', { maximumFractionDigits: 4 });
+      },
+    };
+  }
+</script>
+{% endblock %}
