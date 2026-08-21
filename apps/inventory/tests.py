@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.configurations.models import City
-from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED
+from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_RAISED, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED
 
 from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseMaster
 from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
@@ -81,7 +81,11 @@ class InventoryFlowTests(TestCase):
             updated_by=self.user,
         )
 
-        self.assertEqual(po.status, STATUS_CREATED)
+        # An order starts raised, not created: "created" was a status this
+        # model no longer has, and the default has been STATUS_RAISED for some
+        # time. The rest of what this test checks -- part received, then fully
+        # received -- is unchanged.
+        self.assertEqual(po.status, STATUS_RAISED)
 
         receive_purchase_order_item(
             purchase_order_item=po_item,

@@ -22,6 +22,13 @@ STATUS_RETURNED: Final = "returned"
 STATUS_PARTIAL_RETURNED: Final = "partial_returned"
 STATUS_PARTIAL_RECEIVED: Final = "partial_received"
 STATUS_FULLY_RECEIVED: Final = "fully_received"
+# An order nobody expects the rest of any more. Distinct from cancelled, which
+# means nothing arrived at all: a short-closed order was part delivered and the
+# balance was deliberately written off rather than left hanging for ever.
+STATUS_CLOSED_SHORT: Final = "closed_short"
+# A supplier bill, from entered to matched against what actually arrived.
+STATUS_MATCHED: Final = "matched"
+STATUS_REVERSED: Final = "reversed"
 
 ALLOWANCE: Final = "allowance"
 DEDUCTION: Final = "deduction"
@@ -204,6 +211,22 @@ GL_SALES_REVENUE_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Revenue")
 GL_SALES_DISCOUNT_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Discount")
 GL_SALES_RETURN_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Returns")
 GL_COGS_PATH: Final = ("EXPENSES", "Direct Expenses", "Cost of Goods Sold")
+# Goods are in the godown long before the supplier's bill turns up. Their value
+# has to sit somewhere in the meantime, and it sits here: a liability that says
+# "received, not yet invoiced". The bill then debits it away and credits the
+# real payable, so the two net to zero. Whatever is left in this account at any
+# moment is exactly the goods received that nobody has billed for -- without it
+# payables are understated and there is no way to say by how much.
+GL_GRN_CLEARING_PATH: Final = ("LIABILITIES", "Current Liabilities", "GRN Clearing")
+# Sales tax paid to a supplier is money the business gets back, so it is an
+# asset until it is set off, not a cost of the goods. Loading it onto stock
+# would overstate both inventory and, later, cost of sales.
+GL_INPUT_TAX_PATH: Final = ("ASSETS", "Current Assets", "Input Sales Tax")
+# Where a supplier bill that disagrees with the goods receipt lands. The stock
+# was already valued when it arrived; re-valuing it now would rewrite the cost
+# of units that may already have been sold, so the difference is taken to the
+# profit and loss account instead.
+GL_PURCHASE_VARIANCE_PATH: Final = ("EXPENSES", "Direct Expenses", "Purchase Price Variance")
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
 
 # Counterparts for an inventory reconciliation. A genuine count difference is a
@@ -325,6 +348,11 @@ LEDGER_PURCHASE_RETURN: Final = "PURCHASE_RETURN"
 LEDGER_SALE: Final = "SALE"
 LEDGER_SALE_RETURN: Final = "SALE_RETURN"
 LEDGER_ADJUSTMENT: Final = "ADJUSTMENT"
+# Stock taken back out because the movement that put it in was withdrawn. Kept
+# apart from an adjustment: an adjustment is a count difference the business
+# discovered, a reversal is an entry the business retracted, and reading the
+# item ledger is a great deal easier when the two are not the same word.
+LEDGER_REVERSAL: Final = "REVERSAL"
 CUSTOMER_LEDGER_PURCHASE: Final = "PURCHASE"
 CUSTOMER_LEDGER_CASH_PAYMENT: Final = "CASH_PAYMENT"
 CUSTOMER_LEDGER_RETURN: Final = "RETURN"
@@ -361,6 +389,7 @@ INV_TRANSACTION_TYPE_CHOICES: Final[StatusChoices] = (
     (LEDGER_SALE, "Sale"),
     (LEDGER_SALE_RETURN, "Sale Return"),
     (LEDGER_ADJUSTMENT, "Adjustment"),
+    (LEDGER_REVERSAL, "Reversal"),
 )
 
 INV_CUSTOMER_LEDGER_TRANSACTION_TYPE_CHOICES: Final[StatusChoices] = (
@@ -383,8 +412,57 @@ INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_RAISED, "Raised"),
     (STATUS_PARTIAL_RECEIVED, "Partial Received"),
     (STATUS_FULLY_RECEIVED, "Fully Received"),
+    (STATUS_CLOSED_SHORT, "Closed Short"),
     (STATUS_CANCELLED, "Cancelled"),
 )
+
+INV_PURCHASE_BILL_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_POSTED, "Posted"),
+    (STATUS_REVERSED, "Reversed"),
+)
+
+# Why an order was abandoned. A free-text box here fills up with "cancelled" and
+# tells nobody anything six months later, so the reason is picked from a list
+# and the list is short enough that the honest answer is always on it.
+INV_PO_CANCEL_REASONS: Final[StatusChoices] = (
+    ("entered_in_error", "Entered in error"),
+    ("wrong_supplier", "Raised on the wrong supplier"),
+    ("duplicate", "Duplicate of another order"),
+    ("rate_renegotiated", "Cancelled after the rate was renegotiated"),
+    ("no_longer_required", "No longer required"),
+)
+
+INV_PO_CLOSE_SHORT_REASONS: Final[StatusChoices] = (
+    ("supplier_short", "Supplier could not supply the balance"),
+    ("season_over", "Crop or season finished -- no more available"),
+    ("quality_rejected", "Quality rejected -- balance not wanted"),
+    ("over_ordered", "Ordered in excess by mistake"),
+    ("accepted_as_final", "Delivered short and accepted as final"),
+)
+
+# Why a posted document was reversed. A reversal without one is unusable to
+# whoever reads the books afterwards, which is the whole point of keeping it.
+INV_REVERSAL_REASONS: Final[StatusChoices] = (
+    ("entered_in_error", "Entered in error"),
+    ("wrong_quantity", "Wrong quantity entered"),
+    ("wrong_rate", "Wrong rate entered"),
+    ("wrong_supplier", "Wrong supplier selected"),
+    ("duplicate", "Duplicate entry"),
+    ("wrong_date", "Wrong date or period"),
+    ("cancelled_by_supplier", "Cancelled by the supplier"),
+)
+
+# Above this the order is a commitment somebody senior has to agree to, so it
+# stays a draft until they do. Held as a setting rather than a constant because
+# the figure is a matter of company policy, not of software.
+CONF_PO_APPROVAL_LIMIT_KEY: Final = "inventory.purchase_order.approval_limit"
+CONF_PO_APPROVAL_LIMIT_DEFAULT: Final = "500000.00"
+
+# How far a supplier's bill may drift from the value of the goods that were
+# received against it before the system stops accepting it without a second
+# pair of eyes. Two percent is the usual commercial rounding; beyond that
+# somebody is billing for something that did not arrive.
+INV_BILL_MATCH_TOLERANCE_PERCENT: Final = "2.00"
 
 INV_RETURN_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_CREATED, "Created"),
@@ -440,6 +518,11 @@ ACTION_VIEW: Final[str] = "view"
 ACTION_ADD: Final[str] = "add"
 ACTION_EDIT: Final[str] = "edit"
 ACTION_DELETE: Final[str] = "delete"
+# Committing money on somebody else's behalf, and unwinding a posted entry.
+# Held apart from "edit" so the person who raises a document is not, by that
+# fact alone, the person who approves it or withdraws it.
+ACTION_APPROVE: Final[str] = "approve"
+ACTION_REVERSE: Final[str] = "reverse"
 
 PAGE_ACTIONS: Final[tuple[str, ...]] = (
     ACTION_INDEX,
@@ -447,6 +530,8 @@ PAGE_ACTIONS: Final[tuple[str, ...]] = (
     ACTION_ADD,
     ACTION_EDIT,
     ACTION_DELETE,
+    ACTION_APPROVE,
+    ACTION_REVERSE,
 )
 
 ACTION_LABELS: Final[dict[str, str]] = {
@@ -455,4 +540,6 @@ ACTION_LABELS: Final[dict[str, str]] = {
     ACTION_ADD: "Add",
     ACTION_EDIT: "Edit",
     ACTION_DELETE: "Delete",
+    ACTION_APPROVE: "Approve",
+    ACTION_REVERSE: "Reverse",
 }

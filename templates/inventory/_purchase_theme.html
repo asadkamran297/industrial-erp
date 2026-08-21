@@ -1,0 +1,222 @@
+<style>
+  /* The look shared by every purchase screen: the board, the bills, the goods
+     receipts and the panels on an order. One file, because the alternative was
+     the same rules pasted into four templates and drifting apart the first time
+     one of them was touched.
+
+     Plain CSS rather than utility classes: the Tailwind bundle is prebuilt, so
+     anything new here would need a rebuild to exist at all. Every rule is
+     written light-first with a `.dark` counterpart directly under it, so a
+     colour is never defined in only one of the two themes. */
+
+  /* ── Page head ────────────────────────────────────────────────────────── */
+  .pur-head-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .pur-title { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; }
+  /* One paragraph, held to a readable measure. A line of body text running the
+     full width of a wide screen is not read, it is skimmed and lost. */
+  .pur-lede { margin-top: .375rem; max-width: 58ch; font-size: .8125rem; line-height: 1.6; color: #64748b; }
+  .dark .pur-lede { color: #94a3b8; }
+
+  /* ── Tiles ────────────────────────────────────────────────────────────── */
+  /* Same shape as the order board: a coloured stripe, an icon in the tile's own
+     hue, the figure, and one line saying what it means. The modifier sets three
+     custom properties and nothing else. */
+  .pur-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+  .pur-tile {
+    --tone: #64748b; --tone-soft: #f1f5f9; --tone-line: #e2e8f0;
+    position: relative; display: flex; align-items: center; gap: .75rem;
+    overflow: hidden; border: 1px solid var(--tone-line); border-radius: .75rem;
+    background: var(--tone-soft); padding: .75rem 1rem;
+  }
+  .pur-tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: .25rem; background: var(--tone); }
+  .pur-tile--money  { --tone: #7c3aed; --tone-soft: #f5f3ff; --tone-line: #ddd6fe; }
+  .pur-tile--wait   { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+  .pur-tile--goods  { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .pur-tile--alert  { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+  .pur-tile--good   { --tone: #059669; --tone-soft: #ecfdf5; --tone-line: #a7f3d0; }
+  .dark .pur-tile { --tone-soft: rgba(30, 41, 59, .45); --tone-line: #1e293b; }
+  .dark .pur-tile--money { --tone: #a78bfa; --tone-soft: rgba(76, 29, 149, .22); --tone-line: rgba(139, 92, 246, .35); }
+  .dark .pur-tile--wait  { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .35); }
+  .dark .pur-tile--goods { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
+  .dark .pur-tile--alert { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
+  .dark .pur-tile--good  { --tone: #34d399; --tone-soft: rgba(6, 78, 59, .25); --tone-line: rgba(16, 185, 129, .35); }
+
+  a.pur-tile { transition: box-shadow .15s ease, transform .1s ease; }
+  a.pur-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(2, 6, 23, .35); }
+  a.pur-tile:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+
+  .pur-tile-icon {
+    display: grid; place-items: center; flex: 0 0 auto;
+    width: 2.25rem; height: 2.25rem; border-radius: .625rem;
+    background: color-mix(in srgb, var(--tone) 16%, transparent); color: var(--tone);
+  }
+  .pur-tile-icon svg { width: 1.125rem; height: 1.125rem; }
+  .pur-tile-body { min-width: 0; }
+  .pur-tile-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tone); }
+  .pur-tile-value { font-size: 1.375rem; font-weight: 800; line-height: 1.15; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .dark .pur-tile-value { color: #f1f5f9; }
+  .pur-tile-note { margin-top: .125rem; font-size: .75rem; line-height: 1.35; color: #64748b; }
+  .dark .pur-tile-note { color: #94a3b8; }
+  .pur-tile-note--alert { color: var(--tone); font-weight: 600; }
+
+  /* ── Card ─────────────────────────────────────────────────────────────── */
+  .pur-card {
+    border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -18px rgba(15, 23, 42, .25);
+  }
+  .dark .pur-card { border-color: #1e293b; background: #0f172a; }
+  .pur-card-head {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: .75rem; border-bottom: 1px solid #f1f5f9; padding: .875rem 1.125rem;
+  }
+  .dark .pur-card-head { border-bottom-color: rgba(30, 41, 59, .8); }
+  .pur-card-title { font-size: .875rem; font-weight: 700; }
+  .pur-card-hint { font-size: .75rem; color: #94a3b8; }
+  .pur-card-body { padding: 1.125rem; }
+  /* A table fills its card to the edges; padding round it only wastes the row. */
+  .pur-card-body--flush { padding: 0; }
+
+  /* ── Table ────────────────────────────────────────────────────────────── */
+  .pur-table { width: 100%; text-align: left; font-size: .875rem; border-collapse: collapse; }
+  .pur-table thead th {
+    padding: .75rem 1rem; border-bottom: 1px solid #e2e8f0;
+    font-size: .6875rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: #64748b; white-space: nowrap; background: #fafbfd;
+  }
+  .dark .pur-table thead th { border-bottom-color: #1e293b; background: rgba(30, 41, 59, .5); color: #94a3b8; }
+  .pur-table tbody td { padding: .8125rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .pur-table tbody td { border-bottom-color: rgba(30, 41, 59, .8); }
+  .pur-table tbody tr:last-child td { border-bottom: 0; }
+  .pur-table tbody tr:hover { background: #f8fafc; }
+  .dark .pur-table tbody tr:hover { background: rgba(30, 41, 59, .4); }
+  .pur-table tfoot td {
+    padding: .8125rem 1rem; background: #fafbfd; font-weight: 800;
+    border-top: 2px solid #e2e8f0; font-variant-numeric: tabular-nums;
+  }
+  .dark .pur-table tfoot td { background: rgba(30, 41, 59, .5); border-top-color: #1e293b; }
+
+  /* Figures line up under one another or they cannot be compared at a glance. */
+  .pur-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pur-strong { font-weight: 700; }
+  .pur-muted { color: #94a3b8; }
+  .dark .pur-muted { color: #64748b; }
+  .pur-sub { display: block; margin-top: .125rem; font-size: .75rem; color: #94a3b8; }
+  .dark .pur-sub { color: #64748b; }
+  /* A document number is one token and never breaks, however tight it gets. */
+  .pur-doc { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  a.pur-doc:hover { text-decoration: underline; }
+  /* A row whose entry has been withdrawn: still readable, plainly spent. */
+  .pur-void td { color: #94a3b8; }
+  .dark .pur-void td { color: #64748b; }
+
+  .pur-empty { padding: 3rem 1.25rem; text-align: center; font-size: .8125rem; line-height: 1.6; color: #94a3b8; }
+
+  /* ── Pills ────────────────────────────────────────────────────────────── */
+  .pur-pill {
+    display: inline-flex; align-items: center; gap: .375rem;
+    border-radius: 9999px; padding: .25rem .625rem;
+    font-size: .75rem; font-weight: 600; white-space: nowrap;
+  }
+  .pur-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .pur-pill--done { color: #047857; background: #d1fae5; }
+  .pur-pill--wait { color: #b45309; background: #fef3c7; }
+  .pur-pill--bad  { color: #dc2626; background: #fee2e2; }
+  .pur-pill--dead { color: #475569; background: #e2e8f0; }
+  .pur-pill--info { color: #7c3aed; background: #ede9fe; }
+  .dark .pur-pill--done { color: #6ee7b7; background: rgba(6, 78, 59, .4); }
+  .dark .pur-pill--wait { color: #fcd34d; background: rgba(120, 53, 15, .4); }
+  .dark .pur-pill--bad  { color: #fca5a5; background: rgba(127, 29, 29, .4); }
+  .dark .pur-pill--dead { color: #cbd5e1; background: rgba(51, 65, 85, .6); }
+  .dark .pur-pill--info { color: #c4b5fd; background: rgba(76, 29, 149, .4); }
+
+  /* ── Notes ────────────────────────────────────────────────────────────── */
+  /* A note says something about the state of the books. It earns a border and a
+     tint; it does not earn a shout. */
+  .pur-note {
+    --tone: #64748b; --tone-soft: #f8fafc; --tone-line: #e2e8f0;
+    display: flex; gap: .75rem; border: 1px solid var(--tone-line); border-left-width: 3px;
+    border-left-color: var(--tone); border-radius: .625rem; background: var(--tone-soft);
+    padding: .8125rem 1rem; font-size: .8125rem; line-height: 1.55; color: #334155;
+  }
+  .dark .pur-note { color: #cbd5e1; --tone-soft: rgba(30, 41, 59, .4); --tone-line: #1e293b; }
+  .pur-note--good { --tone: #059669; --tone-soft: #ecfdf5; --tone-line: #a7f3d0; }
+  .pur-note--warn { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+  .pur-note--bad  { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+  .pur-note--info { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .dark .pur-note--good { --tone: #34d399; --tone-soft: rgba(6, 78, 59, .25); --tone-line: rgba(16, 185, 129, .3); }
+  .dark .pur-note--warn { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .3); }
+  .dark .pur-note--bad  { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .3); }
+  .dark .pur-note--info { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .3); }
+  .pur-note-icon { flex: 0 0 auto; color: var(--tone); }
+  .pur-note-icon svg { width: 1.125rem; height: 1.125rem; }
+  .pur-note b { font-weight: 700; }
+  .pur-note p + p { margin-top: .375rem; }
+
+  /* ── Key/value ────────────────────────────────────────────────────────── */
+  /* Label left, figure right, both on one baseline. What a document's summary
+     always is, so it is one rule rather than a grid rebuilt per screen. */
+  .pur-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 1.5rem; padding: .4375rem 0; font-size: .8125rem; }
+  .pur-kv + .pur-kv { border-top: 1px solid #f1f5f9; }
+  .dark .pur-kv + .pur-kv { border-top-color: rgba(30, 41, 59, .8); }
+  .pur-kv dt, .pur-kv .pur-kv-key { color: #64748b; }
+  .dark .pur-kv dt, .dark .pur-kv .pur-kv-key { color: #94a3b8; }
+  .pur-kv dd, .pur-kv .pur-kv-val { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  /* The line the eye is meant to stop on. */
+  .pur-kv--total { border-top: 2px solid #0f172a !important; margin-top: .25rem; padding-top: .625rem; font-size: .9375rem; }
+  .dark .pur-kv--total { border-top-color: #e2e8f0 !important; }
+  .pur-kv--total dd, .pur-kv--total .pur-kv-val { font-weight: 800; }
+
+  /* ── Fields ───────────────────────────────────────────────────────────── */
+  .pur-label { display: block; margin-bottom: .375rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+  .dark .pur-label { color: #94a3b8; }
+  .pur-req { color: #e11d48; }
+  .pur-help { margin-top: .375rem; font-size: .6875rem; line-height: 1.45; color: #94a3b8; }
+  .dark .pur-help { color: #64748b; }
+  .pur-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  /* A date box has to fit what the browser draws in it, which is not the value
+     we set: Chrome renders dd-mmm-yyyy with spacing of its own and then hangs a
+     calendar button off the right-hand end. */
+  .pur-card input[type="date"] { min-width: 11.5rem; }
+  .pur-card input[type="date"]::-webkit-calendar-picker-indicator { margin-left: .25rem; }
+  /* A figure is typed, not stepped, and reads right-aligned like every other. */
+  .pur-money { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────── */
+  .pur-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .375rem;
+    height: 2.25rem; border-radius: .5rem; padding: 0 .875rem;
+    font-size: .8125rem; font-weight: 650; white-space: nowrap;
+    border: 1px solid transparent; transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .pur-btn svg { width: .9375rem; height: .9375rem; }
+  .pur-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .pur-btn--primary { background: var(--primary-color); color: #fff; box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--primary-color) 55%, transparent); }
+  .pur-btn--primary:hover { filter: brightness(.94); }
+  .pur-btn--ghost { border-color: #e2e8f0; background: #fff; color: #334155; }
+  .pur-btn--ghost:hover { background: #f8fafc; }
+  .dark .pur-btn--ghost { border-color: #1e293b; background: transparent; color: #cbd5e1; }
+  .dark .pur-btn--ghost:hover { background: rgba(30, 41, 59, .6); }
+  /* Withdrawing a posted entry is not a routine action and does not dress as
+     one, but it is legitimate work -- so it is outlined, not filled red. */
+  .pur-btn--danger { border-color: #fecdd3; background: #fff; color: #e11d48; }
+  .pur-btn--danger:hover { background: #fff1f2; }
+  .dark .pur-btn--danger { border-color: rgba(244, 63, 94, .35); background: transparent; color: #fb7185; }
+  .dark .pur-btn--danger:hover { background: rgba(136, 19, 55, .25); }
+  .pur-btn--sm { height: 1.875rem; padding: 0 .625rem; font-size: .75rem; }
+  .pur-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ── Document header, for a single bill or receipt ────────────────────── */
+  .pur-doc-head {
+    display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
+    gap: 1.25rem; border-bottom: 2px solid #0f172a; padding-bottom: .875rem;
+  }
+  .dark .pur-doc-head { border-bottom-color: #e2e8f0; }
+  .pur-doc-co { font-size: 1.125rem; font-weight: 800; letter-spacing: -.01em; }
+  .pur-doc-kind { font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--primary-color); }
+  .pur-doc-no { font-size: 1.125rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  @media print {
+    .pur-noprint { display: none !important; }
+    .pur-card { box-shadow: none; border-color: #cbd5e1; break-inside: avoid; }
+  }
+</style>

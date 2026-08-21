@@ -18,6 +18,9 @@ from apps.core.constants import (
     CASH_FLOW_SECTION_LABELS,
     GL_CASH_PATH,
     GL_COGS_PATH,
+    GL_GRN_CLEARING_PATH,
+    GL_INPUT_TAX_PATH,
+    GL_PURCHASE_VARIANCE_PATH,
     GL_INVENTORY_ADJUSTMENT_PATH,
     GL_INVENTORY_PATH,
     GL_OPENING_EQUITY_PATH,
@@ -678,7 +681,14 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
     """Book goods received against a purchase order.
 
         Dr Inventory            landed cost of the goods received
-            Cr Supplier payable     amount now owed to the supplier
+            Cr GRN Clearing         value received that nobody has billed for yet
+
+    The payable is deliberately *not* credited here. Goods almost always arrive
+    before the supplier's invoice does, and crediting the supplier at the gate
+    would mean guessing the amount they are going to ask for. Instead the value
+    waits in GRN Clearing; entering the bill moves it across to the real
+    payable. Whatever is left in that account is the goods received and not yet
+    invoiced — a figure the books would otherwise have no way of stating.
 
     Landed cost includes apportioned freight, so the asset carries what the
     goods actually cost to bring in — which is what the later COGS entry
@@ -688,7 +698,7 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
     value = (amount or zero).quantize(TWO_DP)
     if not supplier:
         raise ValidationError("A supplier is required to post a goods receipt to the general ledger.")
-    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
+    clearing = gl_account(GL_GRN_CLEARING_PATH, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
     return _post_voucher(
@@ -696,12 +706,101 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
         voucher_type=VOUCHER_TYPE_PURCHASE,
         voucher_date=receipt.receive_date,
         settlement_mode=SETTLEMENT_CREDIT,
-        account_no=supplier_account.code,
+        account_no=clearing.code,
         remarks=f"Auto-posted from goods receipt {receipt.grn_number}",
         entries=[
             (inventory.code, value, zero, f"Stock received on {receipt.grn_number}"),
-            (supplier_account.code, zero, value, f"Payable to {supplier.name} on {receipt.grn_number}"),
+            (clearing.code, zero, value, f"Received from {supplier.name}, not yet invoiced ({receipt.grn_number})"),
         ],
+        user=user,
+    )
+
+
+def post_purchase_bill_to_gl(*, bill, user=None):
+    """Book a supplier's invoice against goods already received.
+
+        Dr GRN Clearing         value released, at what the goods came in at
+        Dr Input Sales Tax      tax the supplier charged, recoverable
+        Dr/Cr Purchase Price Variance   the bill disagreeing with the receipt
+            Cr Supplier payable     what is now actually owed
+
+    The stock is not touched. It was valued when it arrived, and some of those
+    units may already have been sold — rewriting their cost now would change a
+    gross profit that has already been reported. The difference goes to the
+    profit and loss account in the period the bill was entered, which is where
+    a rate that was not the agreed one belongs.
+    """
+    zero = Decimal("0.00")
+    supplier = bill.supplier
+    if not supplier:
+        raise ValidationError("A supplier is required to post a purchase bill to the general ledger.")
+
+    cleared = (bill.cleared_amount or zero).quantize(TWO_DP)
+    tax = (bill.tax_amount or zero).quantize(TWO_DP)
+    payable = (bill.total_amount or zero).quantize(TWO_DP)
+    variance = (bill.variance_amount or zero).quantize(TWO_DP)
+
+    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
+    clearing = gl_account(GL_GRN_CLEARING_PATH, user=user)
+
+    entries = [(clearing.code, cleared, zero, f"GRN clearing released on {bill.bill_num}")]
+    if tax:
+        entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
+                        f"Input sales tax on {bill.supplier_invoice_num}"))
+    if variance:
+        variance_account = gl_account(GL_PURCHASE_VARIANCE_PATH, user=user)
+        # Billed above what the goods were received at is a cost; billed below
+        # is a credit back. Both sides of the same account, never two accounts.
+        if variance > zero:
+            entries.append((variance_account.code, variance, zero,
+                            f"Billed above goods receipt value on {bill.bill_num}"))
+        else:
+            entries.append((variance_account.code, zero, -variance,
+                            f"Billed below goods receipt value on {bill.bill_num}"))
+    entries.append((supplier_account.code, zero, payable,
+                    f"Payable to {supplier.name} on {bill.supplier_invoice_num}"))
+
+    return _post_voucher(
+        source_ref=f"inv_purchase_bills:{bill.pk}",
+        voucher_type=VOUCHER_TYPE_PURCHASE,
+        voucher_date=bill.bill_date,
+        settlement_mode=SETTLEMENT_CREDIT,
+        account_no=supplier_account.code,
+        remarks=f"Auto-posted from purchase bill {bill.bill_num} ({bill.supplier_invoice_num})",
+        entries=entries,
+        user=user,
+    )
+
+
+def reverse_gl_posting(*, source_ref, reversal_ref, voucher_date, remarks, user=None):
+    """Mirror an existing voucher: every debit becomes a credit and vice versa.
+
+    Nothing is deleted or edited. The original voucher stays exactly as posted
+    and a second one cancels it, so the pair reads as what actually happened —
+    an entry was made and then withdrawn — instead of pretending it never was.
+    Deleting the original would break the voucher sequence, take the supporting
+    document out of the audit trail, and silently restate a period that may
+    already have been reported on.
+
+    Returns ``None`` when the original never posted anything, which is the
+    right answer for a document that had no ledger effect to begin with.
+    """
+    original = AccountVoucher.objects.filter(source_ref=source_ref).first()
+    if not original:
+        return None
+    entries = [
+        (line.account_no, line.credit_amount, line.debit_amount, f"Reversal of {original.voucher_no}")
+        for line in original.lines.all().order_by("line_number")
+    ]
+    return _post_voucher(
+        source_ref=reversal_ref,
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=voucher_date,
+        settlement_mode=original.settlement_mode,
+        account_no=original.account_no,
+        party_account_no=original.party_account_no,
+        remarks=remarks,
+        entries=entries,
         user=user,
     )
 

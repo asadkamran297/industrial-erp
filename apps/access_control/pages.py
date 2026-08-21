@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 
 from apps.core.constants import (
     ACTION_ADD,
+    ACTION_APPROVE,
+    ACTION_REVERSE,
     ACTION_DELETE,
     ACTION_EDIT,
     ACTION_INDEX,
@@ -18,7 +20,7 @@ from apps.core.constants import (
     PAGE_ACTIONS,
 )
 
-CRUD = PAGE_ACTIONS
+CRUD = (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT, ACTION_DELETE)
 LIST_ONLY = (ACTION_INDEX,)
 READ_ONLY = (ACTION_INDEX, ACTION_VIEW)
 MASTER = (ACTION_INDEX, ACTION_ADD, ACTION_EDIT, ACTION_DELETE)
@@ -50,8 +52,8 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("inventory.items", "Items", "Inventory", MASTER_NO_DELETE),
     Page("inventory.item_ledger", "Item Ledger", "Inventory", READ_ONLY),
     Page("inventory.customer_ledger", "Customer Ledger", "Inventory", READ_ONLY),
-    Page("inventory.purchase_orders", "Purchase Orders", "Inventory", CRUD),
-    Page("inventory.grn", "GRN", "Inventory", READ_ONLY + (ACTION_EDIT,)),
+    Page("inventory.purchase_orders", "Purchase Orders", "Inventory", CRUD + (ACTION_APPROVE, ACTION_REVERSE)),
+    Page("inventory.grn", "GRN", "Inventory", READ_ONLY + (ACTION_EDIT, ACTION_REVERSE)),
     Page("inventory.manual_transaction", "Manual Transaction", "Inventory", CRUD),
     Page("inventory.customers", "Customers", "Inventory", MASTER_NO_DELETE),
     Page("inventory.pos_sales", "POS Sales", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),

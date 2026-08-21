@@ -242,12 +242,16 @@
             <th class="px-4 py-3">Receive Date</th>
             <th class="px-4 py-3 text-right">Qty</th>
             <th class="px-4 py-3 text-right">Retail Price</th>
+            <th class="px-4 py-3">Status</th>
             <th class="px-4 py-3"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {% for grn in grns %}
-          <tr>
+          {# A reversed receipt and its mirror both stay on the register, greyed #}
+          {# rather than hidden: the pair nets to nothing, and that is a fact    #}
+          {# about the goods worth being able to read.                          #}
+          <tr {% if grn.reversed or grn.reversal_of_id %}class="text-slate-400"{% endif %}>
             <td class="px-4 py-3 font-medium">{{ grn.grn_number }}</td>
             <td class="px-4 py-3">
               <a href="{% url 'inventory:purchase_order_detail' grn.purchase_order_item.purchase_order_id %}"
@@ -258,6 +262,22 @@
             <td class="px-4 py-3 text-right">{{ grn.quantity|qty }}</td>
             <td class="px-4 py-3 text-right">{{ grn.retail_price|amount }}</td>
             <td class="px-4 py-3">
+              {% if grn.reversed %}<span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Reversed</span>
+              {% elif grn.reversal_of_id %}<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Reversal</span>
+              {% elif grn.pending_bill_qty %}<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Not billed</span>
+              {% else %}<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Billed</span>{% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if grn.can_reverse and can_reverse_perm %}
+              <form method="post" action="{% url 'inventory:goods_receipt_reverse' grn.pk %}" class="mb-2 flex items-center gap-1">
+                {% csrf_token %}
+                <select name="reason" class="form-select text-xs" style="max-width:11rem;">
+                  {% for value, label in reversal_form.reason.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700"
+                        title="Reverse &mdash; posts a mirror-image receipt; nothing is deleted">Reverse</button>
+              </form>
+              {% endif %}
               <a href="{% url 'inventory:grn_print' grn.purchase_order_item.purchase_order_id %}?receipts={{ grn.pk }}&reprint=1"
                  class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200" title="Reprint GRN">
                 &#128438; Print
@@ -265,7 +285,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
+          <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

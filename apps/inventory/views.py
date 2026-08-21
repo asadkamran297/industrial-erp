@@ -19,7 +19,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Upd
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, YES
+from apps.core.constants import INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
@@ -27,11 +27,11 @@ from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
-from .forms import CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
-from .models import Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
+from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
+from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
-from .services import amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
 
@@ -1664,15 +1664,141 @@ class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
 
 
 class PurchaseOrderRaiseView(InventoryManageMixin, View):
+    """Release a draft order to the supplier.
+
+    Guarded by ``edit`` and not by ``approve``, because most orders are within
+    the buyer's own limit and releasing those is ordinary work. The service
+    decides whether this particular order needed a second signature, which is
+    the only place that can be decided -- it depends on the amount.
+    """
+
     page = "inventory.purchase_orders"
     action = "edit"
+
     def post(self, request, pk):
-        order = get_object_or_404(PurchaseOrder, pk=pk, status=STATUS_DRAFT)
-        order.status = STATUS_RAISED
-        order.updated_by = request.user
-        order.save(update_fields=["status", "updated_by", "updated_at"])
-        messages.success(request, f"{order.purchase_num} raised.")
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        try:
+            approve_purchase_order(order=order, user=request.user)
+            messages.success(request, f"{order.purchase_num} approved and released to the supplier.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
         return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+
+
+class PurchaseOrderCancelView(InventoryManageMixin, View):
+    """Abandon an order nothing has arrived against.
+
+    Not a delete: the number stays in the sequence and the reason stays on the
+    record, so a cancelled order can be told apart from one that never existed.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "approve"
+
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        form = PurchaseOrderCancelForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Pick a reason for cancelling this order.")
+            return redirect("inventory:purchase_order_detail", pk=pk)
+        try:
+            cancel_purchase_order(order=order, reason=form.cleaned_data["reason"], user=request.user)
+            messages.success(request, f"{order.purchase_num} cancelled. The number stays in the sequence.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:purchase_order_detail", pk=pk)
+
+
+class PurchaseOrderCloseShortView(InventoryManageMixin, View):
+    """Give up on the balance of a part-delivered order.
+
+    Creates no accounting entry -- an order never had one. What it releases is
+    the commitment, so the outstanding quantity stops counting as goods on
+    order and stops propping up a reorder decision that will never be met.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "approve"
+
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        form = PurchaseOrderCloseShortForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Pick a reason for closing this order short.")
+            return redirect("inventory:purchase_order_detail", pk=pk)
+        try:
+            closed = close_purchase_order_short(order=order, reason=form.cleaned_data["reason"], user=request.user)
+            messages.success(
+                request,
+                f"{closed.purchase_num} closed short — {closed.short_qty} units "
+                f"({closed.short_value}) released from what is on order.",
+            )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:purchase_order_detail", pk=pk)
+
+
+class PurchaseOrderReopenView(InventoryManageMixin, View):
+    """Expect the balance again, because the goods turned up after all."""
+
+    page = "inventory.purchase_orders"
+    action = "approve"
+
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        try:
+            reopen_purchase_order(order=order, user=request.user)
+            messages.success(request, f"{order.purchase_num} re-opened — the balance is expected again.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:purchase_order_detail", pk=pk)
+
+
+class PurchaseApprovalLimitView(InventoryManageMixin, View):
+    """Set what a buyer may commit without a second signature."""
+
+    page = "inventory.purchase_orders"
+    action = "approve"
+
+    def post(self, request):
+        form = PurchaseApprovalLimitForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Enter a valid approval limit.")
+        else:
+            try:
+                limit = set_purchase_order_approval_limit(form.cleaned_data["amount"], user=request.user)
+                messages.success(request, f"Approval limit set to {limit}. It applies to orders raised from now on.")
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:purchase_order_list")
+
+
+class GoodsReceiptReverseView(InventoryManageMixin, View):
+    """Withdraw a posted goods receipt by posting its mirror image.
+
+    Held behind its own permission rather than behind ``edit``: whoever enters
+    a receipt should not, by that fact alone, be able to make one disappear.
+    """
+
+    page = "inventory.grn"
+    action = "reverse"
+
+    def post(self, request, pk):
+        receipt = get_object_or_404(PurchaseOrderItemReceived, pk=pk)
+        form = ReversalReasonForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "A reversal needs a reason.")
+            return redirect("inventory:grn_list")
+        try:
+            mirror = reverse_purchase_receipt(receipt=receipt, reason=form.cleaned_data["reason"], user=request.user)
+            messages.success(
+                request,
+                f"{receipt.grn_number} reversed by {mirror.grn_number}. The original stays in the books "
+                "with a nil net effect — nothing was deleted.",
+            )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:grn_list")
 
 
 class PurchaseInvoiceListView(InventoryListMixin, ListView):
@@ -1739,7 +1865,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         PurchaseOrder.objects
         .filter(is_direct=False)
         .select_related("supplier", "created_by")
-        .prefetch_related("items__receipts", "items__uom")
+        .prefetch_related("items__receipts", "items__uom", "bills")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
@@ -1859,6 +1985,14 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         else:
             context["foot_lead_span"] = span
             context["foot_tail_span"] = 0
+        # The figure the approval gate is measured against, so the tile that
+        # counts drafts can say why they are drafts rather than leaving it as
+        # something only the person who set it up knows.
+        context["approval_limit"] = purchase_order_approval_limit()
+        # The figure the approval gate is measured against, so the tile that
+        # counts drafts can say why they are drafts rather than leaving it as
+        # something only the person who set it up knows.
+        context["approval_limit"] = purchase_order_approval_limit()
         context["current_tab"] = self.current_tab()
         # The current view as a query string with the tab left out, so a tab
         # link only has to append its own and every other setting survives.
@@ -2151,6 +2285,30 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         receive_form = ReceivePOForm(initial={"purchase_order_item": self.object.items.first()})
         receive_form.fields["purchase_order_item"].queryset = self.object.items.all()
         context["receive_form"] = receive_form
+
+        # How this order may be ended, which depends on whether anything has
+        # arrived against it. Cancel is for an order nothing came against;
+        # close-short gives up the balance of one that was part delivered. The
+        # template is told which applies rather than working it out itself.
+        lines = list(self.object.items.all())
+        anything_received = any((line.total_receive_qty or Decimal("0")) > 0 for line in lines)
+        outstanding = sum((line.open_receive_qty for line in lines), Decimal("0"))
+        context["can_cancel"] = self.object.status in (STATUS_DRAFT, STATUS_RAISED) and not anything_received
+        context["can_close_short"] = anything_received and outstanding > Decimal("0.0005")
+        context["is_closed_early"] = self.object.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT)
+        context["outstanding_qty"] = outstanding
+        context["cancel_form"] = PurchaseOrderCancelForm()
+        context["close_short_form"] = PurchaseOrderCloseShortForm()
+        context["reversal_form"] = ReversalReasonForm()
+        # Receipts on this order, with whether each may still be withdrawn.
+        receipts = []
+        for line in lines:
+            for receipt in line.receipts.all():
+                ok, why = can_reverse_receipt(receipt)
+                receipt.can_reverse = ok
+                receipt.cannot_reverse_because = why
+                receipts.append(receipt)
+        context["receipts"] = sorted(receipts, key=lambda r: (r.receive_date, r.pk), reverse=True)
         return context
 
 
@@ -2963,7 +3121,7 @@ class GRNListView(InventoryListMixin, ListView):
     page = "inventory.grn"
     template_name = "inventory/grn_list.html"
     context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__receipts").exclude(status=STATUS_FULLY_RECEIVED).order_by("-purchase_date", "-id")
+    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__receipts", "bills").exclude(status__in=(STATUS_FULLY_RECEIVED, STATUS_CANCELLED, STATUS_CLOSED_SHORT)).order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "supplier__name", "quot_num")
     filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
@@ -3002,7 +3160,19 @@ class GRNListView(InventoryListMixin, ListView):
         # The expander handle and the GRN button are cells the table draws
         # itself rather than columns anyone may switch off.
         context["column_span"] = len(context["columns"]) + 2
-        context["grns"] = PurchaseOrderItemReceived.objects.select_related("purchase_order_item__purchase_order", "inventory_item").order_by("-receive_date", "-id")
+        grns = list(
+            PurchaseOrderItemReceived.objects
+            .select_related("purchase_order_item__purchase_order", "inventory_item")
+            .order_by("-receive_date", "-id")
+        )
+        # Whether each one may still be withdrawn, worked out here so the
+        # template prints an answer rather than guessing at one.
+        for grn in grns:
+            ok, why = can_reverse_receipt(grn)
+            grn.can_reverse = ok
+            grn.cannot_reverse_because = why
+        context["grns"] = grns
+        context["reversal_form"] = ReversalReasonForm()
         for order in context["orders"]:
             items = list(order.items.all())
             order.po_total = sum(i.total_amount for i in items)
@@ -3380,3 +3550,204 @@ class PurchaseReturnPostView(InventoryManageMixin, View):
         except ValidationError as exc:
             messages.error(request, exc)
         return redirect("inventory:purchase_return_detail", pk=pk)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Supplier bills
+#
+# The screen is built around the goods receipts, not around the order. What is
+# billable is what actually arrived and nobody has invoiced yet, so that is
+# what the form lists -- and a quantity cannot be typed above it.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class PurchaseBillListView(InventoryListMixin, ListView):
+    """Supplier invoices entered against goods received.
+
+    The tile that matters is GRN Clearing: goods in the godown that no bill has
+    been entered for. While it is not zero the payables are understated, and by
+    exactly that much.
+    """
+
+    page = "inventory.purchase_orders"
+    template_name = "inventory/purchase_bill_list.html"
+    context_object_name = "bills"
+    paginate_by = 25
+    queryset = (
+        PurchaseBill.objects
+        .select_related("supplier", "purchase_order", "created_by")
+        .prefetch_related("items__inventory_item")
+        .order_by("-bill_date", "-id")
+    )
+    search_fields = ("bill_num", "supplier_invoice_num", "supplier__name", "purchase_order__purchase_num")
+    filter_fields = {"supplier": "supplier_id"}
+    date_filters = [{"field": "bill_date", "label": "Bill date"}]
+
+    def get_filter_specs(self):
+        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
+        return [{"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
+                 "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pending = billable_receipts()
+        context["unbilled_count"] = len(pending)
+        context["unbilled_value"] = sum(
+            ((row.pending_bill_qty * row.landed_rate).quantize(Decimal("0.01")) for row in pending),
+            Decimal("0.00"),
+        )
+        context["reversal_form"] = ReversalReasonForm()
+        carried = self.request.GET.copy()
+        for key in ("page",):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
+        return context
+
+
+class PurchaseBillCreateView(InventoryManageMixin, View):
+    """Enter a supplier's invoice against goods already received.
+
+    Every candidate line carries three figures side by side: what arrived, what
+    it was taken into stock at, and what the supplier is asking. Somebody who
+    can see all three at once is in a position to notice a rate that was never
+    agreed, which is the entire reason the three-way match exists.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "add"
+    template_name = "inventory/purchase_bill_form.html"
+
+    def _candidates(self, supplier=None, order=None):
+        rows = billable_receipts(supplier=supplier, purchase_order=order)
+        for row in rows:
+            row.order_ref = row.purchase_order_item.purchase_order
+            row.order_rate = row.purchase_order_item.rate
+        return rows
+
+    def get(self, request):
+        supplier = None
+        supplier_id = (request.GET.get("supplier") or "").strip()
+        if supplier_id.isdigit():
+            supplier = Supplier.objects.filter(pk=int(supplier_id)).first()
+
+        order = None
+        order_id = (request.GET.get("order") or "").strip()
+        if order_id.isdigit():
+            order = PurchaseOrder.objects.filter(pk=int(order_id)).first()
+            supplier = supplier or (order.supplier if order else None)
+
+        form = PurchaseBillForm(initial={
+            "supplier": supplier, "bill_date": timezone.localdate(), "supplier_invoice_date": timezone.localdate(),
+        })
+        return render(request, self.template_name, {
+            "title": "Purchase Bill",
+            "form": form,
+            "candidates": self._candidates(supplier=supplier, order=order),
+            "selected_supplier": supplier,
+            "selected_order": order,
+        })
+
+    def post(self, request):
+        form = PurchaseBillForm(request.POST)
+        supplier = None
+        supplier_id = (request.POST.get("supplier") or "").strip()
+        if supplier_id.isdigit():
+            supplier = Supplier.objects.filter(pk=int(supplier_id)).first()
+
+        if not form.is_valid():
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
+            return render(request, self.template_name, {
+                "title": "Purchase Bill", "form": form,
+                "candidates": self._candidates(supplier=supplier), "selected_supplier": supplier,
+            })
+
+        # Only the rows that were ticked, and only with the quantity and rate
+        # actually typed against them. An untouched row is not a line.
+        lines = []
+        for receipt_id in request.POST.getlist("receipt_id"):
+            if not request.POST.get(f"pick_{receipt_id}"):
+                continue
+            receipt = PurchaseOrderItemReceived.objects.filter(pk=receipt_id).select_related(
+                "purchase_order_item__purchase_order", "inventory_item"
+            ).first()
+            if not receipt:
+                continue
+            try:
+                quantity = Decimal(request.POST.get(f"qty_{receipt_id}") or "0")
+                rate = Decimal(request.POST.get(f"rate_{receipt_id}") or "0")
+            except InvalidOperation:
+                messages.error(request, f"{receipt.grn_number}: quantity and rate must be numbers.")
+                return redirect("inventory:purchase_bill_create")
+            lines.append({"receipt": receipt, "quantity": quantity, "rate": rate})
+
+        data = form.cleaned_data
+        try:
+            bill = create_purchase_bill(
+                supplier=data["supplier"],
+                supplier_invoice_num=data["supplier_invoice_num"],
+                supplier_invoice_date=data.get("supplier_invoice_date"),
+                bill_date=data["bill_date"],
+                due_date=data.get("due_date"),
+                lines=lines,
+                freight_amount=data.get("freight_amount") or Decimal("0"),
+                discount_amount=data.get("discount_amount") or Decimal("0"),
+                tax_amount=data.get("tax_amount") or Decimal("0"),
+                remarks=data.get("remarks") or "",
+                variance_approved=bool(data.get("variance_approved")),
+                user=request.user,
+            )
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return render(request, self.template_name, {
+                "title": "Purchase Bill", "form": form,
+                "candidates": self._candidates(supplier=data["supplier"]), "selected_supplier": data["supplier"],
+            })
+
+        messages.success(
+            request,
+            f"Bill {bill.bill_num} posted for {bill.total_amount}. "
+            "GRN clearing released, payable created, input tax claimable.",
+        )
+        return redirect("inventory:purchase_bill_detail", pk=bill.pk)
+
+
+class PurchaseBillDetailView(InventoryListMixin, DetailView):
+    page = "inventory.purchase_orders"
+    model = PurchaseBill
+    template_name = "inventory/purchase_bill_detail.html"
+    context_object_name = "bill"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        ok, why = can_reverse_bill(self.object)
+        context["can_reverse"] = ok
+        context["cannot_reverse_because"] = why
+        context["reversal_form"] = ReversalReasonForm()
+        return context
+
+
+class PurchaseBillReverseView(InventoryManageMixin, View):
+    """Withdraw a posted bill: value back into GRN Clearing, payable off."""
+
+    page = "inventory.purchase_orders"
+    action = "reverse"
+
+    def post(self, request, pk):
+        bill = get_object_or_404(PurchaseBill, pk=pk)
+        form = ReversalReasonForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "A reversal needs a reason.")
+            return redirect("inventory:purchase_bill_detail", pk=pk)
+        try:
+            mirror = reverse_purchase_bill(bill=bill, reason=form.cleaned_data["reason"], user=request.user)
+            messages.success(
+                request,
+                f"{bill.bill_num} reversed by {mirror.bill_num}. The receipts are unbilled again, "
+                "so the correct invoice can be entered against them.",
+            )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("inventory:purchase_bill_detail", pk=pk)

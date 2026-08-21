@@ -1,1 +1,273 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-6">{% include "components/ui/page_header.html" with title=order.purchase_num subtitle=order.supplier.name %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Seq #</th><th class="px-4 py-3">Item Description</th><th class="px-4 py-3">UOM</th><th class="px-4 py-3">Price</th><th class="px-4 py-3">PO Qty</th><th class="px-4 py-3">Discount</th>{% if order.status == 'raised' %}<th class="px-4 py-3"></th>{% endif %}</tr></thead><tbody>{% for item in order.items.all %}<tr class="border-t border-slate-100 dark:border-slate-800"><td class="px-4 py-3">{{ item.seq_num }}</td><td class="px-4 py-3">{{ item.descr }}</td><td class="px-4 py-3">{{ item.uom.title }}</td><td class="px-4 py-3">{{ item.rate|amount }}</td><td class="px-4 py-3">{{ item.quantity|qty }}</td><td class="px-4 py-3">{{ item.discount_amount|amount }}</td>{% if order.status == 'raised' %}<td class="px-4 py-3"><a href="{% url 'inventory:purchase_order_item_update' item.pk %}" class="text-sm font-medium text-[var(--primary-color)]">Edit</a></td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if order.status == 'raised' %}8{% else %}7{% endif %}" class="px-4 py-8 text-center text-slate-500">No items added yet.</td></tr>{% endfor %}</tbody></table></div><div class="flex justify-end"><a href="{% url 'inventory:purchase_order_print' order.pk %}" class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Print</a></div></section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<style>
+  /* An anchored panel is jumped to from the board, so it must not land under
+     the sticky header, and it says so when it arrives. */
+  .pur-anchor { scroll-margin-top: 5rem; }
+  .pur-anchor:target { box-shadow: 0 0 0 3px var(--ring-primary); }
+</style>
+
+<section class="space-y-5">
+
+  <div class="pur-head-row pur-noprint">
+    <div>
+      <h1 class="pur-title title-accent">{{ order.purchase_num }}</h1>
+      <p class="pur-lede">
+        {{ order.supplier.name }}
+        &middot; ordered {{ order.purchase_date|date:"d M Y" }}
+        {% if order.expected_date %}&middot; expected {{ order.expected_date|date:"d M Y" }}{% endif %}
+        {% if order.approved_by %}&middot; approved by {{ order.approved_by.get_full_name|default:order.approved_by.username }}{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_list' %}">All orders</a>
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
+      {% if order.status == "draft" and can_edit %}
+      <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="pur-btn pur-btn--primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+          Approve order
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── How this order ended, if it ended early ─────────────────────────── #}
+  {% if is_closed_early %}
+  <div class="pur-note {% if order.status == 'cancelled' %}pur-note--bad{% else %}pur-note--warn{% endif %}">
+    <span class="pur-note-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path>
+      </svg>
+    </span>
+    <div class="flex-1">
+      <p>
+        <b>{% if order.status == "cancelled" %}This order was cancelled{% else %}This order was closed short{% endif %}
+        on {{ order.closed_on|date:"d M Y" }}{% if order.closed_by %} by {{ order.closed_by.get_full_name|default:order.closed_by.username }}{% endif %}.</b>
+        {{ order.close_reason_label }}
+      </p>
+      {% if order.short_qty %}
+      <p>
+        {{ order.short_qty|qty }} units worth {{ order.short_value|amount }} were released from what is
+        on order. No accounting entry was made: an order never had one, so there was nothing to reverse.
+      </p>
+      {% endif %}
+      {% if can_approve %}
+      <form method="post" action="{% url 'inventory:purchase_order_reopen' order.pk %}" class="mt-3">
+        {% csrf_token %}
+        <button type="submit" class="pur-btn pur-btn--ghost">Re-open &mdash; the goods turned up after all</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Order lines ─────────────────────────────────────────────────────── #}
+  <div class="pur-card">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">Order lines</h2>
+      <span class="pur-card-hint">What was asked for, and how much of it has arrived</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="pur-table">
+        <thead>
+          <tr>
+            <th style="width: 2.5rem;">#</th>
+            <th>Item</th>
+            <th>Unit</th>
+            <th class="pur-num">Rate</th>
+            <th class="pur-num">Ordered</th>
+            <th class="pur-num">Received</th>
+            <th class="pur-num">Outstanding</th>
+            <th class="pur-num">Discount</th>
+            <th class="pur-num">Amount</th>
+            {% if order.status == 'raised' and can_edit %}<th class="pur-noprint"></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in order.items.all %}
+          <tr>
+            <td class="pur-muted">{{ item.seq_num }}</td>
+            <td class="pur-strong">{{ item.descr }}
+              {% if item.closed %}<span class="pur-sub">balance given up on</span>{% endif %}
+            </td>
+            <td>{{ item.uom.title|default:"—" }}</td>
+            <td class="pur-num">{{ item.rate|amount }}</td>
+            <td class="pur-num">{{ item.quantity|qty }}</td>
+            <td class="pur-num">{{ item.total_receive_qty|qty }}</td>
+            <td class="pur-num {% if item.open_receive_qty %}pur-strong{% else %}pur-muted{% endif %}">
+              {{ item.open_receive_qty|qty }}
+            </td>
+            <td class="pur-num">{{ item.discount_amount|amount }}</td>
+            <td class="pur-num pur-strong">{{ item.total_amount|amount }}</td>
+            {% if order.status == 'raised' and can_edit %}
+            <td class="pur-noprint">
+              <a class="pur-doc" href="{% url 'inventory:purchase_order_item_update' item.pk %}">Edit</a>
+            </td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="10"><div class="pur-empty">No items added yet.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Receiving goods against it ──────────────────────────────────────── #}
+  {# Rendered here because this is the order the goods belong to. Sending #}
+  {# somebody to a separate screen to find the row again is how a delivery #}
+  {# gets booked against the wrong order.                                  #}
+  {% if can_edit and not is_closed_early and outstanding_qty %}
+  <div class="pur-card pur-anchor pur-noprint" id="receive">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">Receive goods</h2>
+      <span class="pur-card-hint">{{ outstanding_qty|qty }} units still expected</span>
+    </div>
+    <form method="post" action="{% url 'inventory:purchase_order_receive' order.pk %}" class="pur-card-body">
+      {% csrf_token %}
+      <div class="pur-grid">
+        <div>
+          <label class="pur-label" for="{{ receive_form.purchase_order_item.id_for_label }}">Line <span class="pur-req">*</span></label>
+          {{ receive_form.purchase_order_item }}
+        </div>
+        <div>
+          <label class="pur-label" for="{{ receive_form.quantity.id_for_label }}">Quantity received <span class="pur-req">*</span></label>
+          {{ receive_form.quantity }}
+        </div>
+        <div>
+          <label class="pur-label" for="{{ receive_form.extra_qty.id_for_label }}">Extra quantity</label>
+          {{ receive_form.extra_qty }}
+          <p class="pur-help">More than ordered, accepted at the gate.</p>
+        </div>
+        <div>
+          <label class="pur-label" for="{{ receive_form.retail_price.id_for_label }}">Rate <span class="pur-req">*</span></label>
+          {{ receive_form.retail_price }}
+        </div>
+        <div>
+          <label class="pur-label" for="{{ receive_form.receive_date.id_for_label }}">Receipt date <span class="pur-req">*</span></label>
+          {{ receive_form.receive_date }}
+        </div>
+        <div>
+          <label class="pur-label" for="{{ receive_form.rv_number.id_for_label }}">Bilty / vehicle ref</label>
+          {{ receive_form.rv_number }}
+        </div>
+      </div>
+      <div class="mt-4">
+        <label class="pur-label" for="{{ receive_form.remarks.id_for_label }}">Store remarks</label>
+        {{ receive_form.remarks }}
+      </div>
+      <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
+        <p class="mr-auto text-xs text-slate-500 dark:text-slate-400">
+          Dr Inventory &middot; Cr GRN Clearing. The payable appears when the supplier's bill is entered.
+        </p>
+        <button type="submit" class="pur-btn pur-btn--primary">Post goods receipt</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {# ── Goods received against it ───────────────────────────────────────── #}
+  {% if receipts %}
+  <div class="pur-card">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">Goods received</h2>
+      <span class="pur-card-hint">A posted receipt is withdrawn by reversing it, never by deleting it</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="pur-table">
+        <thead>
+          <tr>
+            <th>GRN</th><th>Date</th><th>Item</th>
+            <th class="pur-num">Quantity</th><th class="pur-num">Landed value</th>
+            <th>Billed</th><th class="pur-num pur-noprint"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for receipt in receipts %}
+          <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
+            <td class="pur-strong">{{ receipt.grn_number }}</td>
+            <td class="whitespace-nowrap">{{ receipt.receive_date|date:"d M Y" }}</td>
+            <td>{{ receipt.descr }}</td>
+            <td class="pur-num">{{ receipt.received_units|qty }}</td>
+            <td class="pur-num">{{ receipt.landed_amount|amount }}</td>
+            <td>
+              {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
+              {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
+              {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
+              {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
+            </td>
+            <td class="pur-num pur-noprint">
+              {% if receipt.can_reverse and can_reverse_perm %}
+              <form method="post" action="{% url 'inventory:goods_receipt_reverse' receipt.pk %}"
+                    class="flex items-center justify-end gap-2">
+                {% csrf_token %}
+                <select name="reason" class="form-select" style="max-width: 13rem; height: 1.875rem; padding-top: 0; padding-bottom: 0; font-size: .75rem;">
+                  {% for value, label in reversal_form.reason.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="pur-btn pur-btn--danger pur-btn--sm">Reverse</button>
+              </form>
+              {% elif receipt.cannot_reverse_because and can_reverse_perm %}
+              <span class="pur-sub" style="text-align: right;">{{ receipt.cannot_reverse_because }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Ending the order early ──────────────────────────────────────────── #}
+  {% if can_approve and can_cancel %}
+  <div class="pur-card pur-anchor pur-noprint" id="cancel">
+    <div class="pur-card-head"><h2 class="pur-card-title text-rose-700 dark:text-rose-400">Cancel this order</h2></div>
+    <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" class="pur-card-body">
+      {% csrf_token %}
+      <p class="pur-help" style="margin-top: 0;">
+        Nothing has arrived against it, so the whole order is abandoned. Not a delete: the number
+        stays in the sequence, because a gap in a numbered series is the first thing anybody
+        auditing purchases asks about.
+      </p>
+      <div class="mt-3 flex flex-wrap items-end gap-3">
+        <div style="min-width: 20rem;">
+          <label class="pur-label" for="{{ cancel_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
+          {{ cancel_form.reason }}
+        </div>
+        <button type="submit" class="pur-btn pur-btn--danger">Cancel order</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if can_approve and can_close_short %}
+  <div class="pur-card pur-anchor pur-noprint" id="close-short">
+    <div class="pur-card-head"><h2 class="pur-card-title text-amber-700 dark:text-amber-400">Close the balance short</h2></div>
+    <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-card-body">
+      {% csrf_token %}
+      <p class="pur-help" style="margin-top: 0;">
+        You are saying the remaining <b>{{ outstanding_qty|qty }} units</b> are never going to arrive.
+        The balance stops counting as goods on order, which is the figure the next reorder decision
+        is made on. No accounting entry is created &mdash; an order never had one &mdash; and it can be
+        re-opened if the goods do turn up.
+      </p>
+      <div class="mt-3 flex flex-wrap items-end gap-3">
+        <div style="min-width: 20rem;">
+          <label class="pur-label" for="{{ close_short_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
+          {{ close_short_form.reason }}
+        </div>
+        <button type="submit" class="pur-btn pur-btn--danger">Close short</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

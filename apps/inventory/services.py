@@ -41,10 +41,15 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.core.constants import LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_SUBMITTED, YES
+from apps.core.constants import CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_REVERSED, STATUS_SUBMITTED, YES
+
+TWO_DP = Decimal("0.01")
+FOUR_DP = Decimal("0.0001")
 
 from .models import (
     ItemLedger,
+    PurchaseBill,
+    PurchaseBillItem,
     ManualTransaction,
     POSDetail,
     POSMaster,
@@ -170,8 +175,40 @@ def finalize_manual_transaction(*, transaction_id, user):
 
 
 @transaction.atomic
+def apportion_freight(freight_amount, line_values):
+    """Split one freight figure across lines by what each line is worth.
+
+    Freight is paid on a delivery, not on a line, so it has to be spread. By
+    value rather than by unit count: a truck carrying one ton of wheat and ten
+    thousand empty bags did not incur the same carriage per unit, and splitting
+    per unit would load nearly all of it onto the bags and leave the wheat
+    costed as if it had walked in. The last line takes whatever the rounding
+    left over, so the parts add back to the figure that was typed.
+
+    ``line_values`` is a list of Decimals. Returns a list the same length.
+    """
+    freight = Decimal(freight_amount or 0).quantize(TWO_DP)
+    total = sum(line_values, Decimal("0.00"))
+    if not freight or total <= 0:
+        return [Decimal("0.00") for _ in line_values]
+
+    shares, spread = [], Decimal("0.00")
+    for index, value in enumerate(line_values):
+        if index == len(line_values) - 1:
+            share = freight - spread
+        else:
+            share = (freight * value / total).quantize(TWO_DP)
+            spread += share
+        shares.append(share)
+    return shares
+
+
 def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, freight_amount=Decimal("0")):
     purchase_order_item = PurchaseOrderItem.objects.select_for_update().select_related("purchase_order", "inventory_item").get(pk=purchase_order_item.pk)
+    if purchase_order_item.closed:
+        raise ValidationError("This line was closed short — nothing more is expected on it. Re-open the order first if the goods have turned up after all.")
+    if purchase_order_item.purchase_order.status in (STATUS_DRAFT, STATUS_CANCELLED, STATUS_CLOSED_SHORT):
+        raise ValidationError("Goods can only be received against an approved order that is still open.")
     allowed = purchase_order_item.quantity + purchase_order_item.extra_qty - purchase_order_item.total_receive_qty
     if quantity <= 0:
         raise ValidationError("Receive quantity must be greater than zero.")
@@ -181,8 +218,12 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     po = purchase_order_item.purchase_order
 
     received_units = quantity + extra_qty
+    # Freight handed to this call belongs to this line alone, so the whole of
+    # it loads onto these units. Where one delivery covers several lines the
+    # caller splits it first with ``apportion_freight``.
     freight_per_unit = (freight_amount / received_units) if received_units > 0 else Decimal("0")
     landed_price = (retail_price or Decimal("0")) + freight_per_unit
+    landed_amount = (landed_price * received_units).quantize(TWO_DP)
 
     receipt = PurchaseOrderItemReceived.objects.create(
         purchase_order_item=purchase_order_item,
@@ -201,6 +242,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         extra_qty_tag=YES if extra_qty > 0 else NO,
         extra_qty=extra_qty,
         retail_price=retail_price,
+        landed_amount=landed_amount,
         created_by=user,
         updated_by=user,
     )
@@ -212,13 +254,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     purchase_order_item.updated_by = user
     purchase_order_item.save()
 
-    po_items = po.items.all()
-    if po_items.exists() and all(item.total_receive_qty >= item.quantity for item in po_items):
-        po.status = STATUS_FULLY_RECEIVED
-    else:
-        po.status = STATUS_PARTIAL_RECEIVED
-    po.updated_by = user
-    po.save(update_fields=["status", "updated_by", "updated_at"])
+    _refresh_order_receipt_status(po, user=user)
 
     purchase_master, _ = PurchaseMaster.objects.get_or_create(
         purchase_order=po,
@@ -251,9 +287,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     # debt to the supplier arises at the same moment, at landed cost.
     from apps.finance.services import post_purchase_receipt_to_gl  # lazy: finance imports inventory
 
-    post_purchase_receipt_to_gl(
-        receipt=receipt, supplier=po.supplier, amount=landed_price * received_units, user=user
-    )
+    post_purchase_receipt_to_gl(receipt=receipt, supplier=po.supplier, amount=landed_amount, user=user)
     return receipt
 
 
@@ -385,6 +419,23 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
         )
 
     net_amount = (goods_total - discount + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+
+    # The approval limit bites here, not on the button. Whoever raised the
+    # order does not get to decide whether it needed signing off, so an order
+    # asked for as raised drops back to draft when it is worth more than the
+    # buyer may commit -- and stays there until someone with the right releases
+    # it. Setting the status straight to raised in a form post is exactly the
+    # gap this closes.
+    committed = (goods_total - discount).quantize(Decimal("0.01"))
+    if order.status == STATUS_RAISED:
+        if needs_approval(committed) and not user_can_approve(user):
+            order.status = STATUS_DRAFT
+        else:
+            order.approved_by = user
+            order.approved_at = timezone.now()
+            order.approved_amount = committed
+        order.save(update_fields=["status", "approved_by", "approved_at", "approved_amount", "updated_at"])
+
     return order, net_amount
 
 
@@ -452,6 +503,33 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
 
     goods_total = sum((line.total_price for line in sale.items.all()), Decimal("0.00"))
     net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+
+    # Straight off the supplier's bill, so the goods arriving and the invoice
+    # arriving are the same event. The bill is posted here rather than left for
+    # somebody to enter later: without it the value would sit in GRN Clearing
+    # for ever, saying the business had been delivered goods nobody had billed
+    # it for, which for a direct purchase is not true even for a moment.
+    receipts = list(
+        PurchaseOrderItemReceived.objects
+        .filter(purchase_order_item__purchase_order=order, reversed=False, reversal_of__isnull=True)
+        .select_related("purchase_order_item__purchase_order", "inventory_item")
+    )
+    create_purchase_bill(
+        supplier=supplier,
+        supplier_invoice_num=bill_number or order.purchase_num,
+        supplier_invoice_date=bill_date,
+        bill_date=bill_date,
+        lines=[{"receipt": receipt, "quantity": receipt.received_units, "rate": receipt.landed_rate}
+               for receipt in receipts],
+        discount_amount=discount_amount,
+        tax_amount=tax_amount,
+        remarks=remarks or "",
+        # The one document was typed by hand as a whole, so the difference
+        # between it and the receipt it created is the discount that was on it
+        # and nothing else. There is no second party's figure to match against.
+        variance_approved=True,
+        user=user,
+    )
 
     paid = Decimal(paid_amount or 0).quantize(Decimal("0.01"))
     if paid > net_amount:
@@ -542,6 +620,33 @@ def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_
         )
 
     net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
+
+    # Straight off the supplier's bill, so the goods arriving and the invoice
+    # arriving are the same event. The bill is posted here rather than left for
+    # somebody to enter later: without it the value would sit in GRN Clearing
+    # for ever, saying the business had been delivered goods nobody had billed
+    # it for, which for a direct purchase is not true even for a moment.
+    receipts = list(
+        PurchaseOrderItemReceived.objects
+        .filter(purchase_order_item__purchase_order=order, reversed=False, reversal_of__isnull=True)
+        .select_related("purchase_order_item__purchase_order", "inventory_item")
+    )
+    create_purchase_bill(
+        supplier=supplier,
+        supplier_invoice_num=bill_number or order.purchase_num,
+        supplier_invoice_date=bill_date,
+        bill_date=bill_date,
+        lines=[{"receipt": receipt, "quantity": receipt.received_units, "rate": receipt.landed_rate}
+               for receipt in receipts],
+        discount_amount=discount_amount,
+        tax_amount=tax_amount,
+        remarks=remarks or "",
+        # The one document was typed by hand as a whole, so the difference
+        # between it and the receipt it created is the discount that was on it
+        # and nothing else. There is no second party's figure to match against.
+        variance_approved=True,
+        user=user,
+    )
 
     paid = Decimal(paid_amount or 0).quantize(Decimal("0.01"))
     if paid > net_amount:
@@ -689,3 +794,634 @@ def post_purchase_return(*, purchase_return, user):
 
     post_purchase_return_to_gl(purchase_return=purchase_return, user=user)
     return purchase_return
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Purchase order lifecycle
+#
+# An order moves: draft -> raised -> partly received -> fully received. It can
+# also stop early, in one of two ways that are deliberately not the same thing:
+#
+#   Cancelled     nothing ever arrived. The order is abandoned whole.
+#   Closed short  something arrived, the rest never will, and somebody said so.
+#
+# Neither deletes anything. The number stays in the sequence and the reason
+# stays on the record, because an order that vanishes is indistinguishable
+# from one that was never raised, and the difference matters to whoever is
+# reconciling commitments at the end of the month.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _refresh_order_receipt_status(po, *, user=None):
+    """Set the order's status from what its lines are actually still owed.
+
+    A line that was closed short counts as finished even though nothing more
+    came, which is the whole point of closing it: the commitment is released
+    without the books pretending goods arrived.
+    """
+    lines = list(po.items.all())
+    if not lines:
+        return po
+
+    if po.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT):
+        return po
+
+    received_any = any((line.total_receive_qty or Decimal("0")) > 0 for line in lines)
+    all_done = all(line.open_receive_qty <= FOUR_DP for line in lines)
+
+    if all_done:
+        # Everything settled, but by delivery or by decision? If any line was
+        # given up on, the order ended short and should say so.
+        po.status = STATUS_CLOSED_SHORT if any(line.closed for line in lines) else STATUS_FULLY_RECEIVED
+    elif received_any:
+        po.status = STATUS_PARTIAL_RECEIVED
+    else:
+        po.status = STATUS_RAISED
+
+    po.updated_by = user
+    po.save(update_fields=["status", "updated_by", "updated_at"])
+    return po
+
+
+def purchase_order_approval_limit():
+    """What a buyer may commit on their own signature.
+
+    A setting rather than a constant: the figure is company policy, and policy
+    changes without anyone wanting to ship a release for it.
+    """
+    from apps.configurations.models import SystemConfiguration
+
+    row = SystemConfiguration.objects.filter(key=CONF_PO_APPROVAL_LIMIT_KEY).first()
+    raw = (row.value or {}).get("amount") if row else None
+    try:
+        return Decimal(str(raw if raw is not None else CONF_PO_APPROVAL_LIMIT_DEFAULT))
+    except (ArithmeticError, ValueError, TypeError):
+        # A setting somebody typed by hand and got wrong must not stop the
+        # purchase screens working; falling back to the shipped figure keeps
+        # the control on rather than switching it off.
+        return Decimal(CONF_PO_APPROVAL_LIMIT_DEFAULT)
+
+
+def set_purchase_order_approval_limit(amount, *, user=None):
+    from apps.configurations.models import SystemConfiguration
+
+    limit = Decimal(amount or 0).quantize(TWO_DP)
+    if limit < 0:
+        raise ValidationError("An approval limit cannot be negative.")
+    SystemConfiguration.objects.update_or_create(
+        key=CONF_PO_APPROVAL_LIMIT_KEY,
+        defaults={"value": {"amount": str(limit)}, "updated_by": user},
+    )
+    return limit
+
+
+def needs_approval(amount):
+    """Whether an order of this value is above what a buyer may commit alone."""
+    return Decimal(amount or 0) > purchase_order_approval_limit()
+
+
+def order_value(po):
+    return sum((line.total_amount for line in po.items.all()), Decimal("0.00")).quantize(TWO_DP)
+
+
+@transaction.atomic
+def approve_purchase_order(*, order, user):
+    """Release a draft order to the supplier, and record who released it.
+
+    Approving is the moment the money is committed. It is also the only control
+    on the purchase side that a person performs rather than the software, so
+    the name and the amount approved are both kept — an approval limit whose
+    approvals are anonymous is not a control, it is a speed bump.
+    """
+    order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+    if order.status != STATUS_DRAFT:
+        raise ValidationError(f"{order.purchase_num} is not awaiting approval.")
+    if not order.items.exists():
+        raise ValidationError("An order with no lines on it cannot be approved.")
+
+    value = order_value(order)
+    if needs_approval(value) and not user_can_approve(user):
+        raise ValidationError(
+            f"{order.purchase_num} is worth {value} which is above the approval limit of "
+            f"{purchase_order_approval_limit()}. It needs someone with purchase approval rights."
+        )
+
+    order.status = STATUS_RAISED
+    order.approved_by = user
+    order.approved_at = timezone.now()
+    order.approved_amount = value
+    order.updated_by = user
+    order.save(update_fields=["status", "approved_by", "approved_at", "approved_amount", "updated_by", "updated_at"])
+    return order
+
+
+def user_can_approve(user):
+    """Who may commit above the buyer's own limit.
+
+    Above the limit the order needs someone holding the approval right, not the
+    buyer signing off their own order. Below it anybody who may raise an order
+    may release it, which is what an approval limit means.
+    """
+    from apps.access_control.selectors import user_has_permission
+
+    return user_has_permission(user, "inventory.purchase_orders.approve")
+
+
+@transaction.atomic
+def cancel_purchase_order(*, order, reason, user):
+    """Abandon an order nothing has arrived against.
+
+    Deliberately not a delete. The number stays in the sequence — a gap in a
+    numbered series is the first thing anybody auditing purchases looks for,
+    and "it was cancelled" is only believable if the cancelled document is
+    still there to read.
+    """
+    order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+    if reason not in dict(INV_PO_CANCEL_REASONS):
+        raise ValidationError("Pick a reason for cancelling this order.")
+    if order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT):
+        raise ValidationError(f"{order.purchase_num} is already closed.")
+    if any((line.total_receive_qty or Decimal("0")) > 0 for line in order.items.all()):
+        raise ValidationError(
+            "Part of this order has already been received, so it cannot be cancelled. "
+            "Close the balance short instead — that keeps what arrived and gives up the rest."
+        )
+
+    order.items.update(closed=True)
+    order.status = STATUS_CANCELLED
+    order.close_reason = reason
+    order.closed_on = timezone.localdate()
+    order.closed_by = user
+    order.short_qty = sum((line.quantity or Decimal("0") for line in order.items.all()), Decimal("0.0000"))
+    order.short_value = order_value(order)
+    order.updated_by = user
+    order.save()
+    return order
+
+
+@transaction.atomic
+def close_purchase_order_short(*, order, reason, user):
+    """Give up on the balance of a part-delivered order.
+
+    Creates no accounting entry, because an order never had one — nothing was
+    debited when it was raised, so nothing has to be credited when it is
+    abandoned. What it does is release the commitment: the outstanding quantity
+    stops counting as goods on order, which is the figure the reorder decision
+    is made on.
+    """
+    order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+    if reason not in dict(INV_PO_CLOSE_SHORT_REASONS):
+        raise ValidationError("Pick a reason for closing this order short.")
+    if order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_FULLY_RECEIVED):
+        raise ValidationError(f"{order.purchase_num} has nothing outstanding to close.")
+
+    short_qty, short_value = Decimal("0.0000"), Decimal("0.00")
+    for line in order.items.select_for_update():
+        pending = line.open_receive_qty
+        if pending <= FOUR_DP:
+            continue
+        short_qty += pending
+        short_value += (pending * (line.rate or Decimal("0"))).quantize(TWO_DP)
+        line.closed = True
+        line.updated_by = user
+        line.save(update_fields=["closed", "updated_by", "updated_at"])
+
+    if short_qty <= FOUR_DP:
+        raise ValidationError(f"{order.purchase_num} has nothing outstanding to close.")
+
+    order.status = STATUS_CLOSED_SHORT
+    order.close_reason = reason
+    order.closed_on = timezone.localdate()
+    order.closed_by = user
+    order.short_qty = short_qty
+    order.short_value = short_value
+    order.updated_by = user
+    order.save()
+    return order
+
+
+@transaction.atomic
+def reopen_purchase_order(*, order, user):
+    """Expect the balance again, because the goods turned up after all.
+
+    Closing short is a judgement, not a fact, and judgements are sometimes
+    wrong. Re-opening puts the line balances back on the outstanding list; it
+    touches no ledger, for the same reason closing it never did.
+    """
+    order = PurchaseOrder.objects.select_for_update().get(pk=order.pk)
+    if order.status not in (STATUS_CANCELLED, STATUS_CLOSED_SHORT):
+        raise ValidationError(f"{order.purchase_num} is not closed.")
+
+    order.items.update(closed=False)
+    order.close_reason = ""
+    order.closed_on = None
+    order.closed_by = None
+    order.short_qty = Decimal("0.0000")
+    order.short_value = Decimal("0.00")
+    # Back to whatever its receipts say it is, which may be raised or partly
+    # received — never straight back to draft, because it was approved once.
+    order.status = STATUS_RAISED
+    order.updated_by = user
+    order.save()
+    _refresh_order_receipt_status(order, user=user)
+    return order
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Correcting a posted receipt — reversal, never deletion
+#
+# A posted goods receipt has moved stock, written an insert-only item ledger
+# row and posted a general-ledger voucher. Deleting it would break the GRN
+# sequence, take the document out of the audit trail, silently restate the
+# weighted-average cost of every later movement of that item, and put the books
+# out of step with anything already filed on them. It is also how theft is
+# hidden: take the goods, delete the receipt.
+#
+# So a receipt is withdrawn by posting its mirror image. Both stay visible and
+# the pair nets to nothing, which is what actually happened: an entry was made
+# and then taken back.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def can_reverse_receipt(receipt):
+    """Whether this receipt may be withdrawn, and if not, why not.
+
+    Returns ``(ok, reason)``. The checks run in the order documents were
+    created, so the caller is always told to unwind the *last* thing first —
+    unwinding out of order would leave a bill pointing at goods that are no
+    longer on the books.
+    """
+    if receipt is None:
+        return False, "Goods receipt not found."
+    if receipt.reversed:
+        return False, "This receipt has already been reversed."
+    if receipt.reversal_of_id:
+        return False, (
+            "This is itself a reversal. Reversing it would simply re-post the original — "
+            "if the goods really did arrive, enter a fresh receipt."
+        )
+    # Read the billed quantity back from the database rather than trusting the
+    # instance handed in. A screen holds a receipt object across a request, and
+    # a bill entered in between would leave that copy saying it was unbilled --
+    # which is exactly the case this guard exists to catch.
+    billed = PurchaseOrderItemReceived.objects.filter(pk=receipt.pk).values_list("billed_qty", flat=True).first() or Decimal("0")
+    if billed > FOUR_DP:
+        return False, "A supplier bill has already been matched to this receipt. Reverse the bill first, then this."
+
+    # Taking the goods back out must not drive the item negative. If the stock
+    # has already been sold or milled, the receipt is no longer the thing to
+    # correct — the movements on top of it are.
+    units = receipt.received_units
+    on_hand = Stock.objects.filter(inventory_item=receipt.inventory_item_id).values_list("current_quantity", flat=True).first() or Decimal("0")
+    if on_hand + FOUR_DP < units:
+        item_name = receipt.inventory_item.item_name
+        return False, (
+            f"Reversing this would take {units} of {item_name} back out, but only {on_hand} is left in stock — "
+            "it has been used or sold. Reverse the movements that came after it first."
+        )
+    return True, ""
+
+
+@transaction.atomic
+def reverse_purchase_receipt(*, receipt, reason, user):
+    """Withdraw a posted goods receipt by posting its mirror image.
+
+    Writes a second receipt row carrying the negative quantity, takes the stock
+    back out at the rate it came in at, writes the item-ledger row that says so,
+    and reverses the general-ledger voucher. Then it rolls back the counters the
+    original had advanced, so the order goes back to expecting the goods.
+    """
+    from apps.finance.services import reverse_gl_posting  # lazy: finance imports inventory
+
+    receipt = PurchaseOrderItemReceived.objects.select_for_update().select_related(
+        "purchase_order_item__purchase_order", "inventory_item"
+    ).get(pk=receipt.pk)
+
+    ok, why = can_reverse_receipt(receipt)
+    if not ok:
+        raise ValidationError(why)
+    if reason not in dict(INV_REVERSAL_REASONS):
+        raise ValidationError("A reversal needs a reason — one without it is unusable to whoever reads the books later.")
+
+    line = PurchaseOrderItem.objects.select_for_update().get(pk=receipt.purchase_order_item_id)
+    po = line.purchase_order
+    units = receipt.received_units
+    today = timezone.localdate()
+
+    mirror = PurchaseOrderItemReceived.objects.create(
+        purchase_order_item=line,
+        seq_num=(line.receipts.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0) + 1,
+        purchase_num=po.purchase_num,
+        purchase_date=po.purchase_date,
+        descr=receipt.descr,
+        status=STATUS_REVERSED,
+        inventory_item=receipt.inventory_item,
+        quantity=-(receipt.quantity or Decimal("0")),
+        extra_qty=-(receipt.extra_qty or Decimal("0")),
+        receive_date=today,
+        invoice_num=receipt.invoice_num,
+        invoice_date=receipt.invoice_date,
+        grn_number=f"REV-{receipt.grn_number}",
+        rv_number=receipt.rv_number,
+        extra_qty_tag=receipt.extra_qty_tag,
+        retail_price=receipt.retail_price,
+        landed_amount=-(receipt.landed_amount or Decimal("0")),
+        reversal_of=receipt,
+        reverse_reason=reason,
+        reversed_on=today,
+        created_by=user,
+        updated_by=user,
+    )
+
+    # Stock back out at the rate it came in at. The average cost is left where
+    # the remaining stock puts it rather than being recomputed backwards: the
+    # units are leaving at their own cost, which is all a reversal claims.
+    stock = Stock.objects.select_for_update().get(inventory_item=receipt.inventory_item)
+    old_quantity, old_price = stock.current_quantity, stock.current_price
+    stock.current_quantity = stock.current_quantity - units
+    stock.updated_by = user
+    stock.save()
+
+    create_ledger_entry(
+        stock=stock, inventory_item=receipt.inventory_item,
+        transaction_id=generate_transaction_id("REV", PurchaseOrderItemReceived),
+        transaction_no=po.purchase_num, transaction_type=LEDGER_REVERSAL, transaction_date=today,
+        ref_table="inv_purchase_order_item_received", ref_id=mirror.pk, ref_no=mirror.grn_number,
+        quantity=-units, old_quantity=old_quantity, new_quantity=stock.current_quantity,
+        old_price=old_price, current_price=stock.current_price,
+        remarks=f"Reversal of {receipt.grn_number} — {dict(INV_REVERSAL_REASONS)[reason]}", user=user,
+    )
+
+    reverse_gl_posting(
+        source_ref=f"inv_purchase_order_item_received:{receipt.pk}",
+        reversal_ref=f"inv_purchase_order_item_received:{mirror.pk}",
+        voucher_date=today,
+        remarks=f"Reversal of goods receipt {receipt.grn_number} — {dict(INV_REVERSAL_REASONS)[reason]}",
+        user=user,
+    )
+
+    # Put the order line back to expecting these goods again.
+    line.total_receive_qty = (line.total_receive_qty or Decimal("0")) - units
+    line.curr_receive_qty = Decimal("0.0000")
+    line.updated_by = user
+    line.save()
+
+    receipt.reversed = True
+    receipt.reverse_reason = reason
+    receipt.reversed_on = today
+    receipt.updated_by = user
+    receipt.save(update_fields=["reversed", "reverse_reason", "reversed_on", "updated_by", "updated_at"])
+
+    _refresh_order_receipt_status(po, user=user)
+    return mirror
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Supplier bills — the third leg of the three-way match
+#
+#   1. Purchase order   what was agreed to buy, and at what rate
+#   2. Goods receipt    what actually arrived at the gate
+#   3. Supplier bill    what they are asking to be paid
+#
+# A bill is entered against receipts, never against the order, because the
+# order is a promise and the receipt is a fact. Quantity cannot exceed what
+# arrived; value is compared to what the goods were taken into stock at, and a
+# difference beyond tolerance stops the bill until somebody with the authority
+# says otherwise. That single control is what stops a supplier billing weight
+# that never crossed the gate.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def bill_match_tolerance():
+    return Decimal(INV_BILL_MATCH_TOLERANCE_PERCENT)
+
+
+def billable_receipts(*, supplier=None, purchase_order=None):
+    """Receipts with goods in the godown that no bill has been entered against."""
+    rows = (
+        PurchaseOrderItemReceived.objects
+        .select_related("purchase_order_item__purchase_order__supplier", "inventory_item")
+        .filter(reversed=False, reversal_of__isnull=True)
+    )
+    if supplier is not None:
+        rows = rows.filter(purchase_order_item__purchase_order__supplier=supplier)
+    if purchase_order is not None:
+        rows = rows.filter(purchase_order_item__purchase_order=purchase_order)
+    return [row for row in rows.order_by("receive_date", "id") if row.pending_bill_qty > FOUR_DP]
+
+
+def duplicate_supplier_invoice(*, supplier, supplier_invoice_num, exclude_pk=None):
+    """The bill this invoice number was already entered as, if it was.
+
+    The supplier's own number is the only thing that catches the same invoice
+    arriving twice — by post and again by hand, or from two people in the
+    office — which is the usual way a supplier ends up paid twice for one load.
+    """
+    rows = PurchaseBill.objects.filter(
+        supplier=supplier, supplier_invoice_num__iexact=(supplier_invoice_num or "").strip(), status=STATUS_POSTED
+    )
+    if exclude_pk:
+        rows = rows.exclude(pk=exclude_pk)
+    return rows.first()
+
+
+@transaction.atomic
+def create_purchase_bill(*, supplier, supplier_invoice_num, supplier_invoice_date, bill_date, lines,
+                         due_date=None, freight_amount=Decimal("0"), discount_amount=Decimal("0"),
+                         tax_amount=None, remarks="", variance_approved=False, user):
+    """Enter a supplier's invoice against goods already received.
+
+    ``lines`` is a list of dicts: ``receipt``, ``quantity``, ``rate`` and an
+    optional ``tax_perc``. Pass ``tax_amount`` to state the tax as one figure
+    off the face of the invoice instead of per line, which is how most supplier
+    bills in this trade are actually written.
+
+    A discount the supplier allowed is not taken back off the stock: those
+    units were valued when they arrived and some may be sold already. It shows
+    up as the bill coming in under what was received, which is a credit to
+    Purchase Price Variance — the goods did cost less than the books said.
+
+    Nothing here touches stock. The goods were valued when they arrived; this
+    releases that value out of GRN Clearing and puts the real payable in its
+    place. Where the bill and the receipt disagree the difference goes to
+    Purchase Price Variance, because re-costing the stock now would rewrite the
+    cost of units that may already have been sold.
+    """
+    from apps.finance.services import post_purchase_bill_to_gl  # lazy: finance imports inventory
+
+    if not supplier:
+        raise ValidationError("Pick the supplier this bill is from.")
+    supplier_invoice_num = (supplier_invoice_num or "").strip()
+    if not supplier_invoice_num:
+        raise ValidationError("Enter the supplier's own invoice number — it is how a duplicate bill is caught.")
+    existing = duplicate_supplier_invoice(supplier=supplier, supplier_invoice_num=supplier_invoice_num)
+    if existing:
+        raise ValidationError(
+            f"Duplicate: invoice {supplier_invoice_num} from this supplier was already entered as {existing.bill_num}."
+        )
+
+    clean = [line for line in lines if line.get("receipt") and Decimal(line.get("quantity") or 0) > 0]
+    if not clean:
+        raise ValidationError("Add at least one line with a quantity — pick the goods receipts this bill covers.")
+
+    # Every line has to come off the same order, because a bill posts one
+    # payable against one commitment and splitting it across orders would leave
+    # neither of them traceable to what was paid.
+    orders = {line["receipt"].purchase_order_item.purchase_order_id for line in clean}
+    if len(orders) > 1:
+        raise ValidationError("All the lines on one bill must belong to the same purchase order.")
+
+    prepared, goods_total, cleared_total = [], Decimal("0.00"), Decimal("0.00")
+    for line in clean:
+        receipt = PurchaseOrderItemReceived.objects.select_for_update().select_related(
+            "purchase_order_item__purchase_order", "inventory_item"
+        ).get(pk=line["receipt"].pk)
+        if receipt.purchase_order_item.purchase_order.supplier_id != supplier.pk:
+            raise ValidationError(f"{receipt.grn_number} was received from a different supplier.")
+        quantity = Decimal(line["quantity"])
+        rate = Decimal(line.get("rate") or 0)
+        if rate <= 0:
+            raise ValidationError("Every line needs a rate — the system will not guess what was agreed.")
+        if quantity > receipt.pending_bill_qty + FOUR_DP:
+            raise ValidationError(
+                f"{receipt.grn_number} has only {receipt.pending_bill_qty} left to bill; "
+                f"the bill is asking for {quantity}. You cannot be billed for goods that did not arrive."
+            )
+        amount = (quantity * rate).quantize(TWO_DP)
+        goods_total += amount
+        # What these same units are holding in GRN Clearing, at what they were
+        # received at — the figure the bill is being matched against.
+        cleared_total += (quantity * receipt.landed_rate).quantize(TWO_DP)
+        prepared.append((receipt, quantity, rate, amount, Decimal(line.get("tax_perc") or 0)))
+
+    freight = Decimal(freight_amount or 0).quantize(TWO_DP)
+    discount = Decimal(discount_amount or 0).quantize(TWO_DP)
+    if discount > goods_total + freight:
+        raise ValidationError("A discount cannot be more than the goods on the bill.")
+    billed_goods = (goods_total + freight - discount).quantize(TWO_DP)
+    variance = (billed_goods - cleared_total).quantize(TWO_DP)
+    drift = (abs(variance) / cleared_total * 100) if cleared_total else Decimal("0")
+
+    if drift > bill_match_tolerance() and not variance_approved:
+        raise ValidationError(
+            f"Blocked — this bill is {drift.quantize(TWO_DP)}% away from the {cleared_total} the goods were "
+            f"received at, against a tolerance of {bill_match_tolerance()}%. Check the rate against the "
+            "purchase order, or have the difference approved before posting."
+        )
+
+    if tax_amount is not None:
+        tax_total = Decimal(tax_amount or 0).quantize(TWO_DP)
+    else:
+        tax_total = sum(
+            ((quantity * rate * tax_perc / 100).quantize(TWO_DP) for _r, quantity, rate, _a, tax_perc in prepared),
+            Decimal("0.00"),
+        )
+
+    bill = PurchaseBill.objects.create(
+        supplier=supplier,
+        purchase_order_id=orders.pop(),
+        supplier_invoice_num=supplier_invoice_num,
+        supplier_invoice_date=supplier_invoice_date or None,
+        bill_date=bill_date or timezone.localdate(),
+        due_date=due_date or None,
+        goods_amount=(goods_total - discount).quantize(TWO_DP),
+        freight_amount=freight,
+        tax_amount=tax_total,
+        total_amount=(billed_goods + tax_total).quantize(TWO_DP),
+        cleared_amount=cleared_total,
+        variance_amount=variance,
+        variance_approved=bool(variance_approved and drift > bill_match_tolerance()),
+        remarks=remarks or "",
+        created_by=user,
+        updated_by=user,
+    )
+
+    for seq, (receipt, quantity, rate, amount, tax_perc) in enumerate(prepared, start=1):
+        PurchaseBillItem.objects.create(
+            bill=bill, receipt=receipt, inventory_item=receipt.inventory_item, seq_num=seq,
+            descr=receipt.descr, quantity=quantity, rate=rate,
+            receipt_rate=receipt.landed_rate.quantize(TWO_DP), tax_perc=tax_perc,
+            tax_amount=(quantity * rate * tax_perc / 100).quantize(TWO_DP), amount=amount,
+            created_by=user, updated_by=user,
+        )
+        receipt.billed_qty = (receipt.billed_qty or Decimal("0")) + quantity
+        # Carry the supplier's number onto the receipt too, so the goods
+        # receipt register can say at a glance what invoiced it.
+        receipt.invoice_num = supplier_invoice_num
+        receipt.invoice_date = supplier_invoice_date or receipt.invoice_date
+        receipt.updated_by = user
+        receipt.save(update_fields=["billed_qty", "invoice_num", "invoice_date", "updated_by", "updated_at"])
+
+    post_purchase_bill_to_gl(bill=bill, user=user)
+    return bill
+
+
+def can_reverse_bill(bill):
+    if bill is None:
+        return False, "Bill not found."
+    if bill.status == STATUS_REVERSED:
+        return False, "This bill has already been reversed."
+    if bill.reversal_of_id:
+        return False, "This is itself a reversal. If the bill really is due, enter it again."
+    return True, ""
+
+
+@transaction.atomic
+def reverse_purchase_bill(*, bill, reason, user):
+    """Withdraw a posted supplier bill.
+
+    Puts the value back into GRN Clearing and takes the payable off, which is
+    the state the books were in the moment before the bill was entered: goods
+    on hand, nobody billed for them yet. The receipts go back to unbilled, so
+    the correct invoice can be entered against them.
+    """
+    from apps.finance.services import reverse_gl_posting  # lazy: finance imports inventory
+
+    bill = PurchaseBill.objects.select_for_update().select_related("supplier").get(pk=bill.pk)
+    ok, why = can_reverse_bill(bill)
+    if not ok:
+        raise ValidationError(why)
+    if reason not in dict(INV_REVERSAL_REASONS):
+        raise ValidationError("A reversal needs a reason — one without it is unusable to whoever reads the books later.")
+
+    today = timezone.localdate()
+    mirror = PurchaseBill.objects.create(
+        supplier=bill.supplier,
+        purchase_order=bill.purchase_order,
+        # Not the supplier's number again: that number is unique per supplier
+        # among posted bills, and this reversal must not stand in the way of
+        # the corrected bill being entered under it.
+        supplier_invoice_num=f"REV/{bill.supplier_invoice_num}"[:80],
+        supplier_invoice_date=bill.supplier_invoice_date,
+        bill_date=today,
+        goods_amount=-bill.goods_amount, freight_amount=-bill.freight_amount,
+        tax_amount=-bill.tax_amount, total_amount=-bill.total_amount,
+        cleared_amount=-bill.cleared_amount, variance_amount=-bill.variance_amount,
+        status=STATUS_REVERSED, reversal_of=bill, reverse_reason=reason, reversed_on=today,
+        remarks=f"Reversal of {bill.bill_num} — {dict(INV_REVERSAL_REASONS)[reason]}",
+        created_by=user, updated_by=user,
+    )
+
+    for item in bill.items.select_related("receipt"):
+        receipt = PurchaseOrderItemReceived.objects.select_for_update().get(pk=item.receipt_id)
+        receipt.billed_qty = max(Decimal("0.0000"), (receipt.billed_qty or Decimal("0")) - item.quantity)
+        if receipt.billed_qty <= FOUR_DP:
+            receipt.invoice_num = ""
+            receipt.invoice_date = None
+        receipt.updated_by = user
+        receipt.save(update_fields=["billed_qty", "invoice_num", "invoice_date", "updated_by", "updated_at"])
+
+    reverse_gl_posting(
+        source_ref=f"inv_purchase_bills:{bill.pk}",
+        reversal_ref=f"inv_purchase_bills:{mirror.pk}",
+        voucher_date=today,
+        remarks=f"Reversal of purchase bill {bill.bill_num} — {dict(INV_REVERSAL_REASONS)[reason]}",
+        user=user,
+    )
+
+    bill.status = STATUS_REVERSED
+    bill.reverse_reason = reason
+    bill.reversed_on = today
+    bill.updated_by = user
+    bill.save(update_fields=["status", "reverse_reason", "reversed_on", "updated_by", "updated_at"])
+    return mirror

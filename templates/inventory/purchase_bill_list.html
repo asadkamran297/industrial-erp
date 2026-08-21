@@ -1,0 +1,131 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<section class="space-y-5">
+
+  <div class="pur-head-row">
+    <div>
+      <h1 class="pur-title title-accent">Purchase Bills</h1>
+      <p class="pur-lede">
+        Supplier invoices, each matched against the goods that actually arrived. A bill cannot be
+        entered for more than was received, at a rate far from what the goods were taken into
+        stock at, or under an invoice number this supplier has already been paid on.
+      </p>
+    </div>
+    {% if can_add %}
+    <a class="pur-btn pur-btn--primary" href="{% url 'inventory:purchase_bill_create' %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 5v14M5 12h14"></path>
+      </svg>
+      Enter a bill
+    </a>
+    {% endif %}
+  </div>
+
+  {# The figure this screen exists for. While GRN clearing is not empty the #}
+  {# payables are understated, and by exactly this much.                     #}
+  <div class="pur-tiles">
+    <a class="pur-tile {% if unbilled_count %}pur-tile--alert{% else %}pur-tile--good{% endif %}"
+       href="{% url 'inventory:purchase_bill_create' %}">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Received, not billed</p>
+        <p class="pur-tile-value">{{ unbilled_value|amount }}</p>
+        <p class="pur-tile-note{% if unbilled_count %} pur-tile-note--alert{% endif %}">
+          {% if unbilled_count %}
+            {{ unbilled_count }} goods receipt{{ unbilled_count|pluralize }} waiting for an invoice
+          {% else %}
+            GRN clearing is empty — every receipt is billed
+          {% endif %}
+        </p>
+      </div>
+    </a>
+
+    <div class="pur-tile pur-tile--money">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
+          <path d="M9 9h6M9 13h6"></path>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Bills entered</p>
+        <p class="pur-tile-value">{{ paginator.count|default:0 }}</p>
+        <p class="pur-tile-note">under the filters applied</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pur-card">
+    {% include "components/table/filter_bar.html" with table_id="bill-table" date_filters_enabled=True search_placeholder="Search by bill, invoice or supplier..." %}
+
+    <div class="overflow-x-auto">
+      <table id="bill-table" class="pur-table">
+        <thead>
+          <tr>
+            <th>Bill #</th>
+            <th>Date</th>
+            <th>Supplier</th>
+            <th>Their invoice</th>
+            <th>Against order</th>
+            <th class="pur-num">Variance</th>
+            <th class="pur-num">Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bill in bills %}
+          <tr {% if bill.status == "reversed" %}class="pur-void"{% endif %}>
+            <td>
+              <a class="pur-doc" href="{% url 'inventory:purchase_bill_detail' bill.pk %}">{{ bill.bill_num }}</a>
+              <span class="pur-sub">{{ bill.created_by.get_full_name|default:bill.created_by.username|default:"—" }}</span>
+            </td>
+            <td class="whitespace-nowrap">{{ bill.bill_date|date:"d M Y" }}</td>
+            <td>
+              <span class="pur-strong">{{ bill.supplier.name }}</span>
+              {% if bill.due_date %}<span class="pur-sub">Due {{ bill.due_date|date:"d M Y" }}</span>{% endif %}
+            </td>
+            <td>{{ bill.supplier_invoice_num }}</td>
+            <td class="whitespace-nowrap">{{ bill.purchase_order.purchase_num }}</td>
+            {# Coloured because it is the number worth arguing about, not #}
+            {# because it is an error: a small variance is ordinary.      #}
+            <td class="pur-num">
+              {% if bill.variance_amount %}
+                <span class="pur-strong {% if bill.variance_amount > 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                  {{ bill.variance_amount|amount }}
+                </span>
+                {% if bill.variance_approved %}<span class="pur-sub">approved</span>{% endif %}
+              {% else %}
+                <span class="pur-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="pur-num pur-strong">{{ bill.total_amount|amount }}</td>
+            <td>
+              {% if bill.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
+              {% elif bill.status == "reversed" %}<span class="pur-pill pur-pill--bad">Reversed</span>
+              {% else %}<span class="pur-pill pur-pill--done">Posted</span>{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8">
+            <div class="pur-empty">
+              No supplier bills yet.<br>
+              Goods have to be received before they can be billed — a bill with no goods receipt
+              behind it has nothing to check it against.
+            </div>
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

@@ -5,7 +5,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from apps.core.constants import INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE
+from apps.core.constants import INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, STATUS_ACTIVE
 from apps.core.forms import AutoSelectSingleChoiceMixin
 
 from .models import (
@@ -466,3 +466,81 @@ class PurchaseReturnDetailForm(StyledModelForm):
     class Meta:
         model = PurchaseReturnDetail
         fields = ("inventory_item", "quantity", "rate", "status")
+
+
+# ── Ending an order early, and unwinding a posted one ──────────────────────
+# Each of these is one field: a reason, picked from a list. A free-text box
+# here fills up with "adjustment" and tells the next reader nothing, and the
+# reason is the entire point of keeping the record rather than deleting it.
+
+
+class PurchaseOrderCancelForm(forms.Form):
+    reason = forms.ChoiceField(
+        choices=INV_PO_CANCEL_REASONS, label="Why is this order being cancelled?",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+
+class PurchaseOrderCloseShortForm(forms.Form):
+    reason = forms.ChoiceField(
+        choices=INV_PO_CLOSE_SHORT_REASONS, label="Why will the balance not arrive?",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+
+class ReversalReasonForm(forms.Form):
+    reason = forms.ChoiceField(
+        choices=INV_REVERSAL_REASONS, label="Why is this being reversed?",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
+
+class PurchaseApprovalLimitForm(forms.Form):
+    """What a buyer may commit on their own signature."""
+
+    amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, min_value=Decimal("0"), label="Buyer's approval limit",
+        help_text="Orders worth more than this stay as drafts until someone with approval rights releases them.",
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
+    )
+
+
+class PurchaseBillForm(forms.Form):
+    """The head of a supplier's invoice. The lines come off the goods receipts."""
+
+    supplier = forms.ModelChoiceField(
+        queryset=Supplier.objects.none(), widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    supplier_invoice_num = forms.CharField(
+        max_length=80, label="Supplier's invoice no",
+        help_text="Their number, not ours. It is what catches the same bill being entered twice.",
+        widget=forms.TextInput(attrs={"class": "form-input"}),
+    )
+    supplier_invoice_date = forms.DateField(
+        required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}),
+    )
+    bill_date = forms.DateField(widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
+    due_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
+    freight_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"), label="Freight on this bill",
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
+    )
+    discount_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"),
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
+    )
+    tax_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"), label="Sales tax",
+        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
+    )
+    remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-input", "rows": 2}))
+    # Only ever ticked deliberately, and only by somebody who has looked at why
+    # the supplier's figure and the goods receipt disagree.
+    variance_approved = forms.BooleanField(
+        required=False, label="I have checked and approved the difference",
+        widget=forms.CheckboxInput(attrs={"class": "form-check"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["supplier"].queryset = Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name")

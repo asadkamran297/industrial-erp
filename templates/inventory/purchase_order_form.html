@@ -180,6 +180,21 @@
   .entity-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e2e8f0; padding: .875rem 1.25rem; }
   .dark .entity-modal-head { border-bottom-color: #1e293b; }
   .entity-modal iframe { flex: 1; width: 100%; border: 0; }
+
+  /* A date box has to fit what the browser draws in it, which is not the value
+     we set. Chrome renders dd-mmm-yyyy with spacing of its own and then hangs a
+     calendar button off the right-hand end, so the field needs noticeably more
+     room than the text alone suggests -- at the old width the year was being
+     cut in half by the picker. Stated as a floor rather than a fixed width so
+     the boxes still share the row evenly on a wide screen and still wrap on a
+     narrow one. */
+  .pur-head input[type="date"] { min-width: 11.5rem; }
+  /* The picker sits at the edge of the box rather than on top of the year. */
+  .pur-head input[type="date"]::-webkit-calendar-picker-indicator { margin-left: .25rem; }
+
+  /* One row of header boxes, each free to take the room its content needs and
+     none of them able to squeeze another below what it can show. */
+  .pur-head > div { flex: 0 1 auto; min-width: 0; }
 </style>
 
 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -208,19 +223,19 @@
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
       </div>
 
-      <div class="ml-auto flex flex-wrap items-end gap-4">
+      <div class="pur-head ml-auto flex flex-wrap items-end gap-4">
         <div class="w-36">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order-no-preview">Order No</label>
           <input type="text" id="order-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_order_no }}" readonly>
         </div>
-        <div class="w-36">
+        <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order_date">Order Date</label>
           <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{{ posted.order_date|default:today|date:'Y-m-d' }}">
         </div>
         {# When the goods were promised. What makes a delivery late, and the #}
         {# only way an order quietly not arriving ever gets noticed. #}
         {% if layout.shown.expected_date %}
-        <div class="w-36">
+        <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="expected_date">Expected</label>
           <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full" value="{{ posted.expected_date|default:'' }}">
         </div>
@@ -233,7 +248,7 @@
         </div>
         {% endif %}
         {% if layout.shown.quot_date %}
-        <div class="w-36">
+        <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="quot_date">Quotation Date</label>
           <input type="date" name="quot_date" id="quot_date" class="form-input h-10 w-full" value="{{ posted.quot_date|default:'' }}">
         </div>

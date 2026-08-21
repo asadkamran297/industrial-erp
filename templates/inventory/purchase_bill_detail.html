@@ -1,0 +1,221 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<section class="space-y-5">
+
+  <div class="pur-head-row pur-noprint">
+    <div>
+      <h1 class="pur-title title-accent">{{ bill.bill_num }}</h1>
+      <p class="pur-lede">
+        {{ bill.supplier.name }} &middot; their invoice {{ bill.supplier_invoice_num }} &middot;
+        against <a class="pur-doc" href="{% url 'inventory:purchase_order_detail' bill.purchase_order_id %}">{{ bill.purchase_order.purchase_num }}</a>
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_bill_list' %}">Bill register</a>
+      <button type="button" class="pur-btn pur-btn--ghost" onclick="window.print()">Print</button>
+    </div>
+  </div>
+
+  {# A reversed bill is neither hidden nor deleted. Both halves stay on file #}
+  {# and net to nothing, which is what actually happened.                    #}
+  {% if bill.reversal_of_id %}
+  <div class="pur-note">
+    <span class="pur-note-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+      </svg>
+    </span>
+    <div>
+      <p><b>This is the reversal of
+        <a class="pur-doc" href="{% url 'inventory:purchase_bill_detail' bill.reversal_of_id %}">{{ bill.reversal_of.bill_num }}</a>.</b></p>
+      <p>Every debit and credit of the original appears here the other way round.</p>
+    </div>
+  </div>
+  {% elif bill.status == "reversed" %}
+  <div class="pur-note pur-note--bad">
+    <span class="pur-note-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6M9 9l6 6"></path>
+      </svg>
+    </span>
+    <div>
+      <p><b>This bill was reversed on {{ bill.reversed_on|date:"d M Y" }}.</b> Its net effect on the books is nil.</p>
+      <p>It stays here because deleting it would break the number sequence and take the document
+        out of the audit trail.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="pur-tiles">
+    <div class="pur-tile pur-tile--goods">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Goods</p>
+        <p class="pur-tile-value">{{ bill.goods_amount|amount }}</p>
+        <p class="pur-tile-note">plus freight {{ bill.freight_amount|amount }}</p>
+      </div>
+    </div>
+    <div class="pur-tile pur-tile--good">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 21V8h16v13"></path><path d="M9 21v-6h6v6"></path><path d="M2 8l10-5 10 5"></path>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Sales tax</p>
+        <p class="pur-tile-value">{{ bill.tax_amount|amount }}</p>
+        <p class="pur-tile-note">claimable input tax</p>
+      </div>
+    </div>
+    <div class="pur-tile {% if bill.variance_amount %}pur-tile--wait{% endif %}">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M3 12h18M3 18h18"></path>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Variance</p>
+        <p class="pur-tile-value">{{ bill.variance_amount|amount }}</p>
+        <p class="pur-tile-note{% if bill.variance_approved %} pur-tile-note--alert{% endif %}">
+          {% if bill.variance_approved %}approved beyond tolerance{% else %}to price variance{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="pur-tile pur-tile--money">
+      <span class="pur-tile-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle>
+        </svg>
+      </span>
+      <div class="pur-tile-body">
+        <p class="pur-tile-label">Payable</p>
+        <p class="pur-tile-value">{{ bill.total_amount|amount }}</p>
+        <p class="pur-tile-note">{% if bill.due_date %}due {{ bill.due_date|date:"d M Y" }}{% else %}no due date set{% endif %}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-5 lg:grid-cols-3">
+    <div class="lg:col-span-2 space-y-5">
+      <div class="pur-card">
+        <div class="pur-card-head">
+          <h2 class="pur-card-title">Billed lines</h2>
+          <span class="pur-card-hint">Each one tied to the receipt it was matched against</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="pur-table">
+            <thead>
+              <tr>
+                <th style="width: 2.5rem;">#</th>
+                <th>Item</th>
+                <th>Goods receipt</th>
+                <th class="pur-num">Quantity</th>
+                <th class="pur-num">Received at</th>
+                <th class="pur-num">Billed at</th>
+                <th class="pur-num">Difference</th>
+                <th class="pur-num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for line in bill.items.all %}
+              <tr>
+                <td class="pur-muted">{{ line.seq_num }}</td>
+                <td class="pur-strong">{{ line.descr }}</td>
+                <td class="whitespace-nowrap">{{ line.receipt.grn_number }}</td>
+                <td class="pur-num">{{ line.quantity|qty }}</td>
+                <td class="pur-num pur-muted">{{ line.receipt_rate|amount }}</td>
+                <td class="pur-num">{{ line.rate|amount }}</td>
+                <td class="pur-num {% if line.variance %}text-rose-600 dark:text-rose-400 pur-strong{% else %}pur-muted{% endif %}">
+                  {{ line.variance|amount }}
+                </td>
+                <td class="pur-num pur-strong">{{ line.amount|amount }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="7">Goods on this bill</td>
+                <td class="pur-num">{{ bill.goods_amount|amount }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-5">
+      {# The three-way match, stated as the two numbers that had to agree. #}
+      <div class="pur-card">
+        <div class="pur-card-head"><h2 class="pur-card-title">Three-way match</h2></div>
+        <div class="pur-card-body">
+          <dl>
+            <div class="pur-kv"><dt>Purchase order</dt><dd>{{ bill.purchase_order.purchase_num }}</dd></div>
+            <div class="pur-kv"><dt>Held in GRN clearing</dt><dd>{{ bill.cleared_amount|amount }}</dd></div>
+            <div class="pur-kv"><dt>Billed, goods and freight</dt><dd>{{ bill.goods_amount|add:bill.freight_amount|amount }}</dd></div>
+            <div class="pur-kv pur-kv--total">
+              <dt>Variance</dt>
+              <dd class="{% if bill.variance_amount > 0 %}text-rose-600 dark:text-rose-400{% elif bill.variance_amount < 0 %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                {{ bill.variance_amount|amount }}
+              </dd>
+            </div>
+          </dl>
+          <p class="pur-help">
+            The stock was not re-costed. It was valued when it arrived and some of those units may
+            already have been sold, so a rate nobody agreed to lands in the profit and loss account
+            for the period the bill was entered, not back onto the goods.
+          </p>
+        </div>
+      </div>
+
+      <div class="pur-card">
+        <div class="pur-card-head"><h2 class="pur-card-title">Bill total</h2></div>
+        <div class="pur-card-body">
+          <dl>
+            <div class="pur-kv"><dt>Goods</dt><dd>{{ bill.goods_amount|amount }}</dd></div>
+            <div class="pur-kv"><dt>Freight</dt><dd>{{ bill.freight_amount|amount }}</dd></div>
+            <div class="pur-kv"><dt>Sales tax</dt><dd>{{ bill.tax_amount|amount }}</dd></div>
+            <div class="pur-kv pur-kv--total"><dt>Payable to supplier</dt><dd>{{ bill.total_amount|amount }}</dd></div>
+          </dl>
+          {% if bill.remarks %}<p class="pur-help">{{ bill.remarks }}</p>{% endif %}
+        </div>
+      </div>
+
+      {% if can_reverse and can_reverse_perm %}
+      <div class="pur-card pur-noprint">
+        <div class="pur-card-head"><h2 class="pur-card-title text-rose-700 dark:text-rose-400">Reverse this bill</h2></div>
+        <div class="pur-card-body">
+          <p class="pur-help" style="margin-top: 0;">
+            Puts the value back into GRN clearing and takes the payable off — the state the books
+            were in the moment before this was entered: goods on hand, nobody billed for them yet.
+            The receipts go back to unbilled so the correct invoice can be entered against them.
+            Nothing is deleted; a mirror-image bill is posted and both stay on file.
+          </p>
+          <form method="post" action="{% url 'inventory:purchase_bill_reverse' bill.pk %}" class="mt-4">
+            {% csrf_token %}
+            <label class="pur-label" for="{{ reversal_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
+            {{ reversal_form.reason }}
+            <button type="submit" class="pur-btn pur-btn--danger mt-3 w-full">Post reversal</button>
+          </form>
+        </div>
+      </div>
+      {% elif not can_reverse %}
+      <div class="pur-note pur-note--warn pur-noprint">
+        <span class="pur-note-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path>
+          </svg>
+        </span>
+        <div>{{ cannot_reverse_because }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

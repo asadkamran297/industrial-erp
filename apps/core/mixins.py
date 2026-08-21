@@ -85,6 +85,12 @@ class PagePermissionRequiredMixin(PortalPermissionRequiredMixin):
             context.setdefault("can_add", user_has_permission(user, f"{page}.add"))
             context.setdefault("can_edit", user_has_permission(user, f"{page}.edit"))
             context.setdefault("can_delete", user_has_permission(user, f"{page}.delete"))
+            # Committing money and unwinding a posted entry. Separate flags
+            # because they are separate rights: the person who raises a
+            # document is not, by that fact alone, the one who signs it off or
+            # takes it back. Pages that grant neither simply never read them.
+            context.setdefault("can_approve", user_has_permission(user, f"{page}.approve"))
+            context.setdefault("can_reverse_perm", user_has_permission(user, f"{page}.reverse"))
         return context
 
 

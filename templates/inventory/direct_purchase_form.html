@@ -176,6 +176,15 @@
   .entity-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e2e8f0; padding: .875rem 1.25rem; }
   .dark .entity-modal-head { border-bottom-color: #1e293b; }
   .entity-modal iframe { flex: 1; width: 100%; border: 0; }
+
+  /* A date box has to fit what the browser draws in it, which is not the value
+     we set: Chrome renders dd-mmm-yyyy with spacing of its own and hangs a
+     calendar button off the right-hand end. At 10rem the year was being cut
+     into by the picker. A floor rather than a fixed width, so the boxes still
+     share the row on a wide screen and still wrap on a narrow one. */
+  .pur-head input[type="date"] { min-width: 11.5rem; }
+  .pur-head input[type="date"]::-webkit-calendar-picker-indicator { margin-left: .25rem; }
+  .pur-head > div { flex: 0 1 auto; min-width: 0; }
 </style>
 
 <h1 class="title-accent text-xl font-bold">Purchase Invoice</h1>
@@ -201,12 +210,12 @@
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
       </div>
 
-      <div class="ml-auto flex flex-wrap items-end gap-4">
+      <div class="pur-head ml-auto flex flex-wrap items-end gap-4">
         <div class="w-40">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="invoice-no-preview">Invoice No</label>
           <input type="text" id="invoice-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_invoice_no }}" readonly>
         </div>
-        <div class="w-40">
+        <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
           <input type="date" name="bill_date" id="bill_date" class="form-input h-10 w-full" value="{{ posted.bill_date|default:today|date:'Y-m-d' }}">
         </div>
