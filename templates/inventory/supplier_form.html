@@ -1,7 +1,7 @@
 {% extends embed_layout|default:"layouts/portal.html" %}
 {% block content %}
 <section class="space-y-6">
-  {% if not embed %}{% include "components/ui/page_header.html" with title=title %}{% endif %}
+  {% if not embed %}<div class="flex items-start gap-3">{% include "components/ui/back_button.html" %}<div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=title %}</div></div>{% endif %}
 
   <form method="post" x-data="{ tab: 'address' }"
         class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">

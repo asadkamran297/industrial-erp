@@ -1,6 +1,9 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title=page_title subtitle="Keep role names clear and attach only the permissions needed." %}
+<div class="flex items-start gap-3">
+  {% include "components/ui/back_button.html" %}
+  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=page_title subtitle="Keep role names clear and attach only the permissions needed." %}</div>
+</div>
 <form method="post" class="mt-6 max-w-4xl rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
   {% csrf_token %}
   <div class="grid gap-4 sm:grid-cols-2">

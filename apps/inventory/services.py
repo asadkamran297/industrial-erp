@@ -203,7 +203,7 @@ def apportion_freight(freight_amount, line_values):
     return shares
 
 
-def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, freight_amount=Decimal("0")):
+def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, freight_amount=Decimal("0"), grn_number=""):
     purchase_order_item = PurchaseOrderItem.objects.select_for_update().select_related("purchase_order", "inventory_item").get(pk=purchase_order_item.pk)
     if purchase_order_item.closed:
         raise ValidationError("This line was closed short — nothing more is expected on it. Re-open the order first if the goods have turned up after all.")
@@ -237,7 +237,10 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         receive_date=receive_date,
         invoice_num=invoice_num,
         invoice_date=invoice_date,
-        grn_number=f"GRN-{po.purchase_num}-{purchase_order_item.seq_num}",
+        # One delivery is one document, so the store's own GRN number is kept
+        # when it hands one over; the per-line fallback is only for the screens
+        # that receive a single row on its own.
+        grn_number=(grn_number or "").strip()[:80] or f"GRN-{po.purchase_num}-{purchase_order_item.seq_num}",
         rv_number=rv_number,
         extra_qty_tag=YES if extra_qty > 0 else NO,
         extra_qty=extra_qty,
@@ -331,6 +334,17 @@ def next_direct_purchase_number():
     """
     last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
     return f"PI-{last + 1:06d}"
+
+
+def next_grn_number():
+    """What the next goods receipt will be called; advisory, like the order one."""
+    numbers = [
+        int(value.split("-")[1])
+        for value in PurchaseOrderItemReceived.all_objects
+        .filter(grn_number__regex=r"^GRN-\d+$")
+        .values_list("grn_number", flat=True)
+    ]
+    return f"GRN-{(max(numbers) if numbers else 0) + 1}"
 
 
 def next_purchase_order_number():

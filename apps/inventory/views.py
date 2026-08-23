@@ -31,7 +31,7 @@ from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCan
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
-from .services import apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
 
@@ -2207,7 +2207,9 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         messages.success(request, f"Purchase order {order.purchase_num} saved for {net}.")
         if "save_and_print" in posted:
             return redirect("inventory:purchase_order_print", pk=order.pk)
-        return redirect("inventory:purchase_order_detail", pk=order.pk)
+        # Orders are raised in runs, so saving one hands back an empty form
+        # rather than the order just saved; the message names what was posted.
+        return redirect("inventory:purchase_order_create")
 
 
 class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
@@ -3787,9 +3789,28 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
         )
         if supplier is not None:
             rows = rows.filter(supplier=supplier)
-        return [order for order in rows if any(line.open_receive_qty > 0 for line in order.items.all())]
+        picked = []
+        for order in rows:
+            # The lines still owed on this order, hung off it so the picker can
+            # show what is actually outstanding without a second query per row.
+            order.open_lines = [line for line in order.items.all() if line.open_receive_qty > 0]
+            if not order.open_lines:
+                continue
+            # Totals over the whole order, not only the lines still open, so the
+            # picker states how far along the order is rather than what is left.
+            lines = list(order.items.all())
+            order.ordered_qty = sum((line.quantity + line.extra_qty for line in lines), Decimal("0.0000"))
+            order.received_qty = sum((line.total_receive_qty for line in lines), Decimal("0.0000"))
+            order.balance_qty = sum((line.open_receive_qty for line in lines), Decimal("0.0000"))
+            order.order_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
+            order.item_count = len(lines)
+            picked.append(order)
+        return picked
 
     def _context(self, request, supplier=None, order=None):
+        # Kept across the supplier/order reload, which is a GET, so a date typed
+        # before the order was picked is not quietly thrown away.
+        grn_date = (request.GET.get("grn_date") or "").strip()
         orders = self._open_orders(supplier=supplier)
         if order is not None and order not in orders:
             # Somebody arrived on a link to an order that has since been
@@ -3810,6 +3831,8 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             "selected_order": order,
             "lines": lines,
             "today": timezone.localdate(),
+            "next_grn_no": next_grn_number(),
+            "grn_date": grn_date,
             "clearing_balance": -(balance_of_grn_clearing()),
         }
 
@@ -3828,6 +3851,8 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             return redirect("inventory:goods_receipt_create")
 
         receive_date = request.POST.get("receive_date") or str(timezone.localdate())
+        # One delivery, one GRN number: every line booked in this pass carries it.
+        grn_number = (request.POST.get("grn_number") or "").strip()
         rv_number = " ".join(part for part in (
             (request.POST.get("dc_number") or "").strip(),
             (request.POST.get("vehicle") or "").strip(),
@@ -3887,6 +3912,7 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
                         remarks=line_note,
                         user=request.user,
                         freight_amount=freight,
+                        grn_number=grn_number,
                     )
                     receipt_pks.append(str(receipt.pk))
         except ValidationError as exc:

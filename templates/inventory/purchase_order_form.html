@@ -198,7 +198,7 @@
 </style>
 
 <div class="flex flex-wrap items-center justify-between gap-3">
-  <h1 class="title-accent text-xl font-bold">Purchase Order</h1>
+  <div class="flex items-center gap-3">{% include "components/ui/back_button.html" %}<h1 class="title-accent text-xl font-bold">Purchase Order</h1></div>
   {% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}
 </div>
 
@@ -207,23 +207,7 @@
 
     {# ── Header: who it is for on the left, which bill on the right ───────── #}
     <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
-      {# The label rides the border and the + rides inside, so picking a supplier #}
-      {# and adding one that is not on file read as the one control. #}
-      <div class="w-full max-w-md">
-        <div class="notch-field notch-field--action">
-          <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
-          <select name="supplier" id="supplier" class="form-select" required>
-            <option value="">Select supplier…</option>
-            {% for row in suppliers %}
-              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
-            {% endfor %}
-          </select>
-          <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
-        </div>
-        <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
-      </div>
-
-      <div class="pur-head ml-auto flex flex-wrap items-end gap-4">
+      <div class="pur-head order-1 ml-auto flex flex-wrap items-end gap-4 xl:flex-nowrap">
         <div class="w-36">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order-no-preview">Order No</label>
           <input type="text" id="order-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_order_no }}" readonly>
@@ -274,6 +258,23 @@
         </div>
         {% endfor %}
       </div>
+
+      {# The label rides the border and the + rides inside, so picking a supplier #}
+      {# and adding one that is not on file read as the one control. #}
+      <div class="order-2 w-full max-w-md basis-full">
+        <div class="notch-field notch-field--action">
+          <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
+          <select name="supplier" id="supplier" class="form-select" required>
+            <option value="">Select supplier…</option>
+            {% for row in suppliers %}
+              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
+        </div>
+        <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+      </div>
+
     </div>
 
     {# ── Lines ────────────────────────────────────────────────────────────── #}
