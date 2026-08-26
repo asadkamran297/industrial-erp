@@ -101,8 +101,8 @@
   }
   .grn-cell input:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
   .dark .grn-cell input { border-color: #334155; background: rgba(15, 23, 42, .6); color: #e2e8f0; }
-  .grn-cell input.is-over { border-color: #e11d48; background: #fff1f2; }
-  .dark .grn-cell input.is-over { border-color: #fb7185; background: rgba(136, 19, 55, .3); }
+  .grn-cell input.is-over { border-color: #f59e0b; background: #fffbeb; }
+  .dark .grn-cell input.is-over { border-color: #fbbf24; background: rgba(120, 53, 15, .3); }
 </style>
 
 <script>
@@ -318,7 +318,7 @@
                   <th>Item</th>
                   <th class="pur-num">Ordered</th>
                   <th class="pur-num">Already recd</th>
-                  <th class="pur-num">Max now</th>
+                  <th class="pur-num">Balance</th>
                   <th class="pur-num grn-cell">Received</th>
                   <th class="pur-num grn-cell">Rejected</th>
                   <th>Unit</th>
@@ -336,13 +336,13 @@
                   </td>
                   <td class="pur-num">{{ line.quantity|qty }}</td>
                   <td class="pur-num">{{ line.total_receive_qty|qty }}</td>
-                  {# The ceiling, stated beside the box rather than discovered #}
-                  {# by having the entry refused after it was typed.           #}
+                  {# The balance outstanding, seeded into the box. Typing over #}
+                  {# it is allowed and flagged, not refused.                    #}
                   <td class="pur-num" style="color: var(--primary-color); font-weight: 600;">{{ line.max_now|qty }}</td>
                   <td class="grn-cell">
                     <input type="number" step="0.0001" min="0" name="qty_{{ line.pk }}"
                            x-model.number="row.qty" :class="row.qty > max ? 'is-over' : ''"
-                           :max="max" value="{{ line.max_now|stringformat:'f' }}">
+                           value="{{ line.max_now|stringformat:'f' }}">
                   </td>
                   <td class="grn-cell">
                     <input type="number" step="0.0001" min="0" name="rej_{{ line.pk }}"
@@ -370,7 +370,7 @@
       <div class="grn-bar">
         <div class="grn-bar-actions">
           <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:grn_list' %}">Cancel</a>
-          <button type="submit" class="pur-btn pur-btn--primary" :disabled="!goods() || over()">
+          <button type="submit" class="pur-btn pur-btn--primary" :disabled="!goods()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M20 6 9 17l-5-5"></path>
             </svg>
@@ -421,10 +421,6 @@
       /* Freight is part of what the goods cost to bring in, so the value that
          lands in stock -- and in the journal beside it -- carries it. */
       landed() { return this.goods() + (Number(this.freight) || 0); },
-      /* A quantity above what the order still has outstanding is refused by the
-         server anyway; catching it here means it is refused before the page is
-         submitted rather than after. */
-      over() { return this.lines.some(row => row.qty > row.max); },
       money(value) {
         return (Math.round(value * 100) / 100).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },

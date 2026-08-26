@@ -209,11 +209,12 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         raise ValidationError("This line was closed short — nothing more is expected on it. Re-open the order first if the goods have turned up after all.")
     if purchase_order_item.purchase_order.status in (STATUS_DRAFT, STATUS_CANCELLED, STATUS_CLOSED_SHORT):
         raise ValidationError("Goods can only be received against an approved order that is still open.")
-    allowed = purchase_order_item.quantity + purchase_order_item.extra_qty - purchase_order_item.total_receive_qty
     if quantity <= 0:
         raise ValidationError("Receive quantity must be greater than zero.")
-    if quantity + extra_qty > allowed:
-        raise ValidationError("PO item cannot receive more than ordered quantity unless extra quantity is available.")
+    # What turned up is what turned up: a delivery may be short, exact, or over
+    # the ordered figure. The receipt records the fact; the order line is not a
+    # ceiling on it. Over-receipt shows up as a total above the ordered quantity
+    # and is settled on the bill, not by refusing the goods at the gate.
 
     po = purchase_order_item.purchase_order
 
