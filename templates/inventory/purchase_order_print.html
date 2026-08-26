@@ -2,6 +2,44 @@
 {% block title %}Purchase Order {{ order.purchase_num }}{% endblock %}
 
 {% block print_content %}
+  {# An order nobody has released is not an instruction to a supplier. Printed #}
+  {# unmarked it looks exactly like one, so it says on its face what it is.     #}
+  {% if order.status == "draft" %}
+  <style>
+    /* Sized against the page rather than in pixels, so it fills the sheet at
+       any paper size and does not run off the edge once rotated: the text is
+       laid across the diagonal, which is the longest line a page has. */
+    .po-watermark {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .po-watermark span {
+      transform: rotate(-32deg);
+      border: .12em solid rgba(220, 38, 38, .13);
+      border-radius: .15em;
+      padding: .1em .35em;
+      font-size: 9vw;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      color: rgba(220, 38, 38, .13);
+    }
+    /* The document keeps its own layer, so no figure is read through ink. */
+    .doc-title, .meta, .items, .totals, .sign-row, .footer, .org-header { position: relative; z-index: 1; }
+    @media print {
+      /* Paper units on paper: a viewport width means nothing to a printer. */
+      .po-watermark span { font-size: 1.5cm; }
+    }
+  </style>
+  <div class="po-watermark" aria-hidden="true"><span>Awaiting Approval</span></div>
+  {% endif %}
+
   <h1 class="doc-title">Purchase Order</h1>
 
   {# Three label/value pairs to a row, and only what the order carries. #}

@@ -34,9 +34,6 @@
   .pur-modal-title { font-size: 1rem; font-weight: 700; }
 
   /* The order as the paper it stands for. */
-  .pur-crumb { font-size: .8125rem; color: #94a3b8; }
-  .pur-crumb a:hover { color: var(--primary-color); }
-  .pur-crumb span + span { margin-left: .25rem; }
 
   .pur-doc-sheet {
     border: 1px solid #e2e8f0;
@@ -245,12 +242,7 @@
       {% url 'inventory:purchase_order_list' as orders_url %}
       {% include "components/ui/back_button.html" with back_url=orders_url %}
       <div>
-        <p class="pur-crumb">
-          <a href="{% url 'inventory:purchase_order_list' %}">Documents</a>
-          <span aria-hidden="true">&rsaquo;</span>
-          <span>{{ order.purchase_num }}</span>
-        </p>
-        <h1 class="pur-title title-accent">Purchase Order &mdash; {{ order.purchase_num }}</h1>
+        <h1 class="pur-title title-accent">Purchase Order</h1>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
@@ -316,7 +308,7 @@
       <div class="pur-modal-card" @click.stop>
         <h2 class="pur-modal-title" id="edit-title">Edit {{ order.purchase_num }}</h2>
         <p class="pur-help" style="margin-top: .25rem;">
-          Quantities, rates and discounts become editable. Nothing is saved until Update PO is used.
+          Quantities, rates and discounts become editable. Nothing is saved until Save PO is used.
         </p>
         <div class="mt-5 flex justify-end gap-3">
           <button type="button" class="pur-btn pur-btn--ghost" @click="askEdit = false">Cancel</button>
@@ -551,7 +543,7 @@
     <form method="post" id="order-lines" action="{% url 'inventory:purchase_order_lines_update' order.pk %}"
           class="pur-lines-save" x-show="editing" x-cloak>{% csrf_token %}
       <button type="button" class="pur-btn pur-btn--ghost" @click="editing = false">Cancel</button>
-      <button type="submit" class="pur-btn pur-btn--primary">Update PO</button>
+      <button type="submit" class="pur-btn pur-btn--primary">Save PO</button>
     </form>
     {% endif %}
 
