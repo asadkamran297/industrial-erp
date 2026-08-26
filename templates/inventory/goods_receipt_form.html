@@ -127,6 +127,8 @@
 <script>
   window.GRN_NEXT_NO = "{{ next_grn_no|escapejs }}";
   window.GRN_PICK_OPEN = {% if selected_supplier and orders and not selected_order %}true{% else %}false{% endif %};
+  {# ISO, not the display format: this feeds an <input type="date"> and is #}
+  {# posted back as the receipt date.                                       #}
   window.GRN_TODAY = "{{ grn_date|default_if_none:'' }}" || "{{ today|date:'Y-m-d' }}";
 </script>
 
@@ -227,7 +229,7 @@
               <path d="m9 6 6 6-6 6"></path>
             </svg>
             <span class="grn-pick-no">{{ row.purchase_num }}</span>
-            <span class="grn-pick-meta">{{ row.purchase_date|date:"d M Y" }}</span>
+            <span class="grn-pick-meta">{{ row.purchase_date|dmy }}</span>
             <span class="is-num">{{ row.item_count }}</span>
             <span class="is-num">{{ row.order_amount|amount }}</span>
             <span class="is-num">{{ row.ordered_qty|qty }}</span>

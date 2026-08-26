@@ -33,6 +33,78 @@
   .dark .pur-modal-card { background: #1e293b; }
   .pur-modal-title { font-size: 1rem; font-weight: 700; }
 
+  /* The order as the paper it stands for. */
+  .pur-crumb { font-size: .8125rem; color: #94a3b8; }
+  .pur-crumb a:hover { color: var(--primary-color); }
+  .pur-crumb span + span { margin-left: .25rem; }
+
+  .pur-doc-sheet {
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #fff;
+    padding: 1.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  }
+  .dark .pur-doc-sheet { border-color: #1e293b; background: #0f172a; }
+  .pur-doc-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #0f172a;
+  }
+  .dark .pur-doc-top { border-bottom-color: #cbd5e1; }
+  .pur-doc-org { font-size: 1.25rem; font-weight: 800; }
+  .pur-doc-sub { font-size: .8125rem; color: #94a3b8; }
+  .pur-doc-stamp { text-align: right; }
+  .pur-doc-kind {
+    font-size: .875rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--primary-color);
+  }
+  .pur-doc-no { font-size: 1.125rem; font-weight: 800; }
+  .pur-doc-date { font-size: .8125rem; color: #94a3b8; }
+
+  .pur-doc-parties {
+    display: grid;
+    gap: 1.5rem;
+    padding: 1.25rem 0;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 768px) { .pur-doc-parties { grid-template-columns: 1fr 1fr; } }
+  .pur-doc-cap {
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .pur-doc-name { font-size: 1rem; font-weight: 700; }
+  .pur-doc-status { font-size: 1rem; text-transform: uppercase; }
+  .pur-doc-table tfoot .pur-doc-total td {
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-weight: 700;
+  }
+  .dark .pur-doc-table tfoot .pur-doc-total td { border-top-color: #1e293b; background: rgba(15, 23, 42, .6); }
+
+  .pur-doc-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-top: 1.25rem;
+  }
+  .pur-doc-narration { font-size: .875rem; }
+  .pur-doc-value { display: flex; align-items: baseline; gap: 1.5rem; font-size: .875rem; color: #64748b; }
+  .pur-doc-value b { font-size: 1.125rem; color: inherit; }
+  .dark .pur-doc-value { color: #94a3b8; }
+
   /* The chain off this order, as chips: kind first so the row can be read
      down its left edge, the number beside it. */
   .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -63,13 +135,12 @@
       {% url 'inventory:purchase_order_list' as orders_url %}
       {% include "components/ui/back_button.html" with back_url=orders_url %}
       <div>
-      <h1 class="pur-title title-accent">{{ order.purchase_num }}</h1>
-      <p class="pur-lede">
-        {{ order.supplier.name }}
-        &middot; ordered {{ order.purchase_date|date:"d M Y" }}
-        {% if order.expected_date %}&middot; expected {{ order.expected_date|date:"d M Y" }}{% endif %}
-        {% if order.approved_by %}&middot; approved by {{ order.approved_by.get_full_name|default:order.approved_by.username }}{% endif %}
-      </p>
+        <p class="pur-crumb">
+          <a href="{% url 'inventory:purchase_order_list' %}">Documents</a>
+          <span aria-hidden="true">&rsaquo;</span>
+          <span>{{ order.purchase_num }}</span>
+        </p>
+        <h1 class="pur-title title-accent">Purchase Order &mdash; {{ order.purchase_num }}</h1>
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
@@ -131,7 +202,7 @@
     <div class="flex-1">
       <p>
         <b>{% if order.status == "cancelled" %}This order was cancelled{% else %}This order was closed short{% endif %}
-        on {{ order.closed_on|date:"d M Y" }}{% if order.closed_by %} by {{ order.closed_by.get_full_name|default:order.closed_by.username }}{% endif %}.</b>
+        on {{ order.closed_on|dmy }}{% if order.closed_by %} by {{ order.closed_by.get_full_name|default:order.closed_by.username }}{% endif %}.</b>
         {{ order.close_reason_label }}
       </p>
       {% if order.short_qty %}
@@ -174,23 +245,52 @@
   </div>
   {% endif %}
 
-  {# ── Order lines ─────────────────────────────────────────────────────── #}
-  <div class="pur-card">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Order lines</h2>
-      <span class="pur-card-hint">What was asked for, and how much of it has arrived</span>
+  {# ── The document ────────────────────────────────────────────────────── #}
+  {# Read as the paper it stands for: who it is from, who it is to, what was #}
+  {# ordered, what it comes to. What has since arrived against it is a       #}
+  {# separate story and is told in its own panel below.                      #}
+  <div class="pur-doc-sheet">
+    <div class="pur-doc-top">
+      <div>
+        <p class="pur-doc-org">{{ system_setting.company_name }}</p>
+        {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
+      </div>
+      <div class="pur-doc-stamp">
+        <p class="pur-doc-kind">Purchase Order</p>
+        <p class="pur-doc-no">{{ order.purchase_num }}</p>
+        <p class="pur-doc-date">{{ order.purchase_date|dmy }}</p>
+      </div>
     </div>
+
+    <div class="pur-doc-parties">
+      <div>
+        <p class="pur-doc-cap">Supplier</p>
+        <p class="pur-doc-name">{{ order.supplier.name }}</p>
+        <p class="pur-doc-sub">
+          {{ order.supplier.city|default:"" }}{% if order.supplier.city and order.supplier.ntn_number %} &middot; {% endif %}
+          {% if order.supplier.ntn_number %}NTN {{ order.supplier.ntn_number }}{% endif %}
+        </p>
+      </div>
+      <div>
+        <p class="pur-doc-cap">Status</p>
+        <p class="pur-doc-status">{{ order.get_status_display }}</p>
+        <p class="pur-doc-sub">
+          Ordered {{ order.purchase_date|dmy }}{% if order.expected_date %} &middot; expected {{ order.expected_date|dmy }}{% endif %}
+          {% if order.approved_by %}<br>Approved by {{ order.approved_by.get_full_name|default:order.approved_by.username }}{% endif %}
+        </p>
+      </div>
+    </div>
+
     <div class="overflow-x-auto">
-      <table class="pur-table">
+      <table class="pur-table pur-doc-table">
         <thead>
           <tr>
             <th style="width: 2.5rem;">#</th>
             <th>Item</th>
+            <th class="pur-num">Qty</th>
             <th>Unit</th>
             <th class="pur-num">Rate</th>
-            <th class="pur-num">Ordered</th>
-            <th class="pur-num">Received</th>
-            <th class="pur-num">Outstanding</th>
+            <th class="pur-num">Tax %</th>
             <th class="pur-num">Discount</th>
             <th class="pur-num">Amount</th>
             {% if order.status == 'raised' and can_edit %}<th class="pur-noprint"></th>{% endif %}
@@ -200,16 +300,14 @@
           {% for item in order.items.all %}
           <tr>
             <td class="pur-muted">{{ item.seq_num }}</td>
-            <td class="pur-strong">{{ item.descr }}
-              {% if item.closed %}<span class="pur-sub">balance given up on</span>{% endif %}
+            <td>
+              <span class="pur-strong">{{ item.descr }}</span>
+              <span class="pur-sub">{{ item.inventory_item.item_code }}{% if item.closed %} &middot; balance given up on{% endif %}</span>
             </td>
-            <td>{{ item.uom.title|default:"—" }}</td>
-            <td class="pur-num">{{ item.rate|amount }}</td>
             <td class="pur-num">{{ item.quantity|qty }}</td>
-            <td class="pur-num">{{ item.total_receive_qty|qty }}</td>
-            <td class="pur-num {% if item.open_receive_qty %}pur-strong{% else %}pur-muted{% endif %}">
-              {{ item.open_receive_qty|qty }}
-            </td>
+            <td>{{ item.uom.title|default:"&mdash;" }}</td>
+            <td class="pur-num">{{ item.rate|amount }}</td>
+            <td class="pur-num">{{ item.tax_perc|floatformat:"-2" }}</td>
             <td class="pur-num">{{ item.discount_amount|amount }}</td>
             <td class="pur-num pur-strong">{{ item.total_amount|amount }}</td>
             {% if order.status == 'raised' and can_edit %}
@@ -219,10 +317,30 @@
             {% endif %}
           </tr>
           {% empty %}
-          <tr><td colspan="10"><div class="pur-empty">No items added yet.</div></td></tr>
+          <tr><td colspan="9"><div class="pur-empty">No items added yet.</div></td></tr>
           {% endfor %}
         </tbody>
+        {% if order.items.all %}
+        <tfoot>
+          <tr class="pur-doc-total">
+            <td colspan="7">Total</td>
+            <td class="pur-num">{{ order_total|amount }}</td>
+            {% if order.status == 'raised' and can_edit %}<td class="pur-noprint"></td>{% endif %}
+          </tr>
+        </tfoot>
+        {% endif %}
       </table>
+    </div>
+
+    <div class="pur-doc-foot">
+      <div>
+        <p class="pur-doc-cap">Narration</p>
+        <p class="pur-doc-narration">{{ order.descr|default:"&mdash;"|linebreaksbr }}</p>
+      </div>
+      <div class="pur-doc-value">
+        <span>Document value</span>
+        <b>{{ order_total|amount }}</b>
+      </div>
     </div>
   </div>
 
@@ -246,7 +364,7 @@
           {% for receipt in receipts %}
           <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
             <td class="pur-strong">{{ receipt.grn_number }}</td>
-            <td class="whitespace-nowrap">{{ receipt.receive_date|date:"d M Y" }}</td>
+            <td class="whitespace-nowrap">{{ receipt.receive_date|dmy }}</td>
             <td>{{ receipt.descr }}</td>
             <td class="pur-num">{{ receipt.received_units|qty }}</td>
             <td class="pur-num">{{ receipt.landed_amount|amount }}</td>

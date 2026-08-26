@@ -7,7 +7,7 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">{{ voucher.voucher_no }}</h1>
-        <p class="mt-1 text-sm text-slate-500">{{ voucher.voucher_date|date:"l, d M Y" }}</p>
+        <p class="mt-1 text-sm text-slate-500">{{ voucher.voucher_date|dmy }}</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
@@ -43,7 +43,7 @@
       {% endif %}
       {% if voucher.bank_name %}<div><dt class="kpi-label">Bank</dt><dd class="mt-0.5">{{ voucher.bank_name }}</dd></div>{% endif %}
       {% if voucher.cheque_no %}
-        <div><dt class="kpi-label">Cheque</dt><dd class="mt-0.5">{{ voucher.cheque_no }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|date:"d M Y" }}{% endif %}</dd></div>
+        <div><dt class="kpi-label">Cheque</dt><dd class="mt-0.5">{{ voucher.cheque_no }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|dmy }}{% endif %}</dd></div>
       {% endif %}
       {% if voucher.transaction_ref %}<div><dt class="kpi-label">Reference</dt><dd class="mt-0.5">{{ voucher.transaction_ref }}</dd></div>{% endif %}
       {% if voucher.payment_receipt %}

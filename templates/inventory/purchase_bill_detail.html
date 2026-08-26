@@ -42,7 +42,7 @@
       </svg>
     </span>
     <div>
-      <p><b>This bill was reversed on {{ bill.reversed_on|date:"d M Y" }}.</b> Its net effect on the books is nil.</p>
+      <p><b>This bill was reversed on {{ bill.reversed_on|dmy }}.</b> Its net effect on the books is nil.</p>
       <p>It stays here because deleting it would break the number sequence and take the document
         out of the audit trail.</p>
     </div>
@@ -97,7 +97,7 @@
       <div class="pur-tile-body">
         <p class="pur-tile-label">Payable</p>
         <p class="pur-tile-value">{{ bill.total_amount|amount }}</p>
-        <p class="pur-tile-note">{% if bill.due_date %}due {{ bill.due_date|date:"d M Y" }}{% else %}no due date set{% endif %}</p>
+        <p class="pur-tile-note">{% if bill.due_date %}due {{ bill.due_date|dmy }}{% else %}no due date set{% endif %}</p>
       </div>
     </div>
   </div>

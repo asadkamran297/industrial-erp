@@ -148,7 +148,7 @@
               </td>
               <td>
                 <span class="pur-strong">{{ row.grn_number }}</span>
-                <span class="pur-sub">{{ row.receive_date|date:"d M Y" }}</span>
+                <span class="pur-sub">{{ row.receive_date|dmy }}</span>
               </td>
               <td>{{ row.descr }}</td>
               <td class="whitespace-nowrap">{{ row.order_ref.purchase_num }}</td>

@@ -86,10 +86,10 @@
               <a class="pur-doc" href="{% url 'inventory:purchase_bill_detail' bill.pk %}">{{ bill.bill_num }}</a>
               <span class="pur-sub">{{ bill.created_by.get_full_name|default:bill.created_by.username|default:"—" }}</span>
             </td>
-            <td class="whitespace-nowrap">{{ bill.bill_date|date:"d M Y" }}</td>
+            <td class="whitespace-nowrap">{{ bill.bill_date|dmy }}</td>
             <td>
               <span class="pur-strong">{{ bill.supplier.name }}</span>
-              {% if bill.due_date %}<span class="pur-sub">Due {{ bill.due_date|date:"d M Y" }}</span>{% endif %}
+              {% if bill.due_date %}<span class="pur-sub">Due {{ bill.due_date|dmy }}</span>{% endif %}
             </td>
             <td>{{ bill.supplier_invoice_num }}</td>
             <td class="whitespace-nowrap">{{ bill.purchase_order.purchase_num }}</td>

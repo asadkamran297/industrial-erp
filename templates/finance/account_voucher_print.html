@@ -9,7 +9,7 @@
 <table class="meta">
   <tr>
     <td class="lbl">Voucher No</td><td>{{ voucher.voucher_no }}</td>
-    <td class="lbl">Date</td><td>{{ voucher.voucher_date|date:"d-m-Y" }}</td>
+    <td class="lbl">Date</td><td>{{ voucher.voucher_date|dmy }}</td>
   </tr>
   <tr>
     <td class="lbl">Voucher Type</td>
@@ -25,7 +25,7 @@
   {% endif %}
   {% if voucher.cheque_no or voucher.transaction_ref %}
   <tr>
-    <td class="lbl">Cheque No</td><td>{{ voucher.cheque_no|default:"&mdash;" }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|date:"d-m-Y" }}{% endif %}</td>
+    <td class="lbl">Cheque No</td><td>{{ voucher.cheque_no|default:"&mdash;" }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|dmy }}{% endif %}</td>
     <td class="lbl">Reference</td><td>{{ voucher.transaction_ref|default:"&mdash;" }}</td>
   </tr>
   {% endif %}

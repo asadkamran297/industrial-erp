@@ -389,7 +389,6 @@
           <span>Total</span>
           <span class="pur-value" id="grand-total">0.00</span>
         </div>
-        <p class="mt-2 text-xs text-slate-400">Nothing is paid or received here. Stock and the books move when the goods arrive against this order.</p>
       </div>
       </div>
 
@@ -710,8 +709,13 @@
         unit.dataset.factor = String(baseFactor(row));
       }
       if (chosen) {
+        // A picked item fills the rest of its row: the unit it is handled in,
+        // what it was last bought at, and one of it. What is typed already is
+        // left alone -- the pick is filling the row in, not correcting it.
         const rate = row.querySelector('.line-rate');
         if (!rate.value) rate.value = chosen.rate ? money(chosen.rate) : '';
+        const qty = row.querySelector('.line-qty');
+        if (!num(qty)) qty.value = '1';
       }
     }
     if (e.target.classList.contains('line-unit')) restateLine(e.target.closest('.pur-row'));
@@ -724,9 +728,10 @@
     if (!rowsBox.children.length) addRow();
     renumber();
     recalc();
+    syncAllRequired();
   });
 
-  document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
+  document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); syncAllRequired(); });
   ['discount_amount', 'tax_amount', 'tax_percent'].forEach(id => {
     const box = document.getElementById(id);
     if (box) box.addEventListener('input', recalc);
@@ -886,9 +891,52 @@
     if (next.select) next.select();
   });
 
+  // A row with an item on it and nothing else is not an order line. Caught
+  // here rather than on the server, which drops such a row silently and would
+  // save an order missing a line the operator believes they entered.
+  //
+  // Every empty box on such a row is marked, not only the first, so one pass
+  // shows everything that has to be filled in. The mark comes off the moment
+  // the box is touched: it says what still needs doing, not what was done
+  // wrong, and it has no business staying on a box being corrected.
+  // A picker is swapped for a button of its own by searchable-select.js and
+  // the select behind it is hidden, so the mark and the focus both have to go
+  // to whatever is actually on screen.
+  // Validation is the browser's own: the boxes carry `required` and the
+  // browser reports on them. Nothing here draws a message.
+  //
+  // A row is only required once it has been started, because the form hands
+  // out blank ones and an untouched row is not a line somebody forgot to
+  // finish. The first row is the exception: an order with no lines on it is
+  // not an order, so that row is asked for from the start.
+  function syncRequired(row) {
+    const item = row.querySelector('.line-item');
+    const qty = row.querySelector('.line-qty');
+    const rate = row.querySelector('.line-rate');
+    const unit = row.querySelector('.line-unit');
+    const started = (item && item.value) || num(qty) > 0 || num(rate) > 0;
+    const wanted = started || row === rowsBox.children[0];
+    [item, qty, rate, unit].forEach(box => {
+      if (!box) return;
+      box.required = wanted;
+      // A number box left at 0 is as empty as one left blank, and `min` is
+      // what says so to the browser. The floor is the smallest figure the box
+      // actually accepts, so the browser's own message reads sensibly:
+      // quantities go to one decimal place, money to two.
+      if (box === qty) box.min = wanted ? '0.1' : '0';
+      if (box === rate) box.min = wanted ? '0.01' : '0';
+    });
+  }
+
+  function syncAllRequired() { Array.from(rowsBox.children).forEach(syncRequired); }
+
+  // What is required moves as the rows are filled in and emptied out.
+  ['input', 'change'].forEach(kind => rowsBox.addEventListener(kind, syncAllRequired));
+
   addRow();
   addRow();
   recalc();
+  syncAllRequired();
 })();
 </script>
 {% endblock %}

@@ -118,7 +118,7 @@
           <div class="activity-row">
             <span class="activity-main">
               <span class="activity-title">{{ sale.sale_num }}{% if sale.customer %} &middot; {{ sale.customer.customer_name }}{% endif %}</span>
-              <span class="activity-meta block">{{ sale.sale_date|date:"d M Y" }}</span>
+              <span class="activity-meta block">{{ sale.sale_date|dmy }}</span>
             </span>
             <span class="activity-value">{{ sale.net_amount|amount }}</span>
           </div>
@@ -138,7 +138,7 @@
           <div class="activity-row">
             <span class="activity-main">
               <a href="{% url 'finance:account_voucher_detail' voucher.pk %}" class="activity-title hover:underline">{{ voucher.voucher_no }} &middot; {{ voucher.get_voucher_type_display }}</a>
-              <span class="activity-meta block">{{ voucher.voucher_date|date:"d M Y" }}</span>
+              <span class="activity-meta block">{{ voucher.voucher_date|dmy }}</span>
             </span>
             <span class="activity-value">{{ voucher.debit_amount|amount }}</span>
           </div>

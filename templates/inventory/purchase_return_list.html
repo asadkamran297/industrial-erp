@@ -119,7 +119,7 @@
             <td class="px-4 py-3 font-medium">{{ row.return_num }}</td>
             <td class="px-4 py-3">{{ row.purchase_order.purchase_num }}</td>
             <td class="px-4 py-3">{{ row.supplier.name }}</td>
-            <td class="px-4 py-3">{{ row.return_date|date:"d-m-Y" }}</td>
+            <td class="px-4 py-3">{{ row.return_date|dmy }}</td>
             <td class="px-4 py-3 text-right">{{ row.returned_amount|amount }}</td>
             <td class="px-4 py-3">
               <div class="flex justify-end gap-1">

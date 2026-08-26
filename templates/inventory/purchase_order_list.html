@@ -596,7 +596,7 @@
           <td>
             <a class="po-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
           </td>
-          {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|date:"d-M-Y" }}</td>{% endif %}
+          {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|dmy }}</td>{% endif %}
           {% if "supplier" in columns %}
           <td>
             {# Who raised it has a column of its own; it is not repeated here. #}
@@ -606,7 +606,7 @@
           {% if "buyer" in columns %}
           <td class="whitespace-nowrap">{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>
           {% endif %}
-          {% if "expected" in columns %}<td class="whitespace-nowrap">{{ order.expected_date|date:"d-M-Y"|default:"—" }}</td>{% endif %}
+          {% if "expected" in columns %}<td class="whitespace-nowrap">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
           {% if "value" in columns %}<td class="po-right font-semibold">{{ order.total_amount|amount }}</td>{% endif %}
           {% if "received" in columns %}
           <td>
@@ -664,9 +664,9 @@
                         number: '{{ order.purchase_num|escapejs }}',
                         supplier: '{{ order.supplier.name|escapejs }}',
                         amount: '{{ order.total_amount|amount|escapejs }}',
-                        date: '{{ order.purchase_date|date:'d M Y'|escapejs }}',
+                        date: '{{ order.purchase_date|dmy|escapejs }}',
                         lines: '{{ order.line_count }}',
-                        expected: '{{ order.expected_date|date:'d M Y'|default:''|escapejs }}'
+                        expected: '{{ order.expected_date|dmy|default:''|escapejs }}'
                       })">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M20 6L9 17l-5-5"></path>

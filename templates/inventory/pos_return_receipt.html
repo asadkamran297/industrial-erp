@@ -28,7 +28,7 @@
     <div class="meta">
       <div class="row"><span>Return #</span><span>{{ sale_return.return_num }}</span></div>
       <div class="row"><span>Against Sale</span><span>{{ sale_return.sale_num }}</span></div>
-      <div class="row"><span>Date</span><span>{{ sale_return.return_date|date:"d-m-Y" }}</span></div>
+      <div class="row"><span>Date</span><span>{{ sale_return.return_date|dmy }}</span></div>
       <div class="row"><span>Customer</span><span>{{ sale_return.customer.customer_name|default:"Walk-in" }}</span></div>
     </div>
     <hr>

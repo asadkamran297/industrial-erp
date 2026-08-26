@@ -68,7 +68,7 @@
 
           {# Joined #}
           <td class="px-5 py-4 hidden lg:table-cell text-slate-500 dark:text-slate-400 text-sm">
-            {{ emp.doj|date:"d M Y"|default:emp.joining_date|date:"d M Y"|default:"—" }}
+            {{ emp.doj|dmy|default:emp.joining_date|dmy|default:"—" }}
           </td>
 
           {# Status badge #}

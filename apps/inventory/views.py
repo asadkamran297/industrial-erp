@@ -2321,6 +2321,9 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
                 receipts.append(receipt)
         context["receipts"] = sorted(receipts, key=lambda r: (r.receive_date, r.pk), reverse=True)
         context["linked_documents"] = linked_documents(self.object)
+        # What the document is for. The order carries no total of its own --
+        # the lines are the record -- so it is added up for the sheet.
+        context["order_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
         return context
 
 
@@ -2409,6 +2412,34 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         grand_total = sum((i.total_amount for i in items), Decimal("0"))
         context["grand_total"] = grand_total
         context["amount_in_words"] = amount_in_words(grand_total)
+        # The header, built from what this order actually carries. A box the
+        # site has switched off its form, or one nobody filled in, prints
+        # nothing at all -- a document full of "N/A" reads as a document that
+        # was not filled in.
+        supplier = self.object.supplier
+        approver = self.object.approved_by
+        # A box switched off in the form settings is off the document too: the
+        # site said it does not use it, and an order raised before it was
+        # switched off should not be the only one printing it.
+        shown = get_layout()["shown"]
+        pairs = [
+            ("PO No", self.object.purchase_num),
+            ("Date", self.object.purchase_date),
+            ("Status", self.object.get_status_display()),
+            ("Expected", self.object.expected_date if shown.get("expected_date", True) else ""),
+            ("Quot Num", self.object.quot_num if shown.get("quot_num", True) else ""),
+            ("Quot Date", self.object.quot_date if shown.get("quot_date", True) else ""),
+            ("Approved By", approver.get_full_name() or approver.username if approver else ""),
+            ("Supplier Name", supplier.name if supplier else ""),
+            ("Phone", (supplier.tel1 or supplier.tel2) if supplier else ""),
+            ("Email", supplier.email if supplier else ""),
+            ("NTN", supplier.ntn_number if supplier else ""),
+            ("Sales Tax", supplier.sale_tax_num if supplier else ""),
+        ]
+        context["meta_pairs"] = [(label, value) for label, value in pairs if value]
+        context["supplier_address"] = " ".join(
+            part for part in ((supplier.addr1 or ""), (supplier.addr2 or "")) if part
+        ).strip() if supplier else ""
         # Back to the list the document belongs to: a direct bill lives on the
         # purchase invoices screen, which has no order row to reopen.
         context["print_back_url"] = (

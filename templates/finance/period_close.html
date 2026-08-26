@@ -52,7 +52,7 @@
           <span class="tree-title">
             <a href="{% url 'finance:account_voucher_detail' voucher.pk %}" class="hover:underline">{{ voucher.voucher_no }}</a>
           </span>
-          <span class="tree-amount">{{ voucher.voucher_date|date:"d M Y" }}</span>
+          <span class="tree-amount">{{ voucher.voucher_date|dmy }}</span>
         </div>
       {% empty %}
         <p class="statement-empty">No period has been closed yet.</p>

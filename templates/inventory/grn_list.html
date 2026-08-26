@@ -270,7 +270,7 @@
                  class="text-[var(--primary-color)] hover:underline">{{ grn.purchase_num }}</a>
             </td>
             <td class="px-4 py-3">{{ grn.descr }}</td>
-            <td class="px-4 py-3">{{ grn.receive_date|date:"d-m-Y" }}</td>
+            <td class="px-4 py-3">{{ grn.receive_date|dmy }}</td>
             <td class="px-4 py-3 text-right">{{ grn.quantity|qty }}</td>
             <td class="px-4 py-3 text-right">{{ grn.retail_price|amount }}</td>
             <td class="px-4 py-3">

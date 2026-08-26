@@ -382,7 +382,10 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
         quot_num=quot_num or "",
         quot_date=quot_date or None,
         expected_date=expected_date or None,
-        descr=remarks or "",
+        # Every document says what it is for. Where nobody wrote a narration
+        # the obvious one is written for them, so a printed order is never
+        # blank where the reader expects a sentence.
+        descr=(remarks or "").strip() or f"Purchase order to {supplier.name}",
         # Whatever the site added to its own form; nothing here reads it.
         extra_data=extra_data or {},
         created_by=user,

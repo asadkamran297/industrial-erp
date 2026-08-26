@@ -20,7 +20,7 @@
   {% if not is_today or selected_type %}
     <a href="{% url 'finance:daybook' %}" class="toolbar-btn">Today</a>
   {% endif %}
-  <span class="toolbar-status">{{ day|date:"l, d M Y" }}</span>
+  <span class="toolbar-status">{{ day|dmy }}</span>
 </form>
 
 {# ── What kind of day it was, at a glance ── #}
@@ -105,7 +105,7 @@
         {% endif %}
       {% empty %}
         <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-slate-500">
-          No transactions posted on {{ day|date:"d M Y" }}.
+          No transactions posted on {{ day|dmy }}.
         </td></tr>
       {% endfor %}
     </tbody>

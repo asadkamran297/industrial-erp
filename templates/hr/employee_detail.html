@@ -37,7 +37,7 @@
             {% if employee.organization %}<span class="hero-chip">🏢 {{ employee.organization }}</span>{% endif %}
             {% if employee.branch %}<span class="hero-chip">📍 {{ employee.branch }}</span>{% endif %}
             {% if employee.job_type %}<span class="hero-chip">💼 {{ employee.job_type }}</span>{% endif %}
-            {% if employee.doj %}<span class="hero-chip">📅 Joined {{ employee.doj|date:"d M Y" }}</span>{% endif %}
+            {% if employee.doj %}<span class="hero-chip">📅 Joined {{ employee.doj|dmy }}</span>{% endif %}
           </div>
         </div>
 
@@ -84,7 +84,7 @@
       {% include "hr/_info_card.html" with icon="📧" label="Email" value=employee.email|default:"—" %}
       {% include "hr/_info_card.html" with icon="📱" label="Contact" value=employee.contact|default:"—" %}
       {% include "hr/_info_card.html" with icon="👤" label="Father / Husband" value=employee.father_husband_name|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🎂" label="Date of Birth" value=employee.dob|date:"d M Y"|default:"—" %}
+      {% include "hr/_info_card.html" with icon="🎂" label="Date of Birth" value=employee.dob|dmy|default:"—" %}
       {% include "hr/_info_card.html" with icon="💍" label="Marital Status" value=employee.marital_status|default:"—" %}
       {% include "hr/_info_card.html" with icon="🩸" label="Blood Group" value=employee.blood_group|default:"—" %}
       {% include "hr/_info_card.html" with icon="🕌" label="Religion" value=employee.religion|default:"—" %}
@@ -109,7 +109,7 @@
       {% include "hr/_info_card.html" with icon="🗂️" label="Department" value=employee.department|default:"—" %}
       {% include "hr/_info_card.html" with icon="💼" label="Designation" value=employee.designation|default:"—" %}
       {% include "hr/_info_card.html" with icon="📋" label="Job Type" value=employee.job_type|default:"—" %}
-      {% include "hr/_info_card.html" with icon="📅" label="Date of Joining" value=employee.doj|date:"d M Y"|default:"—" %}
+      {% include "hr/_info_card.html" with icon="📅" label="Date of Joining" value=employee.doj|dmy|default:"—" %}
       {% include "hr/_info_card.html" with icon="💰" label="Base Salary (PKR)" value=employee.salary|amount %}
       {% include "hr/_info_card.html" with icon="🏦" label="Bank" value=employee.bank|default:"—" %}
       {% include "hr/_info_card.html" with icon="🔢" label="Account Number" value=employee.account_number|default:"—" %}
