@@ -16,7 +16,7 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, View
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, STATUS_REVERSED, YES
@@ -2168,6 +2168,10 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             except (InvalidOperation, ValueError):
                 messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
                 return render(request, self.template_name, self._context(posted=posted))
+            # Order quantities are kept to one decimal place, matching what the
+            # line box accepts, so a figure typed finer somewhere else does not
+            # come back to an operator as a quantity they cannot re-enter.
+            quantity = quantity.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             if quantity > 0:
                 # With the unit column off nothing is posted, and the line is
                 # taken as written in the item's own unit.

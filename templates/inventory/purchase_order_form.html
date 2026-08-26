@@ -429,7 +429,7 @@
       '<div class="text-center text-xs text-slate-400 row-num"></div>' +
       '<div class="pur-item-cell"><select name="item_id" class="form-select line-item">' + itemOptions('') + '</select>' +
         (SHOW.stock ? '<span class="stock-chip line-stock" hidden></span>' : '') + '</div>' +
-      '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
+      '<div><input type="number" step="0.1" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
         '<span class="unit-note line-qty-unit"></span></div>' +
       (SHOW.unit ? '<div><select name="line_uom" class="pur-cell line-unit">' + unitOptions('') + '</select></div>' : '') +
       '<div><input type="number" step="0.01" min="0" name="rate" class="pur-cell pur-right line-rate" placeholder="0.00">' +
@@ -547,7 +547,7 @@
     const qty = row.querySelector('.line-qty');
     const rate = row.querySelector('.line-rate');
     const ratio = was / now;
-    if (num(qty)) qty.value = String(Math.round(num(qty) * ratio * 10000) / 10000);
+    if (num(qty)) qty.value = String(Math.round(num(qty) * ratio * 10) / 10);
     // The price box is grouped as it is typed, so a restated figure is written
     // the same way rather than waiting for the next keystroke to catch up.
     if (num(rate)) {
@@ -610,8 +610,21 @@
     writeAmount(total);
   }
 
+  // Quantities are entered to one decimal place. The box is cut back as it is
+  // typed rather than being refused on submit, so what is on screen is always
+  // what will be posted.
+  function trimQty(box) {
+    const typed = String(box.value);
+    const dot = typed.indexOf('.');
+    if (dot === -1 || typed.length - dot <= 2) return;
+    box.value = typed.slice(0, dot + 2);
+  }
+
   // Delegated: rows are built and dropped as the operator works.
-  rowsBox.addEventListener('input', recalc);
+  rowsBox.addEventListener('input', e => {
+    if (e.target.classList.contains('line-qty')) trimQty(e.target);
+    recalc();
+  });
   rowsBox.addEventListener('change', e => {
     if (e.target.classList.contains('line-item')) {
       // Picking an item brings its unit and its expected cost with it.
