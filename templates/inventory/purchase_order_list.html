@@ -772,8 +772,8 @@
                   <th class="po-right">Discount</th>
                   <th class="po-right">Amount</th>
                   <th class="po-right">Received</th>
-                  <th>Goods receipt</th>
                   <th class="po-right">Balance</th>
+                  <th>Goods receipt</th>
                 </tr>
               </thead>
               <tbody>
@@ -790,6 +790,11 @@
                   <td class="po-right">{{ poi.discount_amount|amount }}</td>
                   <td class="po-right font-semibold">{{ poi.total_amount|amount }}</td>
                   <td class="po-right {% if poi.total_receive_qty %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.total_receive_qty|qty }}</td>
+                  {# What is still genuinely expected: a line closed short is #}
+                  {# nil here, not outstanding, the same as everywhere else.  #}
+                  <td class="po-right {% if poi.open_receive_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">
+                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>{% else %}{{ poi.open_receive_qty|qty }}{% endif %}
+                  </td>
                   {# Every note this line came in under, not only the last: a #}
                   {# delivery a week for a month is four, and which of them a  #}
                   {# quantity arrived on is the question being asked here.     #}
@@ -802,11 +807,6 @@
                     {% empty %}
                     <span class="po-lines-nil">&mdash;</span>
                     {% endfor %}
-                  </td>
-                  {# What is still genuinely expected: a line closed short is #}
-                  {# nil here, not outstanding, the same as everywhere else.  #}
-                  <td class="po-right {% if poi.open_receive_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">
-                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>{% else %}{{ poi.open_receive_qty|qty }}{% endif %}
                   </td>
                 </tr>
                 {% endfor %}

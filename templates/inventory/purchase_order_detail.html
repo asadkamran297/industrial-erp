@@ -68,6 +68,23 @@
   }
   .pur-doc-no { font-size: 1.125rem; font-weight: 800; }
   .pur-doc-date { font-size: .8125rem; color: #94a3b8; }
+  /* Lifted from the register so the two screens cannot drift apart. */
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--draft { color: #7c3aed; background: #ede9fe; }
+  .po-pill--open { color: #b45309; background: #fef3c7; }
+  .po-pill--late { color: #dc2626; background: #fee2e2; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--dead { color: #475569; background: #e2e8f0; }
 
   .pur-doc-parties {
     display: grid;
@@ -75,7 +92,13 @@
     padding: 1.25rem 0;
     grid-template-columns: 1fr;
   }
-  @media (min-width: 768px) { .pur-doc-parties { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 768px) {
+    .pur-doc-parties { grid-template-columns: 1fr 1fr; }
+    /* The status sits against the right edge, under the document's own
+       number, so the sheet reads down both margins. */
+    .pur-doc-right { text-align: right; }
+  }
+
   .pur-doc-cap {
     font-size: .6875rem;
     font-weight: 700;
@@ -84,7 +107,6 @@
     color: #94a3b8;
   }
   .pur-doc-name { font-size: 1rem; font-weight: 700; }
-  .pur-doc-status { font-size: 1rem; text-transform: uppercase; }
   .pur-doc-table tfoot .pur-doc-total td {
     border-top: 1px solid #e2e8f0;
     background: #f8fafc;
@@ -100,6 +122,69 @@
     gap: 1.5rem;
     padding-top: 1.25rem;
   }
+  .pur-in { font-weight: 600; color: #047857; }
+  .pur-due { font-weight: 600; color: #b45309; }
+  .pur-nil { color: #94a3b8; }
+  /* The notes a line came in under, as chips: several fit without widening
+     the column past the money beside it. */
+  .pur-grns { min-width: 9rem; }
+  .pur-grn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .25rem;
+    margin: 0 .25rem .25rem 0;
+    border-radius: .25rem;
+    background: #e0f2fe;
+    padding: .0625rem .3125rem;
+    font-size: .625rem;
+    font-weight: 700;
+    color: #0369a1;
+    white-space: nowrap;
+  }
+  .pur-grn:hover { background: #bae6fd; }
+  .dark .pur-grn { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
+  .dark .pur-grn:hover { background: rgba(3, 105, 161, .4); }
+  .pur-grn-qty { font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
+  /* A note and the lines under it: the note reads as the row, the lines as
+     the account behind it. */
+  .pur-note-row > td { background: #f8fafc; }
+  .dark .pur-note-row > td { background: rgba(15, 23, 42, .55); }
+  .pur-lines-row:hover > td { background: #f8fafc; }
+  .dark .pur-lines-row:hover > td { background: rgba(15, 23, 42, .55); }
+  .pur-lines-cell { background: #f8fafc; padding: .75rem 1rem 1rem 2.5rem !important; }
+  .dark .pur-lines-cell { background: rgba(15, 23, 42, .55); }
+  .pur-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .pur-lines thead th {
+    padding: .375rem .5rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .pur-lines thead th { border-bottom-color: #1e293b; }
+  .pur-lines tbody td { padding: .375rem .5rem; border-bottom: 1px solid #eef2f7; }
+  .dark .pur-lines tbody td { border-bottom-color: rgba(30, 41, 59, .7); }
+  .pur-lines tbody tr:last-child td { border-bottom: 0; }
+  .pur-in { font-weight: 600; color: #047857; }
+  .pur-due { font-weight: 600; color: #b45309; }
+  .pur-nil { color: #94a3b8; }
+  .pur-fold {
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .375rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #475569;
+  }
+  .pur-fold:hover { background: #e2e8f0; }
+  .dark .pur-fold { border-color: #475569; color: #cbd5e1; }
   .pur-doc-narration { font-size: .875rem; }
   .pur-doc-value { display: flex; align-items: baseline; gap: 1.5rem; font-size: .875rem; color: #64748b; }
   .pur-doc-value b { font-size: 1.125rem; color: inherit; }
@@ -130,7 +215,7 @@
 
 <section class="space-y-5">
 
-  <div class="pur-head-row pur-noprint" x-data="{ cancelling: false }">
+  <div class="pur-head-row pur-noprint" x-data="{ cancelling: false, closing: false }">
     <div class="flex items-start gap-3">
       {% url 'inventory:purchase_order_list' as orders_url %}
       {% include "components/ui/back_button.html" with back_url=orders_url %}
@@ -144,7 +229,30 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      {# Everything the register offers on this order's row, offered here as #}
+      {# well: the page an order is opened on should not be the one place    #}
+      {# its next step is missing.                                           #}
       <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
+
+      {# What is still owed on the lines, not a percentage: an order that took #}
+      {# more than it asked for on one line can still be short on another.      #}
+      {% if order.is_live and outstanding_qty and can_edit %}
+      <a class="pur-btn pur-btn--ghost"
+         href="{% url 'inventory:goods_receipt_create' %}?supplier={{ order.supplier_id }}&amp;order={{ order.pk }}"
+         title="Book the goods in against this order">Receive goods</a>
+      {% endif %}
+
+      {% if order.unbilled_value and can_edit %}
+      <a class="pur-btn pur-btn--ghost"
+         href="{% url 'inventory:purchase_bill_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}"
+         title="Enter the supplier's invoice against what arrived">Enter bill</a>
+      {% endif %}
+
+      {% if order.days_late %}
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' order.supplier_id %}"
+         title="{{ order.days_late }} day{{ order.days_late|pluralize }} late &mdash; supplier contact details">Chase supplier</a>
+      {% endif %}
+
       {% if order.status == "draft" and can_edit %}
       <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">
         {% csrf_token %}
@@ -155,6 +263,11 @@
           Approve order
         </button>
       </form>
+      {% endif %}
+
+      {% if can_approve and can_close_short %}
+      <button type="button" class="pur-btn pur-btn--danger" @click="closing = true"
+              title="The balance is not coming">Close PO</button>
       {% endif %}
 
       {# Cancelling is done from here, in a dialog, rather than from a panel #}
@@ -185,6 +298,34 @@
         <div class="mt-5 flex justify-end gap-3">
           <button type="button" class="pur-btn pur-btn--ghost" @click="cancelling = false">Keep the order</button>
           <button type="submit" class="pur-btn pur-btn--danger">Cancel order</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if can_approve and can_close_short %}
+    <div class="pur-modal" x-show="closing" x-cloak @click.self="closing = false"
+         @keydown.escape.window="closing = false" role="dialog" aria-modal="true" aria-labelledby="close-title">
+      <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-modal-card" @click.stop>
+        {% csrf_token %}
+        <h2 class="pur-modal-title" id="close-title">Close {{ order.purchase_num }}</h2>
+        {# The balance stops counting as goods on order, which is the figure the #}
+        {# next reorder decision is made on. Nothing is posted -- an order never #}
+        {# had an entry -- and the order re-opens if the goods do turn up.       #}
+        <p class="pur-help" style="margin-top: .25rem;">
+          Writes off the outstanding <b>{{ outstanding_qty|qty }} units</b> as never arriving.
+        </p>
+        <div class="mt-4">
+          <label class="pur-label" for="{{ close_short_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
+          {{ close_short_form.reason }}
+        </div>
+        <div class="mt-3">
+          <label class="pur-label" for="{{ close_short_form.remarks.id_for_label }}">Remarks</label>
+          {{ close_short_form.remarks }}
+        </div>
+        <div class="mt-5 flex justify-end gap-3">
+          <button type="button" class="pur-btn pur-btn--ghost" @click="closing = false">Leave it open</button>
+          <button type="submit" class="pur-btn pur-btn--danger">Close PO</button>
         </div>
       </form>
     </div>
@@ -255,6 +396,8 @@
         <p class="pur-doc-org">{{ system_setting.company_name }}</p>
         {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
       </div>
+      {# Kind, number, date and where the order stands: everything that names #}
+      {# the document, in the corner a document is named in.                   #}
       <div class="pur-doc-stamp">
         <p class="pur-doc-kind">Purchase Order</p>
         <p class="pur-doc-no">{{ order.purchase_num }}</p>
@@ -262,23 +405,22 @@
       </div>
     </div>
 
+    {# Who it is on and where it stands, side by side: the two things read #}
+    {# together, so they sit on one line rather than one under the other.  #}
     <div class="pur-doc-parties">
-      <div>
-        <p class="pur-doc-cap">Supplier</p>
-        <p class="pur-doc-name">{{ order.supplier.name }}</p>
-        <p class="pur-doc-sub">
-          {{ order.supplier.city|default:"" }}{% if order.supplier.city and order.supplier.ntn_number %} &middot; {% endif %}
-          {% if order.supplier.ntn_number %}NTN {{ order.supplier.ntn_number }}{% endif %}
-        </p>
-      </div>
-      <div>
-        <p class="pur-doc-cap">Status</p>
-        <p class="pur-doc-status">{{ order.get_status_display }}</p>
-        <p class="pur-doc-sub">
-          Ordered {{ order.purchase_date|dmy }}{% if order.expected_date %} &middot; expected {{ order.expected_date|dmy }}{% endif %}
-          {% if order.approved_by %}<br>Approved by {{ order.approved_by.get_full_name|default:order.approved_by.username }}{% endif %}
-        </p>
-      </div>
+      <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ order.supplier.name }}</span></p>
+      {# The same pill the register draws, in the same words: one order shown #}
+      {# on two screens must not appear to be in two different states.        #}
+      <p class="pur-doc-right">
+        <span class="pur-doc-cap">Status:</span>
+        {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
+        {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
+        {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partly received</span>
+        {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Received</span>
+        {% elif order.status == "closed_short" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
+        {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Cancelled</span>
+        {% else %}<span class="po-pill po-pill--open">Awaiting goods</span>{% endif %}
+      </p>
     </div>
 
     <div class="overflow-x-auto">
@@ -345,48 +487,98 @@
   </div>
 
   {# ── Goods received against it ───────────────────────────────────────── #}
-  {% if receipts %}
-  <div class="pur-card">
+  {# Grouped by the note the goods came in on, because that is the document  #}
+  {# that exists: a delivery arrived, several lines came in under it. The    #}
+  {# note reads as the row and its items as the account behind it, the same  #}
+  {# way an order opens out on the register. Every note starts open.         #}
+  {% if receipt_notes %}
+  <div class="pur-card" x-data="{ open: [] }">
     <div class="pur-card-head">
       <h2 class="pur-card-title">Goods received</h2>
-      <span class="pur-card-hint">A posted receipt is withdrawn by reversing it, never by deleting it</span>
     </div>
     <div class="overflow-x-auto">
-      <table class="pur-table">
+      <table class="pur-table pur-recd-table">
         <thead>
           <tr>
-            <th>GRN</th><th>Date</th><th>Item</th>
-            <th class="pur-num">Quantity</th><th class="pur-num">Landed value</th>
-            <th>Billed</th><th class="pur-num pur-noprint"></th>
+            <th style="width: 2.5rem;"></th>
+            <th>Goods receipt</th>
+            <th>Date</th>
+            <th class="pur-num">Items</th>
+            <th class="pur-num">Ordered</th>
+            <th class="pur-num">Received</th>
+            <th class="pur-num">Balance</th>
+            <th class="pur-num">Landed value</th>
           </tr>
         </thead>
         <tbody>
-          {% for receipt in receipts %}
-          <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
-            <td class="pur-strong">{{ receipt.grn_number }}</td>
-            <td class="whitespace-nowrap">{{ receipt.receive_date|dmy }}</td>
-            <td>{{ receipt.descr }}</td>
-            <td class="pur-num">{{ receipt.received_units|qty }}</td>
-            <td class="pur-num">{{ receipt.landed_amount|amount }}</td>
+          {% for note in receipt_notes %}
+          <tr class="pur-note-row">
             <td>
-              {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
-              {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
-              {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
-              {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
+              <button type="button" class="pur-fold"
+                      @click="open = open.includes({{ forloop.counter0 }}) ? open.filter(n => n !== {{ forloop.counter0 }}) : [...open, {{ forloop.counter0 }}]"
+                      :aria-expanded="open.includes({{ forloop.counter0 }}) ? 'true' : 'false'"
+                      aria-label="Show the items on this goods receipt">
+                <span x-text="open.includes({{ forloop.counter0 }}) ? '−' : '+'">+</span>
+              </button>
             </td>
-            <td class="pur-num pur-noprint">
-              {% if receipt.can_reverse and can_reverse_perm %}
-              <form method="post" action="{% url 'inventory:goods_receipt_reverse' receipt.pk %}"
-                    class="flex items-center justify-end gap-2">
-                {% csrf_token %}
-                <select name="reason" class="form-select" style="max-width: 13rem; height: 1.875rem; padding-top: 0; padding-bottom: 0; font-size: .75rem;">
-                  {% for value, label in reversal_form.reason.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="pur-btn pur-btn--danger pur-btn--sm">Reverse</button>
-              </form>
-              {% elif receipt.cannot_reverse_because and can_reverse_perm %}
-              <span class="pur-sub" style="text-align: right;">{{ receipt.cannot_reverse_because }}</span>
-              {% endif %}
+            <td class="pur-strong">
+              <a href="{% url 'inventory:grn_print' order.pk %}?receipts={{ note.pks|join:',' }}&amp;reprint=1"
+                 target="_blank" class="pur-doc">{{ note.number }}</a>
+            </td>
+            <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
+            <td class="pur-num pur-muted">{{ note.lines|length }}</td>
+            <td class="pur-num">{{ note.ordered|qty }}</td>
+            <td class="pur-num pur-in">{{ note.quantity|qty }}</td>
+            <td class="pur-num {% if note.balance %}pur-due{% else %}pur-nil{% endif %}">{{ note.balance|qty }}</td>
+            <td class="pur-num pur-strong">{{ note.value|amount }}</td>
+          </tr>
+
+          {# What came in under it, stepped in and drawn quieter, so the notes #}
+          {# still read as the list and the items read as detail on one.       #}
+          <tr class="pur-lines-row" x-show="open.includes({{ forloop.counter0 }})" x-cloak>
+            <td colspan="8" class="pur-lines-cell">
+              <table class="pur-lines">
+                <thead>
+                  <tr>
+                    <th style="width: 2rem;">#</th>
+                    <th>Item</th>
+                    <th class="pur-num">Ordered</th>
+                    <th>Unit</th>
+                    <th class="pur-num">Rate</th>
+                    <th class="pur-num">Discount</th>
+                    <th class="pur-num">Amount</th>
+                    <th class="pur-num">Received</th>
+                    <th class="pur-num">Balance</th>
+                    <th>Billed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {# The order line as it stands, and what this note took   #}
+                  {# against it: "received" is this delivery, "balance" is  #}
+                  {# what the line is still owed after every delivery.      #}
+                  {% for receipt in note.lines %}
+                  <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
+                    <td class="pur-muted">{{ receipt.line.seq_num }}</td>
+                    <td class="pur-strong">{{ receipt.descr }}</td>
+                    <td class="pur-num">{{ receipt.line.quantity|qty }}</td>
+                    <td>{{ receipt.line.uom.title|default:"&mdash;" }}</td>
+                    <td class="pur-num">{{ receipt.line.rate|amount }}</td>
+                    <td class="pur-num">{{ receipt.line.discount_amount|amount }}</td>
+                    <td class="pur-num pur-strong">{{ receipt.line.total_amount|amount }}</td>
+                    <td class="pur-num pur-in">{{ receipt.received_units|qty }}</td>
+                    <td class="pur-num {% if receipt.line.open_receive_qty %}pur-due{% else %}pur-nil{% endif %}">
+                      {% if receipt.line.closed %}<span class="pur-nil">Closed</span>{% else %}{{ receipt.line.open_receive_qty|qty }}{% endif %}
+                    </td>
+                    <td>
+                      {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
+                      {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
+                      {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
+                      {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </td>
           </tr>
           {% endfor %}
@@ -396,27 +588,5 @@
   </div>
   {% endif %}
 
-  {# ── Ending the order early ──────────────────────────────────────────── #}
-  {% if can_approve and can_close_short %}
-  <div class="pur-card pur-anchor pur-noprint" id="close-short">
-    <div class="pur-card-head"><h2 class="pur-card-title text-amber-700 dark:text-amber-400">Close PO</h2></div>
-    <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-card-body">
-      {% csrf_token %}
-      {# The balance stops counting as goods on order, which is the figure the #}
-      {# next reorder decision is made on. Nothing is posted -- an order never #}
-      {# had an entry -- and the order re-opens if the goods do turn up.       #}
-      <p class="pur-help" style="margin-top: 0;">
-        Writes off the outstanding <b>{{ outstanding_qty|qty }} units</b> as never arriving.
-      </p>
-      <div class="mt-3 flex flex-wrap items-end gap-3">
-        <div style="min-width: 20rem;">
-          <label class="pur-label" for="{{ close_short_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
-          {{ close_short_form.reason }}
-        </div>
-        <button type="submit" class="pur-btn pur-btn--danger">Close PO</button>
-      </div>
-    </form>
-  </div>
-  {% endif %}
 </section>
 {% endblock %}

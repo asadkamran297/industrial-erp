@@ -1728,7 +1728,8 @@ class PurchaseOrderCloseShortView(InventoryManageMixin, View):
             messages.error(request, "Pick a reason for closing this order short.")
             return redirect("inventory:purchase_order_detail", pk=pk)
         try:
-            closed = close_purchase_order_short(order=order, reason=form.cleaned_data["reason"], user=request.user)
+            closed = close_purchase_order_short(order=order, reason=form.cleaned_data["reason"],
+                                                remarks=form.cleaned_data["remarks"], user=request.user)
             messages.success(
                 request,
                 f"{closed.purchase_num} closed — {closed.short_qty} units "
@@ -2288,6 +2289,13 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
     model = PurchaseOrder
     template_name = "inventory/purchase_order_detail.html"
     context_object_name = "order"
+    # Same relations the register pulls, because the page runs the same
+    # ``decorate`` over this one order to work out what it is waiting on.
+    queryset = (
+        PurchaseOrder.objects
+        .select_related("supplier", "created_by", "approved_by", "closed_by")
+        .prefetch_related("items__receipts", "items__uom", "items__inventory_item", "bills")
+    )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -2318,12 +2326,67 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
                 ok, why = can_reverse_receipt(receipt)
                 receipt.can_reverse = ok
                 receipt.cannot_reverse_because = why
+                # The order line this came in against, hung off the receipt so
+                # a note can be read beside what was ordered without going back
+                # to the database for every row.
+                receipt.line = line
                 receipts.append(receipt)
         context["receipts"] = sorted(receipts, key=lambda r: (r.receive_date, r.pk), reverse=True)
+        # The same receipts read as the documents they were booked in on: one
+        # note, the items that came in under it, what it came to. A delivery is
+        # a document, and a page listing every posting flat makes the reader
+        # reassemble it in their head.
+        #
+        # Walked oldest first, because the balance a note leaves behind is the
+        # balance *after* that delivery -- the figure somebody checking the
+        # third note wants is what was still owed on the day it arrived, not
+        # what is owed today. Reading them newest first would put the same
+        # closing balance against every note.
+        notes = {}
+        taken = {}
+        for receipt in sorted(receipts, key=lambda r: (r.receive_date or date.min, r.pk)):
+            number = receipt.grn_number or "—"
+            note = notes.setdefault(number, {
+                "number": number, "date": receipt.receive_date, "lines": [],
+                "quantity": Decimal("0.0000"), "value": Decimal("0.00"), "pks": [],
+                "ordered": Decimal("0.0000"), "seen": set(), "closing": {},
+            })
+            note["lines"].append(receipt)
+            note["pks"].append(str(receipt.pk))
+            if receipt.receive_date and (not note["date"] or receipt.receive_date > note["date"]):
+                note["date"] = receipt.receive_date
+            # A reversal and the receipt it cancels both stay on the list, but
+            # neither counts towards what the note delivered -- nor towards the
+            # balance it left, because between them they moved nothing.
+            if not receipt.reversed and receipt.reversal_of_id is None:
+                note["quantity"] += receipt.received_units
+                note["value"] += receipt.landed_amount or Decimal("0.00")
+                taken[receipt.line.pk] = taken.get(receipt.line.pk, Decimal("0.0000")) + receipt.received_units
+            # Ordered belongs to the line, not to this delivery, so a line that
+            # came in twice under one note is counted once.
+            if receipt.line.pk not in note["seen"]:
+                note["seen"].add(receipt.line.pk)
+                note["ordered"] += receipt.line.quantity or Decimal("0.0000")
+            # What this line was still owed once this note had been booked in.
+            # Held per line and totalled after, so a later note on the same
+            # line overwrites rather than adds.
+            owed = (receipt.line.quantity or Decimal("0.0000")) - taken.get(receipt.line.pk, Decimal("0.0000"))
+            note["closing"][receipt.line.pk] = owed if owed > 0 else Decimal("0.0000")
+
+        for note in notes.values():
+            note["balance"] = sum(note["closing"].values(), Decimal("0.0000"))
+
+        context["receipt_notes"] = sorted(
+            notes.values(), key=lambda note: (note["date"] or date.min, note["number"]), reverse=True
+        )
         context["linked_documents"] = linked_documents(self.object)
         # What the document is for. The order carries no total of its own --
         # the lines are the record -- so it is added up for the sheet.
         context["order_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
+        # What the register would offer on this order's row, offered here too:
+        # the page an order is opened on should not be the one place its next
+        # step is missing.
+        decorate([self.object])
         return context
 
 

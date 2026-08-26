@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 _ONES = ("", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen")
 _TENS = ("", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety")
@@ -295,6 +295,20 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
     return receipt
 
 
+def _fits(quantity, rate):
+    """A converted quantity and rate, cut to what the columns actually hold.
+
+    Dividing by a conversion factor gives whatever precision Decimal feels
+    like -- 10 bags in kilos at a factor of 3 is 3.333... to twenty-seven
+    places -- and the line refuses to save, because the columns are four
+    places and two. Even a factor that divides cleanly overshoots: a rate
+    multiplied by 20.0000 keeps the four places the factor was stored with.
+    So the figures are rounded here, at the point of conversion, rather than
+    reaching a model that can only reject them.
+    """
+    return quantity.quantize(FOUR_DP, rounding=ROUND_HALF_UP), rate.quantize(TWO_DP, rounding=ROUND_HALF_UP)
+
+
 def to_base_unit(*, item, uom, quantity, rate):
     """A quantity and rate bought in one unit, restated in the item's own unit.
 
@@ -312,13 +326,13 @@ def to_base_unit(*, item, uom, quantity, rate):
     down = UOMConversion.objects.filter(uom_from=base, uom_to=uom, status=STATUS_ACTIVE).first()
     if down and down.conversion_factor:
         factor = Decimal(down.conversion_factor)
-        return quantity / factor, rate * factor
+        return _fits(quantity / factor, rate * factor)
 
     # 1 picked = factor base  ->  the picked unit is the larger of the two.
     up = UOMConversion.objects.filter(uom_from=uom, uom_to=base, status=STATUS_ACTIVE).first()
     if up and up.conversion_factor:
         factor = Decimal(up.conversion_factor)
-        return quantity * factor, rate / factor
+        return _fits(quantity * factor, rate / factor)
 
     raise ValidationError(
         f"{item.item_name} is stocked in {base.title}, and there is no conversion "
@@ -979,7 +993,7 @@ def cancel_purchase_order(*, order, reason, user, remarks=""):
 
 
 @transaction.atomic
-def close_purchase_order_short(*, order, reason, user):
+def close_purchase_order_short(*, order, reason, user, remarks=""):
     """Give up on the balance of a part-delivered order.
 
     Creates no accounting entry, because an order never had one — nothing was
@@ -1010,6 +1024,7 @@ def close_purchase_order_short(*, order, reason, user):
 
     order.status = STATUS_CLOSED_SHORT
     order.close_reason = reason
+    order.close_remarks = (remarks or "").strip()
     order.closed_on = timezone.localdate()
     order.closed_by = user
     order.short_qty = short_qty

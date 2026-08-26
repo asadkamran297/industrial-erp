@@ -490,6 +490,10 @@ class PurchaseOrderCloseShortForm(forms.Form):
         choices=INV_PO_CLOSE_SHORT_REASONS, label="Why will the balance not arrive?",
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+    remarks = forms.CharField(
+        required=False, max_length=500, label="Remarks",
+        widget=forms.TextInput(attrs={"class": "form-input", "placeholder": "Anything worth recording"}),
+    )
 
 
 class ReversalReasonForm(forms.Form):

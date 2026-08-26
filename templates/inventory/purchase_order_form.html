@@ -242,11 +242,11 @@
   {% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}
 </div>
 
-<section class="mt-3">
+<section class="mt-2">
   <form method="post" id="order-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
     {# ── Header: who it is for on the left, which bill on the right ───────── #}
-    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
+    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-3 pt-4">
       <div class="pur-head order-1 ml-auto flex flex-wrap items-end gap-4 xl:flex-nowrap">
         <div class="w-36">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order-no-preview">Order No</label>
