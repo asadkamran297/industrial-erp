@@ -31,9 +31,20 @@ from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCan
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
-from .services import apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import _refresh_order_receipt_status, apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
+
+
+def decimal_of(raw, default="0"):
+    """A posted money or quantity box, read as the number it is.
+
+    Money boxes are grouped with commas on screen; the grouping is stripped
+    before the form posts, but a figure that arrives grouped anyway is read
+    rather than rejected.
+    """
+    text = (raw or "").strip().replace(",", "") or default
+    return Decimal(text)
 
 
 def uom_title(record):
@@ -2387,6 +2398,12 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         # the page an order is opened on should not be the one place its next
         # step is missing.
         decorate([self.object])
+        # A line is open to correction while the order is still going. Once it
+        # is closed or cancelled the figures are history, not a draft.
+        context["can_edit_lines"] = (
+            context.get("can_edit")
+            and self.object.status in (STATUS_DRAFT, STATUS_RAISED, STATUS_PARTIAL_RECEIVED)
+        )
         return context
 
 
@@ -2458,6 +2475,86 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
         messages.success(self.request, "Purchase order item updated.")
         list_url = str(reverse_lazy("inventory:purchase_order_list"))
         return redirect(f"{list_url}?open={item.purchase_order_id}")
+
+
+class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
+    """The order's lines, corrected together on the order itself.
+
+    The document is the natural place to fix a line: the figure that is wrong
+    is being read there. Only what a line actually says is editable --
+    quantity, rate, discount -- and never the item, because changing what was
+    ordered is a different order, not an edit.
+
+    Every line is checked before any is written, so a page of corrections
+    cannot half-save and leave the operator guessing which half took.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "edit"
+
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk)
+        back = redirect("inventory:purchase_order_detail", pk=order.pk)
+
+        # A line is open to correction until the order is closed one way or
+        # another. Once it is cancelled or closed short there is nothing left
+        # to correct, and a received line is held to what arrived below.
+        if order.status not in (STATUS_DRAFT, STATUS_RAISED, STATUS_PARTIAL_RECEIVED):
+            messages.error(request, f"{order.purchase_num} is closed, so its lines can no longer be edited.")
+            return back
+
+        changes = []
+        for item in order.items.all():
+            try:
+                quantity = decimal_of(request.POST.get(f"quantity_{item.pk}"))
+                rate = decimal_of(request.POST.get(f"rate_{item.pk}"))
+                discount = decimal_of(request.POST.get(f"discount_{item.pk}") or "0")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"{item.descr}: quantity, rate and discount must be numbers.")
+                return back
+
+            if quantity <= 0:
+                messages.error(request, f"{item.descr}: the quantity must be greater than zero.")
+                return back
+            # Ordering less than has already turned up would leave the line
+            # owing a negative balance, which is not a thing that can be true.
+            if quantity < (item.total_receive_qty or Decimal("0")):
+                messages.error(
+                    request,
+                    f"{item.descr}: {item.total_receive_qty} has already been received, "
+                    f"so the order cannot be cut to {quantity}.",
+                )
+                return back
+            if discount > quantity * rate:
+                messages.error(request, f"{item.descr}: the discount is more than the line comes to.")
+                return back
+
+            quantity = quantity.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            rate = rate.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            discount = discount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if (quantity, rate, discount) == (item.quantity, item.rate, item.discount_amount):
+                continue
+            changes.append((item, quantity, rate, discount))
+
+        if not changes:
+            messages.info(request, "Nothing on the lines was changed.")
+            return back
+
+        with transaction.atomic():
+            for item, quantity, rate, discount in changes:
+                item.quantity = quantity
+                item.rate = rate
+                item.unit_rate = rate
+                item.discount_amount = discount
+                item.updated_by = request.user
+                item.save()
+            # What is owed on the order has moved, so what the order is
+            # waiting on may have moved with it.
+            _refresh_order_receipt_status(order, user=request.user)
+
+        plural = "" if len(changes) == 1 else "s"
+        messages.success(request, f"{len(changes)} line{plural} updated on {order.purchase_num}.")
+        return back
 
 
 class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
