@@ -22,30 +22,10 @@ window.printSection = function (elementId, title) {
 
   var logoHtml = org.logo ? "<img src='" + org.logo + "' alt='logo'>" : "";
 
-  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + title + "</title><style>" +
-    "* { box-sizing: border-box; }" +
-    "body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; }" +
-    ".org-header { position: relative; text-align: center; border-bottom: 3px double #7a0000; padding-bottom: 12px; margin-bottom: 6px; }" +
-    ".org-header img { height: 72px; width: auto; object-fit: contain; margin-bottom: 6px; }" +
-    ".org-name { font-size: 26px; font-weight: 800; letter-spacing: .5px; color: #7a0000; text-transform: uppercase; }" +
-    ".org-branch { font-size: 12px; font-weight: 600; color: #333; margin-top: 2px; }" +
-    ".org-addr { font-size: 11px; color: #555; margin-top: 3px; }" +
-    ".org-contact { position: absolute; top: 0; right: 0; text-align: right; font-size: 11px; color: #333; display: flex; flex-direction: column; gap: 2px; }" +
-    ".org-contact span { white-space: nowrap; }" +
-    ".org-contact b { color: #7a0000; }" +
-    ".org-printed { margin-top: 8px; color: #666; }" +
-    "h1.doc-title { text-align: center; font-size: 20px; margin: 14px 0; }" +
-    "table, table[class] { width: 100% !important; border-collapse: collapse !important; margin-top: 8px; }" +
-    "th, td { border: 1px solid #999 !important; padding: 6px 8px !important; font-size: 11px !important; color: #111 !important; background: none; }" +
-    "th { background: #f0f0f0 !important; text-align: left !important; font-weight: 600 !important; }" +
-    "thead th { text-transform: uppercase; font-size: 10px !important; }" +
-    "tr:nth-child(even) td { background: #fafafa !important; }" +
-    "button, form, label, input, .peer, [class*='sr-only'] { display: none !important; }" +
-    ".footer { margin-top: 30px; border-top: 1px solid #333; padding-top: 8px; text-align: center; font-size: 11px; color: #444; }" +
-    ".print-btn { margin-bottom: 14px; }" +
-    "@media print { .print-btn { display: none; } body { margin: 0; } }" +
-    "</style></head><body>" +
-    "<div class='print-btn'><button onclick='window.print()'>Print</button> <button onclick='window.close()'>Close</button></div>" +
+  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + title + "</title>" +
+    // Styling lives in a real stylesheet, never inline in this string.
+    "<link rel='stylesheet' href='/static/dist/print-popup.css'>" +
+    "</head><body>" +
     "<div class='org-header'>" +
       logoHtml +
       "<div class='org-name'>" + (org.name || "Organization") + "</div>" +
@@ -58,8 +38,39 @@ window.printSection = function (elementId, title) {
     "<div class='footer'>" + (org.name || "") + (org.website ? " &middot; " + org.website : "") + " &middot; This is a system generated document.</div>" +
     "</body></html>";
 
-  var w = window.open("", "_blank", "width=1000,height=700");
-  w.document.write(html);
-  w.document.close();
-  w.onload = function () { w.print(); w.onafterprint = function () { w.close(); }; };
+  // Printed from a hidden frame rather than a popup window. A popup showed its
+  // own window behind the print dialog, and cancelling the dialog left it open
+  // because "afterprint" is not fired reliably on cancel. A frame has nothing
+  // to leave behind: the dialog is the only thing the user sees, and whether
+  // they print or cancel, the frame is thrown away.
+  var frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(frame);
+
+  var done = false;
+  function discard() {
+    if (done) { return; }
+    done = true;
+    // After the dialog closes, not during it: removing the frame while it is
+    // still printing cancels the job in some browsers.
+    window.setTimeout(function () {
+      if (frame.parentNode) { frame.parentNode.removeChild(frame); }
+    }, 0);
+  }
+
+  frame.onload = function () {
+    var win = frame.contentWindow;
+    win.onafterprint = discard;
+    // Nothing fires afterprint in a few browsers; the window regaining focus
+    // means the dialog is gone either way.
+    window.addEventListener("focus", discard, { once: true });
+    win.focus();
+    win.print();
+  };
+
+  var doc = frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
 };

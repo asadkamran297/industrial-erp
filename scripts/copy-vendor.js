@@ -9,6 +9,8 @@ const fs = require("fs");
 const path = require("path");
 
 const ASSETS = [
+  ["htmx.org/dist/htmx.min.js", "htmx/htmx.min.js"],
+  ["alpinejs/dist/cdn.min.js", "alpinejs/alpine.min.js"],
   ["highcharts/highcharts.js", "highcharts/highcharts.js"],
   ["highcharts/modules/accessibility.js", "highcharts/accessibility.js"],
   ["sortablejs/Sortable.min.js", "sortablejs/Sortable.min.js"],
