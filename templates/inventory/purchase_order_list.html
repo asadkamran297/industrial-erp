@@ -594,9 +594,7 @@
             </button>
           </td>
           <td>
-            {# Not a link: the order is opened from the eye in Actions, so the #}
-            {# number is read here rather than being a second way in.           #}
-            <span class="po-num">{{ order.purchase_num }}</span>
+            <a class="po-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
           </td>
           {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|date:"d-M-Y" }}</td>{% endif %}
           {% if "supplier" in columns %}

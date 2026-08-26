@@ -943,7 +943,7 @@ def user_can_approve(user):
 
 
 @transaction.atomic
-def cancel_purchase_order(*, order, reason, user):
+def cancel_purchase_order(*, order, reason, user, remarks=""):
     """Abandon an order nothing has arrived against.
 
     Deliberately not a delete. The number stays in the sequence — a gap in a
@@ -965,6 +965,7 @@ def cancel_purchase_order(*, order, reason, user):
     order.items.update(closed=True)
     order.status = STATUS_CANCELLED
     order.close_reason = reason
+    order.close_remarks = (remarks or "").strip()
     order.closed_on = timezone.localdate()
     order.closed_by = user
     order.short_qty = sum((line.quantity or Decimal("0") for line in order.items.all()), Decimal("0.0000"))

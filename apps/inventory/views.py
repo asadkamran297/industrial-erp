@@ -1702,7 +1702,8 @@ class PurchaseOrderCancelView(InventoryManageMixin, View):
             messages.error(request, "Pick a reason for cancelling this order.")
             return redirect("inventory:purchase_order_detail", pk=pk)
         try:
-            cancel_purchase_order(order=order, reason=form.cleaned_data["reason"], user=request.user)
+            cancel_purchase_order(order=order, reason=form.cleaned_data["reason"],
+                                  remarks=form.cleaned_data["remarks"], user=request.user)
             messages.success(request, f"{order.purchase_num} cancelled. The number stays in the sequence.")
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
@@ -2249,7 +2250,6 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
 
         elif step == "add":
             error = add_extra_field(
-                code=request.POST.get("code"),
                 label=request.POST.get("label"),
                 kind=request.POST.get("type"),
                 required=request.POST.get("required") == "1",
@@ -2297,10 +2297,6 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         item_form.fields["inventory_item"].queryset = available_items
         context["item_form"] = item_form
         context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": uom_title(i)} for i in available_items}
-        receive_form = ReceivePOForm(initial={"purchase_order_item": self.object.items.first()})
-        receive_form.fields["purchase_order_item"].queryset = self.object.items.all()
-        context["receive_form"] = receive_form
-
         # How this order may be ended, which depends on whether anything has
         # arrived against it. Cancel is for an order nothing came against;
         # close-short gives up the balance of one that was part delivered. The

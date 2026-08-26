@@ -3,6 +3,20 @@
 <style>
   /* The line grid is declared here: the compiled Tailwind bundle carries no
      six-column utility and rebuilding it is not worth one screen. */
+  /* The tax row: a rate and the money it comes to, side by side. */
+  .pur-tax { display: flex; align-items: center; gap: .5rem; }
+  .pur-pct { position: relative; }
+  .pur-pct input { max-width: 5.5rem; padding-right: 1.5rem; }
+  .pur-pct-sign {
+    position: absolute;
+    top: 50%;
+    right: .5rem;
+    transform: translateY(-50%);
+    font-size: .75rem;
+    font-weight: 600;
+    color: #94a3b8;
+    pointer-events: none;
+  }
   .pur-grid { display: grid; grid-template-columns: 3rem minmax(0, 1fr) 7rem 9rem 9rem 9rem 2.5rem; align-items: center; }
   @media (max-width: 900px) { .pur-grid { grid-template-columns: 2rem minmax(0, 1fr) 5rem 6rem 6rem 6rem 2rem; } }
   /* Unit column switched off in the form settings: the same grid, one column
@@ -66,6 +80,32 @@
   /* Room for the pill, and for the picker's own arrow to sit clear of it. */
   .notch-field--action .searchable-select-button,
   .notch-field--action .form-select { padding-right: 4.25rem; }
+
+  /* The supplier is the one field the whole document hangs off, so it carries
+     the site's colour the way the amount panel does: the same wash, the same
+     tinted border. The picker swaps the select for a button of its own, so
+     both wear it. */
+  .notch-field--tint .form-select,
+  .notch-field--tint .searchable-select-button {
+    border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+    background-image: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--primary-color) 16%, #fff) 0%,
+      color-mix(in srgb, var(--primary-color) 6%, #fff) 45%,
+      color-mix(in srgb, var(--primary-color) 14%, #fff) 100%
+    );
+    box-shadow: 0 2px 10px -6px color-mix(in srgb, var(--primary-color) 60%, transparent);
+  }
+  .dark .notch-field--tint .form-select,
+  .dark .notch-field--tint .searchable-select-button {
+    border-color: color-mix(in srgb, var(--primary-color) 45%, transparent);
+    background-image: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--primary-color) 30%, #0f172a) 0%,
+      color-mix(in srgb, var(--primary-color) 12%, #0f172a) 45%,
+      color-mix(in srgb, var(--primary-color) 26%, #0f172a) 100%
+    );
+  }
 
   .notch-field .notch-action {
     position: absolute;
@@ -261,8 +301,11 @@
 
       {# The label rides the border and the + rides inside, so picking a supplier #}
       {# and adding one that is not on file read as the one control. #}
-      <div class="order-2 w-full max-w-md basis-full">
-        <div class="notch-field notch-field--action">
+      {# Its own row under the order boxes. The wrapper is what claims the #}
+      {# full width -- a capped box would fit beside them and never wrap.  #}
+      <div class="order-2 w-full basis-full">
+      <div class="w-full max-w-md">
+        <div class="notch-field notch-field--action notch-field--tint">
           <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
           <select name="supplier" id="supplier" class="form-select" required>
             <option value="">Select supplier…</option>
@@ -273,6 +316,7 @@
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+      </div>
       </div>
 
     </div>
@@ -323,9 +367,22 @@
         </div>
         {% endif %}
         {% if layout.shown.tax_amount %}
+        {# Tax is agreed as a rate and posted as an amount. The percent box #}
+        {# works out the money off the sub total; the money box stays open  #}
+        {# for the odd figure that is not a clean rate.                     #}
         <div class="pur-total-row">
-          <label class="pur-label" for="tax_amount">Tax (Rs)</label>
-          <input type="number" step="0.01" min="0" name="tax_amount" id="tax_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.tax_amount|default:'' }}" placeholder="0.00">
+          <label class="pur-label" for="tax_percent">Tax</label>
+          <div class="pur-tax">
+            <div class="pur-pct">
+              <input type="number" step="0.01" min="0" max="100" name="tax_percent" id="tax_percent"
+                     class="form-input pur-right" value="{{ posted.tax_percent|default:'' }}" placeholder="0"
+                     aria-label="Tax rate, percent of the sub total">
+              <span class="pur-pct-sign">%</span>
+            </div>
+            <input type="number" step="0.01" min="0" name="tax_amount" id="tax_amount"
+                   class="form-input pur-right" style="max-width:9rem;" value="{{ posted.tax_amount|default:'' }}"
+                   placeholder="0.00" aria-label="Tax amount in rupees">
+          </div>
         </div>
         {% endif %}
         <div class="pur-total-row pur-grand">
@@ -338,14 +395,7 @@
 
       {# What the order comes to, spelled out — the figure the operator checks against the paper. #}
       {% if layout.shown.amount_words %}
-      <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-        <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
-        <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
-          <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
-          <span id="amount-figure" class="w-full text-center text-3xl font-bold tabular-nums text-slate-300 dark:text-slate-600">0</span>
-        </div>
-        <p id="amount-words" class="mt-2 text-center text-sm italic text-slate-400">Amount in words appears here</p>
-      </aside>
+      {% include "inventory/_amount_panel.html" %}
       {% endif %}
     </div>
 
@@ -483,22 +533,19 @@
     const figure = document.getElementById('amount-figure');
     const line = document.getElementById('amount-words');
     if (!figure || !line) return;
+    // Nothing typed yet: the panel is dimmed rather than recoloured, so it
+    // stays the site's colour whether or not there is a figure in it.
     const has = value > 0;
     figure.textContent = has ? moneyText(value) : '0';
-    figure.classList.toggle('text-slate-300', !has);
-    figure.classList.toggle('dark:text-slate-600', !has);
-    figure.classList.toggle('text-slate-900', has);
-    figure.classList.toggle('dark:text-white', has);
+    figure.closest('.pur-words').classList.toggle('is-empty', !has);
     if (!has) {
       line.textContent = 'Amount in words appears here';
-      line.classList.add('text-slate-400');
       return;
     }
     const rupees = Math.floor(value);
     const paisa = Math.round((value - rupees) * 100);
     const words = inWords(rupees) + ' rupees' + (paisa ? ' and ' + inWords(paisa) + ' paisa' : '') + ' only';
     line.textContent = words.charAt(0).toUpperCase() + words.slice(1);
-    line.classList.remove('text-slate-400');
   }
 
   // The stock standing behind a line: what is on the shelf, and — once a
@@ -603,9 +650,19 @@
     document.getElementById('total-amount').textContent = moneyText(goods);
     document.getElementById('sub-total').textContent = moneyText(goods);
 
+    // A rate typed against the sub total decides the tax; the money box is
+    // written from it so what is posted is an amount either way. Typing in
+    // the money box directly clears the rate, because the two would otherwise
+    // disagree and the rate would win on the next keystroke.
+    const pct = document.getElementById('tax_percent');
+    const tax = document.getElementById('tax_amount');
+    if (pct && tax && pct.value !== '') {
+      tax.value = money(goods * num(pct) / 100);
+    }
+
     // A box that is off contributes nothing, which is what num() of a
     // missing element already gives.
-    const total = goods - num(document.getElementById('discount_amount')) + num(document.getElementById('tax_amount'));
+    const total = goods - num(document.getElementById('discount_amount')) + num(tax);
     document.getElementById('grand-total').textContent = moneyText(total);
     writeAmount(total);
   }
@@ -618,6 +675,20 @@
     const dot = typed.indexOf('.');
     if (dot === -1 || typed.length - dot <= 2) return;
     box.value = typed.slice(0, dot + 2);
+  }
+
+  // The money box and the rate box are two ways of saying one figure, so each
+  // clears the other: typing in the money box is the final word and drops the
+  // rate, and clearing the rate takes the tax it worked out away with it.
+  // Registered before recalc is wired to the same boxes, so recalc totals what
+  // these have already settled.
+  const taxAmountBox = document.getElementById('tax_amount');
+  const taxPercentBox = document.getElementById('tax_percent');
+  if (taxAmountBox && taxPercentBox) {
+    taxAmountBox.addEventListener('input', () => { taxPercentBox.value = ''; });
+    taxPercentBox.addEventListener('input', () => {
+      if (taxPercentBox.value === '') taxAmountBox.value = '';
+    });
   }
 
   // Delegated: rows are built and dropped as the operator works.
@@ -656,7 +727,7 @@
   });
 
   document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
-  ['discount_amount', 'tax_amount'].forEach(id => {
+  ['discount_amount', 'tax_amount', 'tax_percent'].forEach(id => {
     const box = document.getElementById(id);
     if (box) box.addEventListener('input', recalc);
   });

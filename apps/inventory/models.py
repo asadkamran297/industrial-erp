@@ -301,6 +301,9 @@ class PurchaseOrder(BaseModel):
     # reason is kept because "cancelled" on its own tells the next reader
     # nothing, and because releasing a commitment is a decision someone made.
     close_reason = models.CharField(max_length=40, blank=True)
+    # What the reason list could not say. A picked reason groups the decision;
+    # this is where the particular one is written down.
+    close_remarks = models.TextField(blank=True)
     closed_on = models.DateField(null=True, blank=True)
     closed_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                  related_name="closed_purchase_orders", db_column="closed_by_id")

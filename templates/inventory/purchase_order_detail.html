@@ -9,6 +9,30 @@
   .pur-anchor { scroll-margin-top: 5rem; }
   .pur-anchor:target { box-shadow: 0 0 0 3px var(--ring-primary); }
 
+  /* Ending the order is asked about in a dialog, so the decision and the
+     reason for it are taken in one place. */
+  .pur-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, .45);
+    backdrop-filter: blur(2px);
+  }
+  .pur-modal-card {
+    width: 100%;
+    max-width: 28rem;
+    border-radius: .75rem;
+    background: #fff;
+    padding: 1.5rem;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, .35);
+  }
+  .dark .pur-modal-card { background: #1e293b; }
+  .pur-modal-title { font-size: 1rem; font-weight: 700; }
+
   /* The chain off this order, as chips: kind first so the row can be read
      down its left edge, the number beside it. */
   .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -34,8 +58,11 @@
 
 <section class="space-y-5">
 
-  <div class="pur-head-row pur-noprint">
-    <div>
+  <div class="pur-head-row pur-noprint" x-data="{ cancelling: false }">
+    <div class="flex items-start gap-3">
+      {% url 'inventory:purchase_order_list' as orders_url %}
+      {% include "components/ui/back_button.html" with back_url=orders_url %}
+      <div>
       <h1 class="pur-title title-accent">{{ order.purchase_num }}</h1>
       <p class="pur-lede">
         {{ order.supplier.name }}
@@ -43,9 +70,9 @@
         {% if order.expected_date %}&middot; expected {{ order.expected_date|date:"d M Y" }}{% endif %}
         {% if order.approved_by %}&middot; approved by {{ order.approved_by.get_full_name|default:order.approved_by.username }}{% endif %}
       </p>
+      </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_list' %}">All orders</a>
       <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
       {% if order.status == "draft" and can_edit %}
       <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">
@@ -58,7 +85,39 @@
         </button>
       </form>
       {% endif %}
+
+      {# Cancelling is done from here, in a dialog, rather than from a panel #}
+      {# further down the page: it is something done to the order, and the   #}
+      {# reason is asked for at the moment the decision is taken.            #}
+      {% if can_approve and can_cancel %}
+      <button type="button" class="pur-btn pur-btn--danger" @click="cancelling = true">Cancel order</button>
+      {% endif %}
     </div>
+
+    {% if can_approve and can_cancel %}
+    <div class="pur-modal" x-show="cancelling" x-cloak @click.self="cancelling = false"
+         @keydown.escape.window="cancelling = false" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+      <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" class="pur-modal-card" @click.stop>
+        {% csrf_token %}
+        <h2 class="pur-modal-title" id="cancel-title">Cancel {{ order.purchase_num }}</h2>
+        {# Not a delete: the number stays in the sequence, because a gap in a #}
+        {# numbered series is the first thing an auditor asks about.          #}
+        <p class="pur-help" style="margin-top: .25rem;">The order is abandoned. The number stays in the sequence.</p>
+        <div class="mt-4">
+          <label class="pur-label" for="{{ cancel_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
+          {{ cancel_form.reason }}
+        </div>
+        <div class="mt-3">
+          <label class="pur-label" for="{{ cancel_form.remarks.id_for_label }}">Remarks</label>
+          {{ cancel_form.remarks }}
+        </div>
+        <div class="mt-5 flex justify-end gap-3">
+          <button type="button" class="pur-btn pur-btn--ghost" @click="cancelling = false">Keep the order</button>
+          <button type="submit" class="pur-btn pur-btn--danger">Cancel order</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
   </div>
 
   {# ── How this order ended, if it ended early ─────────────────────────── #}
@@ -167,59 +226,6 @@
     </div>
   </div>
 
-  {# ── Receiving goods against it ──────────────────────────────────────── #}
-  {# Rendered here because this is the order the goods belong to. Sending #}
-  {# somebody to a separate screen to find the row again is how a delivery #}
-  {# gets booked against the wrong order.                                  #}
-  {% if can_edit and not is_closed_early and outstanding_qty %}
-  <div class="pur-card pur-anchor pur-noprint" id="receive">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Receive goods</h2>
-      <span class="pur-card-hint">{{ outstanding_qty|qty }} units still expected</span>
-    </div>
-    <form method="post" action="{% url 'inventory:purchase_order_receive' order.pk %}" class="pur-card-body">
-      {% csrf_token %}
-      <div class="pur-grid">
-        <div>
-          <label class="pur-label" for="{{ receive_form.purchase_order_item.id_for_label }}">Line <span class="pur-req">*</span></label>
-          {{ receive_form.purchase_order_item }}
-        </div>
-        <div>
-          <label class="pur-label" for="{{ receive_form.quantity.id_for_label }}">Quantity received <span class="pur-req">*</span></label>
-          {{ receive_form.quantity }}
-        </div>
-        <div>
-          <label class="pur-label" for="{{ receive_form.extra_qty.id_for_label }}">Extra quantity</label>
-          {{ receive_form.extra_qty }}
-          <p class="pur-help">More than ordered, accepted at the gate.</p>
-        </div>
-        <div>
-          <label class="pur-label" for="{{ receive_form.retail_price.id_for_label }}">Rate <span class="pur-req">*</span></label>
-          {{ receive_form.retail_price }}
-        </div>
-        <div>
-          <label class="pur-label" for="{{ receive_form.receive_date.id_for_label }}">Receipt date <span class="pur-req">*</span></label>
-          {{ receive_form.receive_date }}
-        </div>
-        <div>
-          <label class="pur-label" for="{{ receive_form.rv_number.id_for_label }}">Bilty / vehicle ref</label>
-          {{ receive_form.rv_number }}
-        </div>
-      </div>
-      <div class="mt-4">
-        <label class="pur-label" for="{{ receive_form.remarks.id_for_label }}">Store remarks</label>
-        {{ receive_form.remarks }}
-      </div>
-      <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
-        <p class="mr-auto text-xs text-slate-500 dark:text-slate-400">
-          Dr Inventory &middot; Cr GRN Clearing. The payable appears when the supplier's bill is entered.
-        </p>
-        <button type="submit" class="pur-btn pur-btn--primary">Post goods receipt</button>
-      </div>
-    </form>
-  </div>
-  {% endif %}
-
   {# ── Goods received against it ───────────────────────────────────────── #}
   {% if receipts %}
   <div class="pur-card">
@@ -273,27 +279,6 @@
   {% endif %}
 
   {# ── Ending the order early ──────────────────────────────────────────── #}
-  {% if can_approve and can_cancel %}
-  <div class="pur-card pur-anchor pur-noprint" id="cancel">
-    <div class="pur-card-head"><h2 class="pur-card-title text-rose-700 dark:text-rose-400">Cancel this order</h2></div>
-    <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" class="pur-card-body">
-      {% csrf_token %}
-      <p class="pur-help" style="margin-top: 0;">
-        Nothing has arrived against it, so the whole order is abandoned. Not a delete: the number
-        stays in the sequence, because a gap in a numbered series is the first thing anybody
-        auditing purchases asks about.
-      </p>
-      <div class="mt-3 flex flex-wrap items-end gap-3">
-        <div style="min-width: 20rem;">
-          <label class="pur-label" for="{{ cancel_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
-          {{ cancel_form.reason }}
-        </div>
-        <button type="submit" class="pur-btn pur-btn--danger">Cancel order</button>
-      </div>
-    </form>
-  </div>
-  {% endif %}
-
   {% if can_approve and can_close_short %}
   <div class="pur-card pur-anchor pur-noprint" id="close-short">
     <div class="pur-card-head"><h2 class="pur-card-title text-amber-700 dark:text-amber-400">Close PO</h2></div>

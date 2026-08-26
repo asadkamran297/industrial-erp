@@ -479,6 +479,10 @@ class PurchaseOrderCancelForm(forms.Form):
         choices=INV_PO_CANCEL_REASONS, label="Why is this order being cancelled?",
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+    remarks = forms.CharField(
+        required=False, max_length=500, label="Remarks",
+        widget=forms.TextInput(attrs={"class": "form-input", "placeholder": "Anything worth recording"}),
+    )
 
 
 class PurchaseOrderCloseShortForm(forms.Form):

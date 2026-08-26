@@ -72,7 +72,7 @@ OPTIONAL_FIELD_CODES = {field.code for field in OPTIONAL_FIELDS}
 # already posts something under each of them.
 RESERVED_CODES = OPTIONAL_FIELD_CODES | {
     "supplier", "order_date", "quantity", "rate", "item_id", "csrfmiddlewaretoken",
-    "save_and_print", "save_and_new",
+    "save_and_print", "save_and_new", "tax_percent",
 }
 
 
@@ -146,31 +146,51 @@ def set_hidden(codes):
     _save([code for code in codes if code in OPTIONAL_FIELD_CODES], record["extra"])
 
 
-def add_extra_field(*, code, label, kind, required=False, options=()):
+def code_for(label):
+    """The code a label is filed under.
+
+    Derived rather than typed: the code is a storage key, and asking an
+    operator for one is asking them to name a database column. A label that
+    yields nothing usable -- one that is all punctuation, or starts with a
+    digit -- comes back empty and is refused by the caller.
+    """
+    code = re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
+    return code if CODE_PATTERN.match(code or "") else ""
+
+
+def _free_code(label, taken):
+    """``code_for`` again, numbered where that code is already spoken for."""
+    base = code_for(label)
+    if not base or base not in taken:
+        return base
+    for suffix in range(2, 100):
+        candidate = f"{base}_{suffix}"
+        if candidate not in taken:
+            return candidate
+    return ""
+
+
+def add_extra_field(*, label, kind, required=False, options=()):
     """Put one of the site's own fields on the form.
 
     Returns an error message, or None where it was added. The caller shows the
     message; nothing here raises, because this is a settings menu and a typo is
     an ordinary thing to correct rather than an exception.
     """
-    code = (code or "").strip().lower().replace(" ", "_").replace("-", "_")
     label = (label or "").strip()
     if not label:
         return "Give the field a label."
-    if not CODE_PATTERN.match(code):
-        return "The code must start with a letter and use only letters, numbers and underscores."
-    if code in RESERVED_CODES:
-        return f"'{code}' is already used by the form. Pick another code."
+    record = get_layout()
+    taken = RESERVED_CODES | {field["code"] for field in record["extra"]}
+    code = _free_code(label, taken)
+    if not code:
+        return "That label cannot be filed under a name. Start it with a letter."
     if kind not in EXTRA_FIELD_TYPE_VALUES:
         return "Pick a field type."
 
     options = [str(option).strip() for option in options if str(option).strip()]
     if kind == "select" and not options:
         return "A choice list needs at least one choice."
-
-    record = get_layout()
-    if any(field["code"] == code for field in record["extra"]):
-        return f"'{code}' is already on the form."
 
     extra = record["extra"] + [{
         "code": code, "label": label[:60], "type": kind,

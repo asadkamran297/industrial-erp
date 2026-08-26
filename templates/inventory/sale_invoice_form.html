@@ -283,14 +283,7 @@
       </div>
 
       {# What the sale comes to, spelled out — the figure the operator checks against the paper. #}
-      <aside class="h-fit rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-        <p class="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Amount</p>
-        <div class="mt-2 flex items-baseline justify-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
-          <span class="text-2xl font-bold text-slate-700 dark:text-slate-200">Rs</span>
-          <span id="amount-figure" class="w-full text-center text-3xl font-bold tabular-nums text-slate-300 dark:text-slate-600">0</span>
-        </div>
-        <p id="amount-words" class="mt-2 text-center text-sm italic text-slate-400">Amount in words appears here</p>
-      </aside>
+      {% include "inventory/_amount_panel.html" %}
     </div>
 
     {# ── Footer ───────────────────────────────────────────────────────────── #}
@@ -416,22 +409,19 @@
   function writeAmount(value) {
     const figure = document.getElementById('amount-figure');
     const line = document.getElementById('amount-words');
+    // Nothing typed yet: the panel is dimmed rather than recoloured, so it
+    // stays the site's colour whether or not there is a figure in it.
     const has = value > 0;
     figure.textContent = has ? moneyText(value) : '0';
-    figure.classList.toggle('text-slate-300', !has);
-    figure.classList.toggle('dark:text-slate-600', !has);
-    figure.classList.toggle('text-slate-900', has);
-    figure.classList.toggle('dark:text-white', has);
+    figure.closest('.pur-words').classList.toggle('is-empty', !has);
     if (!has) {
       line.textContent = 'Amount in words appears here';
-      line.classList.add('text-slate-400');
       return;
     }
     const rupees = Math.floor(value);
     const paisa = Math.round((value - rupees) * 100);
     const words = inWords(rupees) + ' rupees' + (paisa ? ' and ' + inWords(paisa) + ' paisa' : '') + ' only';
     line.textContent = words.charAt(0).toUpperCase() + words.slice(1);
-    line.classList.remove('text-slate-400');
   }
 
   // The stock standing behind a line: what is on the shelf, and — once a
