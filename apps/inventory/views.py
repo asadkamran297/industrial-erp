@@ -29,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -1730,7 +1730,7 @@ class PurchaseOrderCloseShortView(InventoryManageMixin, View):
             closed = close_purchase_order_short(order=order, reason=form.cleaned_data["reason"], user=request.user)
             messages.success(
                 request,
-                f"{closed.purchase_num} closed short — {closed.short_qty} units "
+                f"{closed.purchase_num} closed — {closed.short_qty} units "
                 f"({closed.short_value}) released from what is on order.",
             )
         except ValidationError as exc:
@@ -1865,7 +1865,9 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         PurchaseOrder.objects
         .filter(is_direct=False)
         .select_related("supplier", "created_by")
-        .prefetch_related("items__receipts", "items__uom", "bills")
+        # ``items__inventory_item``: the row opens out to its lines, and each
+        # line names the item it was ordered against.
+        .prefetch_related("items__receipts", "items__uom", "items__inventory_item", "bills")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
@@ -1977,11 +1979,14 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         # as its own trailing cell rather than from the column set, so it is
         # counted once here and not twice.
         shown = [column.key for column in COLUMNS.columns if column.key in context["columns"]]
-        span = len(shown) + 1
+        # The chosen columns, plus the expander at the front and the actions at
+        # the end. Neither is a column somebody picks, so both are counted here
+        # rather than being taken from the column set.
+        span = len(shown) + 2
         context["column_span"] = span
         if "value" in shown:
-            context["foot_lead_span"] = shown.index("value")
-            context["foot_tail_span"] = span - shown.index("value") - 1
+            context["foot_lead_span"] = shown.index("value") + 1
+            context["foot_tail_span"] = span - shown.index("value") - 2
         else:
             context["foot_lead_span"] = span
             context["foot_tail_span"] = 0
@@ -2198,9 +2203,10 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 tax_amount=money("tax_amount"),
                 remarks=(posted.get("remarks") or "").strip(),
                 extra_data=extra_values,
-                # Saved as a draft until it is raised, unless the operator said
-                # to raise it here — the list screen offers the same step.
-                status=STATUS_RAISED if "save_and_raise" in posted else STATUS_DRAFT,
+                # Always a draft. Releasing it to the supplier is a separate
+                # act, done from the register, where it goes through the
+                # approval gate and the name and amount are recorded against it.
+                status=STATUS_DRAFT,
                 user=request.user,
             )
         except ValidationError as error:
@@ -2211,9 +2217,12 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         messages.success(request, f"Purchase order {order.purchase_num} saved for {net}.")
         if "save_and_print" in posted:
             return redirect("inventory:purchase_order_print", pk=order.pk)
-        # Orders are raised in runs, so saving one hands back an empty form
-        # rather than the order just saved; the message names what was posted.
-        return redirect("inventory:purchase_order_create")
+        # Entering a run of orders is the exception, not the rule, so it is asked
+        # for by its own button; a plain save ends on the register, where the
+        # order that was just posted can be seen among the rest.
+        if "save_and_new" in posted:
+            return redirect("inventory:purchase_order_create")
+        return redirect("inventory:purchase_order_list")
 
 
 class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
@@ -2315,6 +2324,7 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
                 receipt.cannot_reverse_because = why
                 receipts.append(receipt)
         context["receipts"] = sorted(receipts, key=lambda r: (r.receive_date, r.pk), reverse=True)
+        context["linked_documents"] = linked_documents(self.object)
         return context
 
 
@@ -3837,6 +3847,9 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             "today": timezone.localdate(),
             "next_grn_no": next_grn_number(),
             "grn_date": grn_date,
+            # What already exists against the order being received: earlier
+            # notes, the bills they were matched to, anything sent back.
+            "linked_documents": linked_documents(order) if order is not None else [],
             "clearing_balance": -(balance_of_grn_clearing()),
         }
 

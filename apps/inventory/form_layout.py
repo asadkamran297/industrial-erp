@@ -72,7 +72,7 @@ OPTIONAL_FIELD_CODES = {field.code for field in OPTIONAL_FIELDS}
 # already posts something under each of them.
 RESERVED_CODES = OPTIONAL_FIELD_CODES | {
     "supplier", "order_date", "quantity", "rate", "item_id", "csrfmiddlewaretoken",
-    "save_and_print", "save_and_raise",
+    "save_and_print", "save_and_new",
 }
 
 

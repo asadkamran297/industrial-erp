@@ -8,6 +8,28 @@
      the sticky header, and it says so when it arrives. */
   .pur-anchor { scroll-margin-top: 5rem; }
   .pur-anchor:target { box-shadow: 0 0 0 3px var(--ring-primary); }
+
+  /* The chain off this order, as chips: kind first so the row can be read
+     down its left edge, the number beside it. */
+  .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .pur-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    background: #fff;
+    padding: .375rem .625rem;
+    font-size: .75rem;
+    line-height: 1.2;
+  }
+  .pur-link:hover { border-color: var(--primary-color); background: #f8fafc; }
+  .dark .pur-link { border-color: #334155; background: #0f172a; }
+  .dark .pur-link:hover { background: #1e293b; }
+  .pur-link-kind { color: #64748b; }
+  .pur-link-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .pur-link--dead { opacity: .55; }
+  .pur-link--dead .pur-link-num { color: #94a3b8; text-decoration: line-through; }
 </style>
 
 <section class="space-y-5">
@@ -65,6 +87,30 @@
         <button type="submit" class="pur-btn pur-btn--ghost">Re-open &mdash; the goods turned up after all</button>
       </form>
       {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Where this order got to: the documents raised off it ───────────── #}
+  {% if linked_documents %}
+  <div class="pur-card">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">Linked documents</h2>
+      <span class="pur-card-hint">Raised against this order</span>
+    </div>
+    <div class="pur-card-body">
+      <div class="pur-links">
+        {% for link in linked_documents %}
+        {# A reversed document is greyed rather than dropped: it happened, and #}
+        {# the entry that cancels it is next to it on the same row.           #}
+        <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
+           {% if link.new_tab %}target="_blank"{% endif %}
+           title="{{ link.kind }} {{ link.label }}{% if link.dead %} — reversed{% endif %}">
+          <span class="pur-link-kind">{{ link.kind }}</span>
+          <span class="pur-link-num">{{ link.label }}</span>
+        </a>
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -250,21 +296,21 @@
 
   {% if can_approve and can_close_short %}
   <div class="pur-card pur-anchor pur-noprint" id="close-short">
-    <div class="pur-card-head"><h2 class="pur-card-title text-amber-700 dark:text-amber-400">Close the balance short</h2></div>
+    <div class="pur-card-head"><h2 class="pur-card-title text-amber-700 dark:text-amber-400">Close PO</h2></div>
     <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-card-body">
       {% csrf_token %}
+      {# The balance stops counting as goods on order, which is the figure the #}
+      {# next reorder decision is made on. Nothing is posted -- an order never #}
+      {# had an entry -- and the order re-opens if the goods do turn up.       #}
       <p class="pur-help" style="margin-top: 0;">
-        You are saying the remaining <b>{{ outstanding_qty|qty }} units</b> are never going to arrive.
-        The balance stops counting as goods on order, which is the figure the next reorder decision
-        is made on. No accounting entry is created &mdash; an order never had one &mdash; and it can be
-        re-opened if the goods do turn up.
+        Writes off the outstanding <b>{{ outstanding_qty|qty }} units</b> as never arriving.
       </p>
       <div class="mt-3 flex flex-wrap items-end gap-3">
         <div style="min-width: 20rem;">
           <label class="pur-label" for="{{ close_short_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
           {{ close_short_form.reason }}
         </div>
-        <button type="submit" class="pur-btn pur-btn--danger">Close short</button>
+        <button type="submit" class="pur-btn pur-btn--danger">Close PO</button>
       </div>
     </form>
   </div>

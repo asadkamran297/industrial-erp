@@ -101,6 +101,25 @@
   }
   .grn-cell input:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
   .dark .grn-cell input { border-color: #334155; background: rgba(15, 23, 42, .6); color: #e2e8f0; }
+  .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .pur-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    background: #fff;
+    padding: .375rem .625rem;
+    font-size: .75rem;
+    line-height: 1.2;
+  }
+  .pur-link:hover { border-color: var(--primary-color); background: #f8fafc; }
+  .dark .pur-link { border-color: #334155; background: #0f172a; }
+  .dark .pur-link:hover { background: #1e293b; }
+  .pur-link-kind { color: #64748b; }
+  .pur-link-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .pur-link--dead { opacity: .55; }
+  .pur-link--dead .pur-link-num { color: #94a3b8; text-decoration: line-through; }
   .grn-cell input.is-over { border-color: #f59e0b; background: #fffbeb; }
   .dark .grn-cell input.is-over { border-color: #fbbf24; background: rgba(120, 53, 15, .3); }
 </style>
@@ -262,6 +281,34 @@
     <input type="hidden" name="receive_date" :value="grnDate">
 
     <div class="space-y-5">
+
+        {# What already exists against this order: earlier notes, the bills #}
+        {# they were matched to, anything sent back.                        #}
+        {% if linked_documents %}
+        <div class="pur-card">
+          <div class="pur-card-head">
+            <h2 class="grn-card-heading">Linked documents</h2>
+            <span class="pur-card-hint">Already raised against {{ selected_order.purchase_num }}</span>
+          </div>
+          <div class="pur-card-body">
+            <div class="pur-links">
+              <a class="pur-link" href="{% url 'inventory:purchase_order_detail' selected_order.pk %}"
+                 title="Purchase Order {{ selected_order.purchase_num }}">
+                <span class="pur-link-kind">Purchase Order</span>
+                <span class="pur-link-num">{{ selected_order.purchase_num }}</span>
+              </a>
+              {% for link in linked_documents %}
+              <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
+                 {% if link.new_tab %}target="_blank"{% endif %}
+                 title="{{ link.kind }} {{ link.label }}{% if link.dead %} — reversed{% endif %}">
+                <span class="pur-link-kind">{{ link.kind }}</span>
+                <span class="pur-link-num">{{ link.label }}</span>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
 
         <div class="pur-card">
           <div class="pur-card-body">

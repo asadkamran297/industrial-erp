@@ -6,6 +6,7 @@ the promised date read against today. All of that is worked out here, once, so
 the view stays a view and the template only prints.
 """
 
+from datetime import date
 from decimal import Decimal
 
 from django.utils import timezone
@@ -106,6 +107,28 @@ def decorate(orders, today=None):
         ]
         grns = [receipt.grn_number for receipt in receipts if receipt.grn_number]
         order.grn_number = grns[-1] if grns else ""
+
+        # The same, per line: which notes this particular item came in under.
+        # One line can have several -- a delivery a week for a month is four --
+        # so they are gathered rather than reduced to the last one. Grouped by
+        # number and not by receipt, because one note covering three lines is
+        # one note, and the row is naming the document, not the posting.
+        for line in lines:
+            under = {}
+            for receipt in line.receipts.all():
+                if receipt.reversed or receipt.reversal_of_id is not None:
+                    continue
+                number = receipt.grn_number or ""
+                if not number:
+                    continue
+                held = under.setdefault(number, {"number": number, "qty": ZERO, "date": receipt.receive_date, "pks": []})
+                held["qty"] += receipt.received_units
+                held["pks"].append(str(receipt.pk))
+                # The note is dated when it was booked in; where one number was
+                # somehow used twice the later date is the one that holds.
+                if receipt.receive_date and (not held["date"] or receipt.receive_date > held["date"]):
+                    held["date"] = receipt.receive_date
+            line.grn_refs = sorted(under.values(), key=lambda ref: (ref["date"] or date.min, ref["number"]))
 
         # Money, split by what has actually happened to the goods rather than by
         # the order's headline total. Three separate figures, because they
@@ -307,3 +330,61 @@ GRN_COLUMNS = ColumnSet("inventory.grn", (
     Column("balance", "Balance", export=lambda o: o.balance_total),
     Column("status", "Status", export=lambda o: o.get_status_display()),
 ))
+
+
+def linked_documents(order):
+    """Everything raised off this order, as one row of links.
+
+    An order is the head of a chain -- goods arrive under a note, the note is
+    billed, some of it may go back. The documents that exist are named; the
+    ones that do not are absent, so the row states how far the order has got.
+    """
+    from django.urls import reverse
+
+    from .models import PurchaseReturnMaster
+
+    links = []
+
+    # One entry per note rather than per posting: a note covering four lines is
+    # one document. A reversed receipt stays, greyed -- it happened, and the
+    # entry cancelling it sits next to it.
+    notes = {}
+    for line in order.items.all():
+        for receipt in line.receipts.all():
+            number = receipt.grn_number or ""
+            if not number:
+                continue
+            held = notes.setdefault(number, {"pks": [], "date": receipt.receive_date, "dead": True})
+            held["pks"].append(str(receipt.pk))
+            if receipt.receive_date and (not held["date"] or receipt.receive_date > held["date"]):
+                held["date"] = receipt.receive_date
+            if not receipt.reversed and receipt.reversal_of_id is None:
+                held["dead"] = False
+    for number, note in sorted(notes.items(), key=lambda pair: (pair[1]["date"] or date.min, pair[0])):
+        links.append({
+            "kind": "GRN",
+            "label": number,
+            "url": f"{reverse('inventory:grn_print', args=[order.pk])}?receipts={','.join(note['pks'])}&reprint=1",
+            "new_tab": True,
+            "dead": note["dead"],
+        })
+
+    for bill in order.bills.all():
+        links.append({
+            "kind": "Purchase Bill",
+            "label": bill.bill_num or bill.supplier_invoice_num,
+            "url": reverse("inventory:purchase_bill_detail", args=[bill.pk]),
+            "new_tab": False,
+            "dead": bill.status == STATUS_REVERSED,
+        })
+
+    for entry in PurchaseReturnMaster.objects.filter(purchase_order=order).order_by("return_date", "pk"):
+        links.append({
+            "kind": "Purchase Return",
+            "label": entry.return_num,
+            "url": reverse("inventory:purchase_return_detail", args=[entry.pk]),
+            "new_tab": False,
+            "dead": entry.status == STATUS_REVERSED,
+        })
+
+    return links

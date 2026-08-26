@@ -356,8 +356,8 @@
         {% url 'inventory:purchase_order_list' as cancel_url %}
         {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
         {% include "components/ui/button.html" with label="Save & Print" icon="&#128438;" name="save_and_print" value="1" variant="secondary" only %}
-        {# Raising commits the order; saving without it leaves a draft to check first. #}
-        {% include "components/ui/button.html" with label="Save & Raise" name="save_and_raise" value="1" variant="secondary" only %}
+        {# For a run of orders: saves this one and hands back an empty form. #}
+        {% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" variant="secondary" only %}
         {% include "components/ui/button.html" with label="Save Draft" variant="primary" extra="px-8" only %}
       </div>
     </div>

@@ -959,7 +959,7 @@ def cancel_purchase_order(*, order, reason, user):
     if any((line.total_receive_qty or Decimal("0")) > 0 for line in order.items.all()):
         raise ValidationError(
             "Part of this order has already been received, so it cannot be cancelled. "
-            "Close the balance short instead — that keeps what arrived and gives up the rest."
+            "Close the PO instead — that keeps what arrived and gives up the rest."
         )
 
     order.items.update(closed=True)

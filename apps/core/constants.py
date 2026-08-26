@@ -412,7 +412,7 @@ INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_RAISED, "Raised"),
     (STATUS_PARTIAL_RECEIVED, "Partial Received"),
     (STATUS_FULLY_RECEIVED, "Fully Received"),
-    (STATUS_CLOSED_SHORT, "Closed Short"),
+    (STATUS_CLOSED_SHORT, "Closed"),
     (STATUS_CANCELLED, "Cancelled"),
 )
 

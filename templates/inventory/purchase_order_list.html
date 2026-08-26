@@ -134,6 +134,69 @@
   .po-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
   .po-table td:first-child, .po-table th:first-child { white-space: nowrap; width: 1%; }
   .po-sub { display: block; font-size: .75rem; color: #94a3b8; }
+
+  /* The + on each row, and the panel of order lines it opens under it. The
+     lines are drawn quieter than the row above them, so the register still
+     reads as the list and an opened order reads as detail hanging off one. */
+  .po-expand-head, .po-expand-cell { width: 1%; padding-right: 0 !important; }
+  .po-expand {
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .375rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #475569;
+  }
+  .po-expand:hover { background: #f1f5f9; }
+  .dark .po-expand { border-color: #475569; color: #cbd5e1; }
+  .dark .po-expand:hover { background: #1e293b; }
+  .po-lines-row:hover { background: transparent !important; }
+  .po-lines-cell { background: #f8fafc; padding: .75rem 1rem 1rem 2.5rem !important; }
+  .dark .po-lines-cell { background: rgba(15, 23, 42, .55); }
+  .po-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .po-lines thead th {
+    padding: .375rem .5rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-lines thead th { border-bottom-color: #1e293b; }
+  .po-lines tbody td { padding: .375rem .5rem; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+  .dark .po-lines tbody td { border-bottom-color: rgba(30, 41, 59, .7); }
+  .po-lines tbody tr:last-child td { border-bottom: 0; }
+  .po-lines-num { color: #94a3b8; }
+  .po-lines-in { font-weight: 600; color: #047857; }
+  .po-lines-due { font-weight: 600; color: #b45309; }
+  .po-lines-nil { color: #94a3b8; }
+  .po-lines-empty { font-size: .75rem; color: #94a3b8; }
+  /* The notes a line came in under. Several fit in the cell without widening
+     it, so they wrap as chips rather than pushing the money columns off. */
+  .po-grns { min-width: 9rem; }
+  .po-grn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .25rem;
+    margin: 0 .25rem .25rem 0;
+    border-radius: .25rem;
+    background: #e0f2fe;
+    padding: .0625rem .3125rem;
+    font-size: .625rem;
+    font-weight: 700;
+    color: #0369a1;
+    white-space: nowrap;
+  }
+  .po-grn:hover { background: #bae6fd; }
+  .dark .po-grn { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
+  .dark .po-grn:hover { background: rgba(3, 105, 161, .4); }
+  .po-grn-qty { font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
   .po-right { text-align: right; font-variant-numeric: tabular-nums; }
 
   /* The received bar: how much of the order has actually turned up. Grey for
@@ -504,6 +567,7 @@
     <table id="order-table" class="po-table">
       <thead>
         <tr>
+          <th class="print-hide po-expand-head"></th>
           {% include "components/table/sort_header.html" with label="Order #" field="purchase_num" %}
           {% if "purchase_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}{% endif %}
           {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
@@ -520,17 +584,25 @@
       <tbody>
         {% for order in orders %}
         <tr>
+          <td class="print-hide po-expand-cell">
+            {# The lines behind the row's figures, opened where the row is #}
+            {# rather than on a screen of their own. #}
+            <button type="button" class="po-expand" @click="toggleRow({{ order.pk }})"
+                    :aria-expanded="isRowOpen({{ order.pk }}) ? 'true' : 'false'"
+                    aria-label="Show the items on this order" title="Show the items on this order">
+              <span x-text="isRowOpen({{ order.pk }}) ? '−' : '+'">+</span>
+            </button>
+          </td>
           <td>
-            <a class="po-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
+            {# Not a link: the order is opened from the eye in Actions, so the #}
+            {# number is read here rather than being a second way in.           #}
+            <span class="po-num">{{ order.purchase_num }}</span>
           </td>
           {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|date:"d-M-Y" }}</td>{% endif %}
           {% if "supplier" in columns %}
           <td>
+            {# Who raised it has a column of its own; it is not repeated here. #}
             <span class="font-semibold">{{ order.supplier.name }}</span>
-            {# Who raised it, under the name, unless Buyer has a column of its own. #}
-            {% if "buyer" not in columns %}
-            <span class="po-sub">Raised by {{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</span>
-            {% endif %}
           </td>
           {% endif %}
           {% if "buyer" in columns %}
@@ -572,7 +644,7 @@
             {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
             {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partly received</span>
             {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Received</span>
-            {% elif order.status == "closed_short" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed short</span>
+            {% elif order.status == "closed_short" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
             {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Cancelled</span>
             {% else %}<span class="po-pill po-pill--open">Awaiting goods</span>{% endif %}
           </td>
@@ -643,16 +715,27 @@
               </a>
               {% endif %}
 
-              {# Giving up on the balance sits with the row it concerns, not two #}
-              {# screens away. Only offered while there is a balance to give up   #}
-              {# on, and only to somebody who may commit or release money.        #}
+              {# Ending the order sits with the row it concerns, not two screens #}
+              {# away. The two verbs are not the same act and do not share an     #}
+              {# icon: nothing arrived, so the order is voided; something did, so #}
+              {# the balance is closed off and the order filed as done.           #}
               {% if can_approve and order.end_action %}
               <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:purchase_order_detail' order.pk %}#{{ order.end_action }}"
-                 title="{% if order.end_action == 'cancel' %}Cancel &mdash; nothing has arrived against this order{% else %}Close short &mdash; the balance is not coming{% endif %}"
-                 aria-label="{% if order.end_action == 'cancel' %}Cancel this order{% else %}Close the balance of this order short{% endif %}">
+                 title="{% if order.end_action == 'cancel' %}Cancel order &mdash; nothing has arrived against it{% else %}Close PO &mdash; the balance is not coming{% endif %}"
+                 aria-label="{% if order.end_action == 'cancel' %}Cancel this order{% else %}Close this purchase order{% endif %}">
+                {% if order.end_action == 'cancel' %}
+                {# Voided: struck through. #}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path>
+                  <circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path>
                 </svg>
+                {% else %}
+                {# Filed away: an archive box, closed on what did arrive. #}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="4" rx="1"></rect>
+                  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"></path>
+                  <path d="M10 12h4"></path>
+                </svg>
+                {% endif %}
               </a>
               {% endif %}
 
@@ -672,6 +755,69 @@
                 </svg>
               </a>
             </div>
+          </td>
+        </tr>
+
+        {# ── The order's own lines, opened from the + on the row ──────────── #}
+        <tr class="po-lines-row print-hide" x-show="isRowOpen({{ order.pk }})" x-cloak>
+          <td colspan="{{ column_span }}" class="po-lines-cell print-hide">
+            {% with poi_list=order.items.all %}
+            {% if poi_list %}
+            <table class="po-lines">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th class="po-right">Ordered</th>
+                  <th>Unit</th>
+                  <th class="po-right">Rate</th>
+                  <th class="po-right">Discount</th>
+                  <th class="po-right">Amount</th>
+                  <th class="po-right">Received</th>
+                  <th>Goods receipt</th>
+                  <th class="po-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for poi in poi_list %}
+                <tr>
+                  <td class="po-lines-num">{{ forloop.counter }}</td>
+                  <td>
+                    <span class="font-semibold">{{ poi.descr }}</span>
+                    {% if poi.inventory_item.item_code %}<span class="po-sub">{{ poi.inventory_item.item_code }}</span>{% endif %}
+                  </td>
+                  <td class="po-right">{{ poi.quantity|qty }}</td>
+                  <td>{{ poi.uom.title|default:"—" }}</td>
+                  <td class="po-right">{{ poi.rate|amount }}</td>
+                  <td class="po-right">{{ poi.discount_amount|amount }}</td>
+                  <td class="po-right font-semibold">{{ poi.total_amount|amount }}</td>
+                  <td class="po-right {% if poi.total_receive_qty %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.total_receive_qty|qty }}</td>
+                  {# Every note this line came in under, not only the last: a #}
+                  {# delivery a week for a month is four, and which of them a  #}
+                  {# quantity arrived on is the question being asked here.     #}
+                  <td class="po-grns">
+                    {% for ref in poi.grn_refs %}
+                    <a class="po-grn" href="{% url 'inventory:grn_print' order.pk %}?receipts={{ ref.pks|join:',' }}&amp;reprint=1" target="_blank"
+                       title="{{ ref.number }} &mdash; {{ ref.qty|qty }} received {{ ref.date|dmy }}">
+                      {{ ref.number }}<span class="po-grn-qty">{{ ref.qty|qty }}</span>
+                    </a>
+                    {% empty %}
+                    <span class="po-lines-nil">&mdash;</span>
+                    {% endfor %}
+                  </td>
+                  {# What is still genuinely expected: a line closed short is #}
+                  {# nil here, not outstanding, the same as everywhere else.  #}
+                  <td class="po-right {% if poi.open_receive_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">
+                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>{% else %}{{ poi.open_receive_qty|qty }}{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="po-lines-empty">Nothing on this order yet.</p>
+            {% endif %}
+            {% endwith %}
           </td>
         </tr>
         {% empty %}
@@ -786,18 +932,6 @@
 <script>
   // The board's own state: which order, if any, is waiting on an approval
   // decision. One dialog serves every row, so the row hands over what it says.
-  function poBoard() {
-    var LINES = JSON.parse(document.getElementById('approval-lines').textContent);
-    return {
-      approval: null,
-      // The lines belonging to whatever the dialog is currently asking about.
-      get lines() { return (this.approval && LINES[this.approval.pk]) || []; },
-      askApproval(order) { this.approval = order; },
-      money(value) {
-        return (Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      },
-    };
-  }
 
   // The board's own state: which order, if any, is waiting on an approval
   // decision. One dialog serves every row, so the row hands over what it says.
@@ -808,6 +942,13 @@
       // The lines belonging to whatever the dialog is currently asking about.
       get lines() { return (this.approval && LINES[this.approval.pk]) || []; },
       askApproval(order) { this.approval = order; },
+      // Which rows are opened out to their lines. A list rather than one row,
+      // so two orders can be compared without one closing the other.
+      openRows: [],
+      isRowOpen(pk) { return this.openRows.includes(pk); },
+      toggleRow(pk) {
+        this.openRows = this.isRowOpen(pk) ? this.openRows.filter(function (id) { return id !== pk; }) : this.openRows.concat(pk);
+      },
       money(value) {
         return (Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },

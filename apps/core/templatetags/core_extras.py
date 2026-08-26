@@ -35,7 +35,7 @@ def short_amount(value):
 
     sign = "-" if number < 0 else ""
     number = abs(number)
-    for size, suffix in ((Decimal("10000000"), " Cr"), (Decimal("100000"), " L")):
+    for size, suffix in ((Decimal("10000000"), " Cr"), (Decimal("100000"), " Lac")):
         if number >= size:
             scaled = (number / size).quantize(Decimal("0.01"))
             # 3.00 Cr says nothing 3 Cr does not, so the zeros come off.
