@@ -250,6 +250,17 @@
   }
   .dark .grn-pick-warn { color: #fbbf24; }
   .grn-pick-warn svg { flex: none; width: .875rem; height: .875rem; margin-top: .0625rem; }
+  /* Which of the two things the screen is doing. Only shown when it is the
+     one somebody has to know about: the goods are already in stock, so this
+     document moves value rather than quantity. */
+  .bill-mode {
+    display: none; align-items: center; gap: .25rem; margin-top: .375rem;
+    border-radius: .375rem; background: #ecfdf5; padding: .1875rem .4375rem;
+    font-size: .6875rem; font-weight: 600; color: #047857;
+  }
+  .bill-mode.is-on { display: inline-flex; }
+  .dark .bill-mode { background: rgba(6, 78, 59, .4); color: #6ee7b7; }
+
   /* Reopening the picker once it has been closed. */
   .grn-pick-again {
     display: none; align-items: center; gap: .375rem; margin-top: .375rem;
@@ -306,11 +317,14 @@
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+        <span id="bill-mode" class="bill-mode">
+          Billing <b id="bill-mode-no"></b> &mdash; no stock is added
+        </span>
         <button type="button" id="grn-pick-open" class="grn-pick-again">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
           </svg>
-          <span id="grn-pick-open-text">Copy from a goods receipt</span>
+          <span id="grn-pick-open-text">Bill a goods receipt</span>
         </button>
       </div>
 
@@ -318,6 +332,14 @@
         <div class="w-40">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="invoice-no-preview">Invoice No</label>
           <input type="text" id="invoice-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_invoice_no }}" readonly>
+        </div>
+        {# Their number, not ours. It is the only thing that catches the same #}
+        {# invoice being entered twice, which is how a supplier gets paid     #}
+        {# twice for one delivery.                                            #}
+        <div class="w-48">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_number">Supplier&rsquo;s bill no</label>
+          <input type="text" name="bill_number" id="bill_number" class="form-input h-10 w-full"
+                 value="{{ posted.bill_number|default:'' }}" placeholder="Off their invoice">
         </div>
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
@@ -428,7 +450,7 @@
     <div class="grn-pick-head">
       <div>
         <h2 class="grn-pick-title" id="grn-pick-title">Goods receipts &mdash; <span id="grn-pick-supplier"></span></h2>
-        <p class="grn-pick-meta">Choose a note and its items are copied into the bill.</p>
+        <p class="grn-pick-meta">Choose a note and this invoice is billed against it.</p>
       </div>
       <button type="button" class="grn-pick-close" data-grn-close>Close</button>
     </div>
@@ -437,7 +459,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path>
         </svg>
-        <span>Copying takes the items only. These goods are already in stock under that note, and posting this bill receives them again.</span>
+        <span>These goods are already in stock. Billing a note moves its value out of GRN clearing into the supplier&rsquo;s account &mdash; no quantity is received again.</span>
       </p>
       <div class="grn-pick-scroll">
         <div class="grn-pick-cols">
@@ -493,6 +515,9 @@
     row.className = 'pur-grid pur-row';
     row.innerHTML =
       '<div class="text-center text-xs text-slate-400 row-num"></div>' +
+      // Set only when the row was filled from a goods receipt. Its presence is
+      // what tells the server to bill those goods rather than receive them.
+      '<input type="hidden" name="row_receipt" class="line-receipt" value="">' +
       '<div class="pur-item-cell"><select name="item_id" class="form-select line-item">' + itemOptions('') + '</select>' +
         '<span class="stock-chip line-stock" hidden></span></div>' +
       '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
@@ -690,6 +715,10 @@
       }
     }
     if (e.target.classList.contains('line-unit')) restateLine(e.target.closest('.pur-row'));
+    if (e.target.classList.contains('line-item')) {
+      const held = e.target.closest('.pur-row').querySelector('.line-receipt');
+      if (held && held.value) { held.value = ''; syncMode(); }
+    }
     recalc();
   });
   rowsBox.addEventListener('click', e => {
@@ -698,6 +727,7 @@
     // Never leave the operator with nothing to type into.
     if (!rowsBox.children.length) addRow();
     renumber();
+    syncMode();
     recalc();
   });
 
@@ -723,6 +753,8 @@
   // them. Choosing a note replaces the lines outright rather than adding to
   // them: it is the bill for that delivery, not an extra page of it.
   const picker = document.getElementById('grn-picker');
+  const modeNote = document.getElementById('bill-mode');
+  const modeNumber = document.getElementById('bill-mode-no');
   const pickerList = document.getElementById('grn-pick-list');
   const pickerName = document.getElementById('grn-pick-supplier');
   const pickAgain = document.getElementById('grn-pick-open');
@@ -746,7 +778,7 @@
         notes = data.notes || [];
         drawNotes();
         if (!notes.length) return;
-        pickAgainText.textContent = 'Copy from a goods receipt (' + notes.length + ')';
+        pickAgainText.textContent = 'Bill a goods receipt (' + notes.length + ')';
         pickAgain.classList.add('is-on');
         if (autoOpen) openPicker();
       })
@@ -769,7 +801,7 @@
           '<span class="is-num">' + note.items + '</span>' +
           '<span class="is-num">' + qtyText(note.quantity) + '</span>' +
           '<span class="is-num grn-pick-amt">' + moneyText(note.value) + '</span>' +
-          '<span class="is-act"><span class="grn-pick-copy" data-copy="' + index + '">Copy</span></span>' +
+          '<span class="is-act"><span class="grn-pick-copy" data-copy="' + index + '">Bill this</span></span>' +
         '</button>' +
         '<div hidden data-lines="' + index + '">' +
           '<table class="grn-pick-lines"><thead><tr>' +
@@ -817,13 +849,34 @@
       const unit = row.querySelector('.line-unit');
       if (line.uom_id) unit.value = String(line.uom_id);
       unit.dataset.factor = String(baseFactor(row));
-      row.querySelector('.line-qty').value = line.quantity;
+      // What is still left to bill, not what arrived: a note already part
+      // billed must not be billed for the whole of itself again.
+      row.querySelector('.line-qty').value = line.pending > 0 ? line.pending : line.quantity;
       row.querySelector('.line-rate').value = money(line.rate);
+      // The row now stands for a posting that already happened, so the bill is
+      // matched against it rather than receiving the goods a second time.
+      row.querySelector('.line-receipt').value = String(line.receipt_id);
     });
     if (!rowsBox.children.length) addRow();
     renumber();
+    billing = note.number;
+    syncMode();
     recalc();
     closePicker();
+  }
+
+  // Which of the two things this screen is doing: buying goods that are
+  // arriving now, or billing goods that arrived already. The difference is
+  // whether stock moves, so it is stated on the page rather than left for
+  // somebody to work out from what they clicked.
+  let billing = null;
+
+  function syncMode() {
+    const held = Array.from(rowsBox.querySelectorAll('.line-receipt')).filter(box => box.value);
+    if (!held.length) billing = null;
+    const on = Boolean(billing);
+    modeNote.classList.toggle('is-on', on);
+    if (on) modeNumber.textContent = billing;
   }
 
   picker.addEventListener('click', event => {

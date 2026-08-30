@@ -1324,6 +1324,10 @@ class SupplierGRNOptionsView(InventoryListMixin, View):
             note["quantity"] += units
             note["value"] += amount
             note["lines"].append({
+                "receipt_id": receipt.pk,
+                # What is still left to bill on this receipt. A note already
+                # part billed offers what remains, not what arrived.
+                "pending": float(receipt.pending_bill_qty),
                 "item_id": receipt.inventory_item_id,
                 "name": receipt.descr,
                 "quantity": float(units),
@@ -1417,6 +1421,12 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
+        # A row filled from a goods receipt carries that receipt with it. Stock
+        # entered the books once, when the note was posted; billing it must not
+        # bring the same goods in a second time. So a page of rows that all
+        # name a receipt is a bill against those receipts, and nothing here
+        # touches inventory at all.
+        receipt_ids = posted.getlist("row_receipt")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
                 continue
@@ -1438,8 +1448,65 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
+        bill_date = posted.get("bill_date") or str(timezone.localdate())
+
+        # ── Billing goods that already arrived ─────────────────────────────
+        billed = [(index, pk) for index, pk in enumerate(receipt_ids) if (pk or "").strip().isdigit()]
+        if billed:
+            if len(billed) != len(lines):
+                # Half a page from a note and half typed by hand cannot be one
+                # document: one half would add stock and the other would not.
+                messages.error(
+                    request,
+                    "Every line must come from the same goods receipt, or none of them. "
+                    "Remove the typed lines, or start again without copying the receipt.",
+                )
+                return render(request, self.template_name, self._context(posted=posted))
+
+            receipts = {
+                receipt.pk: receipt
+                for receipt in PurchaseOrderItemReceived.objects.filter(
+                    pk__in=[int(pk) for _index, pk in billed]
+                ).select_related("purchase_order_item__purchase_order")
+            }
+            bill_lines = []
+            for position, (index, pk) in enumerate(billed):
+                receipt = receipts.get(int(pk))
+                if not receipt:
+                    messages.error(request, "One of the goods receipt lines no longer exists.")
+                    return render(request, self.template_name, self._context(posted=posted))
+                row = lines[position]
+                bill_lines.append({
+                    "receipt": receipt,
+                    "quantity": row["quantity"],
+                    "rate": row["rate"] or receipt.landed_rate,
+                })
+            try:
+                bill = create_purchase_bill(
+                    supplier=supplier,
+                    supplier_invoice_num=(posted.get("bill_number") or "").strip(),
+                    supplier_invoice_date=bill_date,
+                    bill_date=bill_date,
+                    lines=bill_lines,
+                    discount_amount=money("discount_amount"),
+                    tax_amount=money("tax_amount"),
+                    remarks=(posted.get("remarks") or "").strip(),
+                    user=request.user,
+                )
+            except ValidationError as error:
+                for message in error.messages:
+                    messages.error(request, message)
+                return render(request, self.template_name, self._context(posted=posted))
+
+            messages.success(
+                request,
+                f"Bill {bill.bill_num} posted for {bill.total_amount}. "
+                "The goods were already in stock, so nothing was received again — "
+                "the value moved out of GRN clearing into the supplier's account.",
+            )
+            return redirect("inventory:purchase_bill_detail", pk=bill.pk)
+
         try:
-            bill_date = posted.get("bill_date") or str(timezone.localdate())
             order, net = create_direct_purchase(
                 supplier=supplier,
                 bill_number=(posted.get("bill_number") or "").strip(),
