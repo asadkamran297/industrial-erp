@@ -424,7 +424,19 @@ class PurchaseOrderItemReceived(BaseModel):
     invoice_num = models.CharField(max_length=80, blank=True)
     invoice_date = models.DateField(null=True, blank=True)
     grn_number = models.CharField(max_length=80, blank=True)
+    # Kept as it was -- the DC and the vehicle joined into one string -- so the
+    # receipts booked before they were held apart still read.
     rv_number = models.CharField(max_length=80, blank=True)
+    # The supplier's own delivery paperwork, and what it arrived on. The
+    # driver is held as a number rather than a name: it is what the gate can
+    # actually check the delivery against, and what anybody chasing a short
+    # delivery rings.
+    dc_number = models.CharField(max_length=80, blank=True)
+    vehicle_no = models.CharField(max_length=60, blank=True)
+    driver_number = models.CharField(max_length=60, blank=True)
+    # Who checked the goods at the gate. A name, not a user: the person who
+    # counted the delivery is often not the person at the keyboard.
+    inspected_by = models.CharField(max_length=120, blank=True)
     # What the store wrote when the goods came through the gate: who checked
     # them, what was rejected, anything else about this delivery. Held on the
     # receipt because it is a fact about this delivery, not about the order.
@@ -432,7 +444,7 @@ class PurchaseOrderItemReceived(BaseModel):
     extra_qty_tag = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # What the goods were worth when they came in, freight included. The bill
+    # What the goods were worth when they came in. The bill
     # is matched against this figure rather than against the order's rate,
     # because this is the amount actually parked in GRN Clearing.
     landed_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))

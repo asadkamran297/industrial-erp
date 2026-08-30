@@ -31,7 +31,7 @@ from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCan
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, GRN_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
-from .services import _refresh_order_receipt_status, apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
 
@@ -3648,6 +3648,24 @@ class GRNDetailView(InventoryListMixin, TemplateView):
         for receipt in receipts:
             note = (receipt.remarks or "").strip()
             receipt.own_remark = note if note and note != context["narration"] else ""
+        # What the gate recorded about the delivery itself. One note is one
+        # delivery, so these are facts about the whole of it -- the first line
+        # to carry each is the note's answer.
+        def first_of(field):
+            for receipt in receipts:
+                value = (getattr(receipt, field, "") or "").strip()
+                if value:
+                    return value
+            return ""
+
+        context["dc_number"] = first_of("dc_number")
+        context["vehicle_no"] = first_of("vehicle_no")
+        context["driver_number"] = first_of("driver_number")
+        context["inspected_by"] = first_of("inspected_by")
+        # Receipts booked before the DC and the vehicle were held apart still
+        # carry the two joined into one string; shown as it was stored rather
+        # than guessed at.
+        context["delivery_ref"] = "" if (context["dc_number"] or context["vehicle_no"]) else first_of("rv_number")
         context["total_units"] = units
         context["total_value"] = value
         # The footer adds up the same sum the rows read across. Ordered, what
@@ -3762,6 +3780,26 @@ class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         context["receive_date"] = receipts[0].receive_date if receipts else timezone.localdate()
         context["prepared_by"] = self.request.user.get_full_name() or self.request.user.username
         context["is_reprint"] = self.request.GET.get("reprint") == "1"
+        # What the gate recorded about the delivery, the same facts the note's
+        # own page shows. The printed sheet is the copy that gets filed and
+        # signed, so it must not say less than the screen it was printed from.
+        def first_of(field):
+            for receipt in receipts:
+                value = (getattr(receipt, field, "") or "").strip()
+                if value:
+                    return value
+            return ""
+
+        context["grn_number"] = first_of("grn_number")
+        context["dc_number"] = first_of("dc_number")
+        context["vehicle_no"] = first_of("vehicle_no")
+        context["driver_number"] = first_of("driver_number")
+        context["inspected_by"] = first_of("inspected_by")
+        context["delivery_ref"] = "" if (context["dc_number"] or context["vehicle_no"]) else first_of("rv_number")
+        # One delivery is normally written up once, so the same words repeat
+        # down its lines: said once here, and kept in full where they differ.
+        notes = list(dict.fromkeys(r.remarks.strip() for r in receipts if (r.remarks or "").strip()))
+        context["store_remarks"] = notes
         context["amount_in_words"] = amount_in_words(context["grand_total"])
         context["print_back_url"] = reverse_lazy("inventory:grn_list")
         return context
@@ -3776,14 +3814,7 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
         errors = []
         receipt_pks = []
 
-        try:
-            freight_total = Decimal(request.POST.get("freight_charges", "").strip() or "0")
-        except Exception:
-            freight_total = Decimal("0")
-        if freight_total < 0:
-            freight_total = Decimal("0")
-
-        # First pass: collect valid receive lines and their cost value for freight allocation.
+        # First pass: collect the lines actually being received.
         recv_lines = []
         for item in order.items.filter(status=YES):
             raw = request.POST.get(f"recv_qty_{item.pk}", "").strip()
@@ -3796,21 +3827,11 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
             if qty <= 0:
                 continue
             unit_cost = item.retail_price or item.rate or Decimal("0")
-            recv_lines.append((item, qty, unit_cost, qty * unit_cost))
-
-        total_value = sum((line[3] for line in recv_lines), Decimal("0"))
+            recv_lines.append((item, qty, unit_cost))
 
         try:
             with transaction.atomic():
-                allocated = Decimal("0")
-                for idx, (item, qty, unit_cost, line_value) in enumerate(recv_lines):
-                    if freight_total <= 0 or total_value <= 0:
-                        freight_amount = Decimal("0")
-                    elif idx == len(recv_lines) - 1:
-                        freight_amount = (freight_total - allocated).quantize(Decimal("0.01"))
-                    else:
-                        freight_amount = (freight_total * line_value / total_value).quantize(Decimal("0.01"))
-                        allocated += freight_amount
+                for item, qty, unit_cost in recv_lines:
                     try:
                         receipt = receive_purchase_order_item(
                             purchase_order_item=item,
@@ -3823,7 +3844,6 @@ class GRNBulkReceiveView(InventoryManageMixin, View):
                             rv_number="",
                             remarks="",
                             user=request.user,
-                            freight_amount=freight_amount,
                         )
                         receipt_pks.append(str(receipt.pk))
                     except ValidationError as exc:
@@ -4245,8 +4265,7 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
     row on a list in mind.
 
     It receives several lines of one order in a single pass, which is what a
-    delivery actually is -- so the freight paid on it can be split across those
-    lines by value rather than being typed against one of them.
+    delivery actually is.
     """
 
     page = "inventory.grn"
@@ -4338,18 +4357,20 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             (request.POST.get("vehicle") or "").strip(),
         ) if part)[:80]
         # What the store saw, kept with the receipt rather than in somebody's
-        # head: who checked it, and anything they want on the record.
+        # head. The inspector is a field of its own now, so the narration holds
+        # the store's own words and nothing else.
+        dc_number = (request.POST.get("dc_number") or "").strip()
+        vehicle_no = (request.POST.get("vehicle") or "").strip()
+        driver_number = (request.POST.get("driver_number") or "").strip()
         inspected = (request.POST.get("inspected_by") or "").strip()
-        note = (request.POST.get("remarks") or "").strip()
-        remarks = " — ".join(part for part in (note, f"Inspected by {inspected}" if inspected else "") if part)
+        remarks = (request.POST.get("remarks") or "").strip()
+        # Nothing typed at the gate: the receipt still says what it is, and the
+        # rejection note below appends to that rather than standing alone.
+        if not remarks:
+            remarks = default_receipt_narration(
+                purchase_order=order, receive_date=receive_date, rv_number=rv_number
+            )
 
-        try:
-            freight_total = Decimal(request.POST.get("freight") or "0")
-        except InvalidOperation:
-            freight_total = Decimal("0")
-
-        # Gather first, post second: freight is split across the lines by their
-        # value, which cannot be worked out until every line is known.
         picked = []
         for line in order.items.all():
             try:
@@ -4368,12 +4389,10 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             messages.error(request, "Nothing was accepted — enter a received quantity on at least one line.")
             return redirect(f"{reverse_lazy('inventory:goods_receipt_create')}?order={order.pk}")
 
-        shares = apportion_freight(freight_total, [accepted * rate for _l, accepted, _r, rate in picked])
-
         receipt_pks = []
         try:
             with transaction.atomic():
-                for (line, accepted, rejected, rate), freight in zip(picked, shares):
+                for line, accepted, rejected, rate in picked:
                     line_note = remarks
                     if rejected > 0:
                         # A rejection is a fact about the delivery and belongs on
@@ -4389,9 +4408,12 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
                         invoice_num="",
                         invoice_date=None,
                         rv_number=rv_number,
+                        dc_number=dc_number,
+                        vehicle_no=vehicle_no,
+                        driver_number=driver_number,
+                        inspected_by=inspected,
                         remarks=line_note,
                         user=request.user,
-                        freight_amount=freight,
                         grn_number=grn_number,
                     )
                     receipt_pks.append(str(receipt.pk))

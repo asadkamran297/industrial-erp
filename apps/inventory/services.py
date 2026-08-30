@@ -40,6 +40,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from apps.core.constants import CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_RAISED, STATUS_RETURNED, STATUS_REVERSED, STATUS_SUBMITTED, YES
 
@@ -175,35 +176,34 @@ def finalize_manual_transaction(*, transaction_id, user):
 
 
 @transaction.atomic
-def apportion_freight(freight_amount, line_values):
-    """Split one freight figure across lines by what each line is worth.
+def default_receipt_narration(*, purchase_order, receive_date, rv_number=""):
+    """What to write on a receipt nobody wrote anything on.
 
-    Freight is paid on a delivery, not on a line, so it has to be spread. By
-    value rather than by unit count: a truck carrying one ton of wheat and ten
-    thousand empty bags did not incur the same carriage per unit, and splitting
-    per unit would load nearly all of it onto the bags and leave the wheat
-    costed as if it had walked in. The last line takes whatever the rounding
-    left over, so the parts add back to the figure that was typed.
+    A blank narration is not neutral: it reads, months later, as though nobody
+    checked the delivery. So the facts that are known anyway are stated —
+    which order, which supplier, what day, and the carrier's paperwork where
+    the store recorded it.
 
-    ``line_values`` is a list of Decimals. Returns a list the same length.
+    Deliberately says nothing about the items: every line of one delivery gets
+    the same sentence, so a note covering four lines reads as one narration
+    rather than four near-identical ones. What arrived on each line is in the
+    table beside it.
     """
-    freight = Decimal(freight_amount or 0).quantize(TWO_DP)
-    total = sum(line_values, Decimal("0.00"))
-    if not freight or total <= 0:
-        return [Decimal("0.00") for _ in line_values]
-
-    shares, spread = [], Decimal("0.00")
-    for index, value in enumerate(line_values):
-        if index == len(line_values) - 1:
-            share = freight - spread
-        else:
-            share = (freight * value / total).quantize(TWO_DP)
-            spread += share
-        shares.append(share)
-    return shares
+    day = receive_date
+    if isinstance(day, str):
+        day = parse_date(day) or day
+    when = day.strftime("%d-%m-%Y") if hasattr(day, "strftime") else str(day)
+    text = (
+        f"Goods received against {purchase_order.purchase_num} "
+        f"from {purchase_order.supplier.name} on {when}."
+    )
+    carrier = (rv_number or "").strip()
+    if carrier:
+        text = f"{text} Delivery ref: {carrier}."
+    return f"{text} Entered automatically — no narration was given."
 
 
-def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, freight_amount=Decimal("0"), grn_number=""):
+def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, retail_price, receive_date, invoice_num, invoice_date, rv_number, remarks, user, grn_number="", dc_number="", vehicle_no="", driver_number="", inspected_by=""):
     purchase_order_item = PurchaseOrderItem.objects.select_for_update().select_related("purchase_order", "inventory_item").get(pk=purchase_order_item.pk)
     if purchase_order_item.closed:
         raise ValidationError("This line was closed short — nothing more is expected on it. Re-open the order first if the goods have turned up after all.")
@@ -218,12 +218,16 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
 
     po = purchase_order_item.purchase_order
 
+    if not (remarks or "").strip():
+        remarks = default_receipt_narration(
+            purchase_order=po, receive_date=receive_date, rv_number=rv_number
+        )
+
     received_units = quantity + extra_qty
-    # Freight handed to this call belongs to this line alone, so the whole of
-    # it loads onto these units. Where one delivery covers several lines the
-    # caller splits it first with ``apportion_freight``.
-    freight_per_unit = (freight_amount / received_units) if received_units > 0 else Decimal("0")
-    landed_price = (retail_price or Decimal("0")) + freight_per_unit
+    # The goods are valued at what was agreed for them and nothing else.
+    # Carriage is not loaded onto the stock: it is settled on the supplier's
+    # bill, where the money actually changes hands.
+    landed_price = retail_price or Decimal("0")
     landed_amount = (landed_price * received_units).quantize(TWO_DP)
 
     receipt = PurchaseOrderItemReceived.objects.create(
@@ -243,6 +247,10 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         # that receive a single row on its own.
         grn_number=(grn_number or "").strip()[:80] or f"GRN-{po.purchase_num}-{purchase_order_item.seq_num}",
         rv_number=rv_number,
+        dc_number=(dc_number or "").strip()[:80],
+        vehicle_no=(vehicle_no or "").strip()[:60],
+        driver_number=(driver_number or "").strip()[:60],
+        inspected_by=(inspected_by or "").strip()[:120],
         remarks=remarks or "",
         extra_qty_tag=YES if extra_qty > 0 else NO,
         extra_qty=extra_qty,

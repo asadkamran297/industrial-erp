@@ -24,6 +24,8 @@
   .status-stamp { position:absolute; top:60px; right:24px; border:3px solid; border-radius:4px; padding:4px 14px; font-size:15px; font-weight:900; letter-spacing:2px; opacity:.35; transform:rotate(-15deg); }
   .status-stamp.partial { border-color:orange; color:orange; }
   .status-stamp.full { border-color:green; color:green; }
+  .remarks-box { margin-top:8px; border:1px solid #cbd5e1; border-radius:4px; padding:6px 8px; font-size:11px; line-height:1.45; }
+  .remarks-box .lbl { font-weight:700; }
 {% endblock %}
 
 {% block print_content %}
@@ -43,9 +45,18 @@
   <div class="grn-ref">
     <div class="grn-ref-left">
       <table class="ref-table">
+        {% if grn_number %}<tr><td class="lbl">GRN #</td><td><b>{{ grn_number }}</b></td></tr>{% endif %}
         <tr><td class="lbl">Receive Date</td><td><b>{{ receive_date }}</b></td></tr>
         <tr><td class="lbl">PO Reference</td><td>{{ order.purchase_num }}</td></tr>
         <tr><td class="lbl">PO Date</td><td>{{ order.purchase_date }}</td></tr>
+        {# What the gate recorded. Printed whether or not it was filled in: a #}
+        {# blank against "Inspected by" on a sheet somebody is about to sign  #}
+        {# is worth seeing, and a row that vanishes when empty hides that.    #}
+        <tr><td class="lbl">Supplier DC / Bilty</td><td>{{ dc_number|default:"&mdash;" }}</td></tr>
+        <tr><td class="lbl">Vehicle Number</td><td>{{ vehicle_no|default:"&mdash;" }}</td></tr>
+        <tr><td class="lbl">Driver Number</td><td>{{ driver_number|default:"&mdash;" }}</td></tr>
+        {% if delivery_ref %}<tr><td class="lbl">Delivery Ref</td><td>{{ delivery_ref }}</td></tr>{% endif %}
+        <tr><td class="lbl">Inspected By</td><td>{{ inspected_by|default:"&mdash;" }}</td></tr>
       </table>
     </div>
     <div class="grn-ref-right">
@@ -109,6 +120,11 @@
   </div>
 
   <div class="words-box">Amount in Words: <b>{{ amount_in_words }}</b></div>
+
+  <div class="remarks-box">
+    <span class="lbl">Store Remarks:</span>
+    {% for note in store_remarks %}<div>{{ note }}</div>{% empty %}<div>&mdash;</div>{% endfor %}
+  </div>
 
   <div class="sign">
     <div>Received By<span>Store / Warehouse</span></div>

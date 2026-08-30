@@ -293,17 +293,16 @@
                 <input type="text" name="dc_number" id="dc_number" class="form-input">
               </div>
               <div>
-                <label class="pur-label" for="vehicle">Vehicle</label>
+                <label class="pur-label" for="vehicle">Vehicle Number</label>
                 <input type="text" name="vehicle" id="vehicle" class="form-input">
+              </div>
+              <div>
+                <label class="pur-label" for="driver_number">Driver Number</label>
+                <input type="text" name="driver_number" id="driver_number" class="form-input">
               </div>
               <div>
                 <label class="pur-label" for="inspected_by">Inspected by</label>
                 <input type="text" name="inspected_by" id="inspected_by" class="form-input">
-              </div>
-              <div>
-                <label class="pur-label" for="freight">Freight paid</label>
-                <input type="number" step="0.01" min="0" name="freight" id="freight"
-                       class="form-input pur-money" value="0" x-model.number="freight">
               </div>
             </div>
             <div class="mt-4">
@@ -412,7 +411,6 @@
      if a quantity is above what the order still has outstanding. */
   function grnForm(rows) {
     return {
-      freight: 0,
       /* The document's own number and date. They sit above the supplier picker,
          which reloads the page as a GET, so they are held here and copied into
          the posting form rather than being typed inside it. */
@@ -440,9 +438,9 @@
       accepted() { return this.lines.reduce((total, row) => total + Math.max(0, row.qty - row.rej), 0); },
       rejected() { return this.lines.reduce((total, row) => total + (Number(row.rej) || 0), 0); },
       goods() { return this.lines.reduce((total, row) => total + Math.max(0, row.qty - row.rej) * row.rate, 0); },
-      /* Freight is part of what the goods cost to bring in, so the value that
-         lands in stock -- and in the journal beside it -- carries it. */
-      landed() { return this.goods() + (Number(this.freight) || 0); },
+      /* What the goods are worth: carriage is settled on the supplier's bill
+         and never loaded onto the stock. */
+      landed() { return this.goods(); },
       money(value) {
         return (Math.round(value * 100) / 100).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },

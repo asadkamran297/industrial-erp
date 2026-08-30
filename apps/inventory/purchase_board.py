@@ -346,8 +346,8 @@ GRN_COLUMNS = ColumnSet("inventory.grn.receipts", (
     Column("receive_date", "Receive date", export=lambda r: r.receive_date),
     Column("quantity", "Qty", export=lambda r: r.received_units),
     Column("retail_price", "Retail price", export=lambda r: r.retail_price),
-    # Off by default: what the goods landed at, freight included, is what the
-    # bill is matched against -- worth having, not worth the width by default.
+    # Off by default: what the goods came in at is what the bill is matched
+    # against -- worth having, not worth the width by default.
     Column("landed", "Landed amount", default=False, export=lambda r: r.landed_amount),
     Column("invoice", "Invoice #", default=False, export=lambda r: r.invoice_num),
     Column("status", "Status", export=lambda r: receipt_state(r)[1]),

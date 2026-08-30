@@ -96,6 +96,33 @@
   .dark .pur-doc-value { color: #94a3b8; }
 
   .pur-in { font-weight: 600; color: #047857; }
+
+  /* What the gate recorded: a short row of facts about the delivery, read
+     across rather than as a stack of labelled lines. */
+  .pur-gate {
+    display: grid;
+    gap: .75rem 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, auto));
+    justify-content: start;
+    margin: 0 0 1.25rem;
+    border: 1px solid #f1f5f9;
+    border-radius: .625rem;
+    background: #f8fafc;
+    padding: .75rem 1rem;
+  }
+  .dark .pur-gate { border-color: #1e293b; background: rgba(15, 23, 42, .55); }
+  .pur-gate dt {
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .pur-gate dd { margin: .125rem 0 0; font-size: .875rem; font-weight: 600; }
+  /* The store's own words run to a sentence, so they take the width of the
+     row rather than a column the size of a vehicle number. */
+  .pur-gate-wide { grid-column: 1 / -1; }
+  .pur-gate-wide dd { font-weight: 500; line-height: 1.45; }
   /* What somebody wrote on the order line, kept under the item it is about. */
   .pur-remark { font-style: italic; }
   .pur-doc-narration { font-size: .875rem; }
@@ -165,8 +192,6 @@
     <div class="flex flex-wrap items-center gap-2">
       <a class="pur-btn pur-btn--ghost" target="_blank"
          href="{% url 'inventory:grn_print' order.pk %}?receipts={{ receipt_pks }}&amp;reprint=1">Print</a>
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_detail' order.pk %}">Purchase order</a>
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' supplier.pk %}">Supplier</a>
       {% if unbilled_qty and can_edit %}
       {# The one thing this note is waiting on: goods in the godown that no #}
       {# supplier bill has been entered against. #}
@@ -232,6 +257,27 @@
       </p>
     </div>
 
+    {# What the gate recorded about the delivery. Every field is on the     #}
+    {# sheet whether or not it was filled in: a blank against "Inspected by" #}
+    {# is itself worth reading, and a field that vanishes when empty leaves  #}
+    {# the reader unsure whether it was skipped or never asked for.          #}
+    <dl class="pur-gate">
+      <div><dt>Supplier DC / bilty</dt><dd>{% if dc_number %}{{ dc_number }}{% else %}<span class="pur-nil">&mdash;</span>{% endif %}</dd></div>
+      <div><dt>Vehicle Number</dt><dd>{% if vehicle_no %}{{ vehicle_no }}{% else %}<span class="pur-nil">&mdash;</span>{% endif %}</dd></div>
+      <div><dt>Driver Number</dt><dd>{% if driver_number %}{{ driver_number }}{% else %}<span class="pur-nil">&mdash;</span>{% endif %}</dd></div>
+      {# Receipts booked before the two were held apart carry them joined. #}
+      {% if delivery_ref %}<div><dt>Delivery ref</dt><dd>{{ delivery_ref }}</dd></div>{% endif %}
+      <div><dt>Inspected by</dt><dd>{% if inspected_by %}{{ inspected_by }}{% else %}<span class="pur-nil">&mdash;</span>{% endif %}</dd></div>
+      <div class="pur-gate-wide">
+        <dt>Store remarks</dt>
+        <dd>
+          {% if narration %}{{ narration|linebreaksbr }}
+          {% elif narration_lines %}{% for line in narration_lines %}{{ line|linebreaksbr }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+          {% else %}<span class="pur-nil">&mdash;</span>{% endif %}
+        </dd>
+      </div>
+    </dl>
+
     <div class="overflow-x-auto">
       <table class="pur-table pur-doc-table">
         <thead>
@@ -239,14 +285,10 @@
             <th style="width: 2.5rem;">#</th>
             <th>Item</th>
             <th>Unit</th>
-            <th class="pur-num">Ordered</th>
-            {# What had already arrived before this note. Without it the row #}
-            {# reads as an arithmetic mistake: 40 ordered, 5 received, 33    #}
-            {# still due only adds up once the earlier deliveries are shown. #}
-            <th class="pur-num">Previously Received</th>
+            {# What this delivery took in, and nothing about the order it #}
+            {# came against: the order is a document of its own and says   #}
+            {# what is ordered, already in and still due on its own page.  #}
             <th class="pur-num">Received Qty</th>
-            <th class="pur-num">Balance</th>
-            <th class="pur-num">Rate</th>
             <th class="pur-num">Landed</th>
             <th>Billed</th>
             <th class="pur-noprint"></th>
@@ -264,20 +306,10 @@
               {% if receipt.own_remark %}<span class="pur-sub pur-remark">{{ receipt.own_remark }}</span>{% endif %}
             </td>
             <td>{{ receipt.line.uom.title|default:"&mdash;" }}</td>
-            {# The row is one sum read left to right: #}
-            {# ordered &minus; already received &minus; this GRN = balance.  #}
-            <td class="pur-num">{{ receipt.qty_ordered|qty }}</td>
-            <td class="pur-num {% if receipt.qty_before %}pur-in{% else %}pur-nil{% endif %}"
-                title="Delivered against this line before {{ number }}">{{ receipt.qty_before|qty }}</td>
             <td class="pur-num pur-in">
               {{ receipt.qty_now|qty }}
               {% if receipt.extra_qty %}<span class="pur-sub">incl. {{ receipt.extra_qty|qty }} extra</span>{% endif %}
             </td>
-            <td class="pur-num {% if receipt.qty_due %}pur-due{% else %}pur-nil{% endif %}"
-                title="Still owed on this line after {{ number }}">
-              {% if receipt.line_closed %}<span class="pur-nil">Closed</span>{% else %}{{ receipt.qty_due|qty }}{% endif %}
-            </td>
-            <td class="pur-num">{{ receipt.line.rate|amount }}</td>
             <td class="pur-num pur-strong">{{ receipt.landed_amount|amount }}</td>
             <td>
               {% if receipt.state == "reversed" %}<span class="pur-pill pur-pill--bad">Reversed</span>
@@ -304,11 +336,7 @@
         <tfoot>
           <tr class="pur-doc-total">
             <td colspan="3">Total</td>
-            <td class="pur-num">{{ total_ordered|qty }}</td>
-            <td class="pur-num">{{ total_before|qty }}</td>
             <td class="pur-num">{{ total_units|qty }}</td>
-            <td class="pur-num">{{ total_due|qty }}</td>
-            <td></td>
             <td class="pur-num">{{ total_value|amount }}</td>
             <td colspan="2"></td>
           </tr>
@@ -317,21 +345,7 @@
     </div>
 
     <div class="pur-doc-foot">
-      <div>
-        {# What the store wrote when these goods came through the gate. It #}
-        {# belongs to this delivery, so the order's own narration is not    #}
-        {# borrowed to fill the space when nothing was written.             #}
-        <p class="pur-doc-cap">Narration</p>
-        {% if narration %}
-        <p class="pur-doc-narration">{{ narration|linebreaksbr }}</p>
-        {% elif narration_lines %}
-        {# Lines booked in under one number but written up differently: each #}
-        {# note is kept, rather than one of them standing for all of them.   #}
-        {% for line in narration_lines %}<p class="pur-doc-narration">{{ line|linebreaksbr }}</p>{% endfor %}
-        {% else %}
-        <p class="pur-doc-narration pur-nil">&mdash;</p>
-        {% endif %}
-      </div>
+      <div></div>
       <div class="pur-doc-value">
         <span>Landed value</span>
         <b>{{ total_value|amount }}</b>
