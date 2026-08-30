@@ -37,10 +37,13 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # One group per direction goods move: in from suppliers, out to
     # customers, and what is sitting on the shelf in between.
     NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
+        # The order of the menu is the order of the work: an order is raised,
+        # the goods turn up against it, and a purchase entered straight off the
+        # supplier's bill is the exception that skipped both.
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index", url_name="inventory:purchase_order_list"),
+        NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
         # Straight off the supplier's bill, no order first.
         NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
-        NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
