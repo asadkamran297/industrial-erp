@@ -98,10 +98,12 @@ def get_nav_item_class(depth: int, has_children: bool, is_active: bool, on_activ
         on_path = "bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)]"
         inactive = "text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
     else:
-        size = "min-h-9 gap-2 rounded-md px-3"
-        # Tint plus a left rule, so the current page is readable against the
-        # indent guides instead of relying on a faint grey fill.
-        active = "border-l-2 border-[var(--primary-color)] bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] font-semibold text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)] dark:text-white"
+        size = "min-h-9 gap-2 rounded-lg px-3"
+        # The same filled pill the top level gets, in the brand hue chosen in
+        # the header. The page somebody is actually on is marked one way
+        # throughout the menu: a child that was merely tinted read as another
+        # shade of "nearby" next to its own parent, which is also tinted.
+        active = "bg-[var(--primary-color)] font-semibold text-white shadow-sm shadow-blue-900/10"
         on_path = "font-semibold text-[var(--primary-color)] dark:text-white"
         inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
     if depth >= 2 and not has_children:

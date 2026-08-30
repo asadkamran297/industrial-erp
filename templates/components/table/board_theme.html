@@ -1,0 +1,289 @@
+{% comment %}
+The list-screen board: tiles across the top, a ruled table under them, icon
+actions at the end of each row.
+
+    {% include "components/table/board_theme.html" %}
+
+Written as plain CSS rather than utility classes because the compiled Tailwind
+bundle is prebuilt: a screen that needs a rule nobody has used before would
+otherwise need a rebuild to show it. Held in one place so the screens that use
+it cannot drift apart — a purchase order, a sale and a voucher are read one
+after the other, and a register that changed shape between them would make the
+reader work out afresh where to look.
+
+Class map:
+  po-tiles / po-tile / po-tile--<tone>   the figures across the top
+  po-table                               the register itself
+  po-num / po-sub / po-right / po-muted  cells
+  po-expand + po-lines-*                 a row opened out to its own lines
+  po-pill--<state>                       what a row is waiting on
+  po-row-actions / po-icon-btn           what can be done to a row
+  po-foot                                the page total
+{% endcomment %}
+<style>
+  /* ── Tiles ────────────────────────────────────────────────────────────── */
+  /* Each tile carries a colour for what it is waiting on, so the row is read
+     by hue before it is read by number. One rule set serves them all -- the
+     modifier only sets the three custom properties. */
+  .po-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .po-tile {
+    --tone: #64748b;
+    --tone-soft: #f1f5f9;
+    --tone-line: #e2e8f0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    overflow: hidden;
+    border: 1px solid var(--tone-line);
+    border-radius: .75rem;
+    background: var(--tone-soft);
+    padding: .75rem 1rem;
+  }
+  /* The stripe down the edge is what makes the tiles read as one row of
+     categories rather than unrelated cards. */
+  .po-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: .25rem;
+    background: var(--tone);
+  }
+
+  /* One tone per thing a figure can be about, named for the meaning rather
+     than the colour, so a screen picks by what it is saying. */
+  .po-tile--committed { --tone: #7c3aed; --tone-soft: #f5f3ff; --tone-line: #ddd6fe; }
+  .po-tile--approval  { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+  .po-tile--goods     { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .po-tile--payable   { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+  .po-tile--supplier  { --tone: #0f766e; --tone-soft: #f0fdfa; --tone-line: #99f6e4; }
+  .po-tile--void      { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+  .po-tile--money     { --tone: #047857; --tone-soft: #ecfdf5; --tone-line: #a7f3d0; }
+
+  /* Dark: the same hues, dropped to a tint that sits on a dark ground rather
+     than glowing off it. */
+  .dark .po-tile { --tone-soft: rgba(30, 41, 59, .45); --tone-line: #1e293b; }
+  .dark .po-tile--committed { --tone: #a78bfa; --tone-soft: rgba(76, 29, 149, .22); --tone-line: rgba(139, 92, 246, .35); }
+  .dark .po-tile--approval  { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .35); }
+  .dark .po-tile--goods     { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
+  .dark .po-tile--payable   { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
+  .dark .po-tile--supplier  { --tone: #5eead4; --tone-soft: rgba(19, 78, 74, .25); --tone-line: rgba(20, 184, 166, .35); }
+  .dark .po-tile--void      { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .35); }
+  .dark .po-tile--money     { --tone: #6ee7b7; --tone-soft: rgba(6, 78, 59, .3); --tone-line: rgba(16, 185, 129, .35); }
+
+  /* A tile that filters the list is the filter it describes, so it lifts under
+     the pointer the way anything clickable should. A plain <div> tile stays
+     still, because nothing happens when it is clicked. */
+  a.po-tile { cursor: pointer; transition: box-shadow .15s ease, transform .1s ease; }
+  a.po-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(2, 6, 23, .35); }
+  a.po-tile:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+  /* The filter currently in force is drawn as pressed, so the reader can see
+     which tile the list below is answering. */
+  .po-tile.is-on { box-shadow: inset 0 0 0 1px var(--tone); }
+
+  .po-tile-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .625rem;
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--tone);
+  }
+  .po-tile-icon svg { width: 1.125rem; height: 1.125rem; }
+
+  .po-tile-body { min-width: 0; }
+  .po-tile-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tone); }
+  /* The count and the label share a line: the label says what is being
+     counted, so the two belong together and the tile keeps a row of height. */
+  .po-tile-head { display: flex; align-items: baseline; gap: .5rem; }
+  .po-tile-value { font-size: 1.5rem; font-weight: 800; line-height: 1.15; color: #0f172a; }
+  .dark .po-tile-value { color: #f1f5f9; }
+  .po-tile-note { margin-top: .125rem; font-size: .75rem; line-height: 1.35; color: #64748b; }
+  .dark .po-tile-note { color: #94a3b8; }
+  /* A figure that is somebody's problem right now is drawn in the tile's own
+     colour; one that is merely true stays grey. */
+  .po-tile-note--alert { color: var(--tone); font-weight: 600; }
+
+  /* ── Table ────────────────────────────────────────────────────────────── */
+  .po-table { width: 100%; text-align: left; font-size: .875rem; border-collapse: collapse; }
+  .po-table thead th {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-table thead th { border-bottom-color: #1e293b; }
+  .po-table tbody td { padding: .875rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .po-table tbody td { border-bottom-color: rgba(30, 41, 59, .8); }
+  .po-table tbody tr:hover { background: #f8fafc; }
+  .dark .po-table tbody tr:hover { background: rgba(30, 41, 59, .4); }
+  /* A document number is one token: never broken across two lines, however
+     tight the column gets. */
+  .po-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .po-table td:first-child, .po-table th:first-child { white-space: nowrap; width: 1%; }
+  .po-sub { display: block; font-size: .75rem; color: #94a3b8; }
+  .po-right { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-muted { color: #cbd5e1; }
+  .dark .po-muted { color: #475569; }
+  .po-unbilled { color: #dc2626; font-weight: 600; }
+  /* A cancelled or reversed row stays on the register, greyed rather than
+     hidden: it happened, and that is a fact worth being able to read. */
+  .po-row--void td { color: #94a3b8; }
+  .po-row--void .po-num { color: #94a3b8; }
+
+  /* The + on each row, and the panel of lines it opens under it. The lines are
+     drawn quieter than the row above them, so the register still reads as the
+     list and an opened row reads as detail hanging off one. */
+  .po-expand-head, .po-expand-cell { width: 1%; padding-right: 0 !important; }
+  .po-expand {
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .375rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #475569;
+  }
+  .po-expand:hover { background: #f1f5f9; }
+  .dark .po-expand { border-color: #475569; color: #cbd5e1; }
+  .dark .po-expand:hover { background: #1e293b; }
+  .po-lines-row:hover { background: transparent !important; }
+  .po-lines-cell { background: #f8fafc; padding: .75rem 1rem 1rem 2.5rem !important; }
+  .dark .po-lines-cell { background: rgba(15, 23, 42, .55); }
+  .po-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .po-lines thead th {
+    padding: .375rem .5rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-lines thead th { border-bottom-color: #1e293b; }
+  .po-lines tbody td { padding: .375rem .5rem; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+  .dark .po-lines tbody td { border-bottom-color: rgba(30, 41, 59, .7); }
+  .po-lines tbody tr:last-child td { border-bottom: 0; }
+  .po-lines-num { color: #94a3b8; }
+  .po-lines-in { font-weight: 600; color: #047857; }
+  .po-lines-due { font-weight: 600; color: #b45309; }
+  .po-lines-nil { color: #94a3b8; }
+  .po-lines-empty { font-size: .75rem; color: #94a3b8; }
+
+  /* A progress bar for how far a row has got: grey for nothing, amber part
+     way, green when it is all in. */
+  .po-bar-track { height: .375rem; border-radius: 9999px; background: #e2e8f0; overflow: hidden; }
+  .dark .po-bar-track { background: #1e293b; }
+  .po-bar-fill { height: 100%; border-radius: 9999px; background: #94a3b8; }
+  .po-bar-fill--part { background: #f59e0b; }
+  .po-bar-fill--full { background: #10b981; }
+  .po-bar-note { display: block; margin-top: .3125rem; font-size: .75rem; color: #64748b; text-align: center; }
+  .po-bar-note--late { color: #dc2626; font-weight: 600; }
+
+  /* A state, never an instruction: what to do about it is the button at the
+     end of the row, and the two must not be spoken in one voice. */
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--draft { color: #7c3aed; background: #ede9fe; }
+  .po-pill--open { color: #b45309; background: #fef3c7; }
+  .po-pill--late { color: #dc2626; background: #fee2e2; }
+  .po-pill--bill { color: #dc2626; background: #fee2e2; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--dead { color: #475569; background: #e2e8f0; }
+
+  /* ── Row actions ──────────────────────────────────────────────────────── */
+  /* Icons, not buttons: a table of them reads as a column of choices rather
+     than a wall of words, and the row stays as tall as its text. */
+  .po-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; }
+  .po-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    color: #94a3b8;
+    transition: color .15s ease, background .15s ease;
+  }
+  .po-icon-btn svg { width: 1.0625rem; height: 1.0625rem; }
+  .po-icon-btn:hover { color: #334155; background: #f1f5f9; }
+  .dark .po-icon-btn:hover { color: #e2e8f0; background: rgba(30, 41, 59, .8); }
+  .po-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  /* The one thing the row is actually waiting on carries its colour all the
+     time; the rest stay grey until they are reached for. */
+  .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+  .po-icon-btn--warn { color: #dc2626; background: #fef2f2; }
+  .po-icon-btn--warn:hover { color: #b91c1c; background: #fee2e2; }
+  .dark .po-icon-btn--warn { background: rgba(127, 29, 29, .3); }
+
+  /* The one action that spends money keeps its label. An icon is fine for
+     looking at something; it is not fine for committing to it. */
+  .po-text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .3125rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    padding: 0 .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-text-btn svg { width: .875rem; height: .875rem; }
+  .po-text-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .po-text-btn--go:hover { background: color-mix(in srgb, var(--primary-color) 20%, transparent); }
+  .po-text-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+
+  .po-foot td { padding: .875rem 1rem; font-weight: 700; }
+
+  /* ── The settings menu on the filter bar ──────────────────────────────── */
+  .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
+  .settings-item:hover { background: #f1f5f9; }
+  .settings-item--muted { color: #94a3b8; }
+  .dark .settings-item { color: #cbd5e1; }
+  .dark .settings-item:hover { background: rgba(30, 41, 59, .7); }
+  .settings-check-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-radius: .5rem;
+    padding: .3125rem .625rem;
+    font-size: .8125rem;
+    color: #334155;
+  }
+  .settings-check-row:hover { background: #f1f5f9; }
+  .dark .settings-check-row { color: #cbd5e1; }
+  .dark .settings-check-row:hover { background: rgba(30, 41, 59, .7); }
+  /* A locked column still shows, ticked and greyed, so the list reads as the
+     whole table rather than as the part that happens to be adjustable. */
+  .settings-check-row.is-locked { color: #94a3b8; }
+  .settings-check-row.is-locked:hover { background: transparent; }
+  .settings-lock { margin-left: auto; font-size: .625rem; opacity: .5; }
+  .settings-apply { display: flex; justify-content: flex-end; padding: .25rem .625rem .5rem; }
+  .settings-rows { display: flex; gap: .375rem; padding: .125rem .625rem .375rem; }
+  .settings-chip { flex: 1; border: 1px solid #e2e8f0; border-radius: .5rem; padding: .3125rem 0; font-size: .75rem; font-weight: 600; text-align: center; color: #475569; }
+  .settings-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .settings-chip.is-on { border-color: var(--primary-color); color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
+  .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
+  .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
+</style>

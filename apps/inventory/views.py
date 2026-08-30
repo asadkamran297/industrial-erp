@@ -29,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
 from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
@@ -3176,40 +3176,172 @@ class CustomerUpdateView(CustomerCreateView, UpdateView):
     success_message = "Customer updated."
 
 
-class SaleInvoiceListView(InventoryListMixin, ListView):
-    """Sales entered as invoices, the counterpart of the purchase invoice list."""
+class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
+    """Sales entered as invoices, the counterpart of the purchase invoice list.
+
+    Read the same way as the purchase boards, because it answers the same kind
+    of question about the other direction: what went out, what it came to, and
+    what the customer still owes for it.
+    """
 
     page = "inventory.pos_sales"
     template_name = "inventory/sale_invoice_list.html"
     context_object_name = "invoices"
+    paginate_by = 25
     queryset = (
         POSMaster.objects
-        .select_related("customer")
-        .prefetch_related("items")
+        .select_related("customer", "created_by")
+        .prefetch_related("items__inventory_item__uom")
         .order_by("-sale_date", "-id")
     )
     search_fields = ("sale_num", "customer__customer_name", "invoice_num", "remarks")
     filter_fields = {"customer": "customer_id"}
     date_filters = [{"field": "sale_date", "label": "Sale date"}]
+    # Only what the database can order by, so a heading never offers a sort
+    # that would quietly lie about the order.
+    sort_fields = {
+        "sale_num": "sale_seq_num",
+        "sale_date": ("sale_date", "id"),
+        "customer": "customer__customer_name",
+        "net_amount": "net_amount",
+        "balance": "balance",
+    }
+    default_sort = "sale_date"
+    default_sort_dir = "desc"
+
+    PER_PAGE_OPTIONS = (10, 25, 50, 100)
+
+    # What a sale can be waiting on. Posted-and-settled is the finished state;
+    # everything else is somebody's problem.
+    TAB_ALL = "all"
+    TAB_DRAFT = "draft"
+    TAB_OWING = "owing"
+    TAB_SETTLED = "settled"
+    TABS = (
+        (TAB_ALL, "All"),
+        (TAB_DRAFT, "Not posted"),
+        (TAB_OWING, "Owing"),
+        (TAB_SETTLED, "Settled"),
+    )
+
+    def current_tab(self):
+        tab = self.request.GET.get("tab", self.TAB_ALL)
+        return tab if tab in dict(self.TABS) else self.TAB_ALL
+
+    def get_paginate_by(self, queryset):
+        raw = (self.request.GET.get("per_page") or "").strip()
+        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
+            return int(raw)
+        return self.paginate_by
+
+    def filtered_queryset(self):
+        """Everything the filter bar allows, before the tab narrows it.
+
+        The tiles are counted over this: clicking a tab must not change the
+        numbers above it, because they are what the tabs are for.
+        """
+        return super().get_queryset()
+
+    def get_queryset(self):
+        queryset = self.filtered_queryset()
+        tab = self.current_tab()
+        if tab == self.TAB_DRAFT:
+            return queryset.exclude(posted=YES)
+        if tab == self.TAB_OWING:
+            return queryset.filter(posted=YES, balance__gt=Decimal("0.00"))
+        if tab == self.TAB_SETTLED:
+            return queryset.filter(posted=YES, balance__lte=Decimal("0.00"))
+        return queryset
 
     def get_filter_specs(self):
         customer_choices = list(
             Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name").values_list("id", "customer_name")
         )
         return [
-            {"name": "customer", "label": "All customers", "choices": customer_choices,
-             "value": self.request.GET.get("customer", "")},
+            {"name": "customer", "label": "All customers", "short_label": "Customer",
+             "choices": customer_choices, "value": self.request.GET.get("customer", "")},
         ]
+
+    def tiles(self):
+        """The figures over everything the filters allow, not just this page."""
+        base = self.filtered_queryset()
+        posted = base.filter(posted=YES)
+        sold = posted.aggregate(count=Count("id"), value=Sum("net_amount"), taken=Sum("total_paid"))
+        owing = posted.filter(balance__gt=Decimal("0.00")).aggregate(count=Count("id"), value=Sum("balance"))
+        drafts = base.exclude(posted=YES).aggregate(count=Count("id"), value=Sum("net_amount"))
+        month = timezone.localdate().replace(day=1)
+        this_month = posted.filter(sale_date__gte=month).aggregate(count=Count("id"), value=Sum("net_amount"))
+        return {
+            "sold_count": sold["count"] or 0,
+            "sold_value": sold["value"] or Decimal("0.00"),
+            "taken": sold["taken"] or Decimal("0.00"),
+            "month_count": this_month["count"] or 0,
+            "month_value": this_month["value"] or Decimal("0.00"),
+            "owing_count": owing["count"] or 0,
+            "owing_value": owing["value"] or Decimal("0.00"),
+            "draft_count": drafts["count"] or 0,
+            "draft_value": drafts["value"] or Decimal("0.00"),
+            "month_from": month.isoformat(),
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        carried = self.request.GET.copy()
+        for key in ("tab", "page"):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
+        context["per_page"] = self.get_paginate_by(None)
+        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        context["tabs"] = self.TABS
+        context["current_tab"] = self.current_tab()
+        context["filters_active"] = any(
+            (self.request.GET.get(key) or "").strip()
+            for key in ("q", "customer", "date_from", "date_to", "tab")
+        )
+        context["tiles"] = self.tiles()
+        context["export_url"] = reverse_lazy("inventory:sale_invoice_export")
+
         page_total = Decimal("0.00")
         for invoice in context["invoices"]:
-            invoice.line_count = invoice.items.count()
+            lines = list(invoice.items.all())
+            invoice.line_count = len(lines)
+            invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            # What the sale is waiting on, worked out here so the row prints an
+            # answer rather than the template guessing at one.
+            if invoice.posted != YES:
+                invoice.state, invoice.state_label = "draft", "Not posted"
+            elif (invoice.balance or Decimal("0.00")) > 0:
+                invoice.state, invoice.state_label = "owing", "Owing"
+            else:
+                invoice.state, invoice.state_label = "settled", "Settled"
             page_total += invoice.net_amount or Decimal("0.00")
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
         return context
+
+
+class SaleInvoiceExportView(InventoryListMixin, TableExportView):
+    """The sale rows on screen, in whichever format was asked for."""
+
+    page = "inventory.pos_sales"
+    columns = SALE_COLUMNS
+    filename = "sale-invoices"
+    title = "Sale Invoices"
+
+    def get_rows(self):
+        listing = SaleInvoiceListView(request=self.request, kwargs={}, args=())
+        rows = list(listing.get_queryset())
+        for row in rows:
+            lines = list(row.items.all())
+            row.line_count = len(lines)
+            row.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            if row.posted != YES:
+                row.state_label = "Not posted"
+            elif (row.balance or Decimal("0.00")) > 0:
+                row.state_label = "Owing"
+            else:
+                row.state_label = "Settled"
+        return rows
 
 
 class SaleInvoiceCreateView(InventoryManageMixin, View):

@@ -331,6 +331,25 @@ PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
 ))
 
 
+# ── Sale invoices screen ───────────────────────────────────────────────────
+# The other direction: what went out, what it came to, and what is still owed
+# for it. Declared here beside the purchase sets so the two registers cannot
+# drift apart in what they call a column.
+SALE_COLUMNS = ColumnSet("inventory.sale_invoices", (
+    Column("sale_num", "Invoice #", locked=True, export=lambda o: o.sale_num),
+    Column("invoice_num", "Reference", default=False, export=lambda o: o.invoice_num or ""),
+    Column("sale_date", "Date", export=lambda o: o.sale_date),
+    Column("customer", "Customer", export=lambda o: o.customer.customer_name if o.customer else "Walk-in"),
+    Column("lines", "Items", export=lambda o: o.line_count),
+    Column("quantity", "Quantity", export=lambda o: o.qty_total),
+    Column("pay_mode", "Paid by", default=False, export=lambda o: o.get_pay_mode_display()),
+    Column("paid", "Received", export=lambda o: o.total_paid),
+    Column("balance", "Balance", export=lambda o: o.balance),
+    Column("status", "Status", export=lambda o: o.state_label),
+    Column("value", "Amount", export=lambda o: o.net_amount),
+))
+
+
 # ── Goods receipt screen ───────────────────────────────────────────────────
 # Its own table, its own choice: the two screens list the same records but are
 # read for different reasons, so what one person wants on show here is not what

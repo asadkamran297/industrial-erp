@@ -1,138 +1,285 @@
 {% extends "layouts/portal.html" %}
+{% load core_extras %}
 {% block content %}
-<style>
-  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so a rule for this one
-     screen is written here rather than adding classes that need a rebuild.
-     Customer names run long, so an option stays on one line and is cut with an
-     ellipsis instead of wrapping into a two-line row. */
-  #customer-field .searchable-select-option,
-  #customer-field .searchable-select-button > span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* Over the tiles below it, whichever way the page is scrolled. */
-  #customer-field .searchable-select-panel { z-index: 60; }
-</style>
-<div class="flex flex-wrap items-center justify-between gap-3">
-  <div>
+{% include "components/table/board_theme.html" %}
+
+<div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
+
+{# ── Head ──────────────────────────────────────────────────────────────── #}
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Sale Invoices</h1>
   </div>
-  <div class="flex flex-wrap items-center gap-3">
-    {# Its own form so searching keeps whatever the filter bar is set to. #}
-    <form method="get" class="flex items-center gap-2">
-      <input type="hidden" name="customer" value="{{ request.GET.customer }}">
-      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
-      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
-      <div class="search-field">
-        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
-        </svg>
-        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search..."
-               class="search-input {% if request.GET.q %}pl-9{% endif %}">
-        {% if request.GET.q %}
-        <a href="?customer={{ request.GET.customer }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}"
-           title="Clear search"
-           class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
-        {% endif %}
-      </div>
-    </form>
+
+  <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
     {% url 'inventory:sale_invoice_create' as add_url %}
-    {% include "components/ui/button.html" with label="Add Sale Invoice" href=add_url variant="primary" icon="+" only %}
+    {% include "components/ui/button.html" with label="Sale Invoice" href=add_url variant="primary" icon="+" only %}
     {% endif %}
   </div>
 </div>
 
-<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-  <div class="w-64" id="customer-field">
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="customer">Customer</label>
-    <select name="customer" id="customer" class="form-select" onchange="this.form.submit()">
-      <option value="">All customers</option>
-      {% for spec in filter_specs %}{% if spec.name == "customer" %}
-        {% for value, label in spec.choices %}
-          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      {% endif %}{% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
-    <input type="date" name="date_from" id="date_from" value="{{ request.GET.date_from }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
-    <input type="date" name="date_to" id="date_to" value="{{ request.GET.date_to }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <input type="hidden" name="q" value="{{ request.GET.q }}">
-  <div class="flex-1"></div>
-  <div class="flex shrink-0 items-center gap-2">
-    <button type="button" class="btn btn-secondary btn--icon" title="Print" aria-label="Print"
-            onclick="printSection('invoice-table', 'Sale Invoices')">
-      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+{# ── Tiles: counted over everything the filters allow, so they hold still ── #}
+{# as the tabs are clicked through. #}
+<div class="po-tiles mt-5">
+  <a class="po-tile po-tile--money{% if current_tab == 'all' and not request.GET.date_from %} is-on{% endif %}"
+     href="?{{ base_query }}&amp;tab=all">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
+        <path d="M9 8h6M9 12h6"></path>
       </svg>
-    </button>
-  </div>
-</form>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.sold_count }}</p>
+        <p class="po-tile-label">Sales</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.sold_value|short_amount }} invoiced</p>
+    </div>
+  </a>
 
-<div class="mt-4 grid gap-4 sm:grid-cols-2">
-  <div class="stat-tile">
-    <span class="stat-icon">&#8721;</span>
-    <div>
-      <p class="stat-label">Total on this page</p>
-      <p class="stat-value">{{ page_total|amount }}</p>
+  <a class="po-tile po-tile--goods{% if request.GET.date_from == tiles.month_from %} is-on{% endif %}"
+     href="?{{ base_query }}&amp;date_from={{ tiles.month_from }}">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+        <path d="M8 2v4M16 2v4M3 10h18"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.month_count }}</p>
+        <p class="po-tile-label">This month</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.month_value|short_amount }} this month</p>
     </div>
-  </div>
-  <div class="stat-tile">
-    <span class="stat-icon">#</span>
-    <div>
-      <p class="stat-label">Invoices</p>
-      <p class="stat-value">{{ invoice_count }}</p>
-      <p class="mt-0.5 text-xs text-slate-500">under the filters applied</p>
+  </a>
+
+  {# What customers still owe on posted sales. The figure that is somebody's #}
+  {# job to chase, so it carries its colour when it is not nil.              #}
+  <a class="po-tile po-tile--payable{% if current_tab == 'owing' %} is-on{% endif %}"
+     href="?{{ base_query }}&amp;tab=owing">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.owing_count }}</p>
+        <p class="po-tile-label">Owing</p>
+      </div>
+      <p class="po-tile-note{% if tiles.owing_count %} po-tile-note--alert{% endif %}">
+        {% if tiles.owing_count %}Rs {{ tiles.owing_value|short_amount }} not received
+        {% else %}Everything settled{% endif %}
+      </p>
     </div>
-  </div>
+  </a>
+
+  {# A sale nobody posted has not happened: no stock left the godown and no #}
+  {# revenue was booked, however finished the paperwork looks.              #}
+  <a class="po-tile po-tile--approval{% if current_tab == 'draft' %} is-on{% endif %}"
+     href="?{{ base_query }}&amp;tab=draft">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <path d="M14 2v6h6"></path><path d="M9 15h6"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.draft_count }}</p>
+        <p class="po-tile-label">Not posted</p>
+      </div>
+      <p class="po-tile-note{% if tiles.draft_count %} po-tile-note--alert{% endif %}">
+        {% if tiles.draft_count %}Rs {{ tiles.draft_value|short_amount }} not in the books yet
+        {% else %}Nothing waiting{% endif %}
+      </p>
+    </div>
+  </a>
 </div>
 
-<section class="mt-4">
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table id="invoice-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Invoice No.</th>
-            <th class="px-4 py-3">Customer</th>
-            <th class="px-4 py-3 text-right">Items</th>
-            <th class="px-4 py-3 text-right">Amount</th>
-            <th class="px-4 py-3 text-right">Balance</th>
-            <th class="px-4 py-3 text-right print-hide">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for invoice in invoices %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-            <td class="px-4 py-3 whitespace-nowrap">{{ invoice.sale_date }}</td>
-            <td class="px-4 py-3 font-medium">{{ invoice.sale_num }}</td>
-            <td class="px-4 py-3">{{ invoice.customer.customer_name|default:"—" }}</td>
-            <td class="px-4 py-3 text-right tabular-nums">{{ invoice.line_count }}</td>
-            <td class="px-4 py-3 text-right font-bold tabular-nums">{{ invoice.net_amount|amount }}</td>
-            {# What the customer still owes on this invoice. #}
-            <td class="px-4 py-3 text-right tabular-nums {% if invoice.balance > 0 %}text-rose-600 font-semibold{% else %}text-slate-400{% endif %}">{{ invoice.balance|amount }}</td>
-            <td class="px-4 py-3 print-hide">
-              <div class="flex justify-end gap-2">
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:pos_detail' invoice.pk %}" title="View">&#128065;</a>
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:pos_receipt' invoice.pk %}" target="_blank" title="Print">&#128438;</a>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="7" class="px-4 py-10 text-center text-slate-500">No sale invoices yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+{# ── Board ─────────────────────────────────────────────────────────────── #}
+<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  {% include "components/table/filter_bar.html" with table_id="sale-table" date_filters_enabled=True search_placeholder="Search..." export_url=export_url %}
+
+  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
+    <table id="sale-table" class="po-table">
+      <thead>
+        <tr>
+          <th class="print-hide po-expand-head"></th>
+          {% include "components/table/sort_header.html" with label="Invoice #" field="sale_num" %}
+          {% include "components/table/sort_header.html" with label="Date" field="sale_date" %}
+          {% include "components/table/sort_header.html" with label="Customer" field="customer" %}
+          <th class="po-right">Items</th>
+          <th class="po-right">Quantity</th>
+          <th>Paid by</th>
+          <th class="po-right">Received</th>
+          {% include "components/table/sort_header.html" with label="Balance" field="balance" align="right" %}
+          <th>Status</th>
+          {% include "components/table/sort_header.html" with label="Amount" field="net_amount" align="right" %}
+          <th class="print-hide po-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invoice in invoices %}
+        <tr>
+          <td class="print-hide po-expand-cell">
+            {# The lines behind the row's figures, opened where the row is #}
+            {# rather than on a screen of their own. #}
+            <button type="button" class="po-expand" @click="toggleRow({{ invoice.pk }})"
+                    :aria-expanded="isRowOpen({{ invoice.pk }}) ? 'true' : 'false'"
+                    aria-label="Show the items on this sale" title="Show the items on this sale">
+              <span x-text="isRowOpen({{ invoice.pk }}) ? '−' : '+'">+</span>
+            </button>
+          </td>
+          <td>
+            <a class="po-num" href="{% url 'inventory:pos_detail' invoice.pk %}">{{ invoice.sale_num }}</a>
+            {% if invoice.invoice_num %}<span class="po-sub">{{ invoice.invoice_num }}</span>{% endif %}
+          </td>
+          <td class="whitespace-nowrap">{{ invoice.sale_date|dmy }}</td>
+          <td>
+            {# A counter sale has no customer on it, and saying so is better #}
+            {# than an empty cell that reads as missing data.                 #}
+            {% if invoice.customer %}<span class="font-semibold">{{ invoice.customer.customer_name }}</span>
+            {% else %}<span class="po-muted">Walk-in</span>{% endif %}
+          </td>
+          <td class="po-right text-slate-500">{{ invoice.line_count }}</td>
+          <td class="po-right">{{ invoice.qty_total|qty }}</td>
+          <td class="whitespace-nowrap">{{ invoice.get_pay_mode_display }}</td>
+          <td class="po-right">{{ invoice.total_paid|amount }}</td>
+          <td class="po-right {% if invoice.balance %}po-unbilled{% else %}po-muted{% endif %}">{{ invoice.balance|amount }}</td>
+          <td>
+            {% if invoice.state == "draft" %}<span class="po-pill po-pill--draft">Not posted</span>
+            {% elif invoice.state == "owing" %}<span class="po-pill po-pill--open">Owing</span>
+            {% else %}<span class="po-pill po-pill--done">Settled</span>{% endif %}
+          </td>
+          <td class="po-right font-semibold">{{ invoice.net_amount|amount }}</td>
+          <td class="print-hide">
+            <div class="po-row-actions">
+              {# One action per row: the next thing this sale is waiting for. #}
+              {% if invoice.state == "draft" and can_edit %}
+              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:pos_update' invoice.pk %}"
+                 title="Finish and post this sale" aria-label="Finish and post this sale">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
+                </svg>
+              </a>
+              {% endif %}
+              <a class="po-icon-btn" href="{% url 'inventory:pos_detail' invoice.pk %}"
+                 title="View this sale" aria-label="View this sale">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </a>
+              <a class="po-icon-btn" href="{% url 'inventory:pos_receipt' invoice.pk %}" target="_blank"
+                 title="Print this invoice" aria-label="Print this invoice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 8V3h10v5"></path>
+                  <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="7" y="14" width="10" height="7" rx="1"></rect>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+
+        {# ── The sale's own lines, opened from the + on the row ───────────── #}
+        <tr class="po-lines-row print-hide" x-show="isRowOpen({{ invoice.pk }})" x-cloak>
+          <td colspan="12" class="po-lines-cell print-hide">
+            {% with line_list=invoice.items.all %}
+            {% if line_list %}
+            <table class="po-lines">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th class="po-right">Quantity</th>
+                  <th>Unit</th>
+                  <th class="po-right">Rate</th>
+                  <th class="po-right">Discount</th>
+                  <th class="po-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for line in line_list %}
+                <tr>
+                  <td class="po-lines-num">{{ forloop.counter }}</td>
+                  <td>
+                    <span class="font-semibold">{{ line.item_name }}</span>
+                    {% if line.item_code %}<span class="po-sub">{{ line.item_code }}</span>{% endif %}
+                  </td>
+                  <td class="po-right">{{ line.quantity|qty }}</td>
+                  <td>{{ line.inventory_item.uom.title|default:"—" }}</td>
+                  <td class="po-right">{{ line.price|amount }}</td>
+                  <td class="po-right">{{ line.discount_amount|amount }}</td>
+                  <td class="po-right font-semibold">{{ line.net_total|amount }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="po-lines-empty">Nothing on this sale.</p>
+            {% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="12" class="px-4 py-12 text-center text-slate-500">No sales here.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if invoices %}
+      <tfoot>
+        <tr class="po-foot">
+          <td colspan="10">Total on this page</td>
+          <td class="po-right">{{ page_total|amount }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
   </div>
-  {% include "components/table/pagination.html" %}
 </section>
+
+{% include "components/table/pagination.html" %}
+
+</div>
+
+<script>
+  // Copy the table as it stands, tab separated, which is what a spreadsheet
+  // pastes into cells rather than into one.
+  function copyTable(event) {
+    var table = document.getElementById('sale-table');
+    var lines = [];
+    table.querySelectorAll('tr').forEach(function (row) {
+      var cells = Array.from(row.querySelectorAll('th, td'))
+        .filter(function (cell) { return !cell.classList.contains('print-hide'); })
+        .map(function (cell) { return cell.innerText.replace(/\s+/g, ' ').trim(); });
+      if (cells.length) lines.push(cells.join('\t'));
+    });
+    var text = lines.join('\n');
+
+    var done = function () {
+      var button = event.currentTarget;
+      var label = button.querySelector('strong');
+      var was = label.textContent;
+      label.textContent = 'Copied';
+      setTimeout(function () { label.textContent = was; }, 1500);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); done(); } finally { box.remove(); }
+  }
+</script>
 {% endblock %}
