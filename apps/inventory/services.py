@@ -243,6 +243,7 @@ def receive_purchase_order_item(*, purchase_order_item, quantity, extra_qty, ret
         # that receive a single row on its own.
         grn_number=(grn_number or "").strip()[:80] or f"GRN-{po.purchase_num}-{purchase_order_item.seq_num}",
         rv_number=rv_number,
+        remarks=remarks or "",
         extra_qty_tag=YES if extra_qty > 0 else NO,
         extra_qty=extra_qty,
         retail_price=retail_price,

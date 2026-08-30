@@ -1,309 +1,579 @@
 {% extends "layouts/portal.html" %}
+{% load core_extras %}
 {% block content %}
 <style>
-  /* A delivery is not a line of the order: it is what happened to one. The
-     history rows are drawn quieter and stepped in, so the ordered lines still
-     read as the list and the receipts read as the account under each. */
-  .grn-table .grn-line > td { border-top: 1px solid #e2e8f0; }
-  .dark .grn-table .grn-line > td { border-top-color: #1e293b; }
-  .grn-table .grn-history { background: #f8fafc; }
-  .dark .grn-table .grn-history { background: rgba(15, 23, 42, .55); }
-  .grn-table .grn-history td { font-size: .6875rem; }
-  .grn-step {
+  /* Plain CSS, same as the purchase orders board: the compiled Tailwind bundle
+     is prebuilt, so the rules for this one screen are written here rather than
+     adding classes that would need a rebuild. The two screens are read one
+     after the other, so they are drawn the same way on purpose. */
+
+  /* ── Tiles ────────────────────────────────────────────────────────────── */
+  .po-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .po-tile {
+    --tone: #64748b;
+    --tone-soft: #f1f5f9;
+    --tone-line: #e2e8f0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    overflow: hidden;
+    border: 1px solid var(--tone-line);
+    border-radius: .75rem;
+    background: var(--tone-soft);
+    padding: .75rem 1rem;
+  }
+  .po-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: .25rem;
+    background: var(--tone);
+  }
+
+  .po-tile--goods     { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .po-tile--committed { --tone: #7c3aed; --tone-soft: #f5f3ff; --tone-line: #ddd6fe; }
+  .po-tile--payable   { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+  .po-tile--void      { --tone: #d97706; --tone-soft: #fffbeb; --tone-line: #fde68a; }
+
+  .dark .po-tile { --tone-soft: rgba(30, 41, 59, .45); --tone-line: #1e293b; }
+  .dark .po-tile--goods     { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
+  .dark .po-tile--committed { --tone: #a78bfa; --tone-soft: rgba(76, 29, 149, .22); --tone-line: rgba(139, 92, 246, .35); }
+  .dark .po-tile--payable   { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
+  .dark .po-tile--void      { --tone: #fbbf24; --tone-soft: rgba(120, 53, 15, .25); --tone-line: rgba(245, 158, 11, .35); }
+
+  .po-tile { cursor: pointer; transition: box-shadow .15s ease, transform .1s ease; }
+  .po-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(2, 6, 23, .35); }
+  .po-tile:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+
+  .po-tile-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .625rem;
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--tone);
+  }
+  .po-tile-icon svg { width: 1.125rem; height: 1.125rem; }
+
+  .po-tile-body { min-width: 0; }
+  .po-tile-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tone); }
+  .po-tile-head { display: flex; align-items: baseline; gap: .5rem; }
+  .po-tile-value { font-size: 1.5rem; font-weight: 800; line-height: 1.15; color: #0f172a; }
+  .dark .po-tile-value { color: #f1f5f9; }
+  .po-tile-note { margin-top: .125rem; font-size: .75rem; line-height: 1.35; color: #64748b; }
+  .dark .po-tile-note { color: #94a3b8; }
+  .po-tile-note--alert { color: var(--tone); font-weight: 600; }
+
+  /* ── Table ────────────────────────────────────────────────────────────── */
+  .po-table { width: 100%; text-align: left; font-size: .875rem; border-collapse: collapse; }
+  .po-table thead th {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-table thead th { border-bottom-color: #1e293b; }
+  .po-table tbody td { padding: .875rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .po-table tbody td { border-bottom-color: rgba(30, 41, 59, .8); }
+  .po-table tbody tr:hover { background: #f8fafc; }
+  .dark .po-table tbody tr:hover { background: rgba(30, 41, 59, .4); }
+  /* A note number is one token: never broken across two lines, however tight
+     the column gets. */
+  .po-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .po-table td:first-child, .po-table th:first-child { white-space: nowrap; width: 1%; }
+  .po-sub { display: block; font-size: .75rem; color: #94a3b8; }
+  .po-right { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-muted { color: #cbd5e1; }
+  .dark .po-muted { color: #475569; }
+
+  /* A reversed receipt and its mirror both stay on the register, greyed rather
+     than hidden: the pair nets to nothing, and that is a fact about the goods
+     worth being able to read. */
+  .po-row--void td { color: #94a3b8; }
+  .po-row--void .po-num { color: #94a3b8; }
+
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--open { color: #b45309; background: #fef3c7; }
+  .po-pill--bill { color: #dc2626; background: #fee2e2; }
+  .po-pill--dead { color: #475569; background: #e2e8f0; }
+
+  /* ── Row actions ──────────────────────────────────────────────────────── */
+  .po-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; }
+  .po-icon-btn {
     display: inline-grid;
     place-items: center;
-    width: 1.125rem;
-    height: 1.125rem;
-    margin-right: .375rem;
-    border-radius: 9999px;
-    background: #e2e8f0;
-    font-size: .5625rem;
-    font-weight: 700;
-    color: #475569;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    color: #94a3b8;
+    transition: color .15s ease, background .15s ease;
   }
-  .dark .grn-step { background: #1e293b; color: #cbd5e1; }
-  .grn-date { font-weight: 600; color: #475569; }
-  .dark .grn-date { color: #cbd5e1; }
-  .grn-ref {
-    margin-left: .375rem;
-    border-radius: .25rem;
-    background: #e0f2fe;
-    padding: .0625rem .3125rem;
-    font-size: .625rem;
+  .po-icon-btn svg { width: 1.0625rem; height: 1.0625rem; }
+  .po-icon-btn:hover { color: #334155; background: #f1f5f9; }
+  .dark .po-icon-btn:hover { color: #e2e8f0; background: rgba(30, 41, 59, .8); }
+  .po-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+  .po-icon-btn--warn { color: #dc2626; background: #fef2f2; }
+  .po-icon-btn--warn:hover { color: #b91c1c; background: #fee2e2; }
+  .dark .po-icon-btn--warn { background: rgba(127, 29, 29, .3); }
+
+  .po-foot td { padding: .875rem 1rem; font-weight: 700; }
+
+  /* ── Reversal dialog ──────────────────────────────────────────────────── */
+  .approve-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(2, 6, 23, .55);
+    backdrop-filter: blur(2px);
+  }
+  .approve-card {
+    width: 100%;
+    max-width: 25rem;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 1.25rem;
+    box-shadow: 0 30px 60px -20px rgba(2, 6, 23, .55);
+  }
+  .dark .approve-card { background: #0f172a; }
+  .approve-head { display: flex; align-items: flex-start; gap: .75rem; }
+  .approve-mark {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: .75rem;
+    color: #dc2626;
+    background: #fee2e2;
+  }
+  .dark .approve-mark { background: rgba(127, 29, 29, .35); color: #fca5a5; }
+  .approve-mark svg { width: 1.375rem; height: 1.375rem; }
+  .approve-title { margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; }
+  .dark .approve-title { color: #f1f5f9; }
+  .approve-sub { margin: .125rem 0 0; font-size: .8125rem; color: #64748b; }
+  .approve-facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: .375rem;
+    border-top: 1px solid #f1f5f9;
+    padding-top: .875rem;
+  }
+  .dark .approve-facts { border-top-color: #1e293b; }
+  .approve-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .approve-facts dt { font-size: .75rem; color: #94a3b8; }
+  .approve-facts dd { margin: 0; font-size: .8125rem; font-weight: 600; color: #334155; text-align: right; }
+  .dark .approve-facts dd { color: #e2e8f0; }
+  .approve-field { margin-top: .875rem; }
+  .approve-field label { display: block; margin-bottom: .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #94a3b8; }
+  .approve-note { margin: .75rem 0 0; font-size: .75rem; line-height: 1.45; color: #94a3b8; }
+  .approve-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+  .approve-cancel {
+    height: 2.25rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    padding: 0 1rem;
+    font-size: .8125rem;
     font-weight: 600;
-    color: #0369a1;
+    color: #475569;
+    background: #fff;
   }
-  .grn-ref--inv { background: #dcfce7; color: #15803d; }
-  .dark .grn-ref { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
-  .dark .grn-ref--inv { background: rgba(21, 128, 61, .25); color: #86efac; }
+  .approve-cancel:hover { background: #f8fafc; }
+  .dark .approve-cancel { border-color: #1e293b; background: transparent; color: #cbd5e1; }
+  .approve-go {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    height: 2.25rem;
+    border: 1px solid #b91c1c;
+    border-radius: .5rem;
+    padding: 0 1.125rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    color: #fff;
+    background-image: linear-gradient(180deg, #ef4444, #dc2626);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22);
+  }
+  .approve-go svg { width: .9375rem; height: .9375rem; }
+  .approve-go:hover { filter: brightness(1.06); }
+  .approve-go:active { transform: translateY(1px); }
+
+  .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
+  .settings-item:hover { background: #f1f5f9; }
+  .settings-item--muted { color: #94a3b8; }
+  .dark .settings-item { color: #cbd5e1; }
+  .dark .settings-item:hover { background: rgba(30, 41, 59, .7); }
+  .settings-check-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-radius: .5rem;
+    padding: .3125rem .625rem;
+    font-size: .8125rem;
+    color: #334155;
+  }
+  .settings-check-row:hover { background: #f1f5f9; }
+  .dark .settings-check-row { color: #cbd5e1; }
+  .dark .settings-check-row:hover { background: rgba(30, 41, 59, .7); }
+  .settings-check-row.is-locked { color: #94a3b8; }
+  .settings-check-row.is-locked:hover { background: transparent; }
+  .settings-lock { margin-left: auto; font-size: .625rem; opacity: .5; }
+  .settings-apply { display: flex; justify-content: flex-end; padding: .25rem .625rem .5rem; }
+  .settings-rows { display: flex; gap: .375rem; padding: .125rem .625rem .375rem; }
+  .settings-chip { flex: 1; border: 1px solid #e2e8f0; border-radius: .5rem; padding: .3125rem 0; font-size: .75rem; font-weight: 600; text-align: center; color: #475569; }
+  .settings-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .settings-chip.is-on { border-color: var(--primary-color); color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
+  .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
+  .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 </style>
 
-<section class="space-y-6" x-data="{ open: new URLSearchParams(location.search).get('open') ? Number(new URLSearchParams(location.search).get('open')) : null }">
+<div x-data="grnBoard()">
 
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">GRN — Goods Receipt Notes</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Purchase orders and their received items.</p>
-    </div>
-    <div class="flex items-center gap-3">
-      <span class="text-xs text-slate-400 dark:text-slate-500">Use &#128438; Print on each GRN row</span>
-      {# Booking a delivery in as its own document, for whoever is standing at #}
-      {# the gate with it. The rows below receive against one order already;   #}
-      {# this is the way in for somebody who has not got a row in mind yet.    #}
-      {% if can_edit %}
-      <a href="{% url 'inventory:goods_receipt_create' %}"
-         class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--primary-color)] px-3 text-sm font-semibold text-white transition hover:brightness-95"
-         title="New goods receipt">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14"></path>
-        </svg>
-        New GRN
-      </a>
-      {% endif %}
-    </div>
+{# ── Head ──────────────────────────────────────────────────────────────── #}
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="max-w-xl">
+    <h1 class="title-accent text-2xl font-bold">Goods Receipts</h1>
   </div>
 
-  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    {% include "components/table/filter_bar.html" with table_id="grn-table" date_filters_enabled=True search_placeholder="Search..." %}
+  <div class="flex flex-wrap items-center gap-2">
+    {% if can_edit %}
+    {% url 'inventory:goods_receipt_create' as add_url %}
+    {% include "components/ui/button.html" with label="New GRN" href=add_url variant="primary" icon="+" only %}
+    {% endif %}
   </div>
+</div>
 
-  {# ── Purchase Orders ── #}
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table id="grn-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="w-8 px-3 py-3"></th>
-            <th class="px-4 py-3">Order #</th>
-            {% if "supplier" in columns %}<th class="px-4 py-3">Supplier</th>{% endif %}
-            {% if "purchase_date" in columns %}<th class="px-4 py-3">Date</th>{% endif %}
-            {% if "expected" in columns %}<th class="px-4 py-3">Expected</th>{% endif %}
-            {% if "value" in columns %}<th class="px-4 py-3 text-right">Amount</th>{% endif %}
-            {% if "ordered" in columns %}<th class="px-4 py-3 text-right">Total ordered</th>{% endif %}
-            {% if "received" in columns %}<th class="px-4 py-3 text-right">Received</th>{% endif %}
-            {% if "balance" in columns %}<th class="px-4 py-3 text-right">Balance</th>{% endif %}
-            {% if "status" in columns %}<th class="px-4 py-3">Status</th>{% endif %}
-            <th class="px-4 py-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for order in orders %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-            <td class="px-3 py-3">
-              <button type="button" @click="open = (open === {{ order.pk }}) ? null : {{ order.pk }}"
-                class="grid h-6 w-6 place-items-center rounded-md border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300">
-                <span x-text="open === {{ order.pk }} ? '−' : '+'"></span>
+{# ── Tiles: counted over everything the filters allow, so they hold still ── #}
+{# as the tabs are clicked through. #}
+<div class="po-tiles mt-5">
+  <a class="po-tile po-tile--goods" href="?{{ base_query }}&amp;tab=all">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.receipt_count }}</p>
+        <p class="po-tile-label">Receipts</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.receipt_value|short_amount }} received</p>
+    </div>
+  </a>
+
+  <a class="po-tile po-tile--committed" href="?{{ base_query }}&amp;tab=all">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M8 9h8M8 13h8M8 17h5"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.units|qty }}</p>
+        <p class="po-tile-label">Units in</p>
+      </div>
+      <p class="po-tile-note">Booked into stock, extras included</p>
+    </div>
+  </a>
+
+  <a class="po-tile po-tile--payable" href="?{{ base_query }}&amp;tab=unbilled">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+        <circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
+        <p class="po-tile-label">Not billed</p>
+      </div>
+      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} arrived, not invoiced</p>
+    </div>
+  </a>
+
+  <a class="po-tile po-tile--void" href="?{{ base_query }}&amp;tab=reversed">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.reversed_count }}</p>
+        <p class="po-tile-label">Reversed</p>
+      </div>
+      <p class="po-tile-note">Withdrawn receipts and their mirrors</p>
+    </div>
+  </a>
+</div>
+
+{# ── Register ──────────────────────────────────────────────────────────── #}
+<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  {% include "components/table/filter_bar.html" with table_id="grn-table" date_filters_enabled=True search_placeholder="Search..." columns_action=columns_url export_url=export_url %}
+
+  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
+    <table id="grn-table" class="po-table">
+      <thead>
+        <tr>
+          {% include "components/table/sort_header.html" with label="GRN #" field="grn_number" %}
+          {% if "purchase_num" in columns %}{% include "components/table/sort_header.html" with label="PO #" field="purchase_num" %}{% endif %}
+          {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
+          {% if "item" in columns %}{% include "components/table/sort_header.html" with label="Item" field="item" %}{% endif %}
+          {% if "receive_date" in columns %}{% include "components/table/sort_header.html" with label="Receive date" field="receive_date" %}{% endif %}
+          {% if "quantity" in columns %}{% include "components/table/sort_header.html" with label="Qty" field="quantity" align="right" %}{% endif %}
+          {% if "retail_price" in columns %}<th class="po-right">Retail price</th>{% endif %}
+          {% if "landed" in columns %}<th class="po-right">Landed amount</th>{% endif %}
+          {% if "invoice" in columns %}<th>Invoice #</th>{% endif %}
+          {% if "status" in columns %}<th>Status</th>{% endif %}
+          <th class="print-hide po-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for receipt in receipts %}
+        <tr {% if receipt.state == "reversed" or receipt.state == "reversal" %}class="po-row--void"{% endif %}>
+          {# The note itself, opened as the document it is: every line booked #}
+          {# in under this number, not only the row that was clicked. #}
+          <td>
+            {% if receipt.grn_number %}
+            <a class="po-num" href="{% url 'inventory:grn_detail' receipt.grn_number %}"
+               title="Open goods receipt note {{ receipt.grn_number }}">{{ receipt.grn_number }}</a>
+            {% else %}<span class="po-muted">&mdash;</span>{% endif %}
+          </td>
+          {% if "purchase_num" in columns %}
+          <td>
+            <a class="po-num" href="{% url 'inventory:purchase_order_detail' receipt.purchase_order_item.purchase_order_id %}">{{ receipt.purchase_num }}</a>
+          </td>
+          {% endif %}
+          {% if "supplier" in columns %}<td class="font-semibold">{{ receipt.purchase_order_item.purchase_order.supplier.name }}</td>{% endif %}
+          {% if "item" in columns %}
+          <td>
+            <span class="font-semibold">{{ receipt.descr }}</span>
+            {% if receipt.inventory_item.item_code %}<span class="po-sub">{{ receipt.inventory_item.item_code }}</span>{% endif %}
+          </td>
+          {% endif %}
+          {% if "receive_date" in columns %}<td class="whitespace-nowrap">{{ receipt.receive_date|dmy }}</td>{% endif %}
+          {% if "quantity" in columns %}
+          <td class="po-right font-semibold">
+            {{ receipt.received_units|qty }}
+            {% if receipt.extra_qty %}<span class="po-sub">incl. {{ receipt.extra_qty|qty }} extra</span>{% endif %}
+          </td>
+          {% endif %}
+          {% if "retail_price" in columns %}<td class="po-right">{{ receipt.retail_price|amount }}</td>{% endif %}
+          {% if "landed" in columns %}<td class="po-right">{{ receipt.landed_amount|amount }}</td>{% endif %}
+          {% if "invoice" in columns %}
+          <td class="whitespace-nowrap">{% if receipt.invoice_num %}{{ receipt.invoice_num }}{% else %}<span class="po-muted">&mdash;</span>{% endif %}</td>
+          {% endif %}
+          {% if "status" in columns %}
+          <td>
+            {# A state, never an instruction: what to do about it is the icon #}
+            {# at the end of the row, and the two must not be spoken in one voice. #}
+            {% if receipt.state == "reversed" %}<span class="po-pill po-pill--bill">Reversed</span>
+            {% elif receipt.state == "reversal" %}<span class="po-pill po-pill--dead">Reversal</span>
+            {% elif receipt.state == "unbilled" %}<span class="po-pill po-pill--bill">Not billed</span>
+            {% elif receipt.state == "part_billed" %}<span class="po-pill po-pill--open">Part billed</span>
+            {% else %}<span class="po-pill po-pill--done">Billed</span>{% endif %}
+          </td>
+          {% endif %}
+          <td class="print-hide">
+            <div class="po-row-actions">
+              {# The one thing this receipt is waiting on: goods in the godown #}
+              {# that no supplier bill has been entered against. #}
+              {% if receipt.state == "unbilled" or receipt.state == "part_billed" %}
+              <a class="po-icon-btn po-icon-btn--go"
+                 href="{% url 'inventory:purchase_bill_create' %}?order={{ receipt.purchase_order_item.purchase_order_id }}&amp;supplier={{ receipt.purchase_order_item.purchase_order.supplier_id }}"
+                 title="Bill &mdash; enter the supplier's invoice against what arrived" aria-label="Enter the bill for this receipt">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
+                  <path d="M9 8h6M9 12h6"></path>
+                </svg>
+              </a>
+              {% endif %}
+
+              {# Withdrawing a posted receipt takes stock back out, so it keeps #}
+              {# a dialog: nothing is deleted, a mirror receipt is written and  #}
+              {# the reason it was written is asked for. #}
+              {% if receipt.can_reverse and can_reverse_perm %}
+              <button type="button" class="po-icon-btn po-icon-btn--warn"
+                      title="Reverse &mdash; posts a mirror-image receipt; nothing is deleted"
+                      aria-label="Reverse this goods receipt"
+                      @click="askReversal({
+                        url: '{% url 'inventory:goods_receipt_reverse' receipt.pk %}',
+                        number: '{{ receipt.grn_number|escapejs }}',
+                        item: '{{ receipt.descr|escapejs }}',
+                        qty: '{{ receipt.received_units|qty|escapejs }}',
+                        date: '{{ receipt.receive_date|dmy|escapejs }}'
+                      })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+                </svg>
               </button>
-            </td>
-            <td class="px-4 py-3 font-medium">{{ order.purchase_num }}</td>
-            {% if "supplier" in columns %}<td class="px-4 py-3">{{ order.supplier.name }}</td>{% endif %}
-            {% if "purchase_date" in columns %}<td class="px-4 py-3 whitespace-nowrap">{{ order.purchase_date|dmy }}</td>{% endif %}
-            {% if "expected" in columns %}<td class="px-4 py-3 whitespace-nowrap">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
-            {% if "value" in columns %}<td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>{% endif %}
-            {% if "ordered" in columns %}<td class="px-4 py-3 text-right text-slate-500">{{ order.ordered_total|qty }}</td>{% endif %}
-            {% if "received" in columns %}<td class="px-4 py-3 text-right {% if order.received_total %}font-medium text-emerald-700{% else %}text-slate-400{% endif %}">{{ order.received_total|qty }}</td>{% endif %}
-            {% if "balance" in columns %}<td class="px-4 py-3 text-right {% if order.balance_total %}font-medium text-amber-600{% else %}text-slate-400{% endif %}">{{ order.balance_total|qty }}</td>{% endif %}
-            {% if "status" in columns %}
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2.5 py-1 text-xs font-medium
-                {% if order.status == 'draft' %}bg-amber-100 text-amber-700
-                {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
-                {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
-                {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ order.get_status_display }}
-              </span>
-            </td>
-            {% endif %}
-            <td class="px-4 py-3">
-              <a href="{% url 'inventory:grn_print' order.pk %}" target="_blank"
-                class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200">
-                &#128438; GRN
-              </a>
-            </td>
-          </tr>
-          {# Expandable GRN rows #}
-          <tr x-show="open === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
-            <td colspan="{{ column_span }}" class="px-6 py-4" x-data="{ confirm: false }">
-              <form method="post" action="{% url 'inventory:grn_bulk_receive' order.pk %}" x-ref="recvForm_{{ order.pk }}">
-              {% csrf_token %}
-              {% with poi_list=order.items.all %}
-              {% if poi_list %}
-              <table class="w-full text-left text-xs grn-table">
-                <thead class="bg-slate-100 text-slate-500 font-semibold uppercase dark:bg-slate-800">
-                  <tr>
-                    <th class="px-2 py-1.5">#</th>
-                    <th class="px-2 py-1.5">Item</th>
-                    <th class="px-2 py-1.5 text-right">Ordered</th>
-                    <th class="px-2 py-1.5 text-right">Rate</th>
-                    <th class="px-2 py-1.5 text-right">Discount</th>
-                    <th class="px-2 py-1.5 text-right">Amount</th>
-                    <th class="px-2 py-1.5 text-right">Received</th>
-                    <th class="px-2 py-1.5 text-right">Balance</th>
-                    <th class="px-2 py-1.5 text-right">Receiving now</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                  {% for poi in poi_list %}
-                  {# One row per ordered line -- never one per delivery, or the #}
-                  {# line's own figures get repeated and the entry box is #}
-                  {# posted more than once for the same line. #}
-                  <tr class="grn-line">
-                    <td class="px-2 py-1.5 text-slate-400">{{ forloop.counter }}</td>
-                    <td class="px-2 py-1.5 font-medium">{{ poi.descr }}</td>
-                    <td class="px-2 py-1.5 text-right">{{ poi.quantity|qty }}</td>
-                    <td class="px-2 py-1.5 text-right">{{ poi.rate|amount }}</td>
-                    <td class="px-2 py-1.5 text-right">{{ poi.discount_amount|amount }}</td>
-                    <td class="px-2 py-1.5 text-right font-medium">{{ poi.total_amount|amount }}</td>
-                    <td class="px-2 py-1.5 text-right font-semibold {% if poi.received_total %}text-emerald-700{% else %}text-slate-400{% endif %}">{{ poi.received_total|qty }}</td>
-                    <td class="px-2 py-1.5 text-right font-semibold {% if poi.remaining_qty %}text-amber-600{% else %}text-slate-400{% endif %}">{{ poi.remaining_qty|qty }}</td>
-                    <td class="px-2 py-1.5 text-right">
-                      {% if poi.remaining_qty %}
-                      <input type="number" name="recv_qty_{{ poi.pk }}" value="{{ poi.remaining_qty|qty }}"
-                             min="0" max="{{ poi.remaining_qty|qty }}" step="0.0001"
-                             class="form-input w-24 text-right">
-                      {% else %}
-                      <span class="inline-flex items-center gap-1 text-emerald-700">&#10003; Complete</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-
-                  {# The account behind that one figure: every delivery, what it #}
-                  {# took the total to, and what was still owed afterwards. #}
-                  {% for entry in poi.history %}
-                  <tr class="grn-history">
-                    <td class="px-2 py-1"></td>
-                    <td class="px-2 py-1" colspan="3">
-                      <span class="grn-step">{{ entry.seq }}</span>
-                      <span class="grn-date">{{ entry.receipt.receive_date|dmy }}</span>
-                      {% if entry.receipt.grn_number %}<span class="grn-ref">{{ entry.receipt.grn_number }}</span>{% endif %}
-                      {% if entry.receipt.invoice_num %}<span class="grn-ref grn-ref--inv">Inv {{ entry.receipt.invoice_num }}</span>{% endif %}
-                    </td>
-                    <td class="px-2 py-1 text-right text-slate-400">Received</td>
-                    <td class="px-2 py-1 text-right font-semibold text-emerald-700">+{{ entry.quantity|qty }}</td>
-                    <td class="px-2 py-1 text-right text-slate-500" title="Total received after this delivery">{{ entry.running|qty }}</td>
-                    <td class="px-2 py-1 text-right text-slate-500" title="Still owed after this delivery">{{ entry.balance|qty }}</td>
-                    <td class="px-2 py-1"></td>
-                  </tr>
-                  {% empty %}
-                  <tr class="grn-history">
-                    <td class="px-2 py-1"></td>
-                    <td class="px-2 py-1 text-slate-400" colspan="8">Nothing received against this line yet.</td>
-                  </tr>
-                  {% endfor %}
-                  {% endfor %}
-                </tbody>
-              </table>
-              <div class="mt-3 flex flex-wrap items-end justify-end gap-3">
-                <div>
-                  <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Freight Charges</label>
-                  <input type="number" name="freight_charges" min="0" step="0.01" value="0"
-                    class="form-input w-40 text-right" title="Distributed across received items by value into landed cost">
-                </div>
-                <button type="button" @click="confirm = true"
-                  class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                  &#128230; Receive &amp; Print
-                </button>
-              </div>
-              {# Confirm modal #}
-              <div x-show="confirm" x-cloak @click.self="confirm = false"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div @click.stop class="w-96 rounded-xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-                  <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">Confirm Receive &amp; Print</h3>
-                  <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    Receive entered quantities for <strong>{{ order.purchase_num }}</strong> and print?
-                  </p>
-                  <div class="mt-5 flex justify-end gap-3">
-                    <button type="button" @click="confirm = false"
-                      class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">
-                      Cancel
-                    </button>
-                    <button type="submit"
-                      class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                      Confirm
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {% else %}
-              <p class="text-sm text-slate-400">No items on this PO.</p>
               {% endif %}
-              {% endwith %}
-              </form>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="{{ column_span }}" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
 
-  {# ── All GRN Records ── #}
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">All Received Items</h2>
-    </div>
-    <div class="overflow-x-auto">
-      <table id="grn-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">GRN #</th>
-            <th class="px-4 py-3">PO #</th>
-            <th class="px-4 py-3">Item</th>
-            <th class="px-4 py-3">Receive Date</th>
-            <th class="px-4 py-3 text-right">Qty</th>
-            <th class="px-4 py-3 text-right">Retail Price</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for grn in grns %}
-          {# A reversed receipt and its mirror both stay on the register, greyed #}
-          {# rather than hidden: the pair nets to nothing, and that is a fact    #}
-          {# about the goods worth being able to read.                          #}
-          <tr {% if grn.reversed or grn.reversal_of_id %}class="text-slate-400"{% endif %}>
-            <td class="px-4 py-3 font-medium">{{ grn.grn_number }}</td>
-            <td class="px-4 py-3">
-              <a href="{% url 'inventory:purchase_order_detail' grn.purchase_order_item.purchase_order_id %}"
-                 class="text-[var(--primary-color)] hover:underline">{{ grn.purchase_num }}</a>
-            </td>
-            <td class="px-4 py-3">{{ grn.descr }}</td>
-            <td class="px-4 py-3">{{ grn.receive_date|dmy }}</td>
-            <td class="px-4 py-3 text-right">{{ grn.quantity|qty }}</td>
-            <td class="px-4 py-3 text-right">{{ grn.retail_price|amount }}</td>
-            <td class="px-4 py-3">
-              {% if grn.reversed %}<span class="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">Reversed</span>
-              {% elif grn.reversal_of_id %}<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Reversal</span>
-              {% elif grn.pending_bill_qty %}<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Not billed</span>
-              {% else %}<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Billed</span>{% endif %}
-            </td>
-            <td class="px-4 py-3">
-              {% if grn.can_reverse and can_reverse_perm %}
-              <form method="post" action="{% url 'inventory:goods_receipt_reverse' grn.pk %}" class="mb-2 flex items-center gap-1">
-                {% csrf_token %}
-                <select name="reason" class="form-select text-xs" style="max-width:11rem;">
-                  {% for value, label in reversal_form.reason.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-700"
-                        title="Reverse &mdash; posts a mirror-image receipt; nothing is deleted">Reverse</button>
-              </form>
-              {% endif %}
-              <a href="{% url 'inventory:grn_print' grn.purchase_order_item.purchase_order_id %}?receipts={{ grn.pk }}&reprint=1"
-                 class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200" title="Reprint GRN">
-                &#128438; Print
+              {# The note itself, which is what the row is about. A posting #}
+              {# from before notes were numbered has none, so the order it   #}
+              {# came in against is the nearest thing there is to open.      #}
+              <a class="po-icon-btn"
+                 {% if receipt.grn_number %}href="{% url 'inventory:grn_detail' receipt.grn_number %}"
+                 title="View this goods receipt note" aria-label="View this goods receipt note"
+                 {% else %}href="{% url 'inventory:purchase_order_detail' receipt.purchase_order_item.purchase_order_id %}"
+                 title="View the order this came in against" aria-label="View the purchase order"{% endif %}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
               </a>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No GRN records found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% include "components/table/pagination.html" %}
 
+              <a class="po-icon-btn" target="_blank"
+                 href="{% url 'inventory:grn_print' receipt.purchase_order_item.purchase_order_id %}?receipts={{ receipt.document_pks }}&amp;reprint=1"
+                 title="Print this goods receipt note" aria-label="Print this goods receipt note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 8V3h10v5"></path>
+                  <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="7" y="14" width="10" height="7" rx="1"></rect>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ column_span }}" class="px-4 py-12 text-center text-slate-500">No goods receipts here.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if receipts %}
+      <tfoot>
+        {# What arrived on this page, at landed cost. A reversed pair nets to #}
+        {# nothing and is left out of the figure rather than counted twice. #}
+        <tr class="po-foot">
+          <td colspan="{{ column_span }}">Received on this page: Rs {{ page_value|amount }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
 </section>
+
+{% include "components/table/pagination.html" %}
+
+{# One dialog for the whole page: the row that opened it hands over what it #}
+{# needs to say, so there is not a copy of this per receipt. #}
+<div class="approve-backdrop" x-show="reversal" x-cloak x-transition.opacity
+     @keydown.escape.window="reversal = null" role="dialog" aria-modal="true" aria-labelledby="reverse-title">
+  <div class="approve-card" @click.outside="reversal = null" x-transition>
+    <div class="approve-head">
+      <span class="approve-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+        </svg>
+      </span>
+      <div>
+        <h2 class="approve-title" id="reverse-title">Reverse this goods receipt?</h2>
+        <p class="approve-sub">The stock it booked in comes back out.</p>
+      </div>
+    </div>
+
+    <dl class="approve-facts">
+      <div><dt>GRN</dt><dd x-text="reversal?.number"></dd></div>
+      <div><dt>Item</dt><dd x-text="reversal?.item"></dd></div>
+      <div><dt>Quantity</dt><dd x-text="reversal?.qty"></dd></div>
+      <div><dt>Received</dt><dd x-text="reversal?.date"></dd></div>
+    </dl>
+
+    <form method="post" :action="reversal?.url">{% csrf_token %}
+      <div class="approve-field">
+        <label for="reverse-reason">Reason</label>
+        <select id="reverse-reason" name="reason" class="form-select w-full">
+          {% for value, label in reversal_form.reason.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <p class="approve-note">
+        Nothing is deleted. A mirror-image receipt is posted, and both stay on the register so the pair can be read.
+      </p>
+
+      <div class="approve-actions">
+        <button type="button" class="approve-cancel" @click="reversal = null">Cancel</button>
+        <button type="submit" class="approve-go">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
+          </svg>
+          Reverse receipt
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+</div>
+
+<script>
+  // The register's own state: which receipt, if any, is waiting on a reversal
+  // decision. One dialog serves every row, so the row hands over what it says.
+  function grnBoard() {
+    return {
+      reversal: null,
+      askReversal(receipt) { this.reversal = receipt; },
+    };
+  }
+
+  // Copy the table as it stands, tab separated, which is what a spreadsheet
+  // pastes into cells rather than into one. Built from the rendered table so
+  // it carries exactly the columns on screen.
+  function copyTable(event) {
+    var table = document.getElementById('grn-table');
+    var lines = [];
+    table.querySelectorAll('tr').forEach(function (row) {
+      var cells = Array.from(row.querySelectorAll('th, td'))
+        .filter(function (cell) { return !cell.classList.contains('print-hide'); })
+        .map(function (cell) { return cell.innerText.replace(/\s+/g, ' ').trim(); });
+      if (cells.length) lines.push(cells.join('\t'));
+    });
+    var text = lines.join('\n');
+
+    var done = function () {
+      var button = event.currentTarget;
+      var label = button.querySelector('strong');
+      var was = label.textContent;
+      label.textContent = 'Copied';
+      setTimeout(function () { label.textContent = was; }, 1500);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    // Plain HTTP, where the clipboard API is not handed out: the old way still
+    // works and this screen is served over it on the local network.
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); done(); } finally { box.remove(); }
+  }
+</script>
 {% endblock %}

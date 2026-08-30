@@ -425,6 +425,10 @@ class PurchaseOrderItemReceived(BaseModel):
     invoice_date = models.DateField(null=True, blank=True)
     grn_number = models.CharField(max_length=80, blank=True)
     rv_number = models.CharField(max_length=80, blank=True)
+    # What the store wrote when the goods came through the gate: who checked
+    # them, what was rejected, anything else about this delivery. Held on the
+    # receipt because it is a fact about this delivery, not about the order.
+    remarks = models.TextField(blank=True)
     extra_qty_tag = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))

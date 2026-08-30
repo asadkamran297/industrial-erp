@@ -595,8 +595,7 @@
               </button>
             </td>
             <td class="pur-strong">
-              <a href="{% url 'inventory:grn_print' order.pk %}?receipts={{ note.pks|join:',' }}&amp;reprint=1"
-                 target="_blank" class="pur-doc">{{ note.number }}</a>
+              <a href="{% url 'inventory:grn_detail' note.number %}" class="pur-doc">{{ note.number }}</a>
             </td>
             <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
             <td class="pur-num pur-muted">{{ note.lines|length }}</td>

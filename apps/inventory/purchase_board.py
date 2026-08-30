@@ -317,18 +317,40 @@ def export_columns(session):
 # Its own table, its own choice: the two screens list the same records but are
 # read for different reasons, so what one person wants on show here is not what
 # they want on the purchase orders board.
-GRN_COLUMNS = ColumnSet("inventory.grn", (
-    Column("purchase_num", "Order #", locked=True, export=lambda o: o.purchase_num),
-    Column("supplier", "Supplier", export=lambda o: o.supplier.name),
-    Column("purchase_date", "Date", export=lambda o: o.purchase_date),
-    Column("expected", "Expected", default=False, export=lambda o: o.expected_date or ""),
-    Column("value", "Amount", export=lambda o: o.po_total),
-    # Off by default: the balance already says what is outstanding, so the
-    # quantity ordered is there for whoever wants to check the arithmetic.
-    Column("ordered", "Total ordered", default=False, export=lambda o: o.ordered_total),
-    Column("received", "Received", export=lambda o: o.received_total),
-    Column("balance", "Balance", export=lambda o: o.balance_total),
-    Column("status", "Status", export=lambda o: o.get_status_display()),
+def receipt_state(receipt):
+    """What a goods receipt row is: one of four states, named once.
+
+    Read off the receipt itself rather than off a text invoice number, so a
+    receipt billed in two instalments is still "part billed" and a reversed one
+    says so instead of quietly counting as goods in hand.
+    """
+    if receipt.reversed:
+        return "reversed", "Reversed"
+    if receipt.reversal_of_id:
+        return "reversal", "Reversal"
+    if receipt.pending_bill_qty:
+        if receipt.billed_qty:
+            return "part_billed", "Part billed"
+        return "unbilled", "Not billed"
+    return "billed", "Billed"
+
+
+# The goods receipt register: one row per receipt, not per order. The screen is
+# a list of what actually came through the gate, so the row's identity is the
+# note it came in under.
+GRN_COLUMNS = ColumnSet("inventory.grn.receipts", (
+    Column("grn_number", "GRN #", locked=True, export=lambda r: r.grn_number),
+    Column("purchase_num", "PO #", export=lambda r: r.purchase_num),
+    Column("supplier", "Supplier", export=lambda r: r.purchase_order_item.purchase_order.supplier.name),
+    Column("item", "Item", export=lambda r: r.descr),
+    Column("receive_date", "Receive date", export=lambda r: r.receive_date),
+    Column("quantity", "Qty", export=lambda r: r.received_units),
+    Column("retail_price", "Retail price", export=lambda r: r.retail_price),
+    # Off by default: what the goods landed at, freight included, is what the
+    # bill is matched against -- worth having, not worth the width by default.
+    Column("landed", "Landed amount", default=False, export=lambda r: r.landed_amount),
+    Column("invoice", "Invoice #", default=False, export=lambda r: r.invoice_num),
+    Column("status", "Status", export=lambda r: receipt_state(r)[1]),
 ))
 
 
@@ -364,8 +386,11 @@ def linked_documents(order):
         links.append({
             "kind": "GRN",
             "label": number,
-            "url": f"{reverse('inventory:grn_print', args=[order.pk])}?receipts={','.join(note['pks'])}&reprint=1",
-            "new_tab": True,
+            # The note's own page, not a print sheet: a link in a chain is
+            # followed to read the document, and printing it is a choice made
+            # once it is open.
+            "url": reverse("inventory:grn_detail", args=[number]),
+            "new_tab": False,
             "dead": note["dead"],
         })
 

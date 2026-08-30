@@ -8,13 +8,13 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, F, Q, Sum
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -29,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, GRN_COLUMNS, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, GRN_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import _refresh_order_receipt_status, apportion_freight, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -3320,16 +3320,68 @@ class POSReturnPostView(InventoryManageMixin, View):
         return redirect("inventory:pos_return_detail", pk=pk)
 
 
-class GRNListView(InventoryListMixin, ListView):
+class GRNListView(SortableListMixin, InventoryListMixin, ListView):
+    """The goods receipt register: one row per receipt, newest first.
+
+    A receipt is the record of what came through the gate, so the list is of
+    receipts rather than of the orders they were booked against. Booking a
+    delivery in happens on the goods receipt screen or from the order's own
+    row; this screen is for reading back what has already arrived.
+    """
+
     page = "inventory.grn"
     template_name = "inventory/grn_list.html"
-    context_object_name = "orders"
-    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__receipts", "bills").exclude(status__in=(STATUS_FULLY_RECEIVED, STATUS_CANCELLED, STATUS_CLOSED_SHORT)).order_by("-purchase_date", "-id")
-    search_fields = ("purchase_num", "supplier__name", "quot_num")
-    filter_fields = {"supplier": "supplier_id"}
-    date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+    context_object_name = "receipts"
+    paginate_by = 25
+    queryset = (
+        PurchaseOrderItemReceived.objects
+        .select_related(
+            "purchase_order_item__purchase_order__supplier",
+            "inventory_item",
+        )
+        .order_by("-receive_date", "-id")
+    )
+    search_fields = (
+        "grn_number",
+        "purchase_num",
+        "descr",
+        "invoice_num",
+        "purchase_order_item__purchase_order__supplier__name",
+    )
+    filter_fields = {"supplier": "purchase_order_item__purchase_order__supplier_id"}
+    date_filters = [{"field": "receive_date", "label": "Receive date"}]
+    # Only what the database can order by. Whether a receipt is billed is read
+    # off its own figures per row, so its heading stays plain rather than
+    # offering a sort that would quietly lie about the order.
+    sort_fields = {
+        "grn_number": ("grn_number", "id"),
+        "purchase_num": ("purchase_num", "id"),
+        "supplier": "purchase_order_item__purchase_order__supplier__name",
+        "item": "descr",
+        "receive_date": ("receive_date", "id"),
+        "quantity": "quantity",
+    }
+    default_sort = "receive_date"
+    default_sort_dir = "desc"
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
+
+    # What the tabs mean, said once. "Not billed" is the queue somebody works
+    # through; a reversed pair is kept out of it because it nets to nothing.
+    TAB_ALL = "all"
+    TAB_UNBILLED = "unbilled"
+    TAB_BILLED = "billed"
+    TAB_REVERSED = "reversed"
+    TABS = (
+        (TAB_ALL, "All"),
+        (TAB_UNBILLED, "Not billed"),
+        (TAB_BILLED, "Billed"),
+        (TAB_REVERSED, "Reversed"),
+    )
+
+    def current_tab(self):
+        tab = self.request.GET.get("tab", self.TAB_ALL)
+        return tab if tab in dict(self.TABS) else self.TAB_ALL
 
     def get_paginate_by(self, queryset):
         raw = (self.request.GET.get("per_page") or "").strip()
@@ -3337,83 +3389,320 @@ class GRNListView(InventoryListMixin, ListView):
             return int(raw)
         return self.paginate_by
 
+    @staticmethod
+    def _live(queryset):
+        """Receipts standing for goods in hand: neither half of a reversal."""
+        return queryset.filter(reversed=False, reversal_of__isnull=True)
+
+    @staticmethod
+    def _annotated(queryset):
+        """Each row carrying what it actually took in, so it can be compared."""
+        return queryset.annotate(units_in=F("quantity") + F("extra_qty"))
+
+    def filtered_queryset(self):
+        """Everything the filter bar allows, before the tab narrows it.
+
+        The tiles are counted over this: clicking a tab must not change the
+        numbers above it, because they are what the tabs are for.
+        """
+        return super().get_queryset()
+
+    def get_queryset(self):
+        queryset = self.filtered_queryset()
+        tab = self.current_tab()
+        if tab == self.TAB_REVERSED:
+            return queryset.filter(Q(reversed=True) | Q(reversal_of__isnull=False))
+        if tab == self.TAB_UNBILLED:
+            return self._annotated(self._live(queryset)).filter(billed_qty__lt=F("units_in"))
+        if tab == self.TAB_BILLED:
+            return self._annotated(self._live(queryset)).filter(billed_qty__gte=F("units_in"))
+        return queryset
+
     def get_filter_specs(self):
         supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
         return [{"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
                  "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
 
+    def tiles(self):
+        """The four figures, over everything the filters allow.
+
+        Counted in the database rather than over the page: a page is 25 rows
+        and the question these answer is about the whole register.
+        """
+        base = self.filtered_queryset()
+        live = self._annotated(self._live(base))
+        totals = live.aggregate(
+            count=Count("id"),
+            units=Sum(F("quantity") + F("extra_qty")),
+            value=Sum("landed_amount"),
+        )
+        unbilled = live.filter(billed_qty__lt=F("units_in")).aggregate(
+            count=Count("id"),
+            value=Sum("landed_amount"),
+        )
+        reversed_count = base.filter(Q(reversed=True) | Q(reversal_of__isnull=False)).count()
+        return {
+            "receipt_count": totals["count"] or 0,
+            "receipt_value": totals["value"] or Decimal("0.00"),
+            "units": totals["units"] or Decimal("0"),
+            "unbilled_count": unbilled["count"] or 0,
+            "unbilled_value": unbilled["value"] or Decimal("0.00"),
+            "reversed_count": reversed_count,
+        }
+
+    def _document_pks(self, receipts):
+        """Every receipt each note covers, so the GRN number opens the note.
+
+        A note covering four lines is one document, and the other three lines
+        may well be on another page -- so the link is built from the receipts
+        sharing the number, not from the one row that was clicked.
+        """
+        numbers = {r.grn_number for r in receipts if r.grn_number}
+        if not numbers:
+            return {}
+        pairs = (
+            PurchaseOrderItemReceived.objects
+            .filter(grn_number__in=numbers)
+            .values_list("grn_number", "pk")
+        )
+        grouped = {}
+        for number, pk in pairs:
+            grouped.setdefault(number, []).append(pk)
+        return grouped
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # What the shared filter bar needs. No tabs, columns or export here --
-        # the component leaves out whatever it is not given.
         carried = self.request.GET.copy()
         for key in ("tab", "page"):
             carried.pop(key, None)
         context["base_query"] = carried.urlencode()
         context["per_page"] = self.get_paginate_by(None)
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        context["tabs"] = self.TABS
+        context["current_tab"] = self.current_tab()
         context["filters_active"] = any(
             (self.request.GET.get(key) or "").strip()
-            for key in ("q", "supplier", "date_from", "date_to")
+            for key in ("q", "supplier", "date_from", "date_to", "tab")
         )
         context["columns"] = GRN_COLUMNS.visible(self.request.session)
         context["column_menu"] = GRN_COLUMNS.menu(self.request.session)
         context["columns_url"] = reverse_lazy("inventory:grn_columns")
         context["export_url"] = reverse_lazy("inventory:grn_export")
-        # The expander handle and the GRN button are cells the table draws
-        # itself rather than columns anyone may switch off.
-        context["column_span"] = len(context["columns"]) + 2
-        grns = list(
-            PurchaseOrderItemReceived.objects
-            .select_related("purchase_order_item__purchase_order", "inventory_item")
-            .order_by("-receive_date", "-id")
-        )
-        # Whether each one may still be withdrawn, worked out here so the
-        # template prints an answer rather than guessing at one.
-        for grn in grns:
-            ok, why = can_reverse_receipt(grn)
-            grn.can_reverse = ok
-            grn.cannot_reverse_because = why
-        context["grns"] = grns
+        # The action cell is drawn by the table itself rather than being a
+        # column anyone may switch off.
+        context["column_span"] = len(context["columns"]) + 1
+        context["tiles"] = self.tiles()
         context["reversal_form"] = ReversalReasonForm()
-        for order in context["orders"]:
-            items = list(order.items.all())
-            order.po_total = sum(i.total_amount for i in items)
-            order.ordered_total = Decimal("0")
-            order.received_total = Decimal("0")
-            order.balance_total = Decimal("0")
-            for item in items:
-                remaining = (item.quantity or Decimal("0")) - (item.total_receive_qty or Decimal("0"))
-                item.remaining_qty = remaining if remaining > 0 else Decimal("0")
 
-                # Every delivery against this line, oldest first, each carrying
-                # what it took the running total to and what was still owed
-                # afterwards. Stored ordering is newest-first, which is right
-                # for a list and wrong for an account.
-                ordered_qty = item.quantity or Decimal("0")
-                running = Decimal("0")
-                history = []
-                for seq, receipt in enumerate(
-                    sorted(item.receipts.all(), key=lambda r: (r.receive_date, r.pk)), start=1
-                ):
-                    taken = (receipt.quantity or Decimal("0")) + (receipt.extra_qty or Decimal("0"))
-                    running += taken
-                    balance = ordered_qty - running
-                    history.append({
-                        "seq": seq,
-                        "receipt": receipt,
-                        "quantity": taken,
-                        "running": running,
-                        "balance": balance if balance > 0 else Decimal("0"),
-                    })
-                item.history = history
-                # What the line has actually taken in, read off the receipts
-                # rather than off the running column the row also carries -- if
-                # the two ever disagree, the receipts are the record.
-                item.received_total = running
-                order.ordered_total += ordered_qty
-                order.received_total += running
-                order.balance_total += item.remaining_qty
+        receipts = list(context["receipts"])
+        documents = self._document_pks(receipts)
+        page_value = Decimal("0.00")
+        for receipt in receipts:
+            state, label = receipt_state(receipt)
+            receipt.state = state
+            receipt.state_label = label
+            # Whether it may still be withdrawn, worked out here so the
+            # template prints an answer rather than guessing at one.
+            ok, why = can_reverse_receipt(receipt)
+            receipt.can_reverse = ok
+            receipt.cannot_reverse_because = why
+            receipt.document_pks = ",".join(str(pk) for pk in documents.get(receipt.grn_number, [receipt.pk]))
+            if state not in ("reversed", "reversal"):
+                page_value += receipt.landed_amount or Decimal("0.00")
+        context["page_value"] = page_value
+        return context
+
+
+class GRNDetailView(InventoryListMixin, TemplateView):
+    """One goods receipt note, read as the document it is.
+
+    The register lists postings; a note is what somebody was handed at the
+    gate, and several lines usually came in under one. So the page is keyed on
+    the note's number and gathers every receipt booked under it, whichever
+    order line each went against.
+    """
+
+    page = "inventory.grn"
+    template_name = "inventory/grn_detail.html"
+
+    def get_receipts(self):
+        number = self.kwargs["number"]
+        receipts = list(
+            PurchaseOrderItemReceived.objects
+            .filter(grn_number=number)
+            .select_related(
+                "purchase_order_item__purchase_order__supplier",
+                "purchase_order_item__uom",
+                "inventory_item",
+            )
+            .prefetch_related("purchase_order_item__receipts")
+            .order_by("purchase_order_item__seq_num", "id")
+        )
+        if not receipts:
+            raise Http404(f"No goods receipt numbered {number}.")
+        return receipts
+
+    @staticmethod
+    def trace_line(receipt):
+        """Where this delivery left the order line it was booked against.
+
+        A note showing 40 ordered, 5 received and 33 still due reads as an
+        arithmetic mistake unless the deliveries before it are on the page too.
+        So the row carries the whole sum: what was ordered, what had already
+        arrived by the time this note was written, what this note added, and
+        what was still owed afterwards.
+
+        Ordering is by receive date then id, which is the order the deliveries
+        actually happened in; "before" therefore means before this one, not
+        merely entered earlier.
+        """
+        line = receipt.purchase_order_item
+        ordered = line.quantity or Decimal("0.0000")
+
+        history = sorted(
+            line.receipts.all(),
+            key=lambda other: (other.receive_date or date.min, other.pk),
+        )
+        # A reversal and the receipt it cancels net to nothing, so neither
+        # counts towards what had arrived.
+        def moved(entry):
+            if entry.reversed or entry.reversal_of_id:
+                return Decimal("0.0000")
+            return entry.received_units
+
+        before = Decimal("0.0000")
+        for entry in history:
+            if (entry.receive_date or date.min, entry.pk) >= (receipt.receive_date or date.min, receipt.pk):
+                break
+            before += moved(entry)
+
+        now = moved(receipt)
+        after = before + now
+        due = ordered - after
+        receipt.qty_ordered = ordered
+        receipt.qty_before = before
+        receipt.qty_now = now
+        receipt.qty_after = after
+        receipt.qty_due = due if due > 0 else Decimal("0.0000")
+        # Where the line stood once this note was booked in, as two widths of
+        # one bar: what was already in, and what this delivery added.
+        if ordered > 0:
+            receipt.pct_before = min(float(before / ordered * 100), 100)
+            receipt.pct_now = min(float(now / ordered * 100), 100 - receipt.pct_before)
+        else:
+            receipt.pct_before = 0
+            receipt.pct_now = 100 if now else 0
+        # The line as a whole, not this delivery: a balance somebody has given
+        # up on is not still expected.
+        receipt.line_closed = line.closed
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        receipts = self.get_receipts()
+        first = receipts[0]
+        order = first.purchase_order_item.purchase_order
+
+        units = Decimal("0.0000")
+        value = Decimal("0.00")
+        unbilled = Decimal("0.0000")
+        live = 0
+        for receipt in receipts:
+            receipt.line = receipt.purchase_order_item
+            state, label = receipt_state(receipt)
+            receipt.state = state
+            receipt.state_label = label
+            ok, why = can_reverse_receipt(receipt)
+            receipt.can_reverse = ok
+            receipt.cannot_reverse_because = why
+            # A reversal and the receipt it cancels both stay on the note, but
+            # neither counts towards what it delivered: between them they moved
+            # nothing.
+            if state not in ("reversed", "reversal"):
+                units += receipt.received_units
+                value += receipt.landed_amount or Decimal("0.00")
+                unbilled += receipt.pending_bill_qty
+                live += 1
+            self.trace_line(receipt)
+
+        context["number"] = first.grn_number
+        context["receipts"] = receipts
+        context["receipt_pks"] = ",".join(str(r.pk) for r in receipts)
+        context["order"] = order
+        # A note is normally one delivery against one order. Said out loud
+        # rather than assumed, so a number that somehow spans two orders shows
+        # both instead of quietly naming one of them.
+        context["orders"] = sorted(
+            {r.purchase_order_item.purchase_order for r in receipts},
+            key=lambda o: o.purchase_num,
+        )
+        context["supplier"] = order.supplier
+        context["receive_date"] = max((r.receive_date for r in receipts if r.receive_date), default=None)
+        context["invoice_nums"] = sorted({r.invoice_num for r in receipts if r.invoice_num})
+        # What the store wrote at the gate. One delivery is usually booked in
+        # with one note against every line, so the same words repeat down the
+        # rows -- said once here, and only what a line adds of its own (what
+        # was rejected on it) stays beside that line.
+        shared = [note for note in dict.fromkeys(r.remarks.strip() for r in receipts if r.remarks.strip())]
+        context["narration"] = shared[0] if len(shared) == 1 else ""
+        context["narration_lines"] = shared if len(shared) > 1 else []
+        for receipt in receipts:
+            note = (receipt.remarks or "").strip()
+            receipt.own_remark = note if note and note != context["narration"] else ""
+        context["total_units"] = units
+        context["total_value"] = value
+        # The footer adds up the same sum the rows read across. Ordered, what
+        # had already arrived and what is still owed all belong to the line
+        # rather than to this delivery, so a line that came in twice under one
+        # note is counted once: its first row for what was already in, its last
+        # for what is still due.
+        first_row = {}
+        last_row = {}
+        for receipt in receipts:
+            first_row.setdefault(receipt.line.pk, receipt)
+            last_row[receipt.line.pk] = receipt
+        context["total_ordered"] = sum(
+            (r.qty_ordered for r in first_row.values()), Decimal("0.0000")
+        )
+        context["total_before"] = sum(
+            (r.qty_before for r in first_row.values()), Decimal("0.0000")
+        )
+        context["total_due"] = sum(
+            (Decimal("0.0000") if r.line_closed else r.qty_due for r in last_row.values()),
+            Decimal("0.0000"),
+        )
+        context["unbilled_qty"] = unbilled
+        # What the note is, as one word: the states of its lines rolled up, so
+        # the sheet says where the delivery stands without the reader adding
+        # the pills up themselves.
+        if not live:
+            context["note_state"] = "reversed"
+        elif unbilled and unbilled >= units:
+            context["note_state"] = "unbilled"
+        elif unbilled:
+            context["note_state"] = "part_billed"
+        else:
+            context["note_state"] = "billed"
+        # The chain this note belongs to. The order it came in against leads,
+        # because that is what a delivery is read against; the notes, bills and
+        # returns hanging off the same order follow. A GRN chip goes to the
+        # note's own page rather than to a print sheet -- from here, the reader
+        # is comparing deliveries, not printing one.
+        links = [{
+            "kind": "Purchase Order",
+            "label": order.purchase_num,
+            "url": reverse("inventory:purchase_order_detail", args=[order.pk]),
+            "new_tab": False,
+            "dead": order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT),
+        }]
+        for link in linked_documents(order):
+            # The note being read is not a link back to itself, so it is left
+            # out of its own chain rather than drawn as a chip going nowhere.
+            if link["kind"] == "GRN" and link["label"] == first.grn_number:
+                continue
+            links.append(link)
+        context["linked_documents"] = links
+        context["reversal_form"] = ReversalReasonForm()
+        context["grn_url"] = reverse_lazy("inventory:grn_list")
         return context
 
 
@@ -3426,19 +3715,9 @@ class GRNExportView(InventoryListMixin, TableExportView):
     title = "Goods Receipts"
 
     def get_rows(self):
-        listing = GRNListView(request=self.request, kwargs={}, args=())
-        orders = list(listing.get_queryset())
-        # The two rolled-up figures the table shows are worked out on the way
-        # to the page, so they are worked out here too rather than exporting
-        # blanks for columns that are on screen.
-        for order in orders:
-            lines = list(order.items.all())
-            order.po_total = sum((line.total_amount for line in lines), Decimal("0.00"))
-            order.received_total = sum((line.total_receive_qty or Decimal("0") for line in lines), Decimal("0"))
-            order.ordered_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            balance = order.ordered_total - order.received_total
-            order.balance_total = balance if balance > 0 else Decimal("0")
-        return orders
+        # Exactly the rows the screen is showing, tab and filters included, so
+        # the file matches what was on screen rather than the whole register.
+        return list(GRNListView(request=self.request, kwargs={}, args=()).get_queryset())
 
 
 class GRNColumnsView(InventoryListMixin, View):
@@ -4034,9 +4313,6 @@ class GoodsReceiptCreateView(InventoryManageMixin, View):
             "today": timezone.localdate(),
             "next_grn_no": next_grn_number(),
             "grn_date": grn_date,
-            # What already exists against the order being received: earlier
-            # notes, the bills they were matched to, anything sent back.
-            "linked_documents": linked_documents(order) if order is not None else [],
             "clearing_balance": -(balance_of_grn_clearing()),
         }
 

@@ -813,7 +813,7 @@
                   {# quantity arrived on is the question being asked here.     #}
                   <td class="po-grns">
                     {% for ref in poi.grn_refs %}
-                    <a class="po-grn" href="{% url 'inventory:grn_print' order.pk %}?receipts={{ ref.pks|join:',' }}&amp;reprint=1" target="_blank"
+                    <a class="po-grn" href="{% url 'inventory:grn_detail' ref.number %}"
                        title="{{ ref.number }} &mdash; {{ ref.qty|qty }} received {{ ref.date|dmy }}">
                       {{ ref.number }}<span class="po-grn-qty">{{ ref.qty|qty }}</span>
                     </a>
