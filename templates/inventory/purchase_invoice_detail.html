@@ -346,7 +346,7 @@
               </button>
             </td>
             <td class="pur-strong">
-              <a class="pur-doc" href="{% url 'inventory:grn_detail' note.number %}">{{ note.number }}</a>
+              <span class="pur-doc">{{ note.number }}</span>
             </td>
             <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
             <td class="pur-num pur-muted">{{ note.lines|length }}</td>

@@ -53,7 +53,6 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("inventory.item_ledger", "Item Ledger", "Inventory", READ_ONLY),
     Page("inventory.customer_ledger", "Customer Ledger", "Inventory", READ_ONLY),
     Page("inventory.purchase_orders", "Purchase Orders", "Inventory", CRUD + (ACTION_APPROVE, ACTION_REVERSE)),
-    Page("inventory.grn", "GRN", "Inventory", READ_ONLY + (ACTION_EDIT, ACTION_REVERSE)),
     Page("inventory.manual_transaction", "Manual Transaction", "Inventory", CRUD),
     Page("inventory.customers", "Customers", "Inventory", MASTER_NO_DELETE),
     Page("inventory.pos_sales", "POS Sales", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),

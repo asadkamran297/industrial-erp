@@ -392,23 +392,6 @@
                   <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
                 </svg>
               </a>
-              {% elif order.next_action == "receive" %}
-              {# Approved and waiting on the supplier. Booking the goods in is #}
-              {# what happens next, so the row offers it rather than leaving   #}
-              {# the reader to go and find the screen for themselves.          #}
-              {# Straight to the goods receipt screen with this order already #}
-              {# chosen. The store is booking a delivery in, not reading an     #}
-              {# order, so the row hands them the document rather than the page #}
-              {# the document is about.                                         #}
-              <a class="po-icon-btn po-icon-btn--go"
-                 href="{% url 'inventory:goods_receipt_create' %}?supplier={{ order.supplier_id }}&amp;order={{ order.pk }}"
-                 title="Receive &mdash; book the goods in against this order" aria-label="Receive goods against this order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>
-                  <path d="M2 8h20l-2-4H4z"></path>
-                  <path d="M12 11v6"></path><path d="M9.5 14.5 12 17l2.5-2.5"></path>
-                </svg>
-              </a>
               {% elif order.next_action == "bill" %}
               <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_bill_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}" title="Bill &mdash; enter the supplier's invoice against what arrived" aria-label="Enter the bill for this order">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -518,10 +501,10 @@
                   {# quantity arrived on is the question being asked here.     #}
                   <td class="po-grns">
                     {% for ref in poi.grn_refs %}
-                    <a class="po-grn" href="{% url 'inventory:grn_detail' ref.number %}"
-                       title="{{ ref.number }} &mdash; {{ ref.qty|qty }} received {{ ref.date|dmy }}">
+                    <span class="po-grn"
+                          title="{{ ref.number }} &mdash; {{ ref.qty|qty }} received {{ ref.date|dmy }}">
                       {{ ref.number }}<span class="po-grn-qty">{{ ref.qty|qty }}</span>
-                    </a>
+                    </span>
                     {% empty %}
                     <span class="po-lines-nil">&mdash;</span>
                     {% endfor %}

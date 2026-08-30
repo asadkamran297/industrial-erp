@@ -251,14 +251,6 @@
       {# its next step is missing.                                           #}
       <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
 
-      {# What is still owed on the lines, not a percentage: an order that took #}
-      {# more than it asked for on one line can still be short on another.      #}
-      {% if order.is_live and outstanding_qty and can_edit %}
-      <a class="pur-btn pur-btn--ghost"
-         href="{% url 'inventory:goods_receipt_create' %}?supplier={{ order.supplier_id }}&amp;order={{ order.pk }}"
-         title="Book the goods in against this order">Receive goods</a>
-      {% endif %}
-
       {% if order.unbilled_value and can_edit %}
       <a class="pur-btn pur-btn--ghost"
          href="{% url 'inventory:purchase_bill_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}"
@@ -595,7 +587,7 @@
               </button>
             </td>
             <td class="pur-strong">
-              <a href="{% url 'inventory:grn_detail' note.number %}" class="pur-doc">{{ note.number }}</a>
+              <span class="pur-doc">{{ note.number }}</span>
             </td>
             <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
             <td class="pur-num pur-muted">{{ note.lines|length }}</td>

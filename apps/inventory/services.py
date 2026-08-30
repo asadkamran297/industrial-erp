@@ -545,33 +545,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     goods_total = sum((line.total_price for line in sale.items.all()), Decimal("0.00"))
     net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
 
-    # Straight off the supplier's bill, so the goods arriving and the invoice
-    # arriving are the same event. The bill is posted here rather than left for
-    # somebody to enter later: without it the value would sit in GRN Clearing
-    # for ever, saying the business had been delivered goods nobody had billed
-    # it for, which for a direct purchase is not true even for a moment.
-    receipts = list(
-        PurchaseOrderItemReceived.objects
-        .filter(purchase_order_item__purchase_order=order, reversed=False, reversal_of__isnull=True)
-        .select_related("purchase_order_item__purchase_order", "inventory_item")
-    )
-    create_purchase_bill(
-        supplier=supplier,
-        supplier_invoice_num=bill_number or order.purchase_num,
-        supplier_invoice_date=bill_date,
-        bill_date=bill_date,
-        lines=[{"receipt": receipt, "quantity": receipt.received_units, "rate": receipt.landed_rate}
-               for receipt in receipts],
-        discount_amount=discount_amount,
-        tax_amount=tax_amount,
-        remarks=remarks or "",
-        # The one document was typed by hand as a whole, so the difference
-        # between it and the receipt it created is the discount that was on it
-        # and nothing else. There is no second party's figure to match against.
-        variance_approved=True,
-        user=user,
-    )
-
     paid = Decimal(paid_amount or 0).quantize(Decimal("0.01"))
     if paid > net_amount:
         raise ValidationError("Paid cannot be more than the invoice total.")
@@ -592,11 +565,10 @@ def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_
                            tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", user):
     """A purchase entered straight off the supplier's bill, with no order first.
 
-    The bill still lands in the order and receipt tables, and every line is
-    received in full as it is entered. That is deliberate: stock, the item
-    ledger and the general ledger then read exactly as they would for a
-    purchase that had gone through an order, so nothing downstream needs to
-    know which route the goods came in by.
+    It still lands in the order tables and posts a bill against every line, so
+    stock, the item ledger and the general ledger read exactly as they would for
+    a purchase that had gone through an order; the flag only keeps it off the
+    outstanding-orders list.
 
     ``lines`` is a list of dicts: inventory_item, quantity, rate, and an
     optional description.
@@ -620,6 +592,7 @@ def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_
     )
 
     goods_total = Decimal("0.00")
+    bill_lines = []
     for seq, line in enumerate(clean_lines, start=1):
         quantity = Decimal(line["quantity"])
         rate = Decimal(line.get("rate") or 0)
@@ -645,46 +618,22 @@ def create_direct_purchase(*, supplier, bill_number, bill_date, lines, discount_
             updated_by=user,
         )
         goods_total += (quantity * rate).quantize(Decimal("0.01"))
-
-        # Received as it is entered: the bill is the goods arriving.
-        receive_purchase_order_item(
-            purchase_order_item=po_item,
-            quantity=quantity,
-            extra_qty=Decimal("0"),
-            retail_price=rate,
-            receive_date=bill_date,
-            invoice_num=bill_number or order.purchase_num,
-            invoice_date=bill_date,
-            rv_number="",
-            remarks=line.get("descr") or "",
-            user=user,
-        )
+        bill_lines.append({"order_item": po_item, "quantity": quantity, "rate": rate})
 
     net_amount = (goods_total - Decimal(discount_amount or 0) + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
 
-    # Straight off the supplier's bill, so the goods arriving and the invoice
-    # arriving are the same event. The bill is posted here rather than left for
-    # somebody to enter later: without it the value would sit in GRN Clearing
-    # for ever, saying the business had been delivered goods nobody had billed
-    # it for, which for a direct purchase is not true even for a moment.
-    receipts = list(
-        PurchaseOrderItemReceived.objects
-        .filter(purchase_order_item__purchase_order=order, reversed=False, reversal_of__isnull=True)
-        .select_related("purchase_order_item__purchase_order", "inventory_item")
-    )
+    # The bill is posted here rather than left for somebody to enter later:
+    # it is the same document, typed once, and it is the bill that takes the
+    # goods into stock.
     create_purchase_bill(
         supplier=supplier,
         supplier_invoice_num=bill_number or order.purchase_num,
         supplier_invoice_date=bill_date,
         bill_date=bill_date,
-        lines=[{"receipt": receipt, "quantity": receipt.received_units, "rate": receipt.landed_rate}
-               for receipt in receipts],
+        lines=bill_lines,
         discount_amount=discount_amount,
         tax_amount=tax_amount,
         remarks=remarks or "",
-        # The one document was typed by hand as a whole, so the difference
-        # between it and the receipt it created is the discount that was on it
-        # and nothing else. There is no second party's figure to match against.
         variance_approved=True,
         user=user,
     )
@@ -1240,7 +1189,11 @@ def bill_match_tolerance():
 
 
 def billable_receipts(*, supplier=None, purchase_order=None):
-    """Receipts with goods in the godown that no bill has been entered against."""
+    """Receipts with goods in the godown that no bill has been entered against.
+
+    Left in place for the goods-receipt screens, which are no longer routed to.
+    Billing runs off the order line now; see ``billable_order_lines``.
+    """
     rows = (
         PurchaseOrderItemReceived.objects
         .select_related("purchase_order_item__purchase_order__supplier", "inventory_item")
@@ -1251,6 +1204,27 @@ def billable_receipts(*, supplier=None, purchase_order=None):
     if purchase_order is not None:
         rows = rows.filter(purchase_order_item__purchase_order=purchase_order)
     return [row for row in rows.order_by("receive_date", "id") if row.pending_bill_qty > FOUR_DP]
+
+
+def billable_order_lines(*, supplier=None, purchase_order=None):
+    """Order lines still open to be billed.
+
+    The bill is entered straight against the order, so what can be billed is
+    simply what was ordered and not yet billed. A line closed short is out of
+    it: the balance on it was given up on and is never going to be invoiced.
+    """
+    rows = (
+        PurchaseOrderItem.objects
+        .select_related("purchase_order__supplier", "inventory_item", "uom")
+        .filter(purchase_order__is_direct=False)
+        .exclude(purchase_order__status__in=(STATUS_DRAFT, STATUS_CANCELLED))
+    )
+    if supplier is not None:
+        rows = rows.filter(purchase_order__supplier=supplier)
+    if purchase_order is not None:
+        rows = rows.filter(purchase_order=purchase_order)
+    return [row for row in rows.order_by("purchase_order__purchase_date", "purchase_order_id", "seq_num")
+            if row.pending_bill_qty > FOUR_DP]
 
 
 def duplicate_supplier_invoice(*, supplier, supplier_invoice_num, exclude_pk=None):
@@ -1272,23 +1246,21 @@ def duplicate_supplier_invoice(*, supplier, supplier_invoice_num, exclude_pk=Non
 def create_purchase_bill(*, supplier, supplier_invoice_num, supplier_invoice_date, bill_date, lines,
                          due_date=None, freight_amount=Decimal("0"), discount_amount=Decimal("0"),
                          tax_amount=None, remarks="", variance_approved=False, user):
-    """Enter a supplier's invoice against goods already received.
+    """Enter a supplier's invoice against an open purchase order.
 
-    ``lines`` is a list of dicts: ``receipt``, ``quantity``, ``rate`` and an
+    ``lines`` is a list of dicts: ``order_item``, ``quantity``, ``rate`` and an
     optional ``tax_perc``. Pass ``tax_amount`` to state the tax as one figure
     off the face of the invoice instead of per line, which is how most supplier
     bills in this trade are actually written.
 
-    A discount the supplier allowed is not taken back off the stock: those
-    units were valued when they arrived and some may be sold already. It shows
-    up as the bill coming in under what was received, which is a credit to
-    Purchase Price Variance — the goods did cost less than the books said.
+    The bill is where the goods enter now. No separate receipt is raised, so
+    this is the single event that takes the stock in and books what is owed for
+    it: the item ledger, the stock figure and the general ledger all move here.
 
-    Nothing here touches stock. The goods were valued when they arrived; this
-    releases that value out of GRN Clearing and puts the real payable in its
-    place. Where the bill and the receipt disagree the difference goes to
-    Purchase Price Variance, because re-costing the stock now would rewrite the
-    cost of units that may already have been sold.
+    Stock is valued at the line rate. Freight the supplier charged and any
+    discount they allowed sit on the bill as a whole and are not spread back
+    across the units -- they go to Purchase Price Variance, so the asset carries
+    the agreed price of the goods and the bill still balances to what is owed.
     """
     from apps.finance.services import post_purchase_bill_to_gl  # lazy: finance imports inventory
 
@@ -1296,73 +1268,69 @@ def create_purchase_bill(*, supplier, supplier_invoice_num, supplier_invoice_dat
         raise ValidationError("Pick the supplier this bill is from.")
     supplier_invoice_num = (supplier_invoice_num or "").strip()
     if not supplier_invoice_num:
-        raise ValidationError("Enter the supplier's own invoice number — it is how a duplicate bill is caught.")
+        raise ValidationError("Enter the supplier's own invoice number - it is how a duplicate bill is caught.")
     existing = duplicate_supplier_invoice(supplier=supplier, supplier_invoice_num=supplier_invoice_num)
     if existing:
         raise ValidationError(
             f"Duplicate: invoice {supplier_invoice_num} from this supplier was already entered as {existing.bill_num}."
         )
 
-    clean = [line for line in lines if line.get("receipt") and Decimal(line.get("quantity") or 0) > 0]
+    clean = [line for line in lines if line.get("order_item") and Decimal(line.get("quantity") or 0) > 0]
     if not clean:
-        raise ValidationError("Add at least one line with a quantity — pick the goods receipts this bill covers.")
+        raise ValidationError("Add at least one line with a quantity - pick the order lines this bill covers.")
 
     # Every line has to come off the same order, because a bill posts one
     # payable against one commitment and splitting it across orders would leave
     # neither of them traceable to what was paid.
-    orders = {line["receipt"].purchase_order_item.purchase_order_id for line in clean}
+    orders = {line["order_item"].purchase_order_id for line in clean}
     if len(orders) > 1:
         raise ValidationError("All the lines on one bill must belong to the same purchase order.")
 
-    prepared, goods_total, cleared_total = [], Decimal("0.00"), Decimal("0.00")
+    prepared, goods_total = [], Decimal("0.00")
     for line in clean:
-        receipt = PurchaseOrderItemReceived.objects.select_for_update().select_related(
-            "purchase_order_item__purchase_order", "inventory_item"
-        ).get(pk=line["receipt"].pk)
-        if receipt.purchase_order_item.purchase_order.supplier_id != supplier.pk:
-            raise ValidationError(f"{receipt.grn_number} was received from a different supplier.")
+        order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+            "purchase_order", "inventory_item"
+        ).get(pk=line["order_item"].pk)
+        order = order_item.purchase_order
+        if order.supplier_id != supplier.pk:
+            raise ValidationError(f"{order.purchase_num} was raised on a different supplier.")
+        if order.status in (STATUS_DRAFT, STATUS_CANCELLED):
+            raise ValidationError("Goods can only be billed against an approved order.")
         quantity = Decimal(line["quantity"])
         rate = Decimal(line.get("rate") or 0)
         if rate <= 0:
-            raise ValidationError("Every line needs a rate — the system will not guess what was agreed.")
-        if quantity > receipt.pending_bill_qty + FOUR_DP:
+            raise ValidationError("Every line needs a rate - the system will not guess what was agreed.")
+        if quantity > order_item.pending_bill_qty + FOUR_DP:
             raise ValidationError(
-                f"{receipt.grn_number} has only {receipt.pending_bill_qty} left to bill; "
-                f"the bill is asking for {quantity}. You cannot be billed for goods that did not arrive."
+                f"{order.purchase_num} line {order_item.seq_num} has only {order_item.pending_bill_qty} "
+                f"left to bill; the bill is asking for {quantity}. You cannot be billed past what was ordered."
             )
         amount = (quantity * rate).quantize(TWO_DP)
         goods_total += amount
-        # What these same units are holding in GRN Clearing, at what they were
-        # received at — the figure the bill is being matched against.
-        cleared_total += (quantity * receipt.landed_rate).quantize(TWO_DP)
-        prepared.append((receipt, quantity, rate, amount, Decimal(line.get("tax_perc") or 0)))
+        prepared.append((order_item, quantity, rate, amount, Decimal(line.get("tax_perc") or 0)))
 
     freight = Decimal(freight_amount or 0).quantize(TWO_DP)
     discount = Decimal(discount_amount or 0).quantize(TWO_DP)
     if discount > goods_total + freight:
         raise ValidationError("A discount cannot be more than the goods on the bill.")
-    billed_goods = (goods_total + freight - discount).quantize(TWO_DP)
-    variance = (billed_goods - cleared_total).quantize(TWO_DP)
-    drift = (abs(variance) / cleared_total * 100) if cleared_total else Decimal("0")
-
-    if drift > bill_match_tolerance() and not variance_approved:
-        raise ValidationError(
-            f"Blocked — this bill is {drift.quantize(TWO_DP)}% away from the {cleared_total} the goods were "
-            f"received at, against a tolerance of {bill_match_tolerance()}%. Check the rate against the "
-            "purchase order, or have the difference approved before posting."
-        )
+    # What the stock is taken in at, and what the bill carries over and above
+    # it. The second figure is the freight and the discount: real money, but not
+    # the price of the goods, so it is held apart rather than loaded onto them.
+    stock_value = goods_total
+    variance = (freight - discount).quantize(TWO_DP)
 
     if tax_amount is not None:
         tax_total = Decimal(tax_amount or 0).quantize(TWO_DP)
     else:
         tax_total = sum(
-            ((quantity * rate * tax_perc / 100).quantize(TWO_DP) for _r, quantity, rate, _a, tax_perc in prepared),
+            ((quantity * rate * tax_perc / 100).quantize(TWO_DP) for _i, quantity, rate, _a, tax_perc in prepared),
             Decimal("0.00"),
         )
 
+    order_id = orders.pop()
     bill = PurchaseBill.objects.create(
         supplier=supplier,
-        purchase_order_id=orders.pop(),
+        purchase_order_id=order_id,
         supplier_invoice_num=supplier_invoice_num,
         supplier_invoice_date=supplier_invoice_date or None,
         bill_date=bill_date or timezone.localdate(),
@@ -1370,30 +1338,72 @@ def create_purchase_bill(*, supplier, supplier_invoice_num, supplier_invoice_dat
         goods_amount=(goods_total - discount).quantize(TWO_DP),
         freight_amount=freight,
         tax_amount=tax_total,
-        total_amount=(billed_goods + tax_total).quantize(TWO_DP),
-        cleared_amount=cleared_total,
+        total_amount=(goods_total + freight - discount + tax_total).quantize(TWO_DP),
+        cleared_amount=stock_value,
         variance_amount=variance,
-        variance_approved=bool(variance_approved and drift > bill_match_tolerance()),
+        variance_approved=bool(variance_approved),
         remarks=remarks or "",
         created_by=user,
         updated_by=user,
     )
 
-    for seq, (receipt, quantity, rate, amount, tax_perc) in enumerate(prepared, start=1):
+    order = PurchaseOrder.objects.select_for_update().get(pk=order_id)
+    purchase_master, _ = PurchaseMaster.objects.get_or_create(
+        purchase_order=order,
+        defaults={
+            "transaction_id": generate_transaction_id("PUR", PurchaseMaster),
+            "supplier": supplier,
+            "inv_purchase_order_inv_num": supplier_invoice_num,
+            "created_by": user,
+            "updated_by": user,
+        },
+    )
+
+    for seq, (order_item, quantity, rate, amount, tax_perc) in enumerate(prepared, start=1):
         PurchaseBillItem.objects.create(
-            bill=bill, receipt=receipt, inventory_item=receipt.inventory_item, seq_num=seq,
-            descr=receipt.descr, quantity=quantity, rate=rate,
-            receipt_rate=receipt.landed_rate.quantize(TWO_DP), tax_perc=tax_perc,
+            bill=bill, purchase_order_item=order_item, inventory_item=order_item.inventory_item, seq_num=seq,
+            descr=order_item.descr, quantity=quantity, rate=rate,
+            receipt_rate=(order_item.rate or Decimal("0.00")).quantize(TWO_DP), tax_perc=tax_perc,
             tax_amount=(quantity * rate * tax_perc / 100).quantize(TWO_DP), amount=amount,
             created_by=user, updated_by=user,
         )
-        receipt.billed_qty = (receipt.billed_qty or Decimal("0")) + quantity
-        # Carry the supplier's number onto the receipt too, so the goods
-        # receipt register can say at a glance what invoiced it.
-        receipt.invoice_num = supplier_invoice_num
-        receipt.invoice_date = supplier_invoice_date or receipt.invoice_date
-        receipt.updated_by = user
-        receipt.save(update_fields=["billed_qty", "invoice_num", "invoice_date", "updated_by", "updated_at"])
+
+        order_item.billed_qty = (order_item.billed_qty or Decimal("0")) + quantity
+        order_item.last_receive_qty = order_item.curr_receive_qty
+        order_item.curr_receive_qty = quantity
+        order_item.total_receive_qty = (order_item.total_receive_qty or Decimal("0")) + quantity
+        order_item.retail_price = rate
+        order_item.updated_by = user
+        order_item.save()
+
+        stock = Stock.objects.select_for_update().get(inventory_item=order_item.inventory_item)
+        old_quantity = stock.current_quantity
+        old_price = stock.current_price
+        stock.last_price = rate if stock.current_quantity <= 0 and stock.current_price <= 0 else stock.current_price
+        stock.current_price = rate
+        stock.current_quantity = stock.current_quantity + quantity
+        stock.updated_by = user
+        stock.save()
+
+        create_ledger_entry(
+            stock=stock, inventory_item=order_item.inventory_item,
+            transaction_id=purchase_master.transaction_id, transaction_no=order.purchase_num,
+            transaction_type=LEDGER_RECEIVE, transaction_date=bill.bill_date,
+            ref_table="inv_purchase_bills", ref_id=bill.pk, ref_no=bill.bill_num,
+            quantity=quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity,
+            old_price=old_price, current_price=stock.current_price,
+            remarks=remarks or order_item.descr, user=user,
+        )
+
+    purchase_master.inv_purchase_order_inv_num = supplier_invoice_num
+    purchase_master.supplier = supplier
+    purchase_master.total_amount = sum(
+        (item.total_receive_qty or Decimal("0")) * (item.rate or Decimal("0")) for item in order.items.all()
+    )
+    purchase_master.updated_by = user
+    purchase_master.save()
+
+    _refresh_order_receipt_status(order, user=user)
 
     post_purchase_bill_to_gl(bill=bill, user=user)
     return bill
@@ -1413,10 +1423,11 @@ def can_reverse_bill(bill):
 def reverse_purchase_bill(*, bill, reason, user):
     """Withdraw a posted supplier bill.
 
-    Puts the value back into GRN Clearing and takes the payable off, which is
-    the state the books were in the moment before the bill was entered: goods
-    on hand, nobody billed for them yet. The receipts go back to unbilled, so
-    the correct invoice can be entered against them.
+    The bill is what took the goods in, so withdrawing it takes them back out:
+    the stock comes off, the item ledger carries the reversal, and the payable
+    goes with it. The order lines go back to unbilled, which is the state the
+    books were in the moment before the bill was entered, so the correct
+    invoice can be entered against the same order.
     """
     from apps.finance.services import reverse_gl_posting  # lazy: finance imports inventory
 
@@ -1445,14 +1456,55 @@ def reverse_purchase_bill(*, bill, reason, user):
         created_by=user, updated_by=user,
     )
 
-    for item in bill.items.select_related("receipt"):
-        receipt = PurchaseOrderItemReceived.objects.select_for_update().get(pk=item.receipt_id)
-        receipt.billed_qty = max(Decimal("0.0000"), (receipt.billed_qty or Decimal("0")) - item.quantity)
-        if receipt.billed_qty <= FOUR_DP:
-            receipt.invoice_num = ""
-            receipt.invoice_date = None
-        receipt.updated_by = user
-        receipt.save(update_fields=["billed_qty", "invoice_num", "invoice_date", "updated_by", "updated_at"])
+    purchase_master = PurchaseMaster.objects.filter(purchase_order=bill.purchase_order).first()
+    for item in bill.items.select_related("purchase_order_item", "inventory_item"):
+        # A bill entered under the old goods-receipt flow points at a receipt
+        # rather than an order line. Its stock was booked by the receipt, not by
+        # the bill, so unwinding it only puts the receipt back to unbilled.
+        if item.purchase_order_item_id is None:
+            if item.receipt_id is None:
+                continue
+            receipt = PurchaseOrderItemReceived.objects.select_for_update().get(pk=item.receipt_id)
+            receipt.billed_qty = max(Decimal("0.0000"), (receipt.billed_qty or Decimal("0")) - item.quantity)
+            if receipt.billed_qty <= FOUR_DP:
+                receipt.invoice_num = ""
+                receipt.invoice_date = None
+            receipt.updated_by = user
+            receipt.save(update_fields=["billed_qty", "invoice_num", "invoice_date", "updated_by", "updated_at"])
+            continue
+
+        order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+            "inventory_item"
+        ).get(pk=item.purchase_order_item_id)
+        order_item.billed_qty = max(Decimal("0.0000"), (order_item.billed_qty or Decimal("0")) - item.quantity)
+        order_item.total_receive_qty = max(
+            Decimal("0.0000"), (order_item.total_receive_qty or Decimal("0")) - item.quantity
+        )
+        order_item.updated_by = user
+        order_item.save()
+
+        stock = Stock.objects.select_for_update().get(inventory_item=order_item.inventory_item)
+        old_quantity = stock.current_quantity
+        old_price = stock.current_price
+        stock.current_quantity = stock.current_quantity - item.quantity
+        stock.updated_by = user
+        stock.save()
+
+        create_ledger_entry(
+            stock=stock, inventory_item=order_item.inventory_item,
+            transaction_id=(purchase_master.transaction_id if purchase_master
+                            else generate_transaction_id("PUR", PurchaseMaster)),
+            transaction_no=bill.purchase_order.purchase_num,
+            transaction_type=LEDGER_REVERSAL, transaction_date=today,
+            ref_table="inv_purchase_bills", ref_id=mirror.pk, ref_no=mirror.bill_num,
+            quantity=-item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity,
+            old_price=old_price, current_price=stock.current_price,
+            remarks=f"Reversal of purchase bill {bill.bill_num}", user=user,
+        )
+
+    _refresh_order_receipt_status(
+        PurchaseOrder.objects.select_for_update().get(pk=bill.purchase_order_id), user=user
+    )
 
     reverse_gl_posting(
         source_ref=f"inv_purchase_bills:{bill.pk}",

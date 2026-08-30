@@ -367,6 +367,10 @@ class PurchaseOrderItem(BaseModel):
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
+    # How much of this line a supplier bill has been entered against. The bill
+    # is what books the goods in now that no separate receipt is raised, so
+    # this is what says whether the line is still owed.
+    billed_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     descr = models.CharField(max_length=255)
     remarks = models.CharField(max_length=255, blank=True, default="")
     # Set when somebody decides the balance on this line is never coming. It
@@ -388,6 +392,14 @@ class PurchaseOrderItem(BaseModel):
     def open_receive_qty(self):
         """Still genuinely expected — nil once the line has been closed short."""
         return Decimal("0.0000") if self.closed else self.pending_receive_qty
+
+    @property
+    def pending_bill_qty(self):
+        """Units on this line no supplier bill has been entered against."""
+        if self.closed:
+            return Decimal("0.0000")
+        pending = (self.quantity or Decimal("0.0000")) - (self.billed_qty or Decimal("0.0000"))
+        return pending if pending > Decimal("0.0000") else Decimal("0.0000")
 
     @property
     def total_amount(self):
@@ -559,15 +571,24 @@ class PurchaseBill(BaseModel):
 
 
 class PurchaseBillItem(BaseModel):
-    """One billed line, tied to the receipt it is being matched against.
+    """One billed line, tied to the order line it is being entered against.
 
-    The link to the receipt is what makes the match possible: quantity cannot
-    exceed what arrived, and the rate can be compared to the rate the goods
-    were taken into stock at.
+    The link to the order line is what bounds it: the quantity billed cannot
+    run past what was ordered and not yet billed, and the rate can be read
+    against the rate that was agreed on the order.
     """
 
     bill = models.ForeignKey(PurchaseBill, related_name="items", on_delete=models.CASCADE, db_column="inv_purchase_bill_id")
-    receipt = models.ForeignKey(PurchaseOrderItemReceived, related_name="bill_items", on_delete=models.PROTECT,
+    # The order line this bill covers. The bill is entered straight against the
+    # order now; nothing is received in between.
+    purchase_order_item = models.ForeignKey(PurchaseOrderItem, null=True, blank=True, related_name="bill_items",
+                                            on_delete=models.PROTECT, db_column="inv_purchase_order_item_id")
+    # The goods receipt this line was matched against, back when a receipt was
+    # raised between the order and the bill. Left nullable rather than dropped:
+    # bills entered under that flow still point at theirs, and the receipt
+    # tables are kept in case the step is put back.
+    receipt = models.ForeignKey(PurchaseOrderItemReceived, null=True, blank=True, related_name="bill_items",
+                                on_delete=models.PROTECT,
                                 db_column="inv_purchase_order_item_received_id")
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     seq_num = models.PositiveIntegerField()

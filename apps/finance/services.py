@@ -680,6 +680,10 @@ def post_sale_return_to_gl(*, sale_return, cost_of_goods, user=None):
 def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
     """Book goods received against a purchase order.
 
+    Not reached: goods are taken in on the supplier's bill now, not on a
+    separate receipt. Kept, with GRN Clearing, in case the receipt step is put
+    back; nothing in the live purchase flow calls it.
+
         Dr Inventory            landed cost of the goods received
             Cr GRN Clearing         value received that nobody has billed for yet
 
@@ -717,46 +721,49 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
 
 
 def post_purchase_bill_to_gl(*, bill, user=None):
-    """Book a supplier's invoice against goods already received.
+    """Book a supplier's invoice against a purchase order.
 
-        Dr GRN Clearing         value released, at what the goods came in at
-        Dr Input Sales Tax      tax the supplier charged, recoverable
-        Dr/Cr Purchase Price Variance   the bill disagreeing with the receipt
-            Cr Supplier payable     what is now actually owed
+        Dr Inventory                    the goods, at the rate billed
+        Dr Input Sales Tax              tax the supplier charged, recoverable
+        Dr/Cr Purchase Price Variance   freight charged, less any discount allowed
+            Cr Supplier payable             what is now actually owed
 
-    The stock is not touched. It was valued when it arrived, and some of those
-    units may already have been sold — rewriting their cost now would change a
-    gross profit that has already been reported. The difference goes to the
-    profit and loss account in the period the bill was entered, which is where
-    a rate that was not the agreed one belongs.
+    The bill is the point the goods enter. No receipt is raised between the
+    order and the invoice, so the asset and the debt to the supplier arise on
+    the same document and at the same moment.
+
+    Freight and discount are on the bill as a whole rather than on any one line,
+    and are not spread back across the units: the stock carries the agreed price
+    of the goods, and the difference goes to the profit and loss account in the
+    period the bill was entered.
     """
     zero = Decimal("0.00")
     supplier = bill.supplier
     if not supplier:
         raise ValidationError("A supplier is required to post a purchase bill to the general ledger.")
 
-    cleared = (bill.cleared_amount or zero).quantize(TWO_DP)
+    stock_value = (bill.cleared_amount or zero).quantize(TWO_DP)
     tax = (bill.tax_amount or zero).quantize(TWO_DP)
     payable = (bill.total_amount or zero).quantize(TWO_DP)
     variance = (bill.variance_amount or zero).quantize(TWO_DP)
 
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
-    clearing = gl_account(GL_GRN_CLEARING_PATH, user=user)
+    inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
-    entries = [(clearing.code, cleared, zero, f"GRN clearing released on {bill.bill_num}")]
+    entries = [(inventory.code, stock_value, zero, f"Stock taken in on {bill.bill_num}")]
     if tax:
         entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
                         f"Input sales tax on {bill.supplier_invoice_num}"))
     if variance:
         variance_account = gl_account(GL_PURCHASE_VARIANCE_PATH, user=user)
-        # Billed above what the goods were received at is a cost; billed below
-        # is a credit back. Both sides of the same account, never two accounts.
+        # Freight the supplier charged is a cost; a discount they allowed is a
+        # credit back. Both sides of the same account, never two accounts.
         if variance > zero:
             entries.append((variance_account.code, variance, zero,
-                            f"Billed above goods receipt value on {bill.bill_num}"))
+                            f"Freight and charges on {bill.bill_num}"))
         else:
             entries.append((variance_account.code, zero, -variance,
-                            f"Billed below goods receipt value on {bill.bill_num}"))
+                            f"Discount allowed on {bill.bill_num}"))
     entries.append((supplier_account.code, zero, payable,
                     f"Payable to {supplier.name} on {bill.supplier_invoice_num}"))
 

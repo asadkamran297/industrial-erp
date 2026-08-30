@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import DirectPurchaseCreateView, CustomerCreateView, CustomerLedgerListView, GRNBulkReceiveView, GRNColumnsView, GRNDetailView, GRNExportView, GRNListView, GRNPrintView, LedgerPrintView, PurchaseReturnQuickCreateView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, GoodsReceiptReverseView, GoodsReceiptCreateView, PurchaseBillCreateView, PurchaseBillDetailView, PurchaseBillListView, PurchaseBillReverseView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SupplierGRNOptionsView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PurchaseReceiveView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
+from .views import DirectPurchaseCreateView, CustomerCreateView, CustomerLedgerListView, LedgerPrintView, PurchaseReturnQuickCreateView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, PurchaseBillCreateView, PurchaseBillDetailView, PurchaseBillListView, PurchaseBillReverseView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
 
 app_name = "inventory"
 
@@ -35,16 +35,9 @@ urlpatterns = [
     path("ledger/", LedgerListView.as_view(), name="ledger_list"),
     path("ledger/print/", LedgerPrintView.as_view(), name="ledger_print"),
     path("customer-ledger/", CustomerLedgerListView.as_view(), name="customer_ledger_list"),
-    path("grn/", GRNListView.as_view(), name="grn_list"),
-    path("grn/new/", GoodsReceiptCreateView.as_view(), name="goods_receipt_create"),
-    path("grn/columns/", GRNColumnsView.as_view(), name="grn_columns"),
-    path("grn/export/", GRNExportView.as_view(), name="grn_export"),
     # Keyed on the note number rather than a row id: a note covering four
     # lines is one document, and its number is what anybody holding the
     # paper can read off it.
-    path("grn/note/<str:number>/", GRNDetailView.as_view(), name="grn_detail"),
-    path("grn/<int:pk>/receive/", GRNBulkReceiveView.as_view(), name="grn_bulk_receive"),
-    path("grn/<int:pk>/print/", GRNPrintView.as_view(), name="grn_print"),
     path("purchase-orders/", PurchaseOrderListView.as_view(), name="purchase_order_list"),
     path("purchase-orders/new/", PurchaseOrderCreateView.as_view(), name="purchase_order_create"),
     path("purchase-orders/export/", PurchaseOrderExportView.as_view(), name="purchase_order_export"),
@@ -59,9 +52,6 @@ urlpatterns = [
     path("sales/export/", SaleInvoiceExportView.as_view(), name="sale_invoice_export"),
     path("sales/new/", SaleInvoiceCreateView.as_view(), name="sale_invoice_create"),
     path("purchases/new/", DirectPurchaseCreateView.as_view(), name="direct_purchase_create"),
-    # What the direct purchase screen asks for the moment a supplier is
-    # picked: that supplier's goods receipts, to copy lines from.
-    path("purchases/grn-options/", SupplierGRNOptionsView.as_view(), name="supplier_grn_options"),
     path("purchase-orders/quick-create/", PurchaseOrderQuickCreateView.as_view(), name="purchase_order_quick_create"),
     path("purchase-orders/draft-init/", PurchaseOrderDraftInitView.as_view(), name="purchase_order_draft_init"),
     path("purchase-orders/draft-finalize/", PurchaseOrderDraftFinalizeView.as_view(), name="purchase_order_draft_finalize"),
@@ -77,7 +67,6 @@ urlpatterns = [
     path("purchase-bills/new/", PurchaseBillCreateView.as_view(), name="purchase_bill_create"),
     path("purchase-bills/<int:pk>/", PurchaseBillDetailView.as_view(), name="purchase_bill_detail"),
     path("purchase-bills/<int:pk>/reverse/", PurchaseBillReverseView.as_view(), name="purchase_bill_reverse"),
-    path("goods-receipts/<int:pk>/reverse/", GoodsReceiptReverseView.as_view(), name="goods_receipt_reverse"),
     path("purchase-orders/<int:pk>/edit/", PurchaseOrderUpdateView.as_view(), name="purchase_order_update"),
     path("purchase-orders/<int:pk>/", PurchaseOrderDetailView.as_view(), name="purchase_order_detail"),
     path("purchase-orders/<int:pk>/items/new/", PurchaseOrderItemCreateView.as_view(), name="purchase_order_item_create"),
@@ -91,7 +80,6 @@ urlpatterns = [
     path("manual-transactions/<int:pk>/delete/", ManualTransactionDeleteView.as_view(), name="manual_transaction_delete"),
     path("manual-transactions/submit/", ManualTransactionSubmitView.as_view(), name="manual_transaction_submit"),
     path("manual-transactions/<str:tx_id>/print/", ManualTransactionPrintView.as_view(), name="manual_transaction_print"),
-    path("purchase-orders/<int:pk>/receive/", PurchaseReceiveView.as_view(), name="purchase_order_receive"),
     path("customers/", CustomerListView.as_view(), name="customer_list"),
     path("customers/new/", CustomerCreateView.as_view(), name="customer_create"),
     path("customers/<int:pk>/edit/", CustomerUpdateView.as_view(), name="customer_update"),

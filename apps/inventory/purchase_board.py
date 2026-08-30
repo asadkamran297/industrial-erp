@@ -135,7 +135,7 @@ def decorate(orders, today=None):
         # answer three different questions and adding the wrong one to a tile is
         # how a screen ends up claiming more is owed than was ever ordered.
         still_to_come = ZERO      # ordered, not yet arrived and still expected
-        arrived_unbilled = ZERO   # arrived, no supplier bill against it
+        arrived_unbilled = ZERO   # ordered, no supplier bill against it yet
         for line in lines:
             rate = line.rate or Decimal("0")
             # ``open_receive_qty`` and not ``pending_receive_qty``: a balance
@@ -143,11 +143,10 @@ def decorate(orders, today=None):
             # here would keep money on the committed tile that nobody expects
             # to spend.
             still_to_come += (line.open_receive_qty * rate).quantize(Decimal("0.01"))
-        for receipt in receipts:
-            # At what the goods were actually taken into stock at, which is the
-            # figure sitting in GRN Clearing waiting for a bill -- not the
-            # order's rate, which is what was hoped for rather than what came.
-            arrived_unbilled += (receipt.pending_bill_qty * receipt.landed_rate).quantize(Decimal("0.01"))
+            # Ordered and not yet invoiced, at the rate that was agreed. The
+            # bill is what books the goods in now, so what is waiting on one is
+            # read off the order line rather than off a receipt.
+            arrived_unbilled += (line.pending_bill_qty * rate).quantize(Decimal("0.01"))
         order.on_order_value = still_to_come
         order.unbilled_value = arrived_unbilled
 
@@ -155,16 +154,16 @@ def decorate(orders, today=None):
         # typed-in invoice number. Part billed is worth seeing rather than
         # rounding away: it is a delivery somebody has been invoiced for twice
         # over, or once and not again.
-        billed_units = sum((receipt.billed_qty or Decimal("0") for receipt in receipts), Decimal("0"))
-        received_units = sum((receipt.received_units for receipt in receipts), Decimal("0"))
+        billed_units = sum((line.billed_qty or Decimal("0") for line in lines), Decimal("0"))
+        ordered_units = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
         order.invoice_numbers = sorted(
             {bill.supplier_invoice_num for bill in order.bills.all() if bill.status != STATUS_REVERSED}
         )
-        if not receipts:
+        if not lines:
             order.billed_state = "none"
         elif billed_units <= Decimal("0.0005"):
             order.billed_state = "unbilled"
-        elif billed_units + Decimal("0.0005") < received_units:
+        elif billed_units + Decimal("0.0005") < ordered_units:
             order.billed_state = "partial"
         else:
             order.billed_state = "billed"
@@ -207,11 +206,11 @@ def decorate(orders, today=None):
         elif order.days_late:
             order.next_action = "chase"
         elif order.is_live and order.received_percent < 100:
-            # Approved, on time, nothing arrived yet. The next thing anyone does
-            # to this order is book goods in against it, so that is the action
-            # the row offers -- an approved order that shows only "view" gives
-            # the person looking at it nothing to do and no idea what is next.
-            order.next_action = "receive"
+            # Approved, on time, nothing in yet. The bill is what books the
+            # goods in, so that is the action the row offers -- an approved
+            # order that shows only "view" gives the person looking at it
+            # nothing to do and no idea what is next.
+            order.next_action = "bill"
         else:
             order.next_action = "view"
 
@@ -394,42 +393,15 @@ GRN_COLUMNS = ColumnSet("inventory.grn.receipts", (
 def linked_documents(order):
     """Everything raised off this order, as one row of links.
 
-    An order is the head of a chain -- goods arrive under a note, the note is
-    billed, some of it may go back. The documents that exist are named; the
-    ones that do not are absent, so the row states how far the order has got.
+    An order is the head of a chain -- it is billed, and some of it may go
+    back. The documents that exist are named; the ones that do not are absent,
+    so the row states how far the order has got.
     """
     from django.urls import reverse
 
     from .models import PurchaseReturnMaster
 
     links = []
-
-    # One entry per note rather than per posting: a note covering four lines is
-    # one document. A reversed receipt stays, greyed -- it happened, and the
-    # entry cancelling it sits next to it.
-    notes = {}
-    for line in order.items.all():
-        for receipt in line.receipts.all():
-            number = receipt.grn_number or ""
-            if not number:
-                continue
-            held = notes.setdefault(number, {"pks": [], "date": receipt.receive_date, "dead": True})
-            held["pks"].append(str(receipt.pk))
-            if receipt.receive_date and (not held["date"] or receipt.receive_date > held["date"]):
-                held["date"] = receipt.receive_date
-            if not receipt.reversed and receipt.reversal_of_id is None:
-                held["dead"] = False
-    for number, note in sorted(notes.items(), key=lambda pair: (pair[1]["date"] or date.min, pair[0])):
-        links.append({
-            "kind": "GRN",
-            "label": number,
-            # The note's own page, not a print sheet: a link in a chain is
-            # followed to read the document, and printing it is a choice made
-            # once it is open.
-            "url": reverse("inventory:grn_detail", args=[number]),
-            "new_tab": False,
-            "dead": note["dead"],
-        })
 
     for bill in order.bills.all():
         links.append({

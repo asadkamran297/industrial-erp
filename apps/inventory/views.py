@@ -32,7 +32,7 @@ from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, In
 from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
-from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_order_lines, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
 
@@ -1421,12 +1421,6 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
-        # A row filled from a goods receipt carries that receipt with it. Stock
-        # entered the books once, when the note was posted; billing it must not
-        # bring the same goods in a second time. So a page of rows that all
-        # name a receipt is a bill against those receipts, and nothing here
-        # touches inventory at all.
-        receipt_ids = posted.getlist("row_receipt")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
                 continue
@@ -1449,62 +1443,6 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
         bill_date = posted.get("bill_date") or str(timezone.localdate())
-
-        # ── Billing goods that already arrived ─────────────────────────────
-        billed = [(index, pk) for index, pk in enumerate(receipt_ids) if (pk or "").strip().isdigit()]
-        if billed:
-            if len(billed) != len(lines):
-                # Half a page from a note and half typed by hand cannot be one
-                # document: one half would add stock and the other would not.
-                messages.error(
-                    request,
-                    "Every line must come from the same goods receipt, or none of them. "
-                    "Remove the typed lines, or start again without copying the receipt.",
-                )
-                return render(request, self.template_name, self._context(posted=posted))
-
-            receipts = {
-                receipt.pk: receipt
-                for receipt in PurchaseOrderItemReceived.objects.filter(
-                    pk__in=[int(pk) for _index, pk in billed]
-                ).select_related("purchase_order_item__purchase_order")
-            }
-            bill_lines = []
-            for position, (index, pk) in enumerate(billed):
-                receipt = receipts.get(int(pk))
-                if not receipt:
-                    messages.error(request, "One of the goods receipt lines no longer exists.")
-                    return render(request, self.template_name, self._context(posted=posted))
-                row = lines[position]
-                bill_lines.append({
-                    "receipt": receipt,
-                    "quantity": row["quantity"],
-                    "rate": row["rate"] or receipt.landed_rate,
-                })
-            try:
-                bill = create_purchase_bill(
-                    supplier=supplier,
-                    supplier_invoice_num=(posted.get("bill_number") or "").strip(),
-                    supplier_invoice_date=bill_date,
-                    bill_date=bill_date,
-                    lines=bill_lines,
-                    discount_amount=money("discount_amount"),
-                    tax_amount=money("tax_amount"),
-                    remarks=(posted.get("remarks") or "").strip(),
-                    user=request.user,
-                )
-            except ValidationError as error:
-                for message in error.messages:
-                    messages.error(request, message)
-                return render(request, self.template_name, self._context(posted=posted))
-
-            messages.success(
-                request,
-                f"Bill {bill.bill_num} posted for {bill.total_amount}. "
-                "The goods were already in stock, so nothing was received again — "
-                "the value moved out of GRN clearing into the supplier's account.",
-            )
-            return redirect("inventory:purchase_bill_detail", pk=bill.pk)
 
         try:
             order, net = create_direct_purchase(
@@ -1648,20 +1586,20 @@ class LedgerListView(InventoryListMixin, ListView):
         context = super().get_context_data(**kwargs)
         rows = list(context["ledgers"])
 
-        receive_ids = [r.ref_id for r in rows if r.ref_table == "inv_purchase_order_item_received"]
         sale_ids = [r.ref_id for r in rows if r.ref_table == "inv_pos_details"]
-        receive_map = {
-            rec.pk: rec.purchase_order_item.purchase_order_id
-            for rec in PurchaseOrderItemReceived.objects.filter(pk__in=receive_ids).select_related("purchase_order_item")
-        }
         sale_map = dict(POSDetail.objects.filter(pk__in=sale_ids).values_list("pk", "pos_master_id"))
+        # Goods come in on the bill now. Rows written under the old goods-receipt
+        # flow name a document there is no longer a page for, so they are left
+        # unlinked rather than pointed at a route that does not exist.
+        bill_ids = {r.ref_id for r in rows if r.ref_table == "inv_purchase_bills"}
+        live_bills = set(PurchaseBill.objects.filter(pk__in=bill_ids).values_list("pk", flat=True))
 
         for row in rows:
             url = None
             if row.ref_table == "inv_manual_transaction" and row.transaction_id:
                 url = reverse_lazy("inventory:manual_transaction_print", kwargs={"tx_id": row.transaction_id})
-            elif row.ref_table == "inv_purchase_order_item_received" and row.ref_id in receive_map:
-                url = f"{reverse_lazy('inventory:grn_print', kwargs={'pk': receive_map[row.ref_id]})}?receipts={row.ref_id}&reprint=1"
+            elif row.ref_table == "inv_purchase_bills" and row.ref_id in live_bills:
+                url = reverse_lazy("inventory:purchase_bill_detail", kwargs={"pk": row.ref_id})
             elif row.ref_table == "inv_pos_details" and row.ref_id in sale_map:
                 url = reverse_lazy("inventory:pos_receipt", kwargs={"pk": sale_map[row.ref_id]})
             row.ref_url = url
@@ -4543,10 +4481,10 @@ class PurchaseBillListView(InventoryListMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        pending = billable_receipts()
+        pending = billable_order_lines()
         context["unbilled_count"] = len(pending)
         context["unbilled_value"] = sum(
-            ((row.pending_bill_qty * row.landed_rate).quantize(Decimal("0.01")) for row in pending),
+            ((row.pending_bill_qty * (row.rate or Decimal("0"))).quantize(Decimal("0.01")) for row in pending),
             Decimal("0.00"),
         )
         context["reversal_form"] = ReversalReasonForm()
@@ -4558,12 +4496,11 @@ class PurchaseBillListView(InventoryListMixin, ListView):
 
 
 class PurchaseBillCreateView(InventoryManageMixin, View):
-    """Enter a supplier's invoice against goods already received.
+    """Enter a supplier's invoice against an open purchase order.
 
-    Every candidate line carries three figures side by side: what arrived, what
-    it was taken into stock at, and what the supplier is asking. Somebody who
-    can see all three at once is in a position to notice a rate that was never
-    agreed, which is the entire reason the three-way match exists.
+    Every candidate line carries the ordered rate beside the one the supplier is
+    asking, so a rate that was never agreed is visible on the way in rather than
+    after it has been paid. Posting the bill is what takes the goods into stock.
     """
 
     page = "inventory.purchase_orders"
@@ -4571,10 +4508,10 @@ class PurchaseBillCreateView(InventoryManageMixin, View):
     template_name = "inventory/purchase_bill_form.html"
 
     def _candidates(self, supplier=None, order=None):
-        rows = billable_receipts(supplier=supplier, purchase_order=order)
+        rows = billable_order_lines(supplier=supplier, purchase_order=order)
         for row in rows:
-            row.order_ref = row.purchase_order_item.purchase_order
-            row.order_rate = row.purchase_order_item.rate
+            row.order_ref = row.purchase_order
+            row.order_rate = row.rate
         return rows
 
     def get(self, request):
@@ -4619,21 +4556,21 @@ class PurchaseBillCreateView(InventoryManageMixin, View):
         # Only the rows that were ticked, and only with the quantity and rate
         # actually typed against them. An untouched row is not a line.
         lines = []
-        for receipt_id in request.POST.getlist("receipt_id"):
-            if not request.POST.get(f"pick_{receipt_id}"):
+        for item_id in request.POST.getlist("order_item_id"):
+            if not request.POST.get(f"pick_{item_id}"):
                 continue
-            receipt = PurchaseOrderItemReceived.objects.filter(pk=receipt_id).select_related(
-                "purchase_order_item__purchase_order", "inventory_item"
+            order_item = PurchaseOrderItem.objects.filter(pk=item_id).select_related(
+                "purchase_order", "inventory_item"
             ).first()
-            if not receipt:
+            if not order_item:
                 continue
             try:
-                quantity = Decimal(request.POST.get(f"qty_{receipt_id}") or "0")
-                rate = Decimal(request.POST.get(f"rate_{receipt_id}") or "0")
+                quantity = Decimal(request.POST.get(f"qty_{item_id}") or "0")
+                rate = Decimal(request.POST.get(f"rate_{item_id}") or "0")
             except InvalidOperation:
-                messages.error(request, f"{receipt.grn_number}: quantity and rate must be numbers.")
+                messages.error(request, f"{order_item.descr}: quantity and rate must be numbers.")
                 return redirect("inventory:purchase_bill_create")
-            lines.append({"receipt": receipt, "quantity": quantity, "rate": rate})
+            lines.append({"order_item": order_item, "quantity": quantity, "rate": rate})
 
         data = form.cleaned_data
         try:
@@ -4662,7 +4599,7 @@ class PurchaseBillCreateView(InventoryManageMixin, View):
         messages.success(
             request,
             f"Bill {bill.bill_num} posted for {bill.total_amount}. "
-            "GRN clearing released, payable created, input tax claimable.",
+            "Stock taken in, payable created, input tax claimable.",
         )
         return redirect("inventory:purchase_bill_detail", pk=bill.pk)
 
@@ -4683,7 +4620,7 @@ class PurchaseBillDetailView(InventoryListMixin, DetailView):
 
 
 class PurchaseBillReverseView(InventoryManageMixin, View):
-    """Withdraw a posted bill: value back into GRN Clearing, payable off."""
+    """Withdraw a posted bill: stock back out, payable off."""
 
     page = "inventory.purchase_orders"
     action = "reverse"

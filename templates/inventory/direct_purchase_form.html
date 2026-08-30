@@ -159,115 +159,6 @@
   .head-action:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
   .dark .head-action { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 
-  /* ── The goods receipt picker ──────────────────────────────────────────
-     Opened the moment a supplier is chosen. Somebody typing a bill is usually
-     holding a delivery note, so the lines are copied off it rather than typed
-     again. This screen does not load the shared purchase theme, so the picker
-     brings its own buttons rather than borrowing class names that are not
-     here. */
-  .grn-pick-backdrop {
-    position: fixed; inset: 0; z-index: 90; display: none; place-items: center;
-    padding: 1rem; background: rgba(2, 6, 23, .55); backdrop-filter: blur(2px);
-  }
-  .grn-pick-backdrop.is-open { display: grid; }
-  .grn-pick-card {
-    display: flex; flex-direction: column; width: 100%; max-width: 62rem;
-    max-height: 85vh; border-radius: .875rem; background: #fff;
-    box-shadow: 0 30px 60px -20px rgba(2, 6, 23, .55);
-  }
-  .dark .grn-pick-card { background: #0f172a; }
-  .grn-pick-head {
-    display: flex; align-items: flex-start; gap: .75rem;
-    padding: .875rem 1.125rem; border-bottom: 1px solid #e2e8f0;
-  }
-  .dark .grn-pick-head { border-bottom-color: #1e293b; }
-  .grn-pick-title { font-size: .9375rem; font-weight: 700; color: #0f172a; }
-  .dark .grn-pick-title { color: #e2e8f0; }
-  .grn-pick-meta { font-size: .75rem; color: #64748b; }
-  .dark .grn-pick-meta { color: #94a3b8; }
-
-  /* The picker's own buttons: a quiet one to leave, a solid one to act. */
-  .grn-pick-close {
-    margin-left: auto; flex: none; height: 2rem; border: 1px solid #e2e8f0;
-    border-radius: .5rem; background: #fff; padding: 0 .875rem;
-    font-size: .8125rem; font-weight: 600; color: #475569;
-  }
-  .grn-pick-close:hover { background: #f8fafc; }
-  .dark .grn-pick-close { border-color: #1e293b; background: transparent; color: #cbd5e1; }
-  .dark .grn-pick-close:hover { background: rgba(30, 41, 59, .6); }
-  .grn-pick-copy {
-    display: inline-grid; place-items: center; height: 1.75rem; border-radius: .4375rem;
-    padding: 0 .875rem; font-size: .75rem; font-weight: 700; white-space: nowrap;
-    color: #fff; background: var(--primary-color);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
-  }
-  .grn-pick-sum:hover .grn-pick-copy { filter: brightness(1.06); }
-
-  .grn-pick-body { overflow: auto; padding: .75rem 1.125rem 1.125rem; }
-  .grn-pick-scroll { min-width: 52rem; }
-  /* One grid for the headings and every row, so the columns cannot drift
-     apart: a note number is a token that is never wrapped, and the money
-     columns are the widest because they are what the eye lands on. */
-  .grn-pick-cols, .grn-pick-sum {
-    display: grid; align-items: center; gap: .625rem;
-    grid-template-columns: 1rem minmax(9rem, 1.1fr) 6rem 6rem 3.5rem 6.5rem 8.5rem 5.5rem;
-  }
-  .grn-pick-cols {
-    padding: .375rem .875rem; font-size: .625rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .06em; color: #94a3b8;
-  }
-  .grn-pick-cols .is-num, .grn-pick-sum .is-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .grn-pick-cols .is-act, .grn-pick-sum .is-act { text-align: right; }
-  .grn-pick-item { border: 1px solid #e2e8f0; border-radius: .625rem; margin-top: .5rem; overflow: hidden; }
-  .dark .grn-pick-item { border-color: #1e293b; }
-  .grn-pick-item:hover { border-color: color-mix(in srgb, var(--primary-color) 45%, #e2e8f0); }
-  .grn-pick-sum {
-    width: 100%; padding: .5625rem .875rem; background: #fff;
-    text-align: left; cursor: pointer; font-size: .8125rem;
-  }
-  .grn-pick-sum:hover { background: #f8fafc; }
-  .dark .grn-pick-sum { background: transparent; }
-  .dark .grn-pick-sum:hover { background: rgba(30, 41, 59, .5); }
-  .grn-pick-caret { transition: transform .15s ease; color: #cbd5e1; }
-  .grn-pick-caret.is-open { transform: rotate(90deg); }
-  .grn-pick-no {
-    font-weight: 700; font-size: .8125rem; color: #0f172a;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .dark .grn-pick-no { color: #e2e8f0; }
-  .grn-pick-amt { font-weight: 700; }
-  .grn-pick-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
-  .grn-pick-lines th { padding: .4375rem .875rem; font-size: .625rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; text-align: left; }
-  .grn-pick-lines td { padding: .375rem .875rem; border-top: 1px dashed #e8eef5; }
-  .dark .grn-pick-lines td { border-top-color: rgba(30, 41, 59, .9); }
-  .grn-pick-lines .is-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .grn-pick-empty { padding: 2.5rem 1rem; text-align: center; font-size: .8125rem; color: #94a3b8; }
-  /* Said once and quietly: it is a fact about what copying does, not an alarm
-     about a mistake nobody has made yet. */
-  .grn-pick-warn {
-    display: flex; align-items: flex-start; gap: .4375rem;
-    margin: 0 0 .625rem; font-size: .6875rem; line-height: 1.5; color: #b45309;
-  }
-  .dark .grn-pick-warn { color: #fbbf24; }
-  .grn-pick-warn svg { flex: none; width: .875rem; height: .875rem; margin-top: .0625rem; }
-  /* Which of the two things the screen is doing. Only shown when it is the
-     one somebody has to know about: the goods are already in stock, so this
-     document moves value rather than quantity. */
-  .bill-mode {
-    display: none; align-items: center; gap: .25rem; margin-top: .375rem;
-    border-radius: .375rem; background: #ecfdf5; padding: .1875rem .4375rem;
-    font-size: .6875rem; font-weight: 600; color: #047857;
-  }
-  .bill-mode.is-on { display: inline-flex; }
-  .dark .bill-mode { background: rgba(6, 78, 59, .4); color: #6ee7b7; }
-
-  /* Reopening the picker once it has been closed. */
-  .grn-pick-again {
-    display: none; align-items: center; gap: .375rem; margin-top: .375rem;
-    font-size: .6875rem; font-weight: 700; color: var(--primary-color);
-  }
-  .grn-pick-again.is-on { display: inline-flex; }
-
   /* Modal: the supplier and item forms are loaded whole rather than rebuilt here. */
   .entity-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgba(2, 6, 23, .55); }
   .entity-modal[hidden] { display: none; }
@@ -317,15 +208,6 @@
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
-        <span id="bill-mode" class="bill-mode">
-          Billing <b id="bill-mode-no"></b> &mdash; no stock is added
-        </span>
-        <button type="button" id="grn-pick-open" class="grn-pick-again">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
-          </svg>
-          <span id="grn-pick-open-text">Bill a goods receipt</span>
-        </button>
       </div>
 
       <div class="pur-head ml-auto flex flex-wrap items-end gap-4">
@@ -445,39 +327,6 @@
 </div>
 
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
-<div class="grn-pick-backdrop" id="grn-picker" role="dialog" aria-modal="true" aria-labelledby="grn-pick-title">
-  <div class="grn-pick-card">
-    <div class="grn-pick-head">
-      <div>
-        <h2 class="grn-pick-title" id="grn-pick-title">Goods receipts &mdash; <span id="grn-pick-supplier"></span></h2>
-        <p class="grn-pick-meta">Choose a note and this invoice is billed against it.</p>
-      </div>
-      <button type="button" class="grn-pick-close" data-grn-close>Close</button>
-    </div>
-    <div class="grn-pick-body">
-      <p class="grn-pick-warn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path>
-        </svg>
-        <span>These goods are already in stock. Billing a note moves its value out of GRN clearing into the supplier&rsquo;s account &mdash; no quantity is received again.</span>
-      </p>
-      <div class="grn-pick-scroll">
-        <div class="grn-pick-cols">
-          <span></span>
-          <span>GRN #</span>
-          <span>Date</span>
-          <span>Order</span>
-          <span class="is-num">Items</span>
-          <span class="is-num">Quantity</span>
-          <span class="is-num">Amount</span>
-          <span class="is-act"></span>
-        </div>
-        <div id="grn-pick-list"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
 (function () {
   const ITEMS = JSON.parse(document.getElementById('items-data').textContent);
@@ -517,7 +366,6 @@
       '<div class="text-center text-xs text-slate-400 row-num"></div>' +
       // Set only when the row was filled from a goods receipt. Its presence is
       // what tells the server to bill those goods rather than receive them.
-      '<input type="hidden" name="row_receipt" class="line-receipt" value="">' +
       '<div class="pur-item-cell"><select name="item_id" class="form-select line-item">' + itemOptions('') + '</select>' +
         '<span class="stock-chip line-stock" hidden></span></div>' +
       '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
@@ -715,10 +563,6 @@
       }
     }
     if (e.target.classList.contains('line-unit')) restateLine(e.target.closest('.pur-row'));
-    if (e.target.classList.contains('line-item')) {
-      const held = e.target.closest('.pur-row').querySelector('.line-receipt');
-      if (held && held.value) { held.value = ''; syncMode(); }
-    }
     recalc();
   });
   rowsBox.addEventListener('click', e => {
@@ -727,7 +571,6 @@
     // Never leave the operator with nothing to type into.
     if (!rowsBox.children.length) addRow();
     renumber();
-    syncMode();
     recalc();
   });
 
@@ -744,154 +587,7 @@
     const show = Boolean(supplier.value && balance);
     supplierBalance.classList.toggle('hidden', !show);
     if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
-    loadNotes(supplier.value, option ? option.textContent.trim() : '', true);
   });
-
-  // ----- copy the lines off a goods receipt -----
-  // Somebody typing a bill is usually holding a delivery note, so the notes for
-  // this supplier are fetched the moment one is chosen and the picker opens on
-  // them. Choosing a note replaces the lines outright rather than adding to
-  // them: it is the bill for that delivery, not an extra page of it.
-  const picker = document.getElementById('grn-picker');
-  const modeNote = document.getElementById('bill-mode');
-  const modeNumber = document.getElementById('bill-mode-no');
-  const pickerList = document.getElementById('grn-pick-list');
-  const pickerName = document.getElementById('grn-pick-supplier');
-  const pickAgain = document.getElementById('grn-pick-open');
-  const pickAgainText = document.getElementById('grn-pick-open-text');
-  let notes = [];
-
-  function openPicker() { if (notes.length) picker.classList.add('is-open'); }
-  function closePicker() { picker.classList.remove('is-open'); }
-
-  function loadNotes(supplierId, name, autoOpen) {
-    notes = [];
-    pickerList.innerHTML = '';
-    pickAgain.classList.remove('is-on');
-    if (!supplierId) return;
-    pickerName.textContent = name;
-    fetch('{% url "inventory:supplier_grn_options" %}?supplier=' + encodeURIComponent(supplierId), {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(response => (response.ok ? response.json() : { notes: [] }))
-      .then(data => {
-        notes = data.notes || [];
-        drawNotes();
-        if (!notes.length) return;
-        pickAgainText.textContent = 'Bill a goods receipt (' + notes.length + ')';
-        pickAgain.classList.add('is-on');
-        if (autoOpen) openPicker();
-      })
-      // A picker that cannot load is a convenience that failed, not a bill that
-      // cannot be typed: the screen carries on without it.
-      .catch(() => { notes = []; });
-  }
-
-  function drawNotes() {
-    pickerList.innerHTML = notes.length ? '' : '<div class="grn-pick-empty">Nothing has been received from this supplier yet.</div>';
-    notes.forEach((note, index) => {
-      const box = document.createElement('div');
-      box.className = 'grn-pick-item';
-      box.innerHTML =
-        '<button type="button" class="grn-pick-sum" data-toggle="' + index + '">' +
-          '<svg class="grn-pick-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>' +
-          '<span class="grn-pick-no">' + note.number + '</span>' +
-          '<span class="grn-pick-meta">' + (note.date_text || '') + '</span>' +
-          '<span class="grn-pick-meta">' + note.order + '</span>' +
-          '<span class="is-num">' + note.items + '</span>' +
-          '<span class="is-num">' + qtyText(note.quantity) + '</span>' +
-          '<span class="is-num grn-pick-amt">' + moneyText(note.value) + '</span>' +
-          '<span class="is-act"><span class="grn-pick-copy" data-copy="' + index + '">Bill this</span></span>' +
-        '</button>' +
-        '<div hidden data-lines="' + index + '">' +
-          '<table class="grn-pick-lines"><thead><tr>' +
-            '<th style="width:2.5rem;">#</th><th>Item</th><th class="is-num">Quantity</th><th>Unit</th><th class="is-num">Price / unit</th><th class="is-num">Amount</th>' +
-          '</tr></thead><tbody>' +
-          note.lines.map((line, n) =>
-            '<tr><td>' + (n + 1) + '</td><td>' + line.name + '</td><td class="is-num">' + qtyText(line.quantity) +
-            '</td><td>' + (line.unit || '&mdash;') + '</td><td class="is-num">' + moneyText(line.rate) +
-            '</td><td class="is-num">' + moneyText(line.amount) + '</td></tr>').join('') +
-          '</tbody></table>' +
-        '</div>';
-      pickerList.appendChild(box);
-    });
-  }
-
-  const qtyText = n => (Math.round((Number(n) || 0) * 10000) / 10000)
-    .toLocaleString('en-US', { maximumFractionDigits: 4 });
-
-  pickerList.addEventListener('click', event => {
-    const copy = event.target.closest('[data-copy]');
-    if (copy) {
-      event.preventDefault();
-      event.stopPropagation();
-      copyNote(notes[Number(copy.dataset.copy)]);
-      return;
-    }
-    const head = event.target.closest('[data-toggle]');
-    if (!head) return;
-    const index = head.dataset.toggle;
-    const lines = pickerList.querySelector('[data-lines="' + index + '"]');
-    lines.hidden = !lines.hidden;
-    head.querySelector('.grn-pick-caret').classList.toggle('is-open', !lines.hidden);
-  });
-
-  function copyNote(note) {
-    if (!note) return;
-    rowsBox.innerHTML = '';
-    note.lines.forEach(line => {
-      const row = addRow();
-      const itemPick = row.querySelector('.line-item');
-      itemPick.value = String(line.item_id);
-      // The item drives the unit list and the stock chip, so the change is
-      // announced rather than the fields being set behind the row's back.
-      itemPick.dispatchEvent(new Event('change', { bubbles: true }));
-      const unit = row.querySelector('.line-unit');
-      if (line.uom_id) unit.value = String(line.uom_id);
-      unit.dataset.factor = String(baseFactor(row));
-      // What is still left to bill, not what arrived: a note already part
-      // billed must not be billed for the whole of itself again.
-      row.querySelector('.line-qty').value = line.pending > 0 ? line.pending : line.quantity;
-      row.querySelector('.line-rate').value = money(line.rate);
-      // The row now stands for a posting that already happened, so the bill is
-      // matched against it rather than receiving the goods a second time.
-      row.querySelector('.line-receipt').value = String(line.receipt_id);
-    });
-    if (!rowsBox.children.length) addRow();
-    renumber();
-    billing = note.number;
-    syncMode();
-    recalc();
-    closePicker();
-  }
-
-  // Which of the two things this screen is doing: buying goods that are
-  // arriving now, or billing goods that arrived already. The difference is
-  // whether stock moves, so it is stated on the page rather than left for
-  // somebody to work out from what they clicked.
-  let billing = null;
-
-  function syncMode() {
-    const held = Array.from(rowsBox.querySelectorAll('.line-receipt')).filter(box => box.value);
-    if (!held.length) billing = null;
-    const on = Boolean(billing);
-    modeNote.classList.toggle('is-on', on);
-    if (on) modeNumber.textContent = billing;
-  }
-
-  picker.addEventListener('click', event => {
-    if (event.target === picker || event.target.closest('[data-grn-close]')) closePicker();
-  });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') closePicker(); });
-  pickAgain.addEventListener('click', openPicker);
-
-  // A supplier already chosen when the page opened -- a form coming back with
-  // errors, or a link that named one -- still gets its notes, but the picker is
-  // not thrown at somebody who was in the middle of typing.
-  if (supplier.value) {
-    const option = supplier.options[supplier.selectedIndex];
-    loadNotes(supplier.value, option ? option.textContent.trim() : '', false);
-  }
 
   // ----- add a supplier or an item without leaving the bill -----
   // The master screen is opened in a frame; it messages back what it saved and

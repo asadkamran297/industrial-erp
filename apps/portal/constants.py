@@ -41,7 +41,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         # the goods turn up against it, and a purchase entered straight off the
         # supplier's bill is the exception that skipped both.
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index", url_name="inventory:purchase_order_list"),
-        NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
         # Straight off the supplier's bill, no order first.
         NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
