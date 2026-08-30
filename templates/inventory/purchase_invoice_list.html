@@ -1,137 +1,447 @@
 {% extends "layouts/portal.html" %}
+{% load core_extras %}
 {% block content %}
 <style>
-  /* Plain CSS: the compiled Tailwind bundle is prebuilt, so a rule for this one
-     screen is written here rather than adding classes that need a rebuild.
-     Supplier names run long, so an option stays on one line and is cut with an
-     ellipsis instead of wrapping into a two-line row. */
-  #supplier-field .searchable-select-option,
-  #supplier-field .searchable-select-button > span:first-child {
+  /* Plain CSS, the same rules the purchase orders board is drawn with: the
+     compiled Tailwind bundle is prebuilt, so this screen's styling is written
+     here rather than adding classes that would need a rebuild. The two screens
+     list the same kind of record by two different routes in, so they are drawn
+     the same way on purpose. */
+
+  /* ── Tiles ────────────────────────────────────────────────────────────── */
+  .po-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .po-tile {
+    --tone: #64748b;
+    --tone-soft: #f1f5f9;
+    --tone-line: #e2e8f0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
     overflow: hidden;
-    text-overflow: ellipsis;
+    border: 1px solid var(--tone-line);
+    border-radius: .75rem;
+    background: var(--tone-soft);
+    padding: .75rem 1rem;
+  }
+  .po-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: .25rem;
+    background: var(--tone);
+  }
+
+  .po-tile--committed { --tone: #7c3aed; --tone-soft: #f5f3ff; --tone-line: #ddd6fe; }
+  .po-tile--goods     { --tone: #0284c7; --tone-soft: #f0f9ff; --tone-line: #bae6fd; }
+  .po-tile--supplier  { --tone: #0f766e; --tone-soft: #f0fdfa; --tone-line: #99f6e4; }
+  .po-tile--payable   { --tone: #e11d48; --tone-soft: #fff1f2; --tone-line: #fecdd3; }
+
+  .dark .po-tile { --tone-soft: rgba(30, 41, 59, .45); --tone-line: #1e293b; }
+  .dark .po-tile--committed { --tone: #a78bfa; --tone-soft: rgba(76, 29, 149, .22); --tone-line: rgba(139, 92, 246, .35); }
+  .dark .po-tile--goods     { --tone: #38bdf8; --tone-soft: rgba(12, 74, 110, .25); --tone-line: rgba(14, 165, 233, .35); }
+  .dark .po-tile--supplier  { --tone: #5eead4; --tone-soft: rgba(19, 78, 74, .25); --tone-line: rgba(20, 184, 166, .35); }
+  .dark .po-tile--payable   { --tone: #fb7185; --tone-soft: rgba(136, 19, 55, .25); --tone-line: rgba(244, 63, 94, .35); }
+
+  .po-tile { cursor: pointer; transition: box-shadow .15s ease, transform .1s ease; }
+  .po-tile:hover { transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(2, 6, 23, .35); }
+  .po-tile:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
+  /* The filter currently in force is drawn as pressed rather than merely
+     coloured, so the reader can see which tile the list below is answering. */
+  .po-tile.is-on { box-shadow: inset 0 0 0 1px var(--tone); }
+
+  .po-tile-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .625rem;
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--tone);
+  }
+  .po-tile-icon svg { width: 1.125rem; height: 1.125rem; }
+
+  .po-tile-body { min-width: 0; }
+  .po-tile-label { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tone); }
+  .po-tile-head { display: flex; align-items: baseline; gap: .5rem; }
+  .po-tile-value { font-size: 1.5rem; font-weight: 800; line-height: 1.15; color: #0f172a; }
+  .dark .po-tile-value { color: #f1f5f9; }
+  .po-tile-note { margin-top: .125rem; font-size: .75rem; line-height: 1.35; color: #64748b; }
+  .dark .po-tile-note { color: #94a3b8; }
+  .po-tile-note--alert { color: var(--tone); font-weight: 600; }
+
+  /* ── Table ────────────────────────────────────────────────────────────── */
+  .po-table { width: 100%; text-align: left; font-size: .875rem; border-collapse: collapse; }
+  .po-table thead th {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #64748b;
     white-space: nowrap;
   }
-  /* Over the tiles below it, whichever way the page is scrolled. */
-  #supplier-field .searchable-select-panel { z-index: 60; }
+  .dark .po-table thead th { border-bottom-color: #1e293b; }
+  .po-table tbody td { padding: .875rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .po-table tbody td { border-bottom-color: rgba(30, 41, 59, .8); }
+  .po-table tbody tr:hover { background: #f8fafc; }
+  .dark .po-table tbody tr:hover { background: rgba(30, 41, 59, .4); }
+  /* A document number is one token: never broken across two lines, however
+     tight the column gets. */
+  .po-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .po-table td:first-child, .po-table th:first-child { white-space: nowrap; width: 1%; }
+  .po-sub { display: block; font-size: .75rem; color: #94a3b8; }
+  .po-right { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-muted { color: #cbd5e1; }
+  .dark .po-muted { color: #475569; }
+
+  /* The + on each row, and the panel of lines it opens under it. */
+  .po-expand-head, .po-expand-cell { width: 1%; padding-right: 0 !important; }
+  .po-expand {
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .375rem;
+    font-size: .8125rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #475569;
+  }
+  .po-expand:hover { background: #f1f5f9; }
+  .dark .po-expand { border-color: #475569; color: #cbd5e1; }
+  .dark .po-expand:hover { background: #1e293b; }
+  .po-lines-row:hover { background: transparent !important; }
+  .po-lines-cell { background: #f8fafc; padding: .75rem 1rem 1rem 2.5rem !important; }
+  .dark .po-lines-cell { background: rgba(15, 23, 42, .55); }
+  .po-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .po-lines thead th {
+    padding: .375rem .5rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: nowrap;
+  }
+  .dark .po-lines thead th { border-bottom-color: #1e293b; }
+  .po-lines tbody td { padding: .375rem .5rem; border-bottom: 1px solid #eef2f7; vertical-align: top; }
+  .dark .po-lines tbody td { border-bottom-color: rgba(30, 41, 59, .7); }
+  .po-lines tbody tr:last-child td { border-bottom: 0; }
+  .po-lines-num { color: #94a3b8; }
+  .po-lines-empty { font-size: .75rem; color: #94a3b8; }
+
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--bill { color: #dc2626; background: #fee2e2; }
+
+  /* ── Row actions ──────────────────────────────────────────────────────── */
+  .po-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .125rem; }
+  .po-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: .4375rem;
+    color: #94a3b8;
+    transition: color .15s ease, background .15s ease;
+  }
+  .po-icon-btn svg { width: 1.0625rem; height: 1.0625rem; }
+  .po-icon-btn:hover { color: #334155; background: #f1f5f9; }
+  .dark .po-icon-btn:hover { color: #e2e8f0; background: rgba(30, 41, 59, .8); }
+  .po-icon-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .po-icon-btn--go { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .po-icon-btn--go:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+
+  .po-foot td { padding: .875rem 1rem; font-weight: 700; }
+
+  .settings-heading { padding: .5rem .625rem .25rem; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+  .settings-item { display: flex; align-items: center; gap: .5rem; border-radius: .5rem; padding: .4375rem .625rem; font-size: .8125rem; font-weight: 500; color: #334155; }
+  .settings-item:hover { background: #f1f5f9; }
+  .settings-item--muted { color: #94a3b8; }
+  .dark .settings-item { color: #cbd5e1; }
+  .dark .settings-item:hover { background: rgba(30, 41, 59, .7); }
+  .settings-rows { display: flex; gap: .375rem; padding: .125rem .625rem .375rem; }
+  .settings-chip { flex: 1; border: 1px solid #e2e8f0; border-radius: .5rem; padding: .3125rem 0; font-size: .75rem; font-weight: 600; text-align: center; color: #475569; }
+  .settings-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .settings-chip.is-on { border-color: var(--primary-color); color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, #fff); }
+  .dark .settings-chip { border-color: #1e293b; color: #cbd5e1; }
+  .dark .settings-chip.is-on { background: color-mix(in srgb, var(--primary-color) 22%, #0f172a); }
 </style>
-<div class="flex flex-wrap items-center justify-between gap-3">
-  <div>
+
+<div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
+
+{# ── Head ──────────────────────────────────────────────────────────────── #}
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Purchase Invoices</h1>
   </div>
-  <div class="flex flex-wrap items-center gap-3">
-    {# Its own form so searching keeps whatever the filter bar is set to. #}
-    <form method="get" class="flex items-center gap-2">
-      <input type="hidden" name="supplier" value="{{ request.GET.supplier }}">
-      <input type="hidden" name="date_from" value="{{ request.GET.date_from }}">
-      <input type="hidden" name="date_to" value="{{ request.GET.date_to }}">
-      <div class="search-field">
-        <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
-        </svg>
-        <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search..."
-               class="search-input {% if request.GET.q %}pl-9{% endif %}">
-        {% if request.GET.q %}
-        <a href="?supplier={{ request.GET.supplier }}&amp;date_from={{ request.GET.date_from }}&amp;date_to={{ request.GET.date_to }}"
-           title="Clear search"
-           class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
-        {% endif %}
-      </div>
-    </form>
+
+  <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
     {% url 'inventory:direct_purchase_create' as add_url %}
-    {% include "components/ui/button.html" with label="Add Purchase Invoice" href=add_url variant="primary" icon="+" only %}
+    {% include "components/ui/button.html" with label="Purchase Invoice" href=add_url variant="primary" icon="+" only %}
     {% endif %}
   </div>
 </div>
 
-<form method="get" class="mt-6 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-  {# Wide enough for a real supplier name: the picker shows one line, and a #}
-  {# name longer than the box is cut with an ellipsis rather than wrapping. #}
-  <div class="w-64" id="supplier-field">
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="supplier">Supplier</label>
-    <select name="supplier" id="supplier" class="form-select" onchange="this.form.submit()">
-      <option value="">All suppliers</option>
-      {% for spec in filter_specs %}{% if spec.name == "supplier" %}
-        {% for value, label in spec.choices %}
-          <option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      {% endif %}{% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_from">From</label>
-    <input type="date" name="date_from" id="date_from" value="{{ request.GET.date_from }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <div>
-    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
-    <input type="date" name="date_to" id="date_to" value="{{ request.GET.date_to }}" class="form-input" onchange="this.form.submit()">
-  </div>
-  <input type="hidden" name="q" value="{{ request.GET.q }}">
-  <div class="flex-1"></div>
-  <div class="flex shrink-0 items-center gap-2">
-    <button type="button" class="btn btn-secondary btn--icon" title="Print" aria-label="Print"
-            onclick="printSection('invoice-table', 'Purchase Invoices')">
-      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
+{# ── Tiles: counted over everything the filters allow, not just this page ── #}
+<div class="po-tiles mt-5">
+  <a class="po-tile po-tile--committed{% if not state and not request.GET.date_from %} is-on{% endif %}"
+     href="?{{ tile_query }}" title="Every purchase invoice under the filters set">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
+        <path d="M9 8h6M9 12h6"></path>
       </svg>
-    </button>
-  </div>
-</form>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.count }}</p>
+        <p class="po-tile-label">Invoices</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.value|short_amount }} bought without an order</p>
+    </div>
+  </a>
 
-<div class="mt-4 grid gap-4 sm:grid-cols-2">
-  <div class="stat-tile">
-    <span class="stat-icon">&#8721;</span>
-    <div>
-      <p class="stat-label">Total on this page</p>
-      <p class="stat-value">{{ page_total|amount }}</p>
+  <a class="po-tile po-tile--goods{% if request.GET.date_from == tiles.month_from and not state %} is-on{% endif %}"
+     href="?{{ tile_query }}&amp;date_from={{ tiles.month_from }}&amp;date_to={{ tiles.month_to }}" title="Only the invoices entered this month">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+        <path d="M8 2v4M16 2v4M3 10h18"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.month_count }}</p>
+        <p class="po-tile-label">This month</p>
+      </div>
+      <p class="po-tile-note">Rs {{ tiles.month_value|short_amount }} entered this month</p>
     </div>
-  </div>
-  <div class="stat-tile">
-    <span class="stat-icon">#</span>
-    <div>
-      <p class="stat-label">Invoices</p>
-      <p class="stat-value">{{ invoice_count }}</p>
-      <p class="mt-0.5 text-xs text-slate-500">under the filters applied</p>
+  </a>
+
+  <a class="po-tile po-tile--supplier" href="{% url 'inventory:supplier_list' %}" title="Open the supplier register">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 21V8l9-5 9 5v13"></path><path d="M9 21v-6h6v6"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.supplier_count }}</p>
+        <p class="po-tile-label">Suppliers</p>
+      </div>
+      <p class="po-tile-note">Bought from directly</p>
     </div>
-  </div>
+  </a>
+
+  {# A direct purchase posts its own bill as it is entered, so one without a #}
+  {# live bill is an entry that did not finish -- and its value is sitting   #}
+  {# in GRN clearing saying nobody has been invoiced for it.                 #}
+  <a class="po-tile po-tile--payable{% if state == 'unbilled' %} is-on{% endif %}"
+     href="?{{ tile_query }}&amp;state=unbilled" title="Only the entries whose bill never posted">
+    <span class="po-tile-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 9v4M12 17h.01"></path>
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+      </svg>
+    </span>
+    <div class="po-tile-body">
+      <div class="po-tile-head">
+        <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
+        <p class="po-tile-label">No bill posted</p>
+      </div>
+      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">
+        {% if tiles.unbilled_count %}Rs {{ tiles.unbilled_value|short_amount }} left in GRN clearing
+        {% else %}Every entry posted its bill{% endif %}
+      </p>
+    </div>
+  </a>
 </div>
 
-<section class="mt-4">
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table id="invoice-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Invoice No.</th>
-            <th class="px-4 py-3">Supplier</th>
-            <th class="px-4 py-3 text-right">Items</th>
-            <th class="px-4 py-3 text-right">Amount</th>
-            <th class="px-4 py-3 text-right print-hide">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for invoice in invoices %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-            <td class="px-4 py-3 whitespace-nowrap">{{ invoice.purchase_date }}</td>
-            <td class="px-4 py-3 font-medium">{{ invoice.purchase_num }}</td>
-            <td class="px-4 py-3">{{ invoice.supplier.name }}</td>
-            <td class="px-4 py-3 text-right tabular-nums">{{ invoice.line_count }}</td>
-            <td class="px-4 py-3 text-right font-bold tabular-nums">{{ invoice.total_amount|amount }}</td>
-            <td class="px-4 py-3 print-hide">
-              <div class="flex justify-end gap-2">
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_detail' invoice.pk %}" title="View">&#128065;</a>
-                <a class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'inventory:purchase_order_print' invoice.pk %}" target="_blank" title="Print">&#128438;</a>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">No purchase invoices yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+{# ── Board ─────────────────────────────────────────────────────────────── #}
+<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  {% include "components/table/filter_bar.html" with table_id="invoice-table" date_filters_enabled=True search_placeholder="Search..." export_url=export_url %}
+
+  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
+    <table id="invoice-table" class="po-table">
+      <thead>
+        <tr>
+          <th class="print-hide po-expand-head"></th>
+          {% include "components/table/sort_header.html" with label="Invoice #" field="purchase_num" %}
+          {% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}
+          {% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}
+          <th>Entered by</th>
+          <th class="po-right">Items</th>
+          <th class="po-right">Quantity</th>
+          <th>Bill</th>
+          <th class="po-right">Amount</th>
+          <th class="print-hide po-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invoice in invoices %}
+        <tr>
+          <td class="print-hide po-expand-cell">
+            {# The lines behind the row's figures, opened where the row is #}
+            {# rather than on a screen of their own. #}
+            <button type="button" class="po-expand" @click="toggleRow({{ invoice.pk }})"
+                    :aria-expanded="isRowOpen({{ invoice.pk }}) ? 'true' : 'false'"
+                    aria-label="Show the items on this invoice" title="Show the items on this invoice">
+              <span x-text="isRowOpen({{ invoice.pk }}) ? '−' : '+'">+</span>
+            </button>
+          </td>
+          <td>
+            <a class="po-num" href="{% url 'inventory:purchase_order_detail' invoice.pk %}">{{ invoice.purchase_num }}</a>
+            {# The supplier's own number on the paper it was entered from. #}
+            {% if invoice.quot_num %}<span class="po-sub">{{ invoice.quot_num }}</span>{% endif %}
+          </td>
+          <td class="whitespace-nowrap">{{ invoice.purchase_date|dmy }}</td>
+          <td><span class="font-semibold">{{ invoice.supplier.name }}</span></td>
+          <td class="whitespace-nowrap">{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</td>
+          <td class="po-right text-slate-500">{{ invoice.line_count }}</td>
+          <td class="po-right">{{ invoice.qty_total|qty }}</td>
+          <td>
+            {% if invoice.bill %}
+            <a class="po-num" href="{% url 'inventory:purchase_bill_detail' invoice.bill.pk %}">{{ invoice.bill.bill_num }}</a>
+            {% else %}
+            <span class="po-pill po-pill--bill" title="This entry posted no bill, so its value is still in GRN clearing">No bill</span>
+            {% endif %}
+          </td>
+          <td class="po-right font-semibold">{{ invoice.total_amount|amount }}</td>
+          <td class="print-hide">
+            <div class="po-row-actions">
+              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_order_detail' invoice.pk %}"
+                 title="View this purchase invoice" aria-label="View this purchase invoice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </a>
+              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_print' invoice.pk %}" target="_blank"
+                 title="Print this purchase invoice" aria-label="Print this purchase invoice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 8V3h10v5"></path>
+                  <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="7" y="14" width="10" height="7" rx="1"></rect>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+
+        {# ── The invoice's own lines, opened from the + on the row ────────── #}
+        <tr class="po-lines-row print-hide" x-show="isRowOpen({{ invoice.pk }})" x-cloak>
+          <td colspan="10" class="po-lines-cell print-hide">
+            {% with line_list=invoice.items.all %}
+            {% if line_list %}
+            <table class="po-lines">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th class="po-right">Quantity</th>
+                  <th>Unit</th>
+                  <th class="po-right">Rate</th>
+                  <th class="po-right">Discount</th>
+                  <th class="po-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for line in line_list %}
+                <tr>
+                  <td class="po-lines-num">{{ forloop.counter }}</td>
+                  <td>
+                    <span class="font-semibold">{{ line.descr }}</span>
+                    {% if line.inventory_item.item_code %}<span class="po-sub">{{ line.inventory_item.item_code }}</span>{% endif %}
+                  </td>
+                  <td class="po-right">{{ line.quantity|qty }}</td>
+                  <td>{{ line.uom.title|default:"—" }}</td>
+                  <td class="po-right">{{ line.rate|amount }}</td>
+                  <td class="po-right">{{ line.discount_amount|amount }}</td>
+                  <td class="po-right font-semibold">{{ line.total_amount|amount }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="po-lines-empty">Nothing on this invoice.</p>
+            {% endif %}
+            {% endwith %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="px-4 py-12 text-center text-slate-500">No purchase invoices here.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if invoices %}
+      <tfoot>
+        <tr class="po-foot">
+          <td colspan="8">Total on this page</td>
+          <td class="po-right">{{ page_total|amount }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
   </div>
-  {% include "components/table/pagination.html" %}
 </section>
+
+{% include "components/table/pagination.html" %}
+
+</div>
+
+<script>
+  // Copy the table as it stands, tab separated, which is what a spreadsheet
+  // pastes into cells rather than into one. Built from the rendered table so
+  // it carries exactly the columns on screen.
+  function copyTable(event) {
+    var table = document.getElementById('invoice-table');
+    var lines = [];
+    table.querySelectorAll('tr').forEach(function (row) {
+      var cells = Array.from(row.querySelectorAll('th, td'))
+        .filter(function (cell) { return !cell.classList.contains('print-hide'); })
+        .map(function (cell) { return cell.innerText.replace(/\s+/g, ' ').trim(); });
+      if (cells.length) lines.push(cells.join('\t'));
+    });
+    var text = lines.join('\n');
+
+    var done = function () {
+      var button = event.currentTarget;
+      var label = button.querySelector('strong');
+      var was = label.textContent;
+      label.textContent = 'Copied';
+      setTimeout(function () { label.textContent = was; }, 1500);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    // Plain HTTP, where the clipboard API is not handed out: the old way still
+    // works and this screen is served over it on the local network.
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    try { document.execCommand('copy'); done(); } finally { box.remove(); }
+  }
+</script>
 {% endblock %}

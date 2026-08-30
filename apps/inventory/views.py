@@ -2,7 +2,7 @@ import csv
 import io
 import json
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -29,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, GRN_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
@@ -1814,50 +1814,176 @@ class GoodsReceiptReverseView(InventoryManageMixin, View):
         return redirect("inventory:grn_list")
 
 
-class PurchaseInvoiceListView(InventoryListMixin, ListView):
-    """Bills entered straight off the supplier's invoice, with no order first.
+class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
+    """Purchases entered straight off the supplier's bill, with no order first.
 
-    Kept apart from the purchase orders screen on purpose: an order is a thing
-    still owed, while these arrived and were received the moment they were
-    entered, so the two lists answer different questions.
+    Read the same way as the purchase orders board, because it answers the same
+    kind of question about the same records -- but for the other route in. An
+    order is a thing still owed; these arrived, were received and were billed
+    the moment they were entered, so what the rows are waiting on is different
+    even though the shape is not.
     """
 
     page = "inventory.purchase_orders"
     template_name = "inventory/purchase_invoice_list.html"
     context_object_name = "invoices"
+    paginate_by = 25
     queryset = (
         PurchaseOrder.objects
         .filter(is_direct=True)
-        .select_related("supplier")
-        .prefetch_related("items")
+        .select_related("supplier", "created_by")
+        .prefetch_related("items__inventory_item", "items__uom", "bills")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
     filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "purchase_date", "label": "Invoice date"}]
+    # Only what the database can order by. What each one came to is added up
+    # per row after the query, so its heading stays plain rather than offering
+    # a sort that would quietly lie about the order.
+    sort_fields = {
+        "purchase_num": "seq_num",
+        "purchase_date": ("purchase_date", "id"),
+        "supplier": "supplier__name",
+    }
+    default_sort = "purchase_date"
+    default_sort_dir = "desc"
+
+    PER_PAGE_OPTIONS = (10, 25, 50, 100)
+
+    def get_paginate_by(self, queryset):
+        raw = (self.request.GET.get("per_page") or "").strip()
+        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
+            return int(raw)
+        return self.paginate_by
 
     def get_filter_specs(self):
         supplier_choices = list(
             Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
         )
         return [
-            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
-             "value": self.request.GET.get("supplier", "")},
+            {"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
+             "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
         ]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # An entry whose bill never posted. Counted in the database rather than
+        # in Python so it narrows the page itself, not just what is shown of it.
+        if (self.request.GET.get("state") or "").strip() == "unbilled":
+            queryset = queryset.annotate(
+                live_bills=Count("bills", filter=~Q(bills__status=STATUS_REVERSED))
+            ).filter(live_bills=0)
+        return queryset
+
+    def tiles(self):
+        """The figures over everything the filters allow, not just this page.
+
+        Counted over the filtered set rather than the page, because "how much
+        did we buy without raising an order" is a question about the whole of
+        it. One pass in Python: the lines are prefetched anyway for the rows.
+        """
+        rows = list(
+            super(PurchaseInvoiceListView, self).get_queryset()
+            .select_related("supplier")
+            .prefetch_related("items", "bills")
+        )
+        today = timezone.localdate()
+        value = Decimal("0.00")
+        month_value = Decimal("0.00")
+        month_count = 0
+        unbilled_count = 0
+        unbilled_value = Decimal("0.00")
+        suppliers = set()
+        for row in rows:
+            total = sum((line.total_amount for line in row.items.all()), Decimal("0.00"))
+            value += total
+            suppliers.add(row.supplier_id)
+            if row.purchase_date and (row.purchase_date.year, row.purchase_date.month) == (today.year, today.month):
+                month_count += 1
+                month_value += total
+            # A direct purchase posts its own bill as it is entered, so one
+            # without a live bill is not normal: it is an entry that did not
+            # finish, and its value is sitting in GRN clearing.
+            if not any(bill.status != STATUS_REVERSED for bill in row.bills.all()):
+                unbilled_count += 1
+                unbilled_value += total
+        # The month each tile would filter to, worked out here so the template
+        # prints a date range rather than assembling one.
+        month_start = today.replace(day=1)
+        next_month = (month_start + timedelta(days=32)).replace(day=1)
+        return {
+            "count": len(rows),
+            "value": value,
+            "month_count": month_count,
+            "month_value": month_value,
+            "month_from": month_start.isoformat(),
+            "month_to": (next_month - timedelta(days=1)).isoformat(),
+            "supplier_count": len(suppliers),
+            "unbilled_count": unbilled_count,
+            "unbilled_value": unbilled_value,
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # What each bill came to, from its own lines, so the figure on screen is
+        carried = self.request.GET.copy()
+        for key in ("tab", "page"):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
+        context["per_page"] = self.get_paginate_by(None)
+        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        context["filters_active"] = any(
+            (self.request.GET.get(key) or "").strip()
+            for key in ("q", "supplier", "date_from", "date_to", "state")
+        )
+        context["state"] = (self.request.GET.get("state") or "").strip()
+        # What the tiles link to keeps whatever the filter bar is set to, so a
+        # tile narrows the list rather than resetting it.
+        kept = self.request.GET.copy()
+        for key in ("page", "state", "date_from", "date_to"):
+            kept.pop(key, None)
+        context["tile_query"] = kept.urlencode()
+        context["tiles"] = self.tiles()
+        context["export_url"] = reverse_lazy("inventory:purchase_invoice_export")
+        # What each one came to, from its own lines, so the figure on screen is
         # the one the books hold rather than a second total kept in step by hand.
         page_total = Decimal("0.00")
         for invoice in context["invoices"]:
             lines = list(invoice.items.all())
             invoice.line_count = len(lines)
             invoice.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
+            invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            # The bill this purchase posted for itself. Named on the row, so
+            # the entry can be followed through to the payable it created.
+            live = [bill for bill in invoice.bills.all() if bill.status != STATUS_REVERSED]
+            invoice.bill = live[0] if live else None
             page_total += invoice.total_amount
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
         return context
+
+
+class PurchaseInvoiceExportView(InventoryListMixin, TableExportView):
+    """The purchase invoice rows on screen, in whichever format was asked for."""
+
+    page = "inventory.purchase_orders"
+    columns = PURCHASE_INVOICE_COLUMNS
+    filename = "purchase-invoices"
+    title = "Purchase Invoices"
+
+    def get_rows(self):
+        listing = PurchaseInvoiceListView(request=self.request, kwargs={}, args=())
+        rows = list(listing.get_queryset())
+        # The figures the table shows are worked out on the way to the page, so
+        # they are worked out here too rather than exporting blank columns.
+        for row in rows:
+            lines = list(row.items.all())
+            row.line_count = len(lines)
+            row.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
+            row.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            live = [bill for bill in row.bills.all() if bill.status != STATUS_REVERSED]
+            row.bill = live[0] if live else None
+        return rows
 
 
 class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):

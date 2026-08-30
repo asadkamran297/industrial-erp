@@ -221,7 +221,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
   .export-badge--csv { background: #0f766e; }
   .export-badge--doc { background: #1d4ed8; }
   .export-badge--pdf { background: #b91c1c; }
-  .export-badge--json { background: #7c3aed; font-size: .75rem; }
   .export-badge--copy { background: #475569; font-size: .8125rem; }
 </style>
 
@@ -305,7 +304,10 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
       </svg>
     </button>
     <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
-      {% with post_to=columns_action|default:columns_url %}
+      {# firstof, not a default filter: a filter argument that the screen does #}
+      {# not set raises rather than falling back, so a list with no column     #}
+      {# menu at all would take the whole bar down with it.                    #}
+      {% firstof columns_action columns_url "" as post_to %}
       {% if column_menu and post_to %}
       <form method="post" action="{{ post_to }}">{% csrf_token %}
         <input type="hidden" name="back" value="{{ base_query }}&amp;tab={{ current_tab }}">
@@ -323,7 +325,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
         </div>
       </form>
       {% endif %}
-      {% endwith %}
 
       {% if per_page_options %}
       <p class="settings-heading">Rows per page</p>
@@ -389,10 +390,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
       <a class="export-item" role="menuitem" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf">
         <span class="export-badge export-badge--pdf">PDF</span>
         <span><strong>PDF / Print</strong><em>Opens the print sheet</em></span>
-      </a>
-      <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=json">
-        <span class="export-badge export-badge--json">{ }</span>
-        <span><strong>JSON</strong><em>For another system to read</em></span>
       </a>
 
       <p class="settings-heading">Copy</p>

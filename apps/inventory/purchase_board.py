@@ -313,6 +313,24 @@ def export_columns(session):
     return COLUMNS.exportable(session)
 
 
+# ── Purchase invoices screen ───────────────────────────────────────────────
+# Purchases entered straight off a supplier's bill, with no order raised first.
+# The figures are added up from the lines rather than stored on the order, so
+# the export asks the same questions of a row that the screen does.
+PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
+    Column("purchase_num", "Invoice #", locked=True, export=lambda o: o.purchase_num),
+    Column("supplier_ref", "Supplier ref", export=lambda o: o.quot_num or ""),
+    Column("purchase_date", "Date", export=lambda o: o.purchase_date),
+    Column("supplier", "Supplier", export=lambda o: o.supplier.name),
+    Column("buyer", "Entered by", export=lambda o: (
+        o.created_by.get_full_name() or o.created_by.username) if o.created_by else ""),
+    Column("lines", "Items", export=lambda o: o.line_count),
+    Column("quantity", "Quantity", export=lambda o: o.qty_total),
+    Column("bill", "Bill", export=lambda o: o.bill.bill_num if o.bill else "Not billed"),
+    Column("value", "Amount", export=lambda o: o.total_amount),
+))
+
+
 # ── Goods receipt screen ───────────────────────────────────────────────────
 # Its own table, its own choice: the two screens list the same records but are
 # read for different reasons, so what one person wants on show here is not what

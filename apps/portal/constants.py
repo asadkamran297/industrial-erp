@@ -41,10 +41,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         # Straight off the supplier's bill, no order first.
         NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
         NavigationItem("Goods Receipt (GRN)", permission="inventory.grn.index", url_name="inventory:grn_list"),
-        # Sits after the receipt on purpose: a bill is entered against goods
-        # that already arrived, and the order of the menu is the order of the
-        # work.
-        NavigationItem("Purchase Bills", permission="inventory.purchase_orders.index", url_name="inventory:purchase_bill_list"),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
