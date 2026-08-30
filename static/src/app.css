@@ -108,7 +108,24 @@
   --accent-3: color-mix(in srgb, var(--primary-color) 45%, #06b6d4);
   --grad-primary: linear-gradient(135deg, var(--primary-color), var(--accent-2));
   --grad-cool: linear-gradient(135deg, var(--accent-3), var(--primary-color));
+}
 
+/* The brand hue is chosen per installation and written onto <body> as an
+   inline style, so everything derived from it has to be declared there too.
+   A custom property is substituted in the scope it is *declared* in: computed
+   on :root, where --primary-color does not exist, each of these resolves to
+   the guaranteed-invalid value and any rule using it silently loses its
+   background -- which is how the active sidebar pill turned into a white box
+   with white text on it. Declared here, they see the body's own hue. */
+body {
+  --ring-primary: color-mix(in srgb, var(--primary-color) 22%, transparent);
+  --accent-2: color-mix(in srgb, var(--primary-color) 55%, #8b5cf6);
+  --accent-3: color-mix(in srgb, var(--primary-color) 45%, #06b6d4);
+  --grad-primary: linear-gradient(135deg, var(--primary-color), var(--accent-2));
+  --grad-cool: linear-gradient(135deg, var(--accent-3), var(--primary-color));
+}
+
+:root {
   /* Semantic colours are fixed: money that is up must read the same whatever
      the brand hue is. */
   --good: #059669;
@@ -214,16 +231,18 @@ textarea {
   background-color: rgb(51 65 85);
 }
 
+/* The menu still scrolls when it is taller than the window -- it has to, or
+   the last items would be unreachable -- but the bar itself is not drawn. A
+   permanent grey rail down the side of the navigation reads as chrome the
+   reader has to account for, and it is the one part of the page nobody is
+   looking at. */
 .portal-sidebar-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(203 213 225) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .portal-sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.portal-sidebar-scroll::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  background: rgb(203 213 225);
+  width: 0;
+  height: 0;
 }
 
 /* ------------------------------------------------------------------ *
