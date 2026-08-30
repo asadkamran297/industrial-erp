@@ -31,6 +31,7 @@ from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCan
 from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
+from .models import TWO_DP
 from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
 
 User = get_user_model()
@@ -1273,6 +1274,77 @@ class ItemNextCodeView(InventoryManageMixin, View):
         return JsonResponse({"prefix": prefix, "code": InventoryItem.next_code(prefix)})
 
 
+class SupplierGRNOptionsView(InventoryListMixin, View):
+    """This supplier's goods receipts, as the direct purchase screen needs them.
+
+    Answers the picker rather than a page: the screen asks the moment a
+    supplier is chosen, so the notes arrive without a reload. Grouped by the
+    note the goods came in on, because that is the document somebody is holding
+    when they type the bill.
+    """
+
+    page = "inventory.purchase_orders"
+
+    def get(self, request, *args, **kwargs):
+        supplier_id = (request.GET.get("supplier") or "").strip()
+        if not supplier_id.isdigit():
+            return JsonResponse({"notes": []})
+
+        receipts = (
+            PurchaseOrderItemReceived.objects
+            .filter(
+                purchase_order_item__purchase_order__supplier_id=int(supplier_id),
+                reversed=False,
+                reversal_of__isnull=True,
+            )
+            .select_related(
+                "purchase_order_item__purchase_order",
+                "purchase_order_item__uom",
+                "inventory_item__uom",
+            )
+            .order_by("-receive_date", "-id")[:200]
+        )
+
+        notes = {}
+        for receipt in receipts:
+            number = receipt.grn_number or "—"
+            line = receipt.purchase_order_item
+            note = notes.setdefault(number, {
+                "number": number,
+                "date": receipt.receive_date.isoformat() if receipt.receive_date else "",
+                "date_text": receipt.receive_date.strftime("%d-%m-%Y") if receipt.receive_date else "",
+                "order": line.purchase_order.purchase_num,
+                "quantity": Decimal("0.0000"),
+                "value": Decimal("0.00"),
+                "lines": [],
+            })
+            units = receipt.received_units
+            rate = receipt.retail_price or Decimal("0.00")
+            amount = (units * rate).quantize(TWO_DP)
+            note["quantity"] += units
+            note["value"] += amount
+            note["lines"].append({
+                "item_id": receipt.inventory_item_id,
+                "name": receipt.descr,
+                "quantity": float(units),
+                "uom_id": line.uom_id or receipt.inventory_item.uom_id or "",
+                "unit": line.uom.title if line.uom else (
+                    receipt.inventory_item.uom.title if receipt.inventory_item.uom else ""),
+                "rate": float(rate),
+                "amount": float(amount),
+            })
+
+        payload = []
+        for note in notes.values():
+            payload.append({
+                **note,
+                "quantity": float(note["quantity"]),
+                "value": float(note["value"]),
+                "items": len(note["lines"]),
+            })
+        return JsonResponse({"notes": payload})
+
+
 class DirectPurchaseCreateView(InventoryManageMixin, View):
     """Enter a supplier bill without raising an order first.
 
@@ -1960,6 +2032,68 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             page_total += invoice.total_amount
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
+        return context
+
+
+class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
+    """One purchase entered straight off a supplier's bill.
+
+    Read as the paper it stands for, the same way a purchase order is: who it
+    is from, what was bought, what it comes to. What is different is that
+    nothing here is still owed -- the goods were received and the bill posted
+    as it was entered -- so the page states what it created rather than what it
+    is waiting on.
+    """
+
+    page = "inventory.purchase_orders"
+    model = PurchaseOrder
+    template_name = "inventory/purchase_invoice_detail.html"
+    context_object_name = "invoice"
+    queryset = (
+        PurchaseOrder.objects
+        .filter(is_direct=True)
+        .select_related("supplier", "created_by")
+        .prefetch_related("items__inventory_item", "items__uom", "items__receipts", "bills__items")
+    )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        order = self.object
+        lines = list(order.items.all())
+        context["lines"] = lines
+        context["goods_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
+        context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+
+        # The money lives on the bill this purchase posted for itself, not on
+        # the order: the order carries lines, the bill carries what was charged.
+        live = [bill for bill in order.bills.all() if bill.status != STATUS_REVERSED]
+        bill = live[0] if live else None
+        context["bill"] = bill
+        context["reversed_bills"] = [b for b in order.bills.all() if b.status == STATUS_REVERSED]
+
+        # The goods it booked in, as the notes they came in under -- one entry
+        # per note rather than per posting, because a note is the document.
+        notes = {}
+        for line in lines:
+            for receipt in line.receipts.all():
+                number = receipt.grn_number or "—"
+                note = notes.setdefault(number, {
+                    "number": number, "date": receipt.receive_date,
+                    "quantity": Decimal("0.0000"), "value": Decimal("0.00"),
+                    "dead": True, "lines": [],
+                })
+                note["lines"].append(receipt)
+                if receipt.receive_date and (not note["date"] or receipt.receive_date > note["date"]):
+                    note["date"] = receipt.receive_date
+                if not receipt.reversed and receipt.reversal_of_id is None:
+                    note["dead"] = False
+                    note["quantity"] += receipt.received_units
+                    note["value"] += receipt.landed_amount or Decimal("0.00")
+        context["receipt_notes"] = sorted(
+            notes.values(), key=lambda note: (note["date"] or date.min, note["number"]), reverse=True
+        )
+        context["linked_documents"] = linked_documents(order)
+        context["invoices_url"] = reverse_lazy("inventory:purchase_invoice_list")
         return context
 
 

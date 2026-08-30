@@ -1,0 +1,395 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<style>
+  /* The invoice as the paper it stands for. Same sheet as the purchase order,
+     because the two are read one after the other and a purchase that looked
+     like a different product would only make the reader work out afresh where
+     to look. */
+  .pur-doc-sheet {
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    background: #fff;
+    padding: 1.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  }
+  .dark .pur-doc-sheet { border-color: #1e293b; background: #0f172a; }
+  .pur-doc-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #0f172a;
+  }
+  .dark .pur-doc-top { border-bottom-color: #cbd5e1; }
+  .pur-doc-org { font-size: 1.25rem; font-weight: 800; }
+  .pur-doc-sub { font-size: .8125rem; color: #94a3b8; }
+  .pur-doc-stamp { text-align: right; }
+  .pur-doc-kind {
+    font-size: .875rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--primary-color);
+  }
+  .pur-doc-no { font-size: 1.125rem; font-weight: 800; }
+  .pur-doc-date { font-size: .8125rem; color: #94a3b8; }
+
+  /* Lifted from the register so the two screens cannot drift apart. */
+  .po-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .25rem .625rem;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
+  .po-pill--done { color: #047857; background: #d1fae5; }
+  .po-pill--bill { color: #dc2626; background: #fee2e2; }
+
+  .pur-doc-parties {
+    display: grid;
+    gap: 1.5rem;
+    padding: 1.25rem 0;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 768px) {
+    .pur-doc-parties { grid-template-columns: 1fr 1fr; }
+    .pur-doc-right { text-align: right; }
+  }
+  .pur-doc-cap {
+    font-size: .6875rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .pur-doc-name { font-size: 1rem; font-weight: 700; }
+  .pur-doc-table tfoot .pur-doc-total td {
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+    font-weight: 700;
+  }
+  .dark .pur-doc-table tfoot .pur-doc-total td { border-top-color: #1e293b; background: rgba(15, 23, 42, .6); }
+
+  .pur-doc-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-top: 1.25rem;
+  }
+  .pur-doc-narration { font-size: .875rem; }
+
+  /* What the supplier charged, as the bill states it: the goods, then what was
+     added or taken off, then the figure that became the payable. Read down the
+     right edge, which is where a total is looked for. */
+  .pur-sums { min-width: 15rem; margin-left: auto; }
+  .pur-sums > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: .1875rem 0;
+    font-size: .8125rem;
+    color: #64748b;
+  }
+  .dark .pur-sums > div { color: #94a3b8; }
+  .pur-sums b { font-weight: 600; color: #334155; font-variant-numeric: tabular-nums; }
+  .dark .pur-sums b { color: #e2e8f0; }
+  .pur-sums .pur-sums-net {
+    margin-top: .375rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: .5rem;
+    font-size: .875rem;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .dark .pur-sums .pur-sums-net { border-top-color: #1e293b; color: #f1f5f9; }
+  .pur-sums .pur-sums-net b { font-size: 1.125rem; color: var(--primary-color); }
+
+  .pur-in { font-weight: 600; color: #047857; }
+  .pur-nil { color: #94a3b8; }
+
+  /* The chain this purchase created, as chips: kind first so the row can be
+     read down its left edge, the number beside it. */
+  .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .pur-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .375rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    background: #fff;
+    padding: .375rem .625rem;
+    font-size: .75rem;
+    line-height: 1.2;
+  }
+  .pur-link:hover { border-color: var(--primary-color); background: #f8fafc; }
+  .dark .pur-link { border-color: #334155; background: #0f172a; }
+  .dark .pur-link:hover { background: #1e293b; }
+  .pur-link-kind { color: #64748b; }
+  .pur-link-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
+  .pur-link--dead { opacity: .55; }
+  .pur-link--dead .pur-link-num { color: #94a3b8; text-decoration: line-through; }
+  .pur-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .625rem;
+    background: #fff;
+    padding: .4375rem .75rem;
+  }
+  .dark .pur-chain { border-color: #1e293b; background: #0f172a; }
+  .pur-chain-cap {
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+</style>
+
+<section class="space-y-5">
+
+  <div class="pur-head-row pur-noprint">
+    <div class="flex items-start gap-3">
+      {% include "components/ui/back_button.html" with back_url=invoices_url %}
+      <div>
+        <h1 class="pur-title title-accent">Purchase Invoice</h1>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' invoice.pk %}" target="_blank">Print</a>
+      {% if bill %}
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_bill_detail' bill.pk %}">Bill</a>
+      {% endif %}
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' invoice.supplier_id %}">Supplier</a>
+    </div>
+  </div>
+
+  {# A purchase entered this way posts its own bill as it is typed, so one #}
+  {# without a live bill did not finish: its value is sitting in GRN       #}
+  {# clearing saying nobody has been invoiced for goods that are in stock. #}
+  {% if not bill %}
+  <div class="pur-note pur-note--bad">
+    <span class="pur-note-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 9v4M12 17h.01"></path>
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+      </svg>
+    </span>
+    <div class="flex-1">
+      <p><b>No bill posted against this purchase.</b></p>
+      <p>
+        The goods were taken into stock, so their value is waiting in GRN clearing rather than in
+        the supplier's account. Enter the bill to move it across.
+      </p>
+      {% if can_add %}
+      <a class="pur-btn pur-btn--ghost mt-3"
+         href="{% url 'inventory:purchase_bill_create' %}?order={{ invoice.pk }}&amp;supplier={{ invoice.supplier_id }}">Enter the bill</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Linked documents ────────────────────────────────────────────────── #}
+  {% if linked_documents %}
+  <div class="pur-chain">
+    <span class="pur-chain-cap">Linked documents</span>
+    {% for link in linked_documents %}
+    <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
+       {% if link.new_tab %}target="_blank"{% endif %}>
+      <span class="pur-link-kind">{{ link.kind }}</span>
+      <span class="pur-link-num">{{ link.label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── The document ────────────────────────────────────────────────────── #}
+  <div class="pur-doc-sheet">
+    <div class="pur-doc-top">
+      <div>
+        <p class="pur-doc-org">{{ system_setting.company_name }}</p>
+        {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
+      </div>
+      <div class="pur-doc-stamp">
+        <p class="pur-doc-kind">Purchase Invoice</p>
+        <p class="pur-doc-no">{{ invoice.purchase_num }}</p>
+        <p class="pur-doc-date">{{ invoice.purchase_date|dmy }}</p>
+      </div>
+    </div>
+
+    <div class="pur-doc-parties">
+      <div>
+        <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ invoice.supplier.name }}</span></p>
+        {# Their number on the paper this was typed from, not ours. #}
+        {% if invoice.quot_num %}
+        <p class="mt-2"><span class="pur-doc-cap">Supplier's bill no:</span> {{ invoice.quot_num }}</p>
+        {% endif %}
+        <p class="mt-2"><span class="pur-doc-cap">Entered by:</span>
+          {{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</p>
+      </div>
+      {# The same words the register uses: one purchase shown on two screens #}
+      {# must not appear to be in two different states.                       #}
+      <p class="pur-doc-right">
+        <span class="pur-doc-cap">Status:</span>
+        {% if bill %}<span class="po-pill po-pill--done">Billed</span>
+        {% else %}<span class="po-pill po-pill--bill">No bill</span>{% endif %}
+      </p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="pur-table pur-doc-table">
+        <thead>
+          <tr>
+            <th style="width: 2.5rem;">#</th>
+            <th>Item</th>
+            <th class="pur-num">Qty</th>
+            <th>Unit</th>
+            <th class="pur-num">Rate</th>
+            <th class="pur-num">Discount</th>
+            <th class="pur-num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in lines %}
+          <tr>
+            <td class="pur-muted">{{ line.seq_num }}</td>
+            <td>
+              <span class="pur-strong">{{ line.descr }}</span>
+              {% if line.inventory_item.item_code %}<span class="pur-sub">{{ line.inventory_item.item_code }}</span>{% endif %}
+            </td>
+            <td class="pur-num">{{ line.quantity|qty }}</td>
+            <td>{{ line.uom.title|default:"&mdash;" }}</td>
+            <td class="pur-num">{{ line.rate|amount }}</td>
+            <td class="pur-num">{{ line.discount_amount|amount }}</td>
+            <td class="pur-num pur-strong">{{ line.total_amount|amount }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7"><div class="pur-empty">Nothing on this invoice.</div></td></tr>
+          {% endfor %}
+        </tbody>
+        {% if lines %}
+        <tfoot>
+          <tr class="pur-doc-total">
+            <td colspan="2">Total</td>
+            <td class="pur-num">{{ qty_total|qty }}</td>
+            <td colspan="3"></td>
+            <td class="pur-num">{{ goods_total|amount }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+
+    <div class="pur-doc-foot">
+      <div>
+        <p class="pur-doc-cap">Narration</p>
+        <p class="pur-doc-narration">{{ invoice.descr|default:"&mdash;"|linebreaksbr }}</p>
+      </div>
+      {# What the supplier actually charged, read off the bill this purchase #}
+      {# posted for itself rather than added up again here.                   #}
+      <div class="pur-sums">
+        <div><span>Goods</span><b>{{ goods_total|amount }}</b></div>
+        {% if bill %}
+        {% if bill.freight_amount %}<div><span>Freight</span><b>{{ bill.freight_amount|amount }}</b></div>{% endif %}
+        {% if bill.tax_amount %}<div><span>Sales tax</span><b>{{ bill.tax_amount|amount }}</b></div>{% endif %}
+        <div class="pur-sums-net"><span>Invoice total</span><b>{{ bill.total_amount|amount }}</b></div>
+        {% else %}
+        <div class="pur-sums-net"><span>Invoice total</span><b>{{ goods_total|amount }}</b></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── What it booked into stock ───────────────────────────────────────── #}
+  {# A purchase entered this way receives itself as it is typed, so the note #}
+  {# below is what it created rather than something that arrived later.      #}
+  {% if receipt_notes %}
+  <div class="pur-card" x-data="{ open: [] }">
+    <div class="pur-card-head">
+      <h2 class="pur-card-title">Goods taken into stock</h2>
+      <span class="pur-card-hint">Received as this invoice was entered</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="pur-table">
+        <thead>
+          <tr>
+            <th style="width: 2.5rem;"></th>
+            <th>Goods receipt</th>
+            <th>Date</th>
+            <th class="pur-num">Items</th>
+            <th class="pur-num">Quantity</th>
+            <th class="pur-num">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for note in receipt_notes %}
+          <tr {% if note.dead %}class="pur-void"{% endif %}>
+            <td>
+              <button type="button" class="pur-fold"
+                      @click="open = open.includes({{ forloop.counter0 }}) ? open.filter(n => n !== {{ forloop.counter0 }}) : [...open, {{ forloop.counter0 }}]"
+                      aria-label="Show the items on this goods receipt">
+                <span x-text="open.includes({{ forloop.counter0 }}) ? '−' : '+'">+</span>
+              </button>
+            </td>
+            <td class="pur-strong">
+              <a class="pur-doc" href="{% url 'inventory:grn_detail' note.number %}">{{ note.number }}</a>
+            </td>
+            <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
+            <td class="pur-num pur-muted">{{ note.lines|length }}</td>
+            <td class="pur-num pur-in">{{ note.quantity|qty }}</td>
+            <td class="pur-num pur-strong">{{ note.value|amount }}</td>
+          </tr>
+          <tr class="pur-lines-row" x-show="open.includes({{ forloop.counter0 }})" x-cloak>
+            <td colspan="6" class="pur-lines-cell">
+              <table class="pur-lines">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="pur-num">Received</th>
+                    <th class="pur-num">Rate</th>
+                    <th class="pur-num">Value</th>
+                    <th>Billed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for receipt in note.lines %}
+                  <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
+                    <td class="pur-strong">{{ receipt.descr }}</td>
+                    <td class="pur-num pur-in">{{ receipt.received_units|qty }}</td>
+                    <td class="pur-num">{{ receipt.retail_price|amount }}</td>
+                    <td class="pur-num">{{ receipt.landed_amount|amount }}</td>
+                    <td>
+                      {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
+                      {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
+                      {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
+                      {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</section>
+{% endblock %}

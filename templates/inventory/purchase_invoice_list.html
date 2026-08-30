@@ -307,7 +307,7 @@
             </button>
           </td>
           <td>
-            <a class="po-num" href="{% url 'inventory:purchase_order_detail' invoice.pk %}">{{ invoice.purchase_num }}</a>
+            <a class="po-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.purchase_num }}</a>
             {# The supplier's own number on the paper it was entered from. #}
             {% if invoice.quot_num %}<span class="po-sub">{{ invoice.quot_num }}</span>{% endif %}
           </td>
@@ -326,7 +326,7 @@
           <td class="po-right font-semibold">{{ invoice.total_amount|amount }}</td>
           <td class="print-hide">
             <div class="po-row-actions">
-              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_order_detail' invoice.pk %}"
+              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}"
                  title="View this purchase invoice" aria-label="View this purchase invoice">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
