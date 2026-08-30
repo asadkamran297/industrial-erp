@@ -3700,25 +3700,17 @@ class GRNDetailView(InventoryListMixin, TemplateView):
             context["note_state"] = "part_billed"
         else:
             context["note_state"] = "billed"
-        # The chain this note belongs to. The order it came in against leads,
-        # because that is what a delivery is read against; the notes, bills and
-        # returns hanging off the same order follow. A GRN chip goes to the
-        # note's own page rather than to a print sheet -- from here, the reader
-        # is comparing deliveries, not printing one.
-        links = [{
+        # The order this delivery came in against, and nothing else. The rest
+        # of the chain -- the other notes, the bills, anything sent back --
+        # hangs off the order, so it is read there rather than repeated on
+        # every note booked against it.
+        context["linked_documents"] = [{
             "kind": "Purchase Order",
             "label": order.purchase_num,
             "url": reverse("inventory:purchase_order_detail", args=[order.pk]),
             "new_tab": False,
             "dead": order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT),
         }]
-        for link in linked_documents(order):
-            # The note being read is not a link back to itself, so it is left
-            # out of its own chain rather than drawn as a chip going nowhere.
-            if link["kind"] == "GRN" and link["label"] == first.grn_number:
-                continue
-            links.append(link)
-        context["linked_documents"] = links
         context["reversal_form"] = ReversalReasonForm()
         context["grn_url"] = reverse_lazy("inventory:grn_list")
         return context

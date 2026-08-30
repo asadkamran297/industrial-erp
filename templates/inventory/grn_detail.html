@@ -97,32 +97,46 @@
 
   .pur-in { font-weight: 600; color: #047857; }
 
-  /* What the gate recorded: a short row of facts about the delivery, read
-     across rather than as a stack of labelled lines. */
+  /* What the gate recorded: a panel of facts about the delivery. Ruled like
+     a form rather than floated on a grey block, so it reads as part of the
+     document and lines up whatever is filled in.
+
+     The rules are the container's own background showing through a one-pixel
+     gap, which keeps every cell the same height without a border on each. */
   .pur-gate {
     display: grid;
-    gap: .75rem 2rem;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, auto));
-    justify-content: start;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1px;
+    overflow: hidden;
     margin: 0 0 1.25rem;
-    border: 1px solid #f1f5f9;
-    border-radius: .625rem;
-    background: #f8fafc;
-    padding: .75rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    background: #e2e8f0;
   }
-  .dark .pur-gate { border-color: #1e293b; background: rgba(15, 23, 42, .55); }
+  .dark .pur-gate { border-color: #1e293b; background: #1e293b; }
+  .pur-gate > div { background: #fff; padding: .625rem .875rem; }
+  .dark .pur-gate > div { background: #0f172a; }
   .pur-gate dt {
     font-size: .625rem;
     font-weight: 700;
-    letter-spacing: .08em;
+    letter-spacing: .07em;
     text-transform: uppercase;
     color: #94a3b8;
+    white-space: nowrap;
   }
-  .pur-gate dd { margin: .125rem 0 0; font-size: .875rem; font-weight: 600; }
+  .pur-gate dd {
+    margin: .25rem 0 0;
+    font-size: .8125rem;
+    font-weight: 600;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .dark .pur-gate dd { color: #e2e8f0; }
   /* The store's own words run to a sentence, so they take the width of the
-     row rather than a column the size of a vehicle number. */
+     panel rather than a column the size of a vehicle number. */
   .pur-gate-wide { grid-column: 1 / -1; }
-  .pur-gate-wide dd { font-weight: 500; line-height: 1.45; }
+  .pur-gate-wide dd { font-weight: 500; line-height: 1.5; font-variant-numeric: normal; }
   /* What somebody wrote on the order line, kept under the item it is about. */
   .pur-remark { font-style: italic; }
   .pur-doc-narration { font-size: .875rem; }
@@ -130,8 +144,26 @@
   .pur-due { font-weight: 600; color: #b45309; }
   .pur-nil { color: #94a3b8; }
 
-  /* The chain this note belongs to, as chips: kind first so the row can be
-     read down its left edge, the number beside it. */
+  /* The order this note was booked against, as a chip: kind first so the
+     row can be read down its left edge, the number beside it. */
+  .pur-chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: .625rem;
+    background: #fff;
+    padding: .4375rem .75rem;
+  }
+  .dark .pur-chain { border-color: #1e293b; background: #0f172a; }
+  .pur-chain-cap {
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
   .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
   .pur-link {
     display: inline-flex;
@@ -202,24 +234,19 @@
   </div>
 
   {# ── Linked documents ────────────────────────────────────────────────── #}
+  {# One chip, so it reads as a line rather than a panel: the heading and    #}
+  {# the order sit on the same row.                                          #}
   {% if linked_documents %}
-  <div class="pur-card">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Linked documents</h2>
-      <span class="pur-card-hint">The chain this note belongs to</span>
-    </div>
-    <div class="pur-card-body">
-      <div class="pur-links">
-        {% for link in linked_documents %}
-        <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
-           {% if link.new_tab %}target="_blank"{% endif %}
-           {% if link.title %}title="{{ link.title }}"{% endif %}>
-          <span class="pur-link-kind">{{ link.kind }}</span>
-          <span class="pur-link-num">{{ link.label }}</span>
-        </a>
-        {% endfor %}
-      </div>
-    </div>
+  <div class="pur-chain">
+    <span class="pur-chain-cap">Linked documents</span>
+    {% for link in linked_documents %}
+    <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
+       {% if link.new_tab %}target="_blank"{% endif %}
+       {% if link.title %}title="{{ link.title }}"{% endif %}>
+      <span class="pur-link-kind">{{ link.kind }}</span>
+      <span class="pur-link-num">{{ link.label }}</span>
+    </a>
+    {% endfor %}
   </div>
   {% endif %}
 
