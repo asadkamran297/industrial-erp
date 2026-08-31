@@ -15,7 +15,9 @@ for candidate in /opt/alt/python313/bin/python3 /opt/alt/python312/bin/python3 /
 done
 "$PYBIN" -V
 
-if [ ! -x "$VENV/bin/python" ]; then
+# A half-built venv from a failed run has bin/python but no pip; rebuild it.
+if [ ! -x "$VENV/bin/pip" ]; then
+    rm -rf "$VENV"
     "$PYBIN" -m venv --copies "$VENV"
 fi
 
