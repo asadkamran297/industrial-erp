@@ -8,8 +8,15 @@ VENV="$HOME/virtualenv/industrial_erp"
 
 cd "$APPROOT"
 
+# CloudLinux blocks symlinking the interpreter, so the venv copies it.
+PYBIN="${PYBIN:-/usr/bin/python3}"
+for candidate in /opt/alt/python313/bin/python3 /opt/alt/python312/bin/python3 /opt/alt/python311/bin/python3; do
+    [ -x "$candidate" ] && PYBIN="$candidate" && break
+done
+"$PYBIN" -V
+
 if [ ! -x "$VENV/bin/python" ]; then
-    /usr/bin/python3 -m venv "$VENV"
+    "$PYBIN" -m venv --copies "$VENV"
 fi
 
 "$VENV/bin/pip" install --upgrade pip
