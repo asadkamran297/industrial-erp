@@ -4,21 +4,15 @@
 set -o errexit
 
 APPROOT="${APPROOT:-$HOME/industrial_erp}"
-VENV="$HOME/virtualenv/industrial_erp"
+# The CloudLinux Python selector owns this virtualenv and Passenger boots the
+# app with its interpreter, so install into it rather than building our own.
+VENV="${VENV:-$HOME/virtualenv/industrial_erp/3.12}"
 
 cd "$APPROOT"
 
-# CloudLinux blocks symlinking the interpreter, so the venv copies it.
-PYBIN="${PYBIN:-/usr/bin/python3}"
-for candidate in /opt/alt/python313/bin/python3 /opt/alt/python312/bin/python3 /opt/alt/python311/bin/python3; do
-    [ -x "$candidate" ] && PYBIN="$candidate" && break
-done
-"$PYBIN" -V
-
-# A half-built venv from a failed run has bin/python but no pip; rebuild it.
 if [ ! -x "$VENV/bin/pip" ]; then
-    rm -rf "$VENV"
-    "$PYBIN" -m venv --copies "$VENV"
+    echo "No virtualenv at $VENV; create the Python app in cPanel first." >&2
+    exit 1
 fi
 
 "$VENV/bin/pip" install --upgrade pip
