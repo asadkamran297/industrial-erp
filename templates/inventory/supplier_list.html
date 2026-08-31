@@ -111,7 +111,7 @@
                     {% if supplier.payable_code %}
                     <a class="toolbar-btn" href="{% url 'finance:account_ledger' %}?account_no={{ supplier.payable_code|urlencode }}">Ledger</a>
                     {% endif %}
-                    <a class="toolbar-btn" href="{% url 'inventory:purchase_order_list' %}?q={{ supplier.name|urlencode }}">Purchase orders</a>
+                    <a class="toolbar-btn" href="{% url 'inventory:purchase_order_board' %}?q={{ supplier.name|urlencode }}">Purchase orders</a>
                     <a class="toolbar-btn" href="{% url 'inventory:purchase_return_list' %}?q={{ supplier.name|urlencode }}">Returns</a>
                   </div>
                 </div>

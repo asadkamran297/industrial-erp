@@ -66,7 +66,9 @@ def build_navigation_item(
         return None
 
     href = resolve_nav_href(item)
-    is_active = is_href_active(href, current_path, current_query)
+    is_active = is_href_active(href, current_path, current_query) or any(
+        is_href_active(path, current_path, current_query) for path in item.match_paths
+    )
     has_active_child = any(child["is_active"] or child["is_open"] for child in children)
 
     return {

@@ -239,7 +239,7 @@
 
   <div class="pur-head-row pur-noprint">
     <div class="flex items-start gap-3">
-      {% url 'inventory:purchase_order_list' as orders_url %}
+      {% url 'inventory:purchase_order_board' as orders_url %}
       {% include "components/ui/back_button.html" with back_url=orders_url %}
       <div>
         <h1 class="pur-title title-accent">Purchase Order</h1>

@@ -1349,6 +1349,65 @@ class SupplierGRNOptionsView(InventoryListMixin, View):
         return JsonResponse({"notes": payload})
 
 
+class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
+    """This supplier's open orders, as the purchase invoice screen needs them.
+
+    Answers the picker rather than a page: the screen asks the moment a
+    supplier is chosen, so the orders arrive without a reload. Only what is
+    still to be billed is offered -- an order already invoiced in full has
+    nothing left to copy onto a bill.
+    """
+
+    page = "inventory.purchase_orders"
+
+    def get(self, request, *args, **kwargs):
+        supplier_id = (request.GET.get("supplier") or "").strip()
+        if not supplier_id.isdigit():
+            return JsonResponse({"orders": []})
+
+        rows = billable_order_lines(supplier=Supplier.objects.filter(pk=int(supplier_id)).first())
+
+        orders = {}
+        for line in rows:
+            order = line.purchase_order
+            held = orders.setdefault(order.pk, {
+                "id": order.pk,
+                "number": order.purchase_num,
+                "date": order.purchase_date.isoformat() if order.purchase_date else "",
+                "date_text": order.purchase_date.strftime("%d-%m-%Y") if order.purchase_date else "",
+                "status": order.get_status_display(),
+                "quantity": Decimal("0.0000"),
+                "value": Decimal("0.00"),
+                "lines": [],
+            })
+            # What is still open on the line, not what was ordered: an order
+            # part billed already offers the balance and nothing more.
+            pending = line.pending_bill_qty
+            rate = line.rate or Decimal("0.00")
+            amount = (pending * rate).quantize(TWO_DP)
+            held["quantity"] += pending
+            held["value"] += amount
+            held["lines"].append({
+                "order_item_id": line.pk,
+                "item_id": line.inventory_item_id,
+                "name": line.descr,
+                "quantity": float(pending),
+                "ordered": float(line.quantity or 0),
+                "uom_id": line.uom_id or line.inventory_item.uom_id or "",
+                "unit": line.uom.title if line.uom else (
+                    line.inventory_item.uom.title if line.inventory_item.uom else ""),
+                "rate": float(rate),
+                "amount": float(amount),
+            })
+
+        payload = [
+            {**order, "quantity": float(order["quantity"]), "value": float(order["value"]),
+             "items": len(order["lines"])}
+            for order in sorted(orders.values(), key=lambda o: o["date"], reverse=True)
+        ]
+        return JsonResponse({"orders": payload})
+
+
 class DirectPurchaseCreateView(InventoryManageMixin, View):
     """Enter a supplier bill without raising an order first.
 
@@ -1421,6 +1480,10 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
+        # A row copied off a purchase order carries that order line with it, so
+        # the bill is entered against the commitment rather than raising a
+        # second one for goods that were already ordered.
+        order_item_ids = posted.getlist("row_order_item")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
                 continue
@@ -1443,6 +1506,62 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
         bill_date = posted.get("bill_date") or str(timezone.localdate())
+
+        # ── Billing an order that was already raised ───────────────────────
+        billed = [(index, pk) for index, pk in enumerate(order_item_ids) if (pk or "").strip().isdigit()]
+        if billed:
+            if len(billed) != len(lines):
+                # Half a page off an order and half typed by hand cannot be one
+                # document: one half would bill a commitment and the other
+                # would raise a new one.
+                messages.error(
+                    request,
+                    "Every line must come from the same purchase order, or none of them. "
+                    "Remove the typed lines, or start again without copying the order.",
+                )
+                return render(request, self.template_name, self._context(posted=posted))
+
+            picked = {
+                item.pk: item
+                for item in PurchaseOrderItem.objects.filter(
+                    pk__in=[int(pk) for _index, pk in billed]
+                ).select_related("purchase_order", "inventory_item")
+            }
+            bill_lines = []
+            for position, (_index, pk) in enumerate(billed):
+                order_item = picked.get(int(pk))
+                if not order_item:
+                    messages.error(request, "One of the purchase order lines no longer exists.")
+                    return render(request, self.template_name, self._context(posted=posted))
+                row = lines[position]
+                bill_lines.append({
+                    "order_item": order_item,
+                    "quantity": row["quantity"],
+                    "rate": row["rate"] or order_item.rate,
+                })
+            try:
+                bill = create_purchase_bill(
+                    supplier=supplier,
+                    supplier_invoice_num=(posted.get("bill_number") or "").strip(),
+                    supplier_invoice_date=bill_date,
+                    bill_date=bill_date,
+                    lines=bill_lines,
+                    discount_amount=money("discount_amount"),
+                    tax_amount=money("tax_amount"),
+                    remarks=(posted.get("remarks") or "").strip(),
+                    user=request.user,
+                )
+            except ValidationError as error:
+                for message in error.messages:
+                    messages.error(request, message)
+                return render(request, self.template_name, self._context(posted=posted))
+
+            messages.success(
+                request,
+                f"Bill {bill.bill_num} posted for {bill.total_amount} against "
+                f"{bill.purchase_order.purchase_num}. Stock taken in, payable created.",
+            )
+            return redirect("inventory:purchase_bill_detail", pk=bill.pk)
 
         try:
             order, net = create_direct_purchase(
@@ -1658,11 +1777,11 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
             for errors in form.errors.values():
                 for error in errors:
                     messages.error(request, error)
-            return redirect("inventory:purchase_order_list")
+            return redirect("inventory:purchase_order_board")
 
         if not lines:
             messages.error(request, "Add at least one item before saving.")
-            return redirect("inventory:purchase_order_list")
+            return redirect("inventory:purchase_order_board")
 
         with transaction.atomic():
             order = form.save(commit=False)
@@ -1684,7 +1803,7 @@ class PurchaseOrderQuickCreateView(InventoryManageMixin, View):
                 )
 
         messages.success(request, f"Purchase order {order.purchase_num} created with {len(lines)} item(s).")
-        return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+        return redirect(f"{reverse_lazy('inventory:purchase_order_board')}?open={order.pk}")
 
 
 class PurchaseOrderDraftInitView(InventoryManageMixin, View):
@@ -1728,7 +1847,7 @@ class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
 
         if not lines:
             messages.error(request, "Add at least one item before saving.")
-            return redirect("inventory:purchase_order_list")
+            return redirect("inventory:purchase_order_board")
 
         with transaction.atomic():
             for item_id, qty, rate, discount in lines:
@@ -1770,7 +1889,7 @@ class PurchaseOrderRaiseView(InventoryManageMixin, View):
             messages.success(request, f"{order.purchase_num} approved and released to the supplier.")
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        return redirect(f"{reverse_lazy('inventory:purchase_order_list')}?open={order.pk}")
+        return redirect(f"{reverse_lazy('inventory:purchase_order_board')}?open={order.pk}")
 
 
 class PurchaseOrderCancelView(InventoryManageMixin, View):
@@ -1860,7 +1979,7 @@ class PurchaseApprovalLimitView(InventoryManageMixin, View):
                 messages.success(request, f"Approval limit set to {limit}. It applies to orders raised from now on.")
             except ValidationError as exc:
                 messages.error(request, "; ".join(exc.messages))
-        return redirect("inventory:purchase_order_list")
+        return redirect("inventory:purchase_order_board")
 
 
 class GoodsReceiptReverseView(InventoryManageMixin, View):
@@ -2333,7 +2452,7 @@ class PurchaseOrderColumnsView(InventoryListMixin, View):
             (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
             if key in ("q", "tab", "supplier", "date_from", "date_to", "per_page", "page")
         ])
-        target = reverse_lazy("inventory:purchase_order_list")
+        target = reverse_lazy("inventory:purchase_order_board")
         return redirect(f"{target}?{query}" if query else str(target))
 
 
@@ -2500,7 +2619,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         # order that was just posted can be seen among the rest.
         if "save_and_new" in posted:
             return redirect("inventory:purchase_order_create")
-        return redirect("inventory:purchase_order_list")
+        return redirect("inventory:purchase_order_board")
 
 
 class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
@@ -2674,7 +2793,7 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
 
 def redirect_after_item(request, pk):
     """Redirect back to the originating page with the PO collapsible auto-opened."""
-    ref = request.META.get("HTTP_REFERER") or str(reverse_lazy("inventory:purchase_order_list"))
+    ref = request.META.get("HTTP_REFERER") or str(reverse_lazy("inventory:purchase_order_board"))
     parts = urlsplit(ref)
     query = [(key, value) for key, value in parse_qsl(parts.query) if key != "open"]
     query.append(("open", str(pk)))
@@ -2738,7 +2857,7 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
             return self.form_invalid(form)
         item.save()
         messages.success(self.request, "Purchase order item updated.")
-        list_url = str(reverse_lazy("inventory:purchase_order_list"))
+        list_url = str(reverse_lazy("inventory:purchase_order_board"))
         return redirect(f"{list_url}?open={item.purchase_order_id}")
 
 
@@ -2869,7 +2988,7 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         # purchase invoices screen, which has no order row to reopen.
         context["print_back_url"] = (
             reverse_lazy("inventory:purchase_invoice_list") if self.object.is_direct
-            else f"{reverse_lazy('inventory:purchase_order_list')}?open={self.object.pk}"
+            else f"{reverse_lazy('inventory:purchase_order_board')}?open={self.object.pk}"
         )
         return context
 

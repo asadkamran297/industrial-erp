@@ -15,6 +15,10 @@ class NavigationItem:
     # Query string appended to the resolved href, e.g. "type=EV". Items that
     # differ only by query are matched on the query too, never on path alone.
     query: str = ""
+    # Paths this item lights up for besides its own href. For a menu entry
+    # whose screens do not all sit under the address it links to: the entry
+    # points at one page, but the whole branch belongs to it.
+    match_paths: tuple[str, ...] = ()
 
 
 SECTION_WORKSPACE = "Workspace"
@@ -37,12 +41,16 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     # One group per direction goods move: in from suppliers, out to
     # customers, and what is sitting on the shelf in between.
     NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
-        # The order of the menu is the order of the work: an order is raised,
-        # the goods turn up against it, and a purchase entered straight off the
-        # supplier's bill is the exception that skipped both.
-        NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index", url_name="inventory:purchase_order_list"),
-        # Straight off the supplier's bill, no order first.
+        # Entering a purchase is the work; the orders board is a place to read
+        # what is still owed, so it sits under the invoice rather than above it.
         NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
+        # The board lives at its own address; raising, reading and printing an
+        # order all sit under /inventory/purchase-orders/, which is the address
+        # that now sends anybody typing it to the invoice form. The menu entry
+        # answers for that branch all the same.
+        NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index",
+                       url_name="inventory:purchase_order_board",
+                       match_paths=("/inventory/purchase-orders/", "/inventory/purchase-bills/")),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),

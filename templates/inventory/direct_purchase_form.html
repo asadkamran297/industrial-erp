@@ -182,6 +182,95 @@
      calendar button off the right-hand end. At 10rem the year was being cut
      into by the picker. A floor rather than a fixed width, so the boxes still
      share the row on a wide screen and still wrap on a narrow one. */
+  /* ── The purchase order picker ─────────────────────────────────────────
+     Opened the moment a supplier is chosen. Somebody typing a bill is usually
+     holding the order it was raised against, so the lines are copied off it
+     rather than typed again. This screen does not load the shared purchase
+     theme, so the picker brings its own buttons. */
+  .po-pick-backdrop {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    place-items: center; padding: 1rem; background: rgba(2, 6, 23, .55);
+  }
+  .po-pick-backdrop.is-open { display: grid; }
+  .po-pick-card {
+    display: flex; flex-direction: column; width: 100%; max-width: 62rem;
+    max-height: min(88vh, 46rem); overflow: hidden; border-radius: 1rem;
+    background: #fff; box-shadow: 0 25px 50px -12px rgba(2, 6, 23, .45);
+  }
+  .dark .po-pick-card { background: #0f172a; }
+  .po-pick-head {
+    display: flex; align-items: center; gap: .75rem;
+    padding: 1rem 1.125rem; border-bottom: 1px solid #e2e8f0;
+  }
+  .dark .po-pick-head { border-bottom-color: #1e293b; }
+  .po-pick-title { font-size: .9375rem; font-weight: 700; color: #0f172a; }
+  .dark .po-pick-title { color: #e2e8f0; }
+  .po-pick-meta { font-size: .75rem; color: #64748b; }
+  .dark .po-pick-meta { color: #94a3b8; }
+  .po-pick-close {
+    margin-left: auto; border: 1px solid #e2e8f0; border-radius: .5rem;
+    padding: .3125rem .75rem; font-size: .75rem; font-weight: 600; color: #475569;
+  }
+  .po-pick-close:hover { background: #f8fafc; }
+  .dark .po-pick-close { border-color: #1e293b; background: transparent; color: #cbd5e1; }
+  .dark .po-pick-close:hover { background: rgba(30, 41, 59, .6); }
+  .po-pick-copy {
+    border-radius: .5rem; background: var(--primary-color); padding: .25rem .625rem;
+    font-size: .6875rem; font-weight: 700; color: #fff;
+  }
+  .po-pick-sum:hover .po-pick-copy { filter: brightness(1.06); }
+  .po-pick-body { overflow: auto; padding: .75rem 1.125rem 1.125rem; }
+  .po-pick-scroll { min-width: 46rem; }
+  .po-pick-cols, .po-pick-sum {
+    display: grid; grid-template-columns: 1.25rem 9rem 6.5rem 8rem 5rem 7rem 6rem;
+    gap: .75rem; align-items: center;
+  }
+  .po-pick-cols {
+    padding: .25rem .875rem .375rem; font-size: .625rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #94a3b8;
+  }
+  .po-pick-cols .is-num, .po-pick-sum .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-pick-cols .is-act, .po-pick-sum .is-act { text-align: right; }
+  .po-pick-item { border: 1px solid #e2e8f0; border-radius: .625rem; margin-top: .5rem; overflow: hidden; }
+  .dark .po-pick-item { border-color: #1e293b; }
+  .po-pick-item:hover { border-color: color-mix(in srgb, var(--primary-color) 45%, #e2e8f0); }
+  .po-pick-sum { width: 100%; padding: .625rem .875rem; text-align: left; font-size: .8125rem; }
+  .po-pick-sum:hover { background: #f8fafc; }
+  .dark .po-pick-sum { background: transparent; }
+  .dark .po-pick-sum:hover { background: rgba(30, 41, 59, .5); }
+  .po-pick-caret { transition: transform .15s ease; color: #cbd5e1; }
+  .po-pick-caret.is-open { transform: rotate(90deg); }
+  .po-pick-no { font-weight: 700; color: #0f172a; }
+  .dark .po-pick-no { color: #e2e8f0; }
+  .po-pick-amt { font-weight: 700; }
+  .po-pick-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .po-pick-lines th {
+    padding: .4375rem .875rem; font-size: .625rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; text-align: left;
+  }
+  .po-pick-lines td { padding: .375rem .875rem; border-top: 1px dashed #e8eef5; }
+  .dark .po-pick-lines td { border-top-color: rgba(30, 41, 59, .9); }
+  .po-pick-lines .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-pick-empty { padding: 2.5rem 1rem; text-align: center; font-size: .8125rem; color: #94a3b8; }
+  /* Which of the two things this screen is doing, said on the page rather than
+     left for somebody to work out from what they clicked. */
+  .bill-mode {
+    display: none; align-items: center; gap: .375rem; margin-top: .375rem;
+    border-radius: .5rem; background: #ecfdf5; padding: .1875rem .5rem;
+    font-size: .6875rem; font-weight: 600; color: #047857;
+  }
+  .bill-mode.is-on { display: inline-flex; }
+  .dark .bill-mode { background: rgba(6, 78, 59, .4); color: #6ee7b7; }
+  .po-pick-again {
+    display: none; align-items: center; gap: .375rem; margin-top: .375rem;
+    border: 1px solid #e2e8f0; border-radius: .5rem; padding: .1875rem .5rem;
+    font-size: .6875rem; font-weight: 600; color: #475569;
+  }
+  .po-pick-again.is-on { display: inline-flex; }
+  .po-pick-again:hover { background: #f8fafc; }
+  .dark .po-pick-again { border-color: #1e293b; color: #cbd5e1; }
+  .dark .po-pick-again:hover { background: rgba(30, 41, 59, .6); }
+
   .pur-head input[type="date"] { min-width: 11.5rem; }
   .pur-head input[type="date"]::-webkit-calendar-picker-indicator { margin-left: .25rem; }
   .pur-head > div { flex: 0 1 auto; min-width: 0; }
@@ -208,6 +297,16 @@
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+        <span id="bill-mode" class="bill-mode">
+          Billing <b id="bill-mode-no"></b>
+        </span>
+        <button type="button" id="po-pick-open" class="po-pick-again">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <path d="M14 2v6h6"></path><path d="M8 13h8M8 17h5"></path>
+          </svg>
+          <span id="po-pick-open-text">Bill a purchase order</span>
+        </button>
       </div>
 
       <div class="pur-head ml-auto flex flex-wrap items-end gap-4">
@@ -326,6 +425,32 @@
   </div>
 </div>
 
+<div class="po-pick-backdrop" id="po-picker" role="dialog" aria-modal="true" aria-labelledby="po-pick-title">
+  <div class="po-pick-card">
+    <div class="po-pick-head">
+      <div>
+        <h2 class="po-pick-title" id="po-pick-title">Purchase orders &mdash; <span id="po-pick-supplier"></span></h2>
+        <p class="po-pick-meta">Choose an order and this invoice is billed against it.</p>
+      </div>
+      <button type="button" class="po-pick-close" data-po-close>Close</button>
+    </div>
+    <div class="po-pick-body">
+      <div class="po-pick-scroll">
+        <div class="po-pick-cols">
+          <span></span>
+          <span>Order #</span>
+          <span>Date</span>
+          <span>Status</span>
+          <span class="is-num">Items</span>
+          <span class="is-num">To bill</span>
+          <span class="is-act">Value</span>
+        </div>
+        <div id="po-pick-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
 <script>
 (function () {
@@ -364,8 +489,9 @@
     row.className = 'pur-grid pur-row';
     row.innerHTML =
       '<div class="text-center text-xs text-slate-400 row-num"></div>' +
-      // Set only when the row was filled from a goods receipt. Its presence is
-      // what tells the server to bill those goods rather than receive them.
+      // Set only when the row was copied off a purchase order. Its presence is
+      // what tells the server to bill that order rather than raise a new one.
+      '<input type="hidden" name="row_order_item" class="line-order-item" value="">' +
       '<div class="pur-item-cell"><select name="item_id" class="form-select line-item">' + itemOptions('') + '</select>' +
         '<span class="stock-chip line-stock" hidden></span></div>' +
       '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
@@ -563,6 +689,10 @@
       }
     }
     if (e.target.classList.contains('line-unit')) restateLine(e.target.closest('.pur-row'));
+    if (e.target.classList.contains('line-item')) {
+      const held = e.target.closest('.pur-row').querySelector('.line-order-item');
+      if (held && held.value) { held.value = ''; syncMode(); }
+    }
     recalc();
   });
   rowsBox.addEventListener('click', e => {
@@ -571,6 +701,7 @@
     // Never leave the operator with nothing to type into.
     if (!rowsBox.children.length) addRow();
     renumber();
+    syncMode();
     recalc();
   });
 
@@ -587,7 +718,158 @@
     const show = Boolean(supplier.value && balance);
     supplierBalance.classList.toggle('hidden', !show);
     if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
+    loadOrders(supplier.value, option ? option.textContent.trim() : '', true);
   });
+
+  // ----- copy the lines off a purchase order -----
+  // Somebody typing a bill is usually holding the order it was raised against,
+  // so that supplier's open orders are fetched the moment one is chosen and the
+  // picker opens on them. Choosing an order replaces the lines outright rather
+  // than adding to them: it is the bill for that order, not an extra page of it.
+  const picker = document.getElementById('po-picker');
+  const modeNote = document.getElementById('bill-mode');
+  const modeNumber = document.getElementById('bill-mode-no');
+  const pickerList = document.getElementById('po-pick-list');
+  const pickerName = document.getElementById('po-pick-supplier');
+  const pickAgain = document.getElementById('po-pick-open');
+  const pickAgainText = document.getElementById('po-pick-open-text');
+  let orders = [];
+
+  function openPicker() { if (orders.length) picker.classList.add('is-open'); }
+  function closePicker() { picker.classList.remove('is-open'); }
+
+  function loadOrders(supplierId, name, autoOpen) {
+    orders = [];
+    pickAgain.classList.remove('is-on');
+    if (!supplierId) { closePicker(); return; }
+    pickerName.textContent = name || '';
+    fetch('{% url "inventory:supplier_po_options" %}?supplier=' + encodeURIComponent(supplierId), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(response => response.ok ? response.json() : { orders: [] })
+      .then(data => {
+        orders = data.orders || [];
+        drawOrders();
+        // A supplier with nothing on order is not worth a dialog: the operator
+        // is typing the bill by hand, which is what the screen already is.
+        if (orders.length) {
+          pickAgain.classList.add('is-on');
+          pickAgainText.textContent = orders.length === 1
+            ? 'Bill purchase order ' + orders[0].number
+            : 'Bill a purchase order (' + orders.length + ')';
+          if (autoOpen) openPicker();
+        }
+      })
+      .catch(() => { orders = []; });
+  }
+
+  const qtyText = n => (Math.round((Number(n) || 0) * 10000) / 10000)
+    .toLocaleString('en-IN', { maximumFractionDigits: 4 });
+
+  function drawOrders() {
+    pickerList.innerHTML = orders.length
+      ? ''
+      : '<div class="po-pick-empty">Nothing is on order from this supplier.</div>';
+    orders.forEach((order, index) => {
+      const box = document.createElement('div');
+      box.className = 'po-pick-item';
+      box.innerHTML =
+        '<button type="button" class="po-pick-sum" data-toggle="' + index + '">' +
+          '<svg class="po-pick-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>' +
+          '<span class="po-pick-no">' + order.number + '</span>' +
+          '<span class="po-pick-meta">' + (order.date_text || '') + '</span>' +
+          '<span class="po-pick-meta">' + (order.status || '') + '</span>' +
+          '<span class="is-num">' + order.items + '</span>' +
+          '<span class="is-num">' + qtyText(order.quantity) + '</span>' +
+          '<span class="is-act"><span class="po-pick-amt">' + moneyText(order.value) + '</span> ' +
+            '<span class="po-pick-copy" data-copy="' + index + '">Bill this</span></span>' +
+        '</button>' +
+        '<div data-lines="' + index + '" hidden>' +
+          '<table class="po-pick-lines"><thead><tr>' +
+            '<th>#</th><th>Item</th><th class="is-num">To bill</th><th>Unit</th>' +
+            '<th class="is-num">Rate</th><th class="is-num">Amount</th>' +
+          '</tr></thead><tbody>' +
+          order.lines.map((line, n) =>
+            '<tr><td>' + (n + 1) + '</td><td>' + line.name + '</td><td class="is-num">' + qtyText(line.quantity) +
+            '</td><td>' + (line.unit || '') + '</td><td class="is-num">' + moneyText(line.rate) +
+            '</td><td class="is-num">' + moneyText(line.amount) + '</td></tr>'
+          ).join('') +
+          '</tbody></table>' +
+        '</div>';
+      pickerList.appendChild(box);
+    });
+  }
+
+  pickerList.addEventListener('click', event => {
+    const copy = event.target.closest('[data-copy]');
+    if (copy) {
+      event.stopPropagation();
+      copyOrder(orders[Number(copy.dataset.copy)]);
+      return;
+    }
+    const head = event.target.closest('[data-toggle]');
+    if (!head) return;
+    const index = head.dataset.toggle;
+    const lines = pickerList.querySelector('[data-lines="' + index + '"]');
+    lines.hidden = !lines.hidden;
+    head.querySelector('.po-pick-caret').classList.toggle('is-open', !lines.hidden);
+  });
+
+  function copyOrder(order) {
+    if (!order) return;
+    rowsBox.innerHTML = '';
+    order.lines.forEach(line => {
+      const row = addRow();
+      const itemPick = row.querySelector('.line-item');
+      itemPick.value = String(line.item_id);
+      // The unit list depends on the item, so it is rebuilt before the order's
+      // own unit is set on it.
+      const unit = row.querySelector('.line-unit');
+      const chosen = ITEMS.find(i => String(i.id) === String(line.item_id));
+      if (chosen) unit.innerHTML = unitOptions(line.uom_id || chosen.uom, chosen.units);
+      if (line.uom_id) unit.value = String(line.uom_id);
+      unit.dataset.factor = String(baseFactor(row));
+      writeUnitNotes(row);
+      row.querySelector('.line-qty').value = line.quantity;
+      row.querySelector('.line-rate').value = money(line.rate);
+      // The row now stands for a line already committed on an order, so the
+      // bill is entered against it rather than raising a second order.
+      row.querySelector('.line-order-item').value = String(line.order_item_id);
+    });
+    if (!rowsBox.children.length) addRow();
+    document.dispatchEvent(new Event('searchable-select:refresh'));
+    renumber();
+    billing = order.number;
+    syncMode();
+    recalc();
+    closePicker();
+  }
+
+  // Which of the two things this screen is doing: buying goods with no order
+  // behind them, or billing an order that was already raised.
+  let billing = null;
+
+  function syncMode() {
+    const held = Array.from(rowsBox.querySelectorAll('.line-order-item')).filter(box => box.value);
+    if (!held.length) billing = null;
+    const on = Boolean(billing);
+    modeNote.classList.toggle('is-on', on);
+    if (on) modeNumber.textContent = billing;
+  }
+
+  picker.addEventListener('click', event => {
+    if (event.target === picker || event.target.closest('[data-po-close]')) closePicker();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closePicker(); });
+  pickAgain.addEventListener('click', openPicker);
+
+  // A supplier already chosen when the page opened -- a form coming back with
+  // errors, or a link that named one -- still gets its orders, but the picker is
+  // not thrown at somebody who was in the middle of typing.
+  if (supplier.value) {
+    const chosen = supplier.options[supplier.selectedIndex];
+    loadOrders(supplier.value, chosen ? chosen.textContent.trim() : '', false);
+  }
 
   // ----- add a supplier or an item without leaving the bill -----
   // The master screen is opened in a frame; it messages back what it saved and

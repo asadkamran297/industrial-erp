@@ -1,6 +1,7 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
-from .views import DirectPurchaseCreateView, CustomerCreateView, CustomerLedgerListView, LedgerPrintView, PurchaseReturnQuickCreateView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, PurchaseBillCreateView, PurchaseBillDetailView, PurchaseBillListView, PurchaseBillReverseView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
+from .views import DirectPurchaseCreateView, CustomerCreateView, CustomerLedgerListView, LedgerPrintView, PurchaseReturnQuickCreateView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, PurchaseBillCreateView, PurchaseBillDetailView, PurchaseBillListView, PurchaseBillReverseView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SupplierPurchaseOrderOptionsView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnItemCreateView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
 
 app_name = "inventory"
 
@@ -38,7 +39,12 @@ urlpatterns = [
     # Keyed on the note number rather than a row id: a note covering four
     # lines is one document, and its number is what anybody holding the
     # paper can read off it.
-    path("purchase-orders/", PurchaseOrderListView.as_view(), name="purchase_order_list"),
+    # The orders board keeps its own address. What used to be its address now
+    # lands on the purchase invoice form, because that is where a purchase is
+    # entered; the board is still there for anybody following an order through.
+    path("purchase-orders/board/", PurchaseOrderListView.as_view(), name="purchase_order_board"),
+    path("purchase-orders/", RedirectView.as_view(pattern_name="inventory:direct_purchase_create", permanent=False),
+         name="purchase_order_list"),
     path("purchase-orders/new/", PurchaseOrderCreateView.as_view(), name="purchase_order_create"),
     path("purchase-orders/export/", PurchaseOrderExportView.as_view(), name="purchase_order_export"),
     path("purchase-orders/columns/", PurchaseOrderColumnsView.as_view(), name="purchase_order_columns"),
@@ -52,6 +58,9 @@ urlpatterns = [
     path("sales/export/", SaleInvoiceExportView.as_view(), name="sale_invoice_export"),
     path("sales/new/", SaleInvoiceCreateView.as_view(), name="sale_invoice_create"),
     path("purchases/new/", DirectPurchaseCreateView.as_view(), name="direct_purchase_create"),
+    # What the purchase invoice screen asks for the moment a supplier is
+    # picked: that supplier's open orders, to copy lines from.
+    path("purchases/po-options/", SupplierPurchaseOrderOptionsView.as_view(), name="supplier_po_options"),
     path("purchase-orders/quick-create/", PurchaseOrderQuickCreateView.as_view(), name="purchase_order_quick_create"),
     path("purchase-orders/draft-init/", PurchaseOrderDraftInitView.as_view(), name="purchase_order_draft_init"),
     path("purchase-orders/draft-finalize/", PurchaseOrderDraftFinalizeView.as_view(), name="purchase_order_draft_finalize"),
