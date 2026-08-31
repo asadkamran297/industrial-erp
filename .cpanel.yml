@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export APPROOT=/home/flouruge/industrial_erp
+    - /bin/bash $APPROOT/scripts/cpanel_deploy.sh
