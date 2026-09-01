@@ -76,3 +76,6 @@ pnpm-debug.log*
 # Deployment secrets
 deploy/cpanel.config
 deploy/ssl/
+
+# Passenger restart trigger written by the deploy script
+tmp/
