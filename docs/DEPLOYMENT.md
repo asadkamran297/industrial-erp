@@ -144,10 +144,55 @@ the app root that imports `config.settings.production` and adds a `LOGGING`
 config with a `FileHandler`, then read that file. Do not flip `DEBUG=True` on a
 public domain.
 
+## TLS certificate (Let's Encrypt, manual ACME)
+
+The account has **no AutoSSL feature**, and the *Namecheap SSL* plugin only
+installs certificates bought from Namecheap. The certificate in place is issued
+from Let's Encrypt with a patched `acme-tiny`, using HTTP-01 validation with the
+challenge files pushed to the document root through the cPanel API.
+
+Everything needed lives in `deploy/ssl/` (git-ignored): `account.key` (ACME
+account — keep it, reuse it), `flourorbit.key`, `flourorbit.csr`,
+`acme_tiny.py`, `upload_challenge.sh`.
+
+Two patches to stock `acme-tiny`, both needed on Windows:
+
+1. An `ACME_UPLOAD_HOOK` env var — after writing a challenge file it runs the
+   hook, which uploads that file to
+   `public_html/.well-known/acme-challenge/` before validation is triggered.
+2. The SAN regex accepts CRLF and OpenSSL 3's trailing space; otherwise only the
+   first domain is picked up and the order fails with *"CSR does not specify
+   same identifiers as Order"*.
+
+`upload_challenge.sh` logs in fresh each call into its own cookie jar, and runs
+paths through `cygpath -w` — with `MSYS_NO_PATHCONV=1` set, curl cannot open
+POSIX-style paths and the upload fails silently with a login page.
+
+### Renewal (certificate expires 2026-11-29)
+
+```bash
+cd deploy/ssl
+export MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1
+export ACME_UPLOAD_HOOK='"C:/Program Files/Git/bin/bash.exe" <abs path>/upload_challenge.sh'
+mkdir -p acme_dir
+python acme_tiny.py --account-key account.key --csr flourorbit.csr \
+  --acme-dir acme_dir --contact mailto:smwaseemt@gmail.com > flourorbit.crt
+```
+
+Split the chain (first block is the leaf, the rest is the CA bundle) and
+install:
+
+```bash
+curl -sS -b jar.txt -X POST "https://$CPANEL_HOST:2083$TOKEN/execute/SSL/install_ssl" \
+  --data-urlencode "domain=$DOMAIN" --data-urlencode "cert@leaf.pem" \
+  --data-urlencode "key@flourorbit.key" --data-urlencode "cabundle@bundle.pem"
+```
+
+Then check `https://$DOMAIN/` with curl **without** `-k`. Set
+`SECURE_SSL_REDIRECT=True` in the server `.env` so Django 301s HTTP to HTTPS.
+
 ## Known gaps on the current account
 
-- **AutoSSL feature is not enabled**, so there is no certificate. Install the
-  free PositiveSSL from cPanel → *Namecheap SSL*.
 - **`staticfiles/` is tracked in git.** Earlier `collectstatic` runs modified
   136 tracked files in the checkout, which is why `deployable` is `0`. Fix is
   to untrack the directory (`git rm -r --cached staticfiles`) and pull with a

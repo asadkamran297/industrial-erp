@@ -75,3 +75,4 @@ pnpm-debug.log*
 
 # Deployment secrets
 deploy/cpanel.config
+deploy/ssl/

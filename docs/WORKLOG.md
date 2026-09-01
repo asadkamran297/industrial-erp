@@ -36,14 +36,24 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - Verified: `/` → 302 `/portal/`, login page 200, real login POST → `/portal/`
   200, `/static/dist/app.css` 200.
 
+### Live — TLS
+
+- Let's Encrypt certificate issued for `flourorbit.com` and
+  `www.flourorbit.com` (HTTP-01, challenge files pushed through the cPanel API
+  with a patched `acme-tiny`) and installed via `SSL/install_ssl`.
+  Valid until **2026-11-29**; renewal steps in `docs/DEPLOYMENT.md`.
+- `config/settings/production.py`: `SECURE_SSL_REDIRECT` now comes from the
+  environment (commit `a98459e`); HTTP 301s to HTTPS on the live host.
+- Verified without `-k`: `https://flourorbit.com/` 302 → `/portal/`,
+  `https://flourorbit.com/accounts/login/` 200, `https://www.flourorbit.com/`
+  200, `http://` → 301 to `https://`.
+
 ### Open
 
 - Auto-deploy (`push` → live) is not active: cPanel reports `deployable: 0`
   because 136 tracked files under `staticfiles/` are modified in the checkout.
   Until that is cleaned, redeploys go through `VersionControl/update` +
   restart.
-- No TLS certificate — the account has no AutoSSL feature. Install the free
-  PositiveSSL from cPanel → *Namecheap SSL*.
 - cPanel password was shared in plaintext during setup; rotate it.
 - Local dev Postgres has a stray `admin` superuser from a probe run; delete with
   `python manage.py shell -c "from django.contrib.auth import get_user_model as g; g().objects.filter(username='admin').delete()"`.
