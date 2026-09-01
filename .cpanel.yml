@@ -2,5 +2,6 @@
 deployment:
   tasks:
     # One task: each .cpanel.yml task runs in its own shell, so an export on a
-    # line of its own would not reach the script.
-    - export APPROOT=/home/flouruge/industrial_erp SEED_DEMO=1 && /bin/bash $APPROOT/scripts/cpanel_deploy.sh
+    # line of its own would not reach the script. Add SEED_DEMO=1 here for a
+    # single deploy when a demo book is wanted, then take it back out.
+    - export APPROOT=/home/flouruge/industrial_erp && /bin/bash $APPROOT/scripts/cpanel_deploy.sh
