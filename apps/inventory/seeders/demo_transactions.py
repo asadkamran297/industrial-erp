@@ -14,12 +14,11 @@ from decimal import Decimal
 from django.utils import timezone
 
 from apps.core.constants import STATUS_DRAFT
-from apps.inventory.models import Customer, InventoryItem, PurchaseBill, PurchaseOrder, POSMaster, Stock, Supplier
+from apps.inventory.models import Customer, InventoryItem, PurchaseInvoice, PurchaseOrder, POSMaster, Stock, Supplier
 from apps.inventory.services import (
     approve_purchase_order,
-    create_direct_purchase,
     create_direct_sale,
-    create_purchase_bill,
+    create_purchase_invoice,
     create_purchase_order,
 )
 
@@ -87,7 +86,7 @@ def seed_demo_purchase_orders(count: int = 50, *, user=None) -> int:
 
 
 def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
-    """Bill the approved orders. This is what brings stock in and books the debt."""
+    """Invoice the submitted orders. This is what brings stock in and books the debt."""
     today = timezone.localdate()
     created_count = 0
 
@@ -99,12 +98,12 @@ def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
 
     for index, order in enumerate(orders[:count], start=1):
         invoice_num = BILL_MARKER % index
-        if PurchaseBill.all_objects.filter(supplier=order.supplier, supplier_invoice_num=invoice_num).exists():
+        if PurchaseInvoice.all_objects.filter(supplier=order.supplier, supplier_invoice_num=invoice_num).exists():
             continue
 
         lines = []
         for order_item in order.items.all():
-            pending = order_item.pending_bill_qty
+            pending = order_item.qty_pending
             if pending <= 0:
                 continue
             # Most bills arrive complete; every fourth is short so the partially
@@ -112,19 +111,24 @@ def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
             quantity = pending if index % 4 else (pending / 2).quantize(Decimal("0.0001"))
             if quantity <= 0:
                 continue
-            lines.append({"order_item": order_item, "quantity": quantity, "rate": order_item.rate})
+            lines.append({
+                "order_item": order_item,
+                "inventory_item": order_item.inventory_item,
+                "quantity": quantity,
+                "rate": order_item.rate,
+            })
 
         if not lines:
             continue
 
-        create_purchase_bill(
+        create_purchase_invoice(
             supplier=order.supplier,
             supplier_invoice_num=invoice_num,
             supplier_invoice_date=today,
-            bill_date=today,
+            invoice_date=today,
             lines=lines,
             tax_amount=Decimal("0"),
-            remarks=f"Demo supplier bill {index}",
+            remarks=f"Demo purchase invoice {index}",
             user=user,
         )
         created_count += 1
@@ -133,12 +137,11 @@ def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
 
 
 def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
-    """Purchases typed straight off the supplier's bill, with no order first.
+    """Purchases typed straight off the supplier's paperwork, with no order.
 
-    These are what the purchase invoice board lists: the same tables as an
-    ordered purchase, flagged ``is_direct`` so they stay off the outstanding
-    orders list. Seeded separately because the ordered route above never
-    produces one.
+    The other route into the invoice board. Seeded separately because the
+    ordered route above never produces one, and the screen branches on which
+    of the two a supplier is on.
     """
     suppliers = list(Supplier.objects.order_by("pk"))
     items = list(InventoryItem.objects.order_by("pk"))
@@ -150,7 +153,7 @@ def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
 
     for index in range(1, count + 1):
         bill_number = DIRECT_PURCHASE_MARKER % index
-        if PurchaseOrder.all_objects.filter(quot_num=bill_number, is_direct=True).exists():
+        if PurchaseInvoice.all_objects.filter(supplier_invoice_num=bill_number).exists():
             continue
 
         # Offset into the item list so these do not buy the same rows the
@@ -169,13 +172,14 @@ def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
         # supplier ledger carries both states.
         paid = goods_total if index % 3 == 0 else (goods_total / 2).quantize(Decimal("0.01"))
 
-        create_direct_purchase(
+        create_purchase_invoice(
             supplier=supplier,
-            bill_number=bill_number,
-            bill_date=today,
+            supplier_invoice_num=bill_number,
+            supplier_invoice_date=today,
+            invoice_date=today,
             lines=lines,
             paid_amount=paid,
-            remarks=f"Demo purchase invoice {index}",
+            remarks=f"Demo direct purchase {index}",
             user=user,
         )
         created_count += 1

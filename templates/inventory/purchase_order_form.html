@@ -271,7 +271,7 @@
         </div>
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order_date">Order Date</label>
-          <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{{ posted.order_date|default:today|date:'Y-m-d' }}">
+          <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{% if posted.order_date %}{{ posted.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}">
         </div>
         {# When the goods were promised. What makes a delivery late, and the #}
         {# only way an order quietly not arriving ever gets noticed. #}

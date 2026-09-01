@@ -253,7 +253,7 @@
 
       {% if order.unbilled_value and can_edit %}
       <a class="pur-btn pur-btn--ghost"
-         href="{% url 'inventory:purchase_bill_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}"
+         href="{% url 'inventory:purchase_invoice_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}"
          title="Enter the supplier's invoice against what arrived">Enter bill</a>
       {% endif %}
 

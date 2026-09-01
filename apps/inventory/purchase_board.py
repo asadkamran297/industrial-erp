@@ -1,8 +1,8 @@
 """What the purchase orders screen knows about an order beyond its own row.
 
 An order's row is mostly not on the order: how much of it has arrived lives on
-the lines, what has been billed lives on the receipts, and whether it is late is
-the promised date read against today. All of that is worked out here, once, so
+the lines, what has been invoiced lives on the lines too, and whether it is
+late is the promised date read against today. All of that is worked out here, once, so
 the view stays a view and the template only prints.
 """
 
@@ -15,12 +15,12 @@ from apps.core.table_columns import Column, ColumnSet
 
 from apps.core.constants import (
     STATUS_CANCELLED,
-    STATUS_CLOSED_SHORT,
+    STATUS_CLOSED,
     STATUS_DRAFT,
-    STATUS_FULLY_RECEIVED,
-    STATUS_PARTIAL_RECEIVED,
-    STATUS_RAISED,
+    STATUS_FULLY_INVOICED,
+    STATUS_PARTIALLY_INVOICED,
     STATUS_REVERSED,
+    STATUS_SUBMITTED,
 )
 
 ZERO = Decimal("0.00")
@@ -31,49 +31,54 @@ ZERO = Decimal("0.00")
 TAB_ALL = "all"
 TAB_PENDING = "pending"
 TAB_OPEN = "open"
-TAB_RECEIVED = "received"
-TAB_UNBILLED = "unbilled"
+TAB_PARTIAL = "partial"
+TAB_INVOICED = "invoiced"
 TAB_CLOSED = "closed"
+
+# Kept so anything still importing it by name does not break; the board no
+# longer offers it, because there is no unbilled state left for it to mean.
+TAB_UNBILLED = "unbilled"
 
 TABS = (
     (TAB_ALL, "All"),
     (TAB_PENDING, "Awaiting approval"),
-    (TAB_OPEN, "Awaiting goods"),
-    (TAB_RECEIVED, "Received"),
-    (TAB_UNBILLED, "Received, not billed"),
+    (TAB_OPEN, "Awaiting invoice"),
+    (TAB_PARTIAL, "Partly invoiced"),
+    (TAB_INVOICED, "Fully invoiced"),
     (TAB_CLOSED, "Closed & cancelled"),
 )
 
 TAB_STATUSES = {
     TAB_PENDING: (STATUS_DRAFT,),
-    TAB_OPEN: (STATUS_RAISED, STATUS_PARTIAL_RECEIVED),
-    TAB_RECEIVED: (STATUS_FULLY_RECEIVED,),
+    TAB_OPEN: (STATUS_SUBMITTED,),
+    TAB_PARTIAL: (STATUS_PARTIALLY_INVOICED,),
+    TAB_INVOICED: (STATUS_FULLY_INVOICED,),
     # Both ways an order can stop early sit together: someone looking for an
     # order that is no longer running does not know, and should not have to
     # know, whether it was cancelled whole or given up on part way.
-    TAB_CLOSED: (STATUS_CANCELLED, STATUS_CLOSED_SHORT),
+    TAB_CLOSED: (STATUS_CANCELLED, STATUS_CLOSED),
 }
 
 # An order still working its way through: committed, and not yet finished or
 # abandoned. What "open" means everywhere on this screen.
-LIVE_STATUSES = (STATUS_RAISED, STATUS_PARTIAL_RECEIVED)
+LIVE_STATUSES = (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
 
 
 def outstanding_now(lines):
     """Quantity still genuinely expected across these lines.
 
-    Reads ``open_receive_qty``, so a balance somebody has already given up on
-    does not count as something left to give up on.
+    Reads ``qty_pending``, which is nil on a line somebody has already given
+    up on, so a balance written off does not count as something left to write off.
     """
-    return sum((line.open_receive_qty for line in lines), Decimal("0"))
+    return sum((line.qty_pending for line in lines), Decimal("0"))
 
 
 def decorate(orders, today=None):
     """Hang everything the row needs off each order, in one pass.
 
     Every order handed in must already have its ``items`` and their
-    ``receipts`` prefetched; nothing here goes back to the database, so a page
-    of orders costs the same few queries however many rows it holds.
+    ``items`` prefetched; nothing here goes back to the database, so a page of
+    orders costs the same few queries however many rows it holds.
     """
     today = today or timezone.localdate()
 
@@ -83,12 +88,13 @@ def decorate(orders, today=None):
         order.total_amount = sum((line.total_amount for line in lines), ZERO)
 
         ordered_qty = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-        received_qty = sum((line.total_receive_qty or Decimal("0") for line in lines), Decimal("0"))
+        received_qty = sum((line.qty_invoiced or Decimal("0") for line in lines), Decimal("0"))
         # Given up on rather than delivered. Shown separately because an order
         # that was closed nine tenths of the way through is not the same story
         # as one that arrived in full, and a bar at 100% would tell the second.
         order.short_closed_qty = sum(
-            (line.pending_receive_qty for line in lines if line.closed), Decimal("0")
+            (line.qty_ordered - (line.qty_invoiced or Decimal("0"))
+             for line in lines if line.closed), Decimal("0")
         )
         order.ordered_qty = ordered_qty
         order.received_qty = received_qty
@@ -96,39 +102,33 @@ def decorate(orders, today=None):
         # bar is not a thing anyone can see.
         order.received_percent = int(received_qty / ordered_qty * 100) if ordered_qty else 0
 
-        # What has arrived, and under which note. The last goods receipt is the
-        # one worth showing: it is the most recent thing that happened here.
-        # Reversals and the receipts they cancelled are left out of every count
-        # below -- the pair nets to nothing, and showing either would say goods
-        # are in the godown that were taken back out.
-        receipts = [
-            receipt for line in lines for receipt in line.receipts.all()
-            if not receipt.reversed and receipt.reversal_of_id is None
-        ]
-        grns = [receipt.grn_number for receipt in receipts if receipt.grn_number]
-        order.grn_number = grns[-1] if grns else ""
-
-        # The same, per line: which notes this particular item came in under.
-        # One line can have several -- a delivery a week for a month is four --
-        # so they are gathered rather than reduced to the last one. Grouped by
-        # number and not by receipt, because one note covering three lines is
-        # one note, and the row is naming the document, not the posting.
+        # Which invoices drew this line down, and for how much. Held per line
+        # because "how much of THIS is still to come" is the question the
+        # expanded row is open to answer, and an order total cannot answer it.
         for line in lines:
-            under = {}
-            for receipt in line.receipts.all():
-                if receipt.reversed or receipt.reversal_of_id is not None:
+            refs = []
+            for invoice_line in line.invoice_lines.all():
+                invoice = invoice_line.invoice
+                # A withdrawn invoice drew nothing down. It is left off rather
+                # than shown at zero: the quantity went back, and a row saying
+                # otherwise is a row somebody has to reconcile by hand.
+                if invoice.status == STATUS_REVERSED:
                     continue
-                number = receipt.grn_number or ""
-                if not number:
-                    continue
-                held = under.setdefault(number, {"number": number, "qty": ZERO, "date": receipt.receive_date, "pks": []})
-                held["qty"] += receipt.received_units
-                held["pks"].append(str(receipt.pk))
-                # The note is dated when it was booked in; where one number was
-                # somehow used twice the later date is the one that holds.
-                if receipt.receive_date and (not held["date"] or receipt.receive_date > held["date"]):
-                    held["date"] = receipt.receive_date
-            line.grn_refs = sorted(under.values(), key=lambda ref: (ref["date"] or date.min, ref["number"]))
+                refs.append({
+                    "pk": invoice.pk,
+                    "number": invoice.invoice_num,
+                    "supplier_ref": invoice.supplier_invoice_num,
+                    "date": invoice.invoice_date,
+                    "qty": invoice_line.quantity or ZERO,
+                    "amount": invoice_line.amount or ZERO,
+                })
+            line.invoice_refs = sorted(refs, key=lambda ref: (ref["date"] or date.min, ref["number"]))
+            # Worked out here rather than in the template: money multiplied in a
+            # template goes through integer arithmetic and loses the paise.
+            line.pending_value = (line.qty_pending * (line.rate or ZERO)).quantize(Decimal("0.01"))
+
+        order.invoiced_qty = received_qty
+        order.pending_qty = sum((line.qty_pending for line in lines), Decimal("0"))
 
         # Money, split by what has actually happened to the goods rather than by
         # the order's headline total. Three separate figures, because they
@@ -138,15 +138,14 @@ def decorate(orders, today=None):
         arrived_unbilled = ZERO   # ordered, no supplier bill against it yet
         for line in lines:
             rate = line.rate or Decimal("0")
-            # ``open_receive_qty`` and not ``pending_receive_qty``: a balance
-            # somebody closed short is not still to come, and leaving it in
-            # here would keep money on the committed tile that nobody expects
-            # to spend.
-            still_to_come += (line.open_receive_qty * rate).quantize(Decimal("0.01"))
+            # ``qty_pending`` is nil on a line somebody closed short, so a
+            # balance already written off does not keep money on the committed
+            # tile that nobody expects to spend.
+            still_to_come += (line.qty_pending * rate).quantize(Decimal("0.01"))
             # Ordered and not yet invoiced, at the rate that was agreed. The
-            # bill is what books the goods in now, so what is waiting on one is
-            # read off the order line rather than off a receipt.
-            arrived_unbilled += (line.pending_bill_qty * rate).quantize(Decimal("0.01"))
+            # invoice is the only thing that books goods in, so what an order
+            # is waiting on is read straight off its own lines.
+            arrived_unbilled += (line.qty_pending * rate).quantize(Decimal("0.01"))
         order.on_order_value = still_to_come
         order.unbilled_value = arrived_unbilled
 
@@ -154,10 +153,11 @@ def decorate(orders, today=None):
         # typed-in invoice number. Part billed is worth seeing rather than
         # rounding away: it is a delivery somebody has been invoiced for twice
         # over, or once and not again.
-        billed_units = sum((line.billed_qty or Decimal("0") for line in lines), Decimal("0"))
+        billed_units = sum((line.qty_invoiced or Decimal("0") for line in lines), Decimal("0"))
         ordered_units = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
         order.invoice_numbers = sorted(
-            {bill.supplier_invoice_num for bill in order.bills.all() if bill.status != STATUS_REVERSED}
+            {invoice.supplier_invoice_num
+             for invoice in order.invoices.all() if invoice.status != STATUS_REVERSED}
         )
         if not lines:
             order.billed_state = "none"
@@ -171,7 +171,7 @@ def decorate(orders, today=None):
         # Whether anything can still be done to this order. A closed one is
         # read, not worked, and the row's action has to know that.
         order.is_live = order.status in LIVE_STATUSES
-        order.is_closed_early = order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT)
+        order.is_closed_early = order.status in (STATUS_CANCELLED, STATUS_CLOSED)
 
         # How this order would be ended, if somebody ended it now. The two verbs
         # are not interchangeable and the wrong one is refused by the service:
@@ -263,7 +263,7 @@ def summarise(orders, today=None):
         # Commitments deliberately given up on. Worth a figure of its own: a
         # mill that closes a fifth of its orders short every month has a
         # supplier problem nobody has said out loud yet.
-        if order.status == STATUS_CLOSED_SHORT:
+        if order.status == STATUS_CLOSED:
             tiles["closed_short_count"] += 1
             tiles["closed_short_value"] += order.short_value or ZERO
 
@@ -283,10 +283,9 @@ COLUMNS = ColumnSet("inventory.purchase_orders", (
            export=lambda o: (o.created_by.get_full_name() or o.created_by.username) if o.created_by else ""),
     Column("expected", "Expected", export=lambda o: o.expected_date or ""),
     Column("value", "Order value", locked=True, export=lambda o: o.total_amount),
-    Column("received", "Received",
+    Column("received", "Progress",
            export=lambda o: f"{o.received_qty} of {o.ordered_qty} ({o.received_percent}%)"),
-    Column("grn", "Goods receipt", default=False, export=lambda o: o.grn_number),
-    Column("billed", "Invoiced",
+    Column("billed", "Invoices",
            export=lambda o: ", ".join(o.invoice_numbers) or BILLED_LABELS[o.billed_state]),
     Column("status", "Status", export=lambda o: o.get_status_display()),
     # Off by default: only a minority of orders end early, and the reason is
@@ -317,15 +316,19 @@ def export_columns(session):
 # The figures are added up from the lines rather than stored on the order, so
 # the export asks the same questions of a row that the screen does.
 PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
-    Column("purchase_num", "Invoice #", locked=True, export=lambda o: o.purchase_num),
-    Column("supplier_ref", "Supplier ref", export=lambda o: o.quot_num or ""),
-    Column("purchase_date", "Date", export=lambda o: o.purchase_date),
+    Column("invoice_num", "Invoice #", locked=True, export=lambda o: o.invoice_num),
+    Column("supplier_ref", "Supplier ref", export=lambda o: o.supplier_invoice_num or ""),
+    Column("invoice_date", "Date", export=lambda o: o.invoice_date),
     Column("supplier", "Supplier", export=lambda o: o.supplier.name),
     Column("buyer", "Entered by", export=lambda o: (
         o.created_by.get_full_name() or o.created_by.username) if o.created_by else ""),
     Column("lines", "Items", export=lambda o: o.line_count),
     Column("quantity", "Quantity", export=lambda o: o.qty_total),
-    Column("bill", "Bill", export=lambda o: o.bill.bill_num if o.bill else "Not billed"),
+    # Which route the purchase came in by -- the one thing about it that still
+    # varies now that every purchase is one document.
+    Column("order", "Order", export=lambda o: (
+        o.purchase_order.purchase_num if o.purchase_order_id else "Direct")),
+    Column("status", "Status", export=lambda o: o.get_status_display()),
     Column("value", "Amount", export=lambda o: o.total_amount),
 ))
 
@@ -353,47 +356,10 @@ SALE_COLUMNS = ColumnSet("inventory.sale_invoices", (
 # Its own table, its own choice: the two screens list the same records but are
 # read for different reasons, so what one person wants on show here is not what
 # they want on the purchase orders board.
-def receipt_state(receipt):
-    """What a goods receipt row is: one of four states, named once.
-
-    Read off the receipt itself rather than off a text invoice number, so a
-    receipt billed in two instalments is still "part billed" and a reversed one
-    says so instead of quietly counting as goods in hand.
-    """
-    if receipt.reversed:
-        return "reversed", "Reversed"
-    if receipt.reversal_of_id:
-        return "reversal", "Reversal"
-    if receipt.pending_bill_qty:
-        if receipt.billed_qty:
-            return "part_billed", "Part billed"
-        return "unbilled", "Not billed"
-    return "billed", "Billed"
-
-
-# The goods receipt register: one row per receipt, not per order. The screen is
-# a list of what actually came through the gate, so the row's identity is the
-# note it came in under.
-GRN_COLUMNS = ColumnSet("inventory.grn.receipts", (
-    Column("grn_number", "GRN #", locked=True, export=lambda r: r.grn_number),
-    Column("purchase_num", "PO #", export=lambda r: r.purchase_num),
-    Column("supplier", "Supplier", export=lambda r: r.purchase_order_item.purchase_order.supplier.name),
-    Column("item", "Item", export=lambda r: r.descr),
-    Column("receive_date", "Receive date", export=lambda r: r.receive_date),
-    Column("quantity", "Qty", export=lambda r: r.received_units),
-    Column("retail_price", "Retail price", export=lambda r: r.retail_price),
-    # Off by default: what the goods came in at is what the bill is matched
-    # against -- worth having, not worth the width by default.
-    Column("landed", "Landed amount", default=False, export=lambda r: r.landed_amount),
-    Column("invoice", "Invoice #", default=False, export=lambda r: r.invoice_num),
-    Column("status", "Status", export=lambda r: receipt_state(r)[1]),
-))
-
-
 def linked_documents(order):
     """Everything raised off this order, as one row of links.
 
-    An order is the head of a chain -- it is billed, and some of it may go
+    An order is the head of a chain -- it is invoiced, and some of it may go
     back. The documents that exist are named; the ones that do not are absent,
     so the row states how far the order has got.
     """
@@ -403,13 +369,13 @@ def linked_documents(order):
 
     links = []
 
-    for bill in order.bills.all():
+    for invoice in order.invoices.all():
         links.append({
-            "kind": "Purchase Bill",
-            "label": bill.bill_num or bill.supplier_invoice_num,
-            "url": reverse("inventory:purchase_bill_detail", args=[bill.pk]),
+            "kind": "Purchase Invoice",
+            "label": invoice.invoice_num or invoice.supplier_invoice_num,
+            "url": reverse("inventory:purchase_invoice_detail", args=[invoice.pk]),
             "new_tab": False,
-            "dead": bill.status == STATUS_REVERSED,
+            "dead": invoice.status == STATUS_REVERSED,
         })
 
     for entry in PurchaseReturnMaster.objects.filter(purchase_order=order).order_by("return_date", "pk"):

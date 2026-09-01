@@ -33,7 +33,17 @@
   .pur-grand { border-top: 1px solid #e2e8f0; margin-top: .375rem; padding-top: .75rem; font-size: 1rem; font-weight: 700; }
   .dark .pur-grand { border-top-color: #1e293b; }
 
-  .pur-bal { font-size: .6875rem; font-weight: 700; letter-spacing: .02em; color: #059669; }
+  .pur-bal {
+    display: inline-flex; align-items: center; gap: .3125rem; border-radius: .375rem;
+    padding: .125rem .4375rem; font-size: .6875rem; font-weight: 700;
+    letter-spacing: .02em; color: #475569; background: #f1f5f9;
+    font-variant-numeric: tabular-nums;
+  }
+  .dark .pur-bal { background: rgba(30, 41, 59, .6); color: #cbd5e1; }
+  .pur-bal--owed { background: #fff7ed; color: #c2410c; }
+  .dark .pur-bal--owed { background: rgba(154, 52, 18, .25); color: #fdba74; }
+  .pur-bal--credit { background: #ecfdf5; color: #047857; }
+  .dark .pur-bal--credit { background: rgba(6, 78, 59, .35); color: #6ee7b7; }
 
   /* Notched field: the label rides the top border, the action rides inside.
      The picker is enhanced into a button by searchable-select.js, so the
@@ -187,71 +197,171 @@
      holding the order it was raised against, so the lines are copied off it
      rather than typed again. This screen does not load the shared purchase
      theme, so the picker brings its own buttons. */
+  /* One grid shared by the header and every row, so a column heading and the
+     figure under it cannot drift apart. The action sits outside the grid in a
+     column of its own width: it is not data, and giving it a data column made
+     the amount beside it wrap. */
+  .po-pick {
+    --pick-grid: 1.5rem minmax(7rem, 1fr) 7rem 9rem 4.5rem 7.5rem 9rem;
+    --pick-act: 10.5rem;
+  }
   .po-pick-backdrop {
     position: fixed; inset: 0; z-index: 70; display: none;
-    place-items: center; padding: 1rem; background: rgba(2, 6, 23, .55);
+    place-items: center; padding: 1rem; background: rgba(2, 6, 23, .6);
   }
-  .po-pick-backdrop.is-open { display: grid; }
+  .po-pick-backdrop.is-open { display: grid; animation: po-pick-fade .12s ease-out; }
+  @keyframes po-pick-fade { from { opacity: 0; } }
   .po-pick-card {
-    display: flex; flex-direction: column; width: 100%; max-width: 62rem;
+    display: flex; flex-direction: column; width: 100%; max-width: 66rem;
     max-height: min(88vh, 46rem); overflow: hidden; border-radius: 1rem;
     background: #fff; box-shadow: 0 25px 50px -12px rgba(2, 6, 23, .45);
+    animation: po-pick-rise .16s cubic-bezier(.16, 1, .3, 1);
+  }
+  @keyframes po-pick-rise { from { transform: translateY(.75rem); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .po-pick-backdrop.is-open, .po-pick-card { animation: none; }
   }
   .dark .po-pick-card { background: #0f172a; }
   .po-pick-head {
-    display: flex; align-items: center; gap: .75rem;
-    padding: 1rem 1.125rem; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: flex-start; gap: .75rem;
+    padding: 1.125rem 1.25rem; border-bottom: 1px solid #e2e8f0;
   }
   .dark .po-pick-head { border-bottom-color: #1e293b; }
-  .po-pick-title { font-size: .9375rem; font-weight: 700; color: #0f172a; }
+  .po-pick-title {
+    display: flex; align-items: center; gap: .5rem;
+    font-size: 1rem; font-weight: 700; color: #0f172a;
+  }
   .dark .po-pick-title { color: #e2e8f0; }
+  /* How many are open, beside the heading rather than in a sentence under it. */
+  .po-pick-count {
+    border-radius: 999px; background: #eef2ff; padding: .0625rem .5rem;
+    font-size: .6875rem; font-weight: 700; color: #4338ca;
+    font-variant-numeric: tabular-nums;
+  }
+  .dark .po-pick-count { background: rgba(67, 56, 202, .25); color: #a5b4fc; }
+  .po-pick-sub { margin-top: .1875rem; font-size: .8125rem; color: #64748b; }
+  .dark .po-pick-sub { color: #94a3b8; }
   .po-pick-meta { font-size: .75rem; color: #64748b; }
   .dark .po-pick-meta { color: #94a3b8; }
   .po-pick-close {
-    margin-left: auto; border: 1px solid #e2e8f0; border-radius: .5rem;
-    padding: .3125rem .75rem; font-size: .75rem; font-weight: 600; color: #475569;
+    display: grid; place-items: center; margin-left: auto; flex: none;
+    width: 2rem; height: 2rem; border: 1px solid #e2e8f0; border-radius: .5rem;
+    color: #64748b; transition: background .12s ease, color .12s ease;
   }
-  .po-pick-close:hover { background: #f8fafc; }
-  .dark .po-pick-close { border-color: #1e293b; background: transparent; color: #cbd5e1; }
-  .dark .po-pick-close:hover { background: rgba(30, 41, 59, .6); }
-  .po-pick-copy {
-    border-radius: .5rem; background: var(--primary-color); padding: .25rem .625rem;
-    font-size: .6875rem; font-weight: 700; color: #fff;
-  }
-  .po-pick-sum:hover .po-pick-copy { filter: brightness(1.06); }
-  .po-pick-body { overflow: auto; padding: .75rem 1.125rem 1.125rem; }
-  .po-pick-scroll { min-width: 46rem; }
-  .po-pick-cols, .po-pick-sum {
-    display: grid; grid-template-columns: 1.25rem 9rem 6.5rem 8rem 5rem 7rem 6rem;
-    gap: .75rem; align-items: center;
-  }
+  .po-pick-close:hover { background: #f1f5f9; color: #0f172a; }
+  .dark .po-pick-close { border-color: #1e293b; color: #94a3b8; }
+  .dark .po-pick-close:hover { background: rgba(30, 41, 59, .6); color: #e2e8f0; }
+
+  .po-pick-body { overflow: auto; padding: .5rem 1.25rem 1.25rem; }
+  .po-pick-scroll { min-width: 52rem; }
+
+  /* Sticky, because the figures are only readable against their headings and a
+     supplier with a dozen open orders scrolls them off. */
   .po-pick-cols {
-    padding: .25rem .875rem .375rem; font-size: .625rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .06em; color: #94a3b8;
+    position: sticky; top: 0; z-index: 1; display: flex; gap: .75rem;
+    padding: .625rem .875rem .5rem; background: #fff;
+    font-size: .625rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #94a3b8;
   }
-  .po-pick-cols .is-num, .po-pick-sum .is-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .po-pick-cols .is-act, .po-pick-sum .is-act { text-align: right; }
-  .po-pick-item { border: 1px solid #e2e8f0; border-radius: .625rem; margin-top: .5rem; overflow: hidden; }
+  .dark .po-pick-cols { background: #0f172a; }
+  .po-pick-cols-grid {
+    flex: 1; display: grid; grid-template-columns: var(--pick-grid);
+    gap: .75rem; align-items: center; min-width: 0;
+  }
+  .po-pick-cols-act { flex: none; width: var(--pick-act); }
+  .po-pick-cols .is-num { text-align: right; }
+
+  .po-pick-item {
+    border: 1px solid #e2e8f0; border-radius: .75rem; margin-top: .5rem;
+    overflow: hidden; transition: border-color .12s ease, box-shadow .12s ease;
+  }
   .dark .po-pick-item { border-color: #1e293b; }
-  .po-pick-item:hover { border-color: color-mix(in srgb, var(--primary-color) 45%, #e2e8f0); }
-  .po-pick-sum { width: 100%; padding: .625rem .875rem; text-align: left; font-size: .8125rem; }
+  .po-pick-item:hover {
+    border-color: color-mix(in srgb, var(--primary-color) 40%, #e2e8f0);
+    box-shadow: 0 1px 3px rgba(2, 6, 23, .06);
+  }
+  .po-pick-item.is-open { border-color: color-mix(in srgb, var(--primary-color) 55%, #e2e8f0); }
+  .po-pick-row { display: flex; align-items: center; gap: .75rem; padding-right: .875rem; }
+
+  /* The row expands; the button beside it is what actually copies the order.
+     Two controls, because they do two things -- the old markup nested the
+     second inside the first, which no keyboard could reach and no screen
+     reader could announce. */
+  .po-pick-sum {
+    flex: 1; min-width: 0; display: grid; grid-template-columns: var(--pick-grid);
+    gap: .75rem; align-items: center; padding: .8125rem .875rem;
+    text-align: left; font-size: .8125rem; border-radius: .75rem 0 0 .75rem;
+    transition: background .12s ease;
+  }
   .po-pick-sum:hover { background: #f8fafc; }
-  .dark .po-pick-sum { background: transparent; }
   .dark .po-pick-sum:hover { background: rgba(30, 41, 59, .5); }
-  .po-pick-caret { transition: transform .15s ease; color: #cbd5e1; }
+  .po-pick-sum:focus-visible, .po-pick-copy:focus-visible, .po-pick-close:focus-visible {
+    outline: 2px solid var(--primary-color); outline-offset: -2px;
+  }
+  .po-pick-sum .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .po-pick-caret { flex: none; transition: transform .15s ease; color: #94a3b8; }
   .po-pick-caret.is-open { transform: rotate(90deg); }
   .po-pick-no { font-weight: 700; color: #0f172a; }
   .dark .po-pick-no { color: #e2e8f0; }
-  .po-pick-amt { font-weight: 700; }
+  .po-pick-amt { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .dark .po-pick-amt { color: #e2e8f0; }
+  /* The unit sits under the figure rather than beside it: an order covering
+     two units has no single one to print, so it says how many lines instead. */
+  .po-pick-numsub { display: block; font-size: .6875rem; font-weight: 500; color: #94a3b8; }
+
+  /* Status as a pill, so how far along an order is can be read at a glance
+     rather than by comparing two words in the same grey as the date. */
+  .po-pick-pill {
+    display: inline-flex; align-items: center; gap: .3125rem; border-radius: 999px;
+    padding: .125rem .5rem; font-size: .6875rem; font-weight: 600; white-space: nowrap;
+  }
+  .po-pick-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 999px; background: currentColor; }
+  .po-pick-pill--open { background: #eff6ff; color: #1d4ed8; }
+  .po-pick-pill--part { background: #fffbeb; color: #b45309; }
+  .dark .po-pick-pill--open { background: rgba(29, 78, 216, .2); color: #93c5fd; }
+  .dark .po-pick-pill--part { background: rgba(180, 83, 9, .2); color: #fcd34d; }
+
+  .po-pick-act { flex: none; width: var(--pick-act); display: flex; justify-content: flex-end; }
+  .po-pick-copy {
+    display: inline-flex; align-items: center; gap: .375rem; border-radius: .5rem;
+    background: var(--primary-color); padding: .4375rem .75rem;
+    font-size: .75rem; font-weight: 600; color: #fff; white-space: nowrap;
+    transition: filter .12s ease;
+  }
+  .po-pick-copy:hover { filter: brightness(1.08); }
+
   .po-pick-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  .po-pick-lines-wrap { border-top: 1px solid #e2e8f0; background: #f8fafc; }
+  .dark .po-pick-lines-wrap { border-top-color: #1e293b; background: rgba(15, 23, 42, .6); }
   .po-pick-lines th {
-    padding: .4375rem .875rem; font-size: .625rem; font-weight: 700;
+    padding: .5rem .875rem; font-size: .625rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; text-align: left;
   }
-  .po-pick-lines td { padding: .375rem .875rem; border-top: 1px dashed #e8eef5; }
-  .dark .po-pick-lines td { border-top-color: rgba(30, 41, 59, .9); }
+  .po-pick-lines td { padding: .4375rem .875rem; border-top: 1px solid #e8eef5; color: #334155; }
+  .dark .po-pick-lines td { border-top-color: rgba(30, 41, 59, .9); color: #cbd5e1; }
   .po-pick-lines .is-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .po-pick-empty { padding: 2.5rem 1rem; text-align: center; font-size: .8125rem; color: #94a3b8; }
+
+  .po-pick-empty {
+    padding: 3rem 1rem; text-align: center; font-size: .875rem; color: #64748b;
+  }
+  .dark .po-pick-empty { color: #94a3b8; }
+  .po-pick-empty svg { margin: 0 auto .625rem; color: #cbd5e1; }
+  .dark .po-pick-empty svg { color: #334155; }
+
+  /* Below the grid's width the columns cannot hold their meaning, so the row
+     stops pretending to be a table and reads as a card. */
+  @media (max-width: 48rem) {
+    .po-pick-scroll { min-width: 0; }
+    .po-pick-cols { display: none; }
+    .po-pick-row { flex-wrap: wrap; padding: 0 .875rem .875rem; }
+    .po-pick-sum {
+      grid-template-columns: 1.5rem 1fr auto; gap: .5rem .625rem;
+      padding: .875rem 0 .625rem; border-radius: 0;
+    }
+    .po-pick-sum > .po-pick-mob { grid-column: 2 / -1; }
+    .po-pick-act { width: 100%; }
+    .po-pick-copy { width: 100%; justify-content: center; }
+  }
   /* Which of the two things this screen is doing, said on the page rather than
      left for somebody to work out from what they clicked. */
   .bill-mode {
@@ -267,6 +377,7 @@
     font-size: .6875rem; font-weight: 600; color: #475569;
   }
   .po-pick-again.is-on { display: inline-flex; }
+  a.po-pick-again { text-decoration: none; }
   .po-pick-again:hover { background: #f8fafc; }
   .dark .po-pick-again { border-color: #1e293b; color: #cbd5e1; }
   .dark .po-pick-again:hover { background: rgba(30, 41, 59, .6); }
@@ -291,21 +402,33 @@
           <select name="supplier" id="supplier" class="form-select" required>
             <option value="">Select supplier…</option>
             {% for row in suppliers %}
-              <option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
+              <option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>
             {% endfor %}
           </select>
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
+        {# What this supplier is owed, off the ledger. Shown as soon as one is #}
+        {# picked, including when the screen opened on one already chosen.     #}
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
         <span id="bill-mode" class="bill-mode">
-          Billing <b id="bill-mode-no"></b>
+          Against <b id="bill-mode-no"></b>
         </span>
+        {# Once the invoice is against an order, "use it" is done and the thing #}
+        {# somebody wants is to read it. The picker keeps its own button so an  #}
+        {# order chosen by mistake can still be swapped.                        #}
+        <a id="po-view" class="po-pick-again" target="_blank" rel="noopener"
+           data-url="{% url 'inventory:purchase_order_detail' 0 %}" href="#">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span id="po-view-text">View order</span>
+        </a>
         <button type="button" id="po-pick-open" class="po-pick-again">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <path d="M14 2v6h6"></path><path d="M8 13h8M8 17h5"></path>
           </svg>
-          <span id="po-pick-open-text">Bill a purchase order</span>
+          <span id="po-pick-open-text">Choose a purchase order</span>
         </button>
       </div>
 
@@ -324,7 +447,7 @@
         </div>
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
-          <input type="date" name="bill_date" id="bill_date" class="form-input h-10 w-full" value="{{ posted.bill_date|default:today|date:'Y-m-d' }}">
+          <input type="date" name="bill_date" id="bill_date" class="form-input h-10 w-full" value="{% if posted.bill_date %}{{ posted.bill_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}">
         </div>
       </div>
     </div>
@@ -369,6 +492,10 @@
         <div class="pur-total-row">
           <label class="pur-label" for="discount_amount">Discount (Rs)</label>
           <input type="number" step="0.01" min="0" name="discount_amount" id="discount_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.discount_amount|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="pur-total-row">
+          <label class="pur-label" for="freight_amount">Freight (Rs)</label>
+          <input type="number" step="0.01" min="0" name="freight_amount" id="freight_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.freight_amount|default:'' }}" placeholder="0.00">
         </div>
         <div class="pur-total-row">
           <label class="pur-label" for="tax_amount">Tax (Rs)</label>
@@ -425,25 +552,33 @@
   </div>
 </div>
 
-<div class="po-pick-backdrop" id="po-picker" role="dialog" aria-modal="true" aria-labelledby="po-pick-title">
+<div class="po-pick po-pick-backdrop" id="po-picker" role="dialog" aria-modal="true" aria-labelledby="po-pick-title">
   <div class="po-pick-card">
     <div class="po-pick-head">
       <div>
-        <h2 class="po-pick-title" id="po-pick-title">Purchase orders &mdash; <span id="po-pick-supplier"></span></h2>
-        <p class="po-pick-meta">Choose an order and this invoice is billed against it.</p>
+        <h2 class="po-pick-title" id="po-pick-title">
+          Open orders
+          <span class="po-pick-count" id="po-pick-count"></span>
+        </h2>
+        <p class="po-pick-sub" id="po-pick-supplier"></p>
       </div>
-      <button type="button" class="po-pick-close" data-po-close>Close</button>
+      <button type="button" class="po-pick-close" data-po-close aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
     </div>
     <div class="po-pick-body">
       <div class="po-pick-scroll">
-        <div class="po-pick-cols">
-          <span></span>
-          <span>Order #</span>
-          <span>Date</span>
-          <span>Status</span>
-          <span class="is-num">Items</span>
-          <span class="is-num">To bill</span>
-          <span class="is-act">Value</span>
+        <div class="po-pick-cols" aria-hidden="true">
+          <div class="po-pick-cols-grid">
+            <span></span>
+            <span>Order #</span>
+            <span>Date</span>
+            <span>Status</span>
+            <span class="is-num">Items</span>
+            <span class="is-num">To invoice</span>
+            <span class="is-num">Value</span>
+          </div>
+          <span class="po-pick-cols-act"></span>
         </div>
         <div id="po-pick-list"></div>
       </div>
@@ -452,6 +587,8 @@
 </div>
 
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
+{# The grid as it was submitted, put back when the server refuses the invoice. #}
+<script id="posted-lines" type="application/json">{{ posted_lines_json|safe }}</script>
 <script>
 (function () {
   const ITEMS = JSON.parse(document.getElementById('items-data').textContent);
@@ -712,14 +849,35 @@
 
   const supplier = document.getElementById('supplier');
   const supplierBalance = document.getElementById('supplier-balance');
+  // Written on picking a supplier and again at load, because the screen can
+  // open on one already chosen -- opened off a purchase order, or handed back
+  // after the server refused the invoice -- and a balance that only appears
+  // when the box is touched is a balance nobody sees on either of those.
+  function writeSupplierBalance() {
+    const option = supplier.options[supplier.selectedIndex];
+    const raw = option ? option.dataset.balance : '';
+    if (!supplier.value || raw === '' || raw === undefined) {
+      supplierBalance.classList.add('hidden');
+      return;
+    }
+    const owed = Number(raw) || 0;
+    supplierBalance.classList.remove('hidden');
+    // Owed and in credit are different facts, and reading one as the other is
+    // how a supplier gets paid twice.
+    supplierBalance.classList.toggle('pur-bal--owed', owed > 0);
+    supplierBalance.classList.toggle('pur-bal--credit', owed < 0);
+    supplierBalance.textContent = owed < 0
+      ? 'In credit: ' + moneyText(Math.abs(owed))
+      : 'Balance owed: ' + moneyText(owed);
+  }
+
   supplier.addEventListener('change', () => {
     const option = supplier.options[supplier.selectedIndex];
-    const balance = option ? option.dataset.balance : '';
-    const show = Boolean(supplier.value && balance);
-    supplierBalance.classList.toggle('hidden', !show);
-    if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
+    writeSupplierBalance();
     loadOrders(supplier.value, option ? option.textContent.trim() : '', true);
   });
+
+  writeSupplierBalance();
 
   // ----- copy the lines off a purchase order -----
   // Somebody typing a bill is usually holding the order it was raised against,
@@ -731,18 +889,54 @@
   const modeNumber = document.getElementById('bill-mode-no');
   const pickerList = document.getElementById('po-pick-list');
   const pickerName = document.getElementById('po-pick-supplier');
+  const pickerCount = document.getElementById('po-pick-count');
+  let lastFocused = null;
   const pickAgain = document.getElementById('po-pick-open');
   const pickAgainText = document.getElementById('po-pick-open-text');
+  const viewOrder = document.getElementById('po-view');
+  const viewOrderText = document.getElementById('po-view-text');
   let orders = [];
 
-  function openPicker() { if (orders.length) picker.classList.add('is-open'); }
-  function closePicker() { picker.classList.remove('is-open'); }
+  // A dialog that does not hold focus is a dialog a keyboard walks straight
+  // out of the back of, into the form it is covering.
+  const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+  function openPicker() {
+    if (!orders.length) return;
+    lastFocused = document.activeElement;
+    picker.classList.add('is-open');
+    const first = picker.querySelector('.po-pick-sum') || picker.querySelector('[data-po-close]');
+    if (first) first.focus();
+  }
+
+  function closePicker() {
+    if (!picker.classList.contains('is-open')) return;
+    picker.classList.remove('is-open');
+    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+    lastFocused = null;
+  }
+
+  picker.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const stops = Array.from(picker.querySelectorAll(FOCUSABLE))
+      .filter(el => el.offsetParent !== null);
+    if (!stops.length) return;
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
 
   function loadOrders(supplierId, name, autoOpen) {
     orders = [];
     pickAgain.classList.remove('is-on');
     if (!supplierId) { closePicker(); return; }
-    pickerName.textContent = name || '';
+    pickerName.textContent = name ? 'From ' + name : '';
     fetch('{% url "inventory:supplier_po_options" %}?supplier=' + encodeURIComponent(supplierId), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
     })
@@ -750,13 +944,12 @@
       .then(data => {
         orders = data.orders || [];
         drawOrders();
+        nameHeldOrder();
         // A supplier with nothing on order is not worth a dialog: the operator
         // is typing the bill by hand, which is what the screen already is.
         if (orders.length) {
           pickAgain.classList.add('is-on');
-          pickAgainText.textContent = orders.length === 1
-            ? 'Bill purchase order ' + orders[0].number
-            : 'Bill a purchase order (' + orders.length + ')';
+          syncMode();
           if (autoOpen) openPicker();
         }
       })
@@ -766,32 +959,65 @@
   const qtyText = n => (Math.round((Number(n) || 0) * 10000) / 10000)
     .toLocaleString('en-IN', { maximumFractionDigits: 4 });
 
+  const escapeText = value => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  // Two states an open order can be in, and they are worth telling apart: one
+  // has had nothing invoiced against it, the other is part way through.
+  function statusPill(order) {
+    const label = escapeText(order.status || 'Submitted');
+    const part = /partial/i.test(order.status || '');
+    return '<span class="po-pick-pill po-pick-pill--' + (part ? 'part' : 'open') + '">' + label + '</span>';
+  }
+
   function drawOrders() {
-    pickerList.innerHTML = orders.length
-      ? ''
-      : '<div class="po-pick-empty">Nothing is on order from this supplier.</div>';
+    pickerCount.textContent = orders.length ? orders.length : '';
+    if (!orders.length) {
+      pickerList.innerHTML =
+        '<div class="po-pick-empty">' +
+          '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M9 3h6l1 3H8l1-3zM5 6h14l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6z"></path></svg>' +
+          'Nothing is on order from this supplier.' +
+        '</div>';
+      return;
+    }
+
+    pickerList.innerHTML = '';
     orders.forEach((order, index) => {
       const box = document.createElement('div');
       box.className = 'po-pick-item';
+      const linesId = 'po-pick-lines-' + index;
+      const itemWord = order.items === 1 ? '1 line' : order.items + ' lines';
+
       box.innerHTML =
-        '<button type="button" class="po-pick-sum" data-toggle="' + index + '">' +
-          '<svg class="po-pick-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>' +
-          '<span class="po-pick-no">' + order.number + '</span>' +
-          '<span class="po-pick-meta">' + (order.date_text || '') + '</span>' +
-          '<span class="po-pick-meta">' + (order.status || '') + '</span>' +
-          '<span class="is-num">' + order.items + '</span>' +
-          '<span class="is-num">' + qtyText(order.quantity) + '</span>' +
-          '<span class="is-act"><span class="po-pick-amt">' + moneyText(order.value) + '</span> ' +
-            '<span class="po-pick-copy" data-copy="' + index + '">Bill this</span></span>' +
-        '</button>' +
-        '<div data-lines="' + index + '" hidden>' +
+        '<div class="po-pick-row">' +
+          '<button type="button" class="po-pick-sum" data-toggle="' + index + '" ' +
+                  'aria-expanded="false" aria-controls="' + linesId + '">' +
+            '<svg class="po-pick-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>' +
+            '<span class="po-pick-no">' + escapeText(order.number) + '</span>' +
+            '<span class="po-pick-meta po-pick-mob">' + escapeText(order.date_text || '') + '</span>' +
+            '<span class="po-pick-mob">' + statusPill(order) + '</span>' +
+            '<span class="is-num po-pick-meta">' + order.items + '</span>' +
+            '<span class="is-num">' + qtyText(order.quantity) +
+              '<span class="po-pick-numsub">' + itemWord + '</span></span>' +
+            '<span class="is-num"><span class="po-pick-amt">' + moneyText(order.value) + '</span></span>' +
+          '</button>' +
+          '<div class="po-pick-act">' +
+            '<button type="button" class="po-pick-copy" data-copy="' + index + '">' +
+              '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>' +
+              'Use this order' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="po-pick-lines-wrap" id="' + linesId + '" hidden>' +
           '<table class="po-pick-lines"><thead><tr>' +
-            '<th>#</th><th>Item</th><th class="is-num">To bill</th><th>Unit</th>' +
+            '<th>#</th><th>Item</th><th class="is-num">To invoice</th><th>Unit</th>' +
             '<th class="is-num">Rate</th><th class="is-num">Amount</th>' +
           '</tr></thead><tbody>' +
           order.lines.map((line, n) =>
-            '<tr><td>' + (n + 1) + '</td><td>' + line.name + '</td><td class="is-num">' + qtyText(line.quantity) +
-            '</td><td>' + (line.unit || '') + '</td><td class="is-num">' + moneyText(line.rate) +
+            '<tr><td>' + (n + 1) + '</td><td>' + escapeText(line.name) + '</td><td class="is-num">' + qtyText(line.quantity) +
+            '</td><td>' + escapeText(line.unit || '') + '</td><td class="is-num">' + moneyText(line.rate) +
             '</td><td class="is-num">' + moneyText(line.amount) + '</td></tr>'
           ).join('') +
           '</tbody></table>' +
@@ -809,10 +1035,12 @@
     }
     const head = event.target.closest('[data-toggle]');
     if (!head) return;
-    const index = head.dataset.toggle;
-    const lines = pickerList.querySelector('[data-lines="' + index + '"]');
-    lines.hidden = !lines.hidden;
-    head.querySelector('.po-pick-caret').classList.toggle('is-open', !lines.hidden);
+    const lines = document.getElementById(head.getAttribute('aria-controls'));
+    const open = lines.hidden;
+    lines.hidden = !open;
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    head.querySelector('.po-pick-caret').classList.toggle('is-open', open);
+    head.closest('.po-pick-item').classList.toggle('is-open', open);
   });
 
   function copyOrder(order) {
@@ -840,27 +1068,66 @@
     document.dispatchEvent(new Event('searchable-select:refresh'));
     renumber();
     billing = order.number;
+    billingId = order.id;
     syncMode();
     recalc();
     closePicker();
   }
 
   // Which of the two things this screen is doing: buying goods with no order
-  // behind them, or billing an order that was already raised.
+  // behind them, or invoicing an order that was already raised. The id is kept
+  // beside the number because the number is what is printed and the id is what
+  // the order's own page is addressed by.
   let billing = null;
+  let billingId = null;
+
+  // A rejected invoice comes back holding order lines but not the order's
+  // number, so it is read back off the orders as soon as they load.
+  function nameHeldOrder() {
+    if (billing) return;
+    const held = Array.from(rowsBox.querySelectorAll('.line-order-item'))
+      .map(box => box.value).find(Boolean);
+    if (!held) return;
+    const found = orders.find(order => (order.lines || [])
+      .some(line => String(line.order_item_id) === String(held)));
+    if (found) {
+      billing = found.number;
+      billingId = found.id;
+      syncMode();
+    }
+  }
 
   function syncMode() {
     const held = Array.from(rowsBox.querySelectorAll('.line-order-item')).filter(box => box.value);
-    if (!held.length) billing = null;
+    if (!held.length) { billing = null; billingId = null; }
     const on = Boolean(billing);
     modeNote.classList.toggle('is-on', on);
     if (on) modeNumber.textContent = billing;
+
+    // Against an order: read it, or swap it. Not against one: choose one.
+    // Two buttons that both say "use purchase order PO-51" are one button too
+    // many, and neither of them is the one somebody is reaching for.
+    const canView = on && Boolean(billingId);
+    viewOrder.classList.toggle('is-on', canView);
+    if (canView) {
+      viewOrder.href = viewOrder.dataset.url.replace('/0/', '/' + billingId + '/');
+      viewOrderText.textContent = 'View ' + billing;
+    }
+    if (orders.length) {
+      pickAgainText.textContent = on
+        ? 'Change order'
+        : (orders.length === 1
+            ? 'Use purchase order ' + orders[0].number
+            : 'Choose a purchase order (' + orders.length + ')');
+    }
   }
 
   picker.addEventListener('click', event => {
     if (event.target === picker || event.target.closest('[data-po-close]')) closePicker();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') closePicker(); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && picker.classList.contains('is-open')) closePicker();
+  });
   pickAgain.addEventListener('click', openPicker);
 
   // A supplier already chosen when the page opened -- a form coming back with
@@ -1015,8 +1282,47 @@
     if (next.select) next.select();
   });
 
-  addRow();
-  addRow();
+  // A rejected invoice comes back with its own lines. Retyping a page of them
+  // because one box at the top was wrong is how an operator ends up entering
+  // the invoice somewhere else.
+  const POSTED_LINES = JSON.parse(
+    (document.getElementById('posted-lines') || {}).textContent || '[]'
+  );
+
+  function restoreLine(line) {
+    const row = addRow();
+    const itemPick = row.querySelector('.line-item');
+    const unit = row.querySelector('.line-unit');
+    if (line.item_id) {
+      itemPick.value = String(line.item_id);
+      // The unit list is narrowed by the item, so it is rebuilt before the
+      // unit that was chosen is put back on it.
+      const chosen = ITEMS.find(i => String(i.id) === String(line.item_id));
+      if (chosen) unit.innerHTML = unitOptions(line.uom_id || chosen.uom, chosen.units);
+    }
+    if (line.uom_id) unit.value = String(line.uom_id);
+    unit.dataset.factor = String(baseFactor(row));
+    writeUnitNotes(row);
+    if (line.quantity) row.querySelector('.line-qty').value = line.quantity;
+    if (line.rate) row.querySelector('.line-rate').value = line.rate;
+    // Kept, so a rejected invoice that was drawn off an order is still drawn
+    // off it on the second attempt rather than quietly raising a new one.
+    if (line.order_item_id) row.querySelector('.line-order-item').value = String(line.order_item_id);
+  }
+
+  if (POSTED_LINES.length) {
+    POSTED_LINES.forEach(restoreLine);
+    // The button labels are rendered when a select is enhanced, so they are put
+    // back in step with the values just written onto the selects.
+    document.dispatchEvent(new Event('searchable-select:refresh'));
+    // Which order the rows came off is named once the orders arrive; at this
+    // point nothing has been fetched yet.
+    syncMode();
+    recalc();
+  } else {
+    addRow();
+    addRow();
+  }
   recalc();
 })();
 </script>

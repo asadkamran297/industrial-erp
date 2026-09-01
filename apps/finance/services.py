@@ -18,7 +18,7 @@ from apps.core.constants import (
     CASH_FLOW_SECTION_LABELS,
     GL_CASH_PATH,
     GL_COGS_PATH,
-    GL_GRN_CLEARING_PATH,
+    GL_FREIGHT_PATH,
     GL_INPUT_TAX_PATH,
     GL_PURCHASE_VARIANCE_PATH,
     GL_INVENTORY_ADJUSTMENT_PATH,
@@ -514,6 +514,46 @@ def create_supplier_payable_account(*, supplier, user=None):
     return node
 
 
+def supplier_payable_balances():
+    """What is owed to each supplier now, keyed by supplier id.
+
+    Read off the payable accounts rather than off the invoices, because a
+    supplier is also paid by vouchers entered on the payments screen; adding up
+    invoices would show a debt that was settled last week.
+
+    Positive means owed. A credit balance on a liability is the normal side, so
+    the sign is turned round here rather than in every caller.
+    """
+    from apps.inventory.models import Supplier  # lazy: inventory imports finance
+
+    payables = get_payables_group()
+    accounts = dict(
+        ChartOfAccount.objects.filter(parent=payables, is_group=False)
+        .values_list("title", "code")
+    )
+    if not accounts:
+        return {}
+
+    movement = {
+        row["account_no"]: (row["credit"] or Decimal("0.00")) - (row["debit"] or Decimal("0.00"))
+        for row in AccountVoucherLine.objects
+        .filter(account_no__in=accounts.values())
+        .values("account_no")
+        .annotate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+    }
+
+    # The account is matched to the supplier by name, which is how it was
+    # created. A supplier renamed since keeps the account it was opened with,
+    # so its balance falls back to what the master carries.
+    balances = {}
+    for supplier_id, name, opening in Supplier.objects.values_list("id", "name", "opening_balance"):
+        code = accounts.get(name)
+        balances[supplier_id] = (
+            movement.get(code, Decimal("0.00")) if code else (opening or Decimal("0.00"))
+        )
+    return balances
+
+
 def _post_voucher(*, source_ref, voucher_type, voucher_date, account_no, entries, remarks,
                   settlement_mode="", party_account_no="", user=None):
     """Create one balanced, posted voucher from ``entries`` and return it.
@@ -716,6 +756,65 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
             (inventory.code, value, zero, f"Stock received on {receipt.grn_number}"),
             (clearing.code, zero, value, f"Received from {supplier.name}, not yet invoiced ({receipt.grn_number})"),
         ],
+        user=user,
+    )
+
+
+def post_purchase_invoice_to_gl(*, invoice, user=None):
+    """Book a supplier's invoice. The only posting the purchase side makes.
+
+        Dr Inventory            the goods, at the rate invoiced, net of discount
+        Dr Freight              carriage the supplier charged
+        Dr Input Sales Tax      tax the supplier charged, recoverable
+            Cr Supplier payable     what is now owed
+
+    Nothing is held in a clearing account and nothing is matched later. There
+    is no receipt between the order and the invoice, so the asset and the debt
+    arise on the same document at the same moment, and the invoice is the whole
+    story of the purchase.
+
+    Freight is a cost of its own rather than a variance: with no receipt to
+    compare against there is no second figure for it to be a difference from.
+    A discount the supplier allowed is already off the goods, because it
+    reduces what the stock actually cost.
+    """
+    zero = Decimal("0.00")
+    supplier = invoice.supplier
+    if not supplier:
+        raise ValidationError("A supplier is required to post a purchase invoice to the general ledger.")
+
+    goods = (invoice.goods_amount or zero).quantize(TWO_DP)
+    freight = (invoice.freight_amount or zero).quantize(TWO_DP)
+    discount = (invoice.discount_amount or zero).quantize(TWO_DP)
+    tax = (invoice.tax_amount or zero).quantize(TWO_DP)
+    payable = (invoice.total_amount or zero).quantize(TWO_DP)
+
+    # The discount comes off the goods rather than being posted on its own:
+    # what the stock cost is what was paid for it, not the list price with an
+    # allowance parked elsewhere.
+    stock_value = (goods - discount).quantize(TWO_DP)
+
+    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
+    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+
+    entries = [(inventory.code, stock_value, zero, f"Stock taken in on {invoice.invoice_num}")]
+    if freight:
+        entries.append((gl_account(GL_FREIGHT_PATH, user=user).code, freight, zero,
+                        f"Freight and charges on {invoice.invoice_num}"))
+    if tax:
+        entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
+                        f"Input sales tax on {invoice.supplier_invoice_num}"))
+    entries.append((supplier_account.code, zero, payable,
+                    f"Payable to {supplier.name} on {invoice.supplier_invoice_num}"))
+
+    return _post_voucher(
+        source_ref=f"inv_purchase_invoices:{invoice.pk}",
+        voucher_type=VOUCHER_TYPE_PURCHASE,
+        voucher_date=invoice.invoice_date,
+        settlement_mode=SETTLEMENT_CREDIT,
+        account_no=supplier_account.code,
+        remarks=f"Auto-posted from purchase invoice {invoice.invoice_num} ({invoice.supplier_invoice_num})",
+        entries=entries,
         user=user,
     )
 

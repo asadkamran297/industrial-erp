@@ -16,8 +16,10 @@ from apps.core.constants import (
     INV_PURCHASE_BILL_STATUS_CHOICES,
     INV_PO_CANCEL_REASONS,
     INV_PO_CLOSE_SHORT_REASONS,
+    INV_PURCHASE_INVOICE_STATUS_CHOICES,
     INV_PURCHASE_ORDER_STATUS_CHOICES,
     INV_RETURN_STATUS_CHOICES,
+    INV_SALES_ORDER_STATUS_CHOICES,
     INV_TRANSACTION_TYPE_CHOICES,
     INVENTORY_KIND_PRODUCT,
     NO,
@@ -27,10 +29,13 @@ from apps.core.constants import (
     STATUS_CREATED,
     STATUS_DRAFT,
     STATUS_CANCELLED,
-    STATUS_CLOSED_SHORT,
-    STATUS_FULLY_RECEIVED,
+    STATUS_CLOSED,
+    STATUS_CLOSED,
+    STATUS_FULLY_INVOICED,
+    STATUS_FULLY_INVOICED,
+    STATUS_PARTIALLY_INVOICED,
     STATUS_POSTED,
-    STATUS_RAISED,
+    STATUS_SUBMITTED,
     STATUS_SUBMITTED,
     YES,
     YES_NO_CHOICES,
@@ -271,12 +276,7 @@ class PurchaseOrder(BaseModel):
     purchase_date = models.DateField(default=timezone.localdate)
     quot_num = models.CharField(max_length=80, blank=True)
     quot_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_RAISED)
-    # A bill entered straight off the supplier's invoice, with no order raised
-    # beforehand. It still runs through the order and receipt tables so stock,
-    # the item ledger and the general ledger read the same as any other
-    # purchase; the flag only keeps it off the outstanding-orders list.
-    is_direct = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_DRAFT)
     # When the goods were promised. Nothing enforces it; it is what makes a
     # delivery late, which is the only way an order that is quietly not
     # arriving ever gets noticed.
@@ -315,9 +315,6 @@ class PurchaseOrder(BaseModel):
     class Meta:
         db_table = "inv_purchase_orders"
         ordering = ["-purchase_date", "-id"]
-        # Unique within a kind rather than across both: PO-1 and PI-000001 are
-        # different documents and are allowed to share a sequence number.
-        constraints = [models.UniqueConstraint(fields=["is_direct", "seq_num"], name="uniq_purchase_seq_per_kind")]
         indexes = [
             models.Index(fields=["purchase_num"]),
             models.Index(fields=["purchase_date"]),
@@ -325,13 +322,40 @@ class PurchaseOrder(BaseModel):
             models.Index(fields=["status", "-purchase_date"]),
             # Supplier history and the pending-receipt lookup.
             models.Index(fields=["supplier", "-purchase_date"]),
-            models.Index(fields=["is_direct", "status"]),
         ]
 
     @property
     def is_closed(self):
         """Finished with, however it finished. Nothing more is expected on it."""
-        return self.status in (STATUS_FULLY_RECEIVED, STATUS_CLOSED_SHORT, STATUS_CANCELLED)
+        return self.status in (STATUS_FULLY_INVOICED, STATUS_CLOSED, STATUS_CANCELLED)
+
+    @property
+    def is_open(self):
+        """Still live: committed, and something on it is still to be invoiced."""
+        return self.status in (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
+
+    @property
+    def qty_pending(self):
+        """Still to be invoiced across the whole order."""
+        return sum((line.qty_pending for line in self.items.all()), Decimal("0.0000"))
+
+    def invoiced_status(self):
+        """What this order's status should be, read off its own lines.
+
+        Draft and the two ended states are decisions somebody made and are left
+        alone; everything else follows the lines, so an order cannot sit at
+        "submitted" with nothing left on it.
+        """
+        if self.status in (STATUS_DRAFT, STATUS_CANCELLED, STATUS_CLOSED):
+            return self.status
+        lines = list(self.items.all())
+        if not lines:
+            return STATUS_SUBMITTED
+        if all(line.is_fully_invoiced for line in lines):
+            return STATUS_FULLY_INVOICED
+        if any((line.qty_invoiced or Decimal("0")) > 0 for line in lines):
+            return STATUS_PARTIALLY_INVOICED
+        return STATUS_SUBMITTED
 
     @property
     def close_reason_label(self):
@@ -341,13 +365,13 @@ class PurchaseOrder(BaseModel):
     def save(self, *args, **kwargs):
         if not self.seq_num:
             last = (
-                PurchaseOrder.all_objects.filter(is_direct=self.is_direct)
-                .order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+                PurchaseOrder.all_objects.order_by("-seq_num")
+                .values_list("seq_num", flat=True).first() or 0
             )
             self.seq_num = last + 1
-        # Directs are their own document — an invoice, not an order — so they
-        # read PI-… off their own counter.
-        self.purchase_num = f"PI-{self.seq_num:06d}" if self.is_direct else f"PO-{self.seq_num}"
+        # One kind of purchase order now: an invoice is its own document with
+        # its own counter, so nothing here has to branch on which it is.
+        self.purchase_num = f"PO-{self.seq_num}"
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -375,10 +399,10 @@ class PurchaseOrderItem(BaseModel):
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    # How much of this line a supplier bill has been entered against. The bill
-    # is what books the goods in now that no separate receipt is raised, so
-    # this is what says whether the line is still owed.
-    billed_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
+    # How much of this line an invoice has been entered against. The invoice is
+    # the only thing that books goods in, so this is what says whether the line
+    # is still owed.
+    qty_invoiced = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     descr = models.CharField(max_length=255)
     remarks = models.CharField(max_length=255, blank=True, default="")
     # Set when somebody decides the balance on this line is never coming. It
@@ -402,12 +426,36 @@ class PurchaseOrderItem(BaseModel):
         return Decimal("0.0000") if self.closed else self.pending_receive_qty
 
     @property
-    def pending_bill_qty(self):
-        """Units on this line no supplier bill has been entered against."""
+    def qty_ordered(self):
+        """What was ordered on this line.
+
+        An alias over ``quantity`` rather than a column of its own: the two
+        would have to be kept equal for ever, and a second copy of a number is
+        a second thing that can be wrong.
+        """
+        return self.quantity or Decimal("0.0000")
+
+    @property
+    def qty_pending(self):
+        """Ordered but not yet invoiced. Nil once the line has been closed.
+
+        Derived rather than stored for the same reason: a column holding a
+        subtraction drifts the first time one of its two inputs is written
+        without the other.
+        """
         if self.closed:
             return Decimal("0.0000")
-        pending = (self.quantity or Decimal("0.0000")) - (self.billed_qty or Decimal("0.0000"))
+        pending = self.qty_ordered - (self.qty_invoiced or Decimal("0.0000"))
         return pending if pending > Decimal("0.0000") else Decimal("0.0000")
+
+    @property
+    def is_fully_invoiced(self):
+        return self.qty_pending <= Decimal("0.0000")
+
+    @property
+    def pending_bill_qty(self):
+        """Old name for :attr:`qty_pending`, kept while callers move over."""
+        return self.qty_pending
 
     @property
     def total_amount(self):
@@ -431,120 +479,54 @@ class PurchaseOrderItem(BaseModel):
         super().save(*args, **kwargs)
 
 
-class PurchaseOrderItemReceived(BaseModel):
-    purchase_order_item = models.ForeignKey(PurchaseOrderItem, related_name="receipts", on_delete=models.PROTECT, db_column="inv_purchase_order_item_id")
-    seq_num = models.PositiveIntegerField()
-    purchase_num = models.CharField(max_length=40)
-    purchase_date = models.DateField()
-    descr = models.CharField(max_length=255)
-    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_CREATED)
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
-    quantity = models.DecimalField(max_digits=18, decimal_places=4)
-    receive_date = models.DateField(default=timezone.localdate)
-    invoice_num = models.CharField(max_length=80, blank=True)
-    invoice_date = models.DateField(null=True, blank=True)
-    grn_number = models.CharField(max_length=80, blank=True)
-    # Kept as it was -- the DC and the vehicle joined into one string -- so the
-    # receipts booked before they were held apart still read.
-    rv_number = models.CharField(max_length=80, blank=True)
-    # The supplier's own delivery paperwork, and what it arrived on. The
-    # driver is held as a number rather than a name: it is what the gate can
-    # actually check the delivery against, and what anybody chasing a short
-    # delivery rings.
-    dc_number = models.CharField(max_length=80, blank=True)
-    vehicle_no = models.CharField(max_length=60, blank=True)
-    driver_number = models.CharField(max_length=60, blank=True)
-    # Who checked the goods at the gate. A name, not a user: the person who
-    # counted the delivery is often not the person at the keyboard.
-    inspected_by = models.CharField(max_length=120, blank=True)
-    # What the store wrote when the goods came through the gate: who checked
-    # them, what was rejected, anything else about this delivery. Held on the
-    # receipt because it is a fact about this delivery, not about the order.
-    remarks = models.TextField(blank=True)
-    extra_qty_tag = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
-    extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # What the goods were worth when they came in. The bill
-    # is matched against this figure rather than against the order's rate,
-    # because this is the amount actually parked in GRN Clearing.
-    landed_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # How much of this receipt a supplier bill has been entered against. Kept
-    # here rather than read off a text invoice number, so a receipt billed in
-    # two instalments is a fact the books hold rather than a guess.
-    billed_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    # A posted receipt is never deleted. Reversing it writes a mirror-image
-    # receipt and marks both, so the pair stays visible and nets to nothing.
-    reversed = models.BooleanField(default=False)
-    reversal_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT,
-                                    related_name="reversals", db_column="reversal_of_id")
-    reverse_reason = models.CharField(max_length=40, blank=True)
-    reversed_on = models.DateField(null=True, blank=True)
+class PurchaseInvoice(BaseModel):
+    """The supplier's invoice. The only financial document on the purchase side.
 
-    @property
-    def received_units(self):
-        return (self.quantity or Decimal("0.0000")) + (self.extra_qty or Decimal("0.0000"))
+    Submitting one takes the goods into stock, writes the item ledger and posts
+    the voucher, in a single transaction. An order may sit behind it and may
+    not; the order is a statement of intent and moves nothing, so an invoice
+    entered with no order behind it is a complete purchase rather than an
+    exception for somebody to reconcile later.
 
-    @property
-    def pending_bill_qty(self):
-        """Units in the godown that no supplier bill has been entered against."""
-        if self.reversed or self.reversal_of_id:
-            return Decimal("0.0000")
-        pending = self.received_units - (self.billed_qty or Decimal("0.0000"))
-        return pending if pending > Decimal("0.0000") else Decimal("0.0000")
-
-    @property
-    def landed_rate(self):
-        units = self.received_units
-        return (self.landed_amount / units) if units else Decimal("0.00")
-
-    class Meta:
-        db_table = "inv_purchase_order_item_received"
-        ordering = ["-receive_date", "-id"]
-
-
-class PurchaseBill(BaseModel):
-    """The supplier's own invoice, entered against goods that already arrived.
-
-    Kept apart from the goods receipt on purpose. The receipt says what came
-    through the gate and is written by the store; the bill says what is being
-    asked for and is written by the supplier. Holding them as one document
-    means there is nothing to compare, and nothing to compare is how a mill
-    ends up paying for weight it never took in.
-
-    Posting a bill debits away the value sitting in GRN Clearing and credits
-    the real payable. Any difference between the two -- the supplier billing a
-    rate the goods were not received at -- goes to Purchase Price Variance
-    rather than back onto the stock, because some of those units may already
-    have been sold and their cost is settled.
+    Nothing is matched against anything. There is no receipt between the order
+    and the invoice, so freight and discount land on the invoice total instead
+    of being held apart as a variance against a figure that no longer exists.
     """
 
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
-    purchase_order = models.ForeignKey(PurchaseOrder, related_name="bills", on_delete=models.PROTECT,
-                                       db_column="inv_purchase_order_id")
+    # Nullable on purpose: this is what "the order is optional" means in the
+    # schema rather than in a comment.
+    purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, related_name="invoices",
+                                       on_delete=models.PROTECT, db_column="inv_purchase_order_id")
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
-    bill_num = models.CharField(max_length=40, unique=True, blank=True)
+    invoice_num = models.CharField(max_length=40, unique=True, blank=True)
     # The supplier's own number. Required, and unique per supplier, because it
     # is the only thing that catches the same invoice being entered twice --
     # which is the most common way a supplier is paid twice for one delivery.
     supplier_invoice_num = models.CharField(max_length=80)
     supplier_invoice_date = models.DateField(null=True, blank=True)
-    bill_date = models.DateField(default=timezone.localdate)
+    invoice_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
 
     goods_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     freight_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # Value released out of GRN Clearing by this bill, and how far the bill
-    # drifted from it. Stored rather than recomputed because the receipts it
-    # was matched against can be reversed later, and the variance that was
-    # actually posted must not move when they are.
-    cleared_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    variance_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # Set when somebody with the authority accepted a variance beyond tolerance.
-    variance_approved = models.BooleanField(default=False)
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
-    status = models.CharField(max_length=20, choices=INV_PURCHASE_BILL_STATUS_CHOICES, default=STATUS_POSTED)
+    status = models.CharField(max_length=20, choices=INV_PURCHASE_INVOICE_STATUS_CHOICES, default=STATUS_POSTED)
+    # When it hit the books, and which voucher carries it. Kept on the invoice
+    # so the document reads on its own, without a join to the ledger to answer
+    # the first question anybody asks of it.
+    posted_at = models.DateTimeField(null=True, blank=True)
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
+                                  related_name="posted_purchase_invoices", db_column="posted_by_id")
+    journal_ref = models.CharField(max_length=80, blank=True)
+    # The PB- number this purchase carried before it became one document.
+    # Read-only, and blank on everything entered since.
+    legacy_bill_no = models.CharField(max_length=40, blank=True)
+
     reversal_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT,
                                     related_name="reversals", db_column="reversal_of_id")
     reverse_reason = models.CharField(max_length=40, blank=True)
@@ -552,77 +534,98 @@ class PurchaseBill(BaseModel):
     remarks = models.TextField(blank=True)
 
     class Meta:
-        db_table = "inv_purchase_bills"
-        ordering = ["-bill_date", "-id"]
+        db_table = "inv_purchase_invoices"
+        ordering = ["-invoice_date", "-id"]
         # One invoice number per supplier. The database says it as well as the
         # service does, so a double submit cannot slip a duplicate through.
         constraints = [
             models.UniqueConstraint(
                 fields=["supplier", "supplier_invoice_num"],
                 condition=Q(status=STATUS_POSTED),
-                name="uniq_supplier_invoice_num",
+                name="uniq_supplier_invoice_number",
             )
         ]
         indexes = [
-            models.Index(fields=["bill_num"]),
-            models.Index(fields=["bill_date"]),
-            models.Index(fields=["status", "-bill_date"]),
-            models.Index(fields=["supplier", "-bill_date"]),
+            models.Index(fields=["invoice_num"]),
+            models.Index(fields=["invoice_date"]),
+            # The board filters by state and pages newest first.
+            models.Index(fields=["status", "-invoice_date"]),
+            # Supplier history, and what a supplier is owed.
+            models.Index(fields=["supplier", "-invoice_date"]),
+            # Walking back from an order to what was invoiced against it.
+            models.Index(fields=["purchase_order"]),
         ]
+
+    @property
+    def balance_amount(self):
+        """Still owed on this invoice. Derived, so it cannot drift from paid."""
+        return (self.total_amount or Decimal("0.00")) - (self.paid_amount or Decimal("0.00"))
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
-            last = PurchaseBill.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+            last = (
+                PurchaseInvoice.all_objects.order_by("-seq_num")
+                .values_list("seq_num", flat=True).first() or 0
+            )
             self.seq_num = last + 1
-        if not self.bill_num:
-            self.bill_num = f"PB-{self.seq_num:06d}"
+        if not self.invoice_num:
+            self.invoice_num = f"PI-{self.seq_num:06d}"
         self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.bill_num
+        return self.invoice_num
 
 
-class PurchaseBillItem(BaseModel):
-    """One billed line, tied to the order line it is being entered against.
+class PurchaseInvoiceLine(BaseModel):
+    """One invoiced line, and the order line it came off if there was one.
 
-    The link to the order line is what bounds it: the quantity billed cannot
-    run past what was ordered and not yet billed, and the rate can be read
-    against the rate that was agreed on the order.
+    Pulled from an order, the link is what bounds it: the quantity cannot run
+    past what was ordered and not yet invoiced, and the rate can be read
+    against the rate that was agreed. Entered without an order, it is bounded
+    by nothing but what the supplier wrote.
     """
 
-    bill = models.ForeignKey(PurchaseBill, related_name="items", on_delete=models.CASCADE, db_column="inv_purchase_bill_id")
-    # The order line this bill covers. The bill is entered straight against the
-    # order now; nothing is received in between.
-    purchase_order_item = models.ForeignKey(PurchaseOrderItem, null=True, blank=True, related_name="bill_items",
-                                            on_delete=models.PROTECT, db_column="inv_purchase_order_item_id")
-    # The goods receipt this line was matched against, back when a receipt was
-    # raised between the order and the bill. Left nullable rather than dropped:
-    # bills entered under that flow still point at theirs, and the receipt
-    # tables are kept in case the step is put back.
-    receipt = models.ForeignKey(PurchaseOrderItemReceived, null=True, blank=True, related_name="bill_items",
-                                on_delete=models.PROTECT,
-                                db_column="inv_purchase_order_item_received_id")
+    invoice = models.ForeignKey(PurchaseInvoice, related_name="items", on_delete=models.CASCADE,
+                                db_column="inv_purchase_invoice_id")
+    purchase_order_item = models.ForeignKey(PurchaseOrderItem, null=True, blank=True,
+                                            related_name="invoice_lines", on_delete=models.PROTECT,
+                                            db_column="inv_purchase_order_item_id")
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     seq_num = models.PositiveIntegerField()
     descr = models.CharField(max_length=255)
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
-    # What the same units were valued at when they were received. Copied on so
-    # the variance on this line can still be read after the fact.
-    receipt_rate = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
     tax_perc = models.DecimalField(max_digits=9, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
     class Meta:
-        db_table = "inv_purchase_bill_items"
-        ordering = ["bill", "seq_num"]
-        unique_together = (("bill", "seq_num"),)
+        db_table = "inv_purchase_invoice_items"
+        ordering = ["invoice", "seq_num"]
+        unique_together = (("invoice", "seq_num"),)
+        indexes = [
+            # An item's purchase history, read straight off the lines.
+            models.Index(fields=["inventory_item", "-id"]),
+        ]
 
-    @property
-    def variance(self):
-        return (self.rate or Decimal("0.00")) - (self.receipt_rate or Decimal("0.00"))
+    def save(self, *args, **kwargs):
+        if not self.seq_num:
+            last = (
+                PurchaseInvoiceLine.all_objects.filter(invoice=self.invoice)
+                .order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+            )
+            self.seq_num = last + 1
+        if not self.descr:
+            self.descr = self.inventory_item.item_name
+        self.amount = (
+            (self.quantity or Decimal("0")) * (self.rate or Decimal("0"))
+            - (self.discount_amount or Decimal("0.00"))
+        ).quantize(TWO_DP)
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class PurchaseMaster(BaseModel):
@@ -764,6 +767,150 @@ class CustomerLedger(BaseModel):
         return f"{self.customer_id} - {self.transaction_no}"
 
 
+class SalesOrder(BaseModel):
+    """What a customer has asked for. Commits nothing to the books.
+
+    The mirror of :class:`PurchaseOrder`, and deliberately the same shape: an
+    order is a statement of intent, the invoice is the event. Nothing here
+    touches stock or the ledger, so an order can be raised, amended and
+    abandoned without anything needing to be unwound.
+    """
+
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column="inv_customer_id")
+    seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
+    order_num = models.CharField(max_length=40, unique=True, blank=True)
+    order_date = models.DateField(default=timezone.localdate)
+    # When the customer was promised it. Nothing enforces it; it is what makes
+    # an order late, which is the only way one quietly going nowhere is noticed.
+    expected_date = models.DateField(null=True, blank=True)
+    customer_ref = models.CharField(max_length=80, blank=True)
+    status = models.CharField(max_length=20, choices=INV_SALES_ORDER_STATUS_CHOICES, default=STATUS_DRAFT)
+
+    close_reason = models.CharField(max_length=40, blank=True)
+    close_remarks = models.TextField(blank=True)
+    closed_on = models.DateField(null=True, blank=True)
+    closed_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
+                                  related_name="closed_sales_orders", db_column="closed_by_id")
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "inv_sales_orders"
+        ordering = ["-order_date", "-id"]
+        indexes = [
+            models.Index(fields=["order_num"]),
+            models.Index(fields=["order_date"]),
+            # The board filters by state and pages newest first.
+            models.Index(fields=["status", "-order_date"]),
+            # A customer's order history, and the open-order lookup the sales
+            # invoice screen makes the moment a customer is picked.
+            models.Index(fields=["customer", "-order_date"]),
+        ]
+
+    @property
+    def is_closed(self):
+        return self.status in (STATUS_FULLY_INVOICED, STATUS_CLOSED, STATUS_CANCELLED)
+
+    @property
+    def is_open(self):
+        return self.status in (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
+
+    @property
+    def qty_pending(self):
+        return sum((line.qty_pending for line in self.items.all()), Decimal("0.0000"))
+
+    @property
+    def total_amount(self):
+        return sum((line.total_amount for line in self.items.all()), Decimal("0.00"))
+
+    def invoiced_status(self):
+        """What this order's status should be, read off its own lines.
+
+        Same rule as the purchase side, and written the same way on purpose:
+        the two boards answer the same question, and a reader who has learnt
+        one should not have to learn the other.
+        """
+        if self.status in (STATUS_DRAFT, STATUS_CANCELLED, STATUS_CLOSED):
+            return self.status
+        lines = list(self.items.all())
+        if not lines:
+            return STATUS_SUBMITTED
+        if all(line.is_fully_invoiced for line in lines):
+            return STATUS_FULLY_INVOICED
+        if any((line.qty_invoiced or Decimal("0")) > 0 for line in lines):
+            return STATUS_PARTIALLY_INVOICED
+        return STATUS_SUBMITTED
+
+    def save(self, *args, **kwargs):
+        if not self.seq_num:
+            last = (
+                SalesOrder.all_objects.order_by("-seq_num")
+                .values_list("seq_num", flat=True).first() or 0
+            )
+            self.seq_num = last + 1
+        if not self.order_num:
+            self.order_num = f"SO-{self.seq_num:06d}"
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.order_num
+
+
+class SalesOrderItem(BaseModel):
+    """One ordered line, and how much of it has been invoiced."""
+
+    sales_order = models.ForeignKey(SalesOrder, related_name="items", on_delete=models.CASCADE,
+                                    db_column="inv_sales_order_id")
+    seq_num = models.PositiveIntegerField()
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    descr = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=18, decimal_places=4)
+    rate = models.DecimalField(max_digits=18, decimal_places=2)
+    uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
+    tax_perc = models.DecimalField(max_digits=9, decimal_places=2, default=Decimal("0.00"))
+    discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    qty_invoiced = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
+    # Set when somebody decides the balance on this line is never going out. It
+    # stops the line counting as still owed without pretending it shipped.
+    closed = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "inv_sales_order_items"
+        ordering = ["sales_order", "seq_num"]
+        unique_together = (("sales_order", "seq_num"),)
+
+    @property
+    def qty_ordered(self):
+        return self.quantity or Decimal("0.0000")
+
+    @property
+    def qty_pending(self):
+        if self.closed:
+            return Decimal("0.0000")
+        pending = self.qty_ordered - (self.qty_invoiced or Decimal("0.0000"))
+        return pending if pending > Decimal("0.0000") else Decimal("0.0000")
+
+    @property
+    def is_fully_invoiced(self):
+        return self.qty_pending <= Decimal("0.0000")
+
+    @property
+    def total_amount(self):
+        return (self.quantity or Decimal("0")) * (self.rate or Decimal("0")) - (self.discount_amount or Decimal("0"))
+
+    def save(self, *args, **kwargs):
+        if not self.seq_num:
+            last = (
+                SalesOrderItem.all_objects.filter(sales_order=self.sales_order)
+                .order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
+            )
+            self.seq_num = last + 1
+        if not self.descr:
+            self.descr = self.inventory_item.item_name
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class POSMaster(BaseModel):
     transaction_id = models.CharField(max_length=60, unique=True)
     sale_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
@@ -778,6 +925,16 @@ class POSMaster(BaseModel):
     total_paid = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     balance = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, db_column="inv_customer_id")
+    # Nullable on purpose: the order is optional, exactly as on the purchase
+    # side. A sale with no order behind it is a complete sale, not an exception.
+    sales_order = models.ForeignKey(SalesOrder, null=True, blank=True, related_name="invoices",
+                                    on_delete=models.PROTECT, db_column="inv_sales_order_id")
+    # When it hit the books and which voucher carries it, so the invoice reads
+    # on its own without a join to the ledger.
+    posted_at = models.DateTimeField(null=True, blank=True)
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
+                                  related_name="posted_sales_invoices", db_column="posted_by_id")
+    journal_ref = models.CharField(max_length=80, blank=True)
     pay_mode = models.CharField(max_length=20, choices=PAY_MODE_CHOICES, default="cash")
     credit_card_type = models.CharField(max_length=40, blank=True)
     credit_card_number = models.CharField(max_length=40, blank=True)

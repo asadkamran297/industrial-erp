@@ -50,13 +50,18 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         # answers for that branch all the same.
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index",
                        url_name="inventory:purchase_order_board",
-                       match_paths=("/inventory/purchase-orders/", "/inventory/purchase-bills/")),
+                       match_paths=("/inventory/purchase-orders/",)),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
     )),
     NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(
         NavigationItem("Sale Invoices", permission="inventory.pos_sales.index", url_name="inventory:sale_invoice_list"),
+        # Same shape as the purchase side: entering the invoice is the work,
+        # the orders board is where what is still promised is read.
+        NavigationItem("Sales Orders", permission="inventory.pos_sales.index",
+                       url_name="inventory:sales_order_list",
+                       match_paths=("/inventory/sales-orders/",)),
         NavigationItem("New Sale (POS)", permission="inventory.pos_sales.index", url_name="inventory:pos_list"),
         NavigationItem("Sale Returns", permission="inventory.pos_returns.index", url_name="inventory:pos_return_list"),
         NavigationItem("Customers", permission="inventory.customers.index", url_name="inventory:customer_list"),

@@ -382,18 +382,6 @@ class PurchaseOrderItemForm(StyledModelForm):
         labels = {"inventory_item": "Inventory Name"}
 
 
-class ReceivePOForm(forms.Form):
-    purchase_order_item = forms.ModelChoiceField(queryset=PurchaseOrderItem.objects.all(), widget=forms.Select(attrs={"class": "form-select"}))
-    quantity = forms.DecimalField(decimal_places=4, max_digits=18, widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0.0001"}))
-    extra_qty = forms.DecimalField(decimal_places=4, max_digits=18, required=False, initial=Decimal("0.0000"), widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0"}))
-    retail_price = forms.DecimalField(decimal_places=2, max_digits=18, widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}))
-    receive_date = forms.DateField(widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
-    invoice_num = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-input"}))
-    invoice_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
-    rv_number = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": "form-input"}))
-    remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-input", "rows": 2}))
-
-
 class ManualTransactionForm(StyledModelForm):
     inventory_item = InventoryItemChoiceField(label="Item")
 
@@ -513,42 +501,3 @@ class PurchaseApprovalLimitForm(forms.Form):
     )
 
 
-class PurchaseBillForm(forms.Form):
-    """The head of a supplier's invoice. The lines come off the goods receipts."""
-
-    supplier = forms.ModelChoiceField(
-        queryset=Supplier.objects.none(), widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    supplier_invoice_num = forms.CharField(
-        max_length=80, label="Supplier's invoice no",
-        help_text="Their number, not ours. It is what catches the same bill being entered twice.",
-        widget=forms.TextInput(attrs={"class": "form-input"}),
-    )
-    supplier_invoice_date = forms.DateField(
-        required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}),
-    )
-    bill_date = forms.DateField(widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
-    due_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-input", "type": "date"}))
-    freight_amount = forms.DecimalField(
-        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"), label="Freight on this bill",
-        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
-    )
-    discount_amount = forms.DecimalField(
-        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"),
-        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
-    )
-    tax_amount = forms.DecimalField(
-        max_digits=18, decimal_places=2, required=False, initial=Decimal("0"), label="Sales tax",
-        widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0"}),
-    )
-    remarks = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-input", "rows": 2}))
-    # Only ever ticked deliberately, and only by somebody who has looked at why
-    # the supplier's figure and the goods receipt disagree.
-    variance_approved = forms.BooleanField(
-        required=False, label="I have checked and approved the difference",
-        widget=forms.CheckboxInput(attrs={"class": "form-check"}),
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["supplier"].queryset = Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name")

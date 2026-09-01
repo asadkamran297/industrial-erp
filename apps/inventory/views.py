@@ -19,7 +19,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_FULLY_RECEIVED, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_CLOSED_SHORT, STATUS_PARTIAL_RECEIVED, STATUS_POSTED, STATUS_RAISED, STATUS_REVERSED, YES
+from apps.core.constants import INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
@@ -27,12 +27,12 @@ from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
-from .forms import PurchaseApprovalLimitForm, PurchaseBillForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, ReceivePOForm, UOMConversionForm, UOMForm, SupplierForm
-from .models import PurchaseBill, PurchaseBillItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseOrderItemReceived, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, GRN_COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, receipt_state, TAB_ALL, TAB_UNBILLED, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
+from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
+from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
-from .services import _refresh_order_receipt_status, default_receipt_narration, approve_purchase_order, billable_order_lines, billable_receipts, can_reverse_bill, can_reverse_receipt, cancel_purchase_order, close_purchase_order_short, create_purchase_bill, needs_approval, purchase_order_approval_limit, reopen_purchase_order, reverse_purchase_bill, reverse_purchase_receipt, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_purchase, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_direct_purchase_number, next_grn_number, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
 
 User = get_user_model()
 
@@ -1274,81 +1274,6 @@ class ItemNextCodeView(InventoryManageMixin, View):
         return JsonResponse({"prefix": prefix, "code": InventoryItem.next_code(prefix)})
 
 
-class SupplierGRNOptionsView(InventoryListMixin, View):
-    """This supplier's goods receipts, as the direct purchase screen needs them.
-
-    Answers the picker rather than a page: the screen asks the moment a
-    supplier is chosen, so the notes arrive without a reload. Grouped by the
-    note the goods came in on, because that is the document somebody is holding
-    when they type the bill.
-    """
-
-    page = "inventory.purchase_orders"
-
-    def get(self, request, *args, **kwargs):
-        supplier_id = (request.GET.get("supplier") or "").strip()
-        if not supplier_id.isdigit():
-            return JsonResponse({"notes": []})
-
-        receipts = (
-            PurchaseOrderItemReceived.objects
-            .filter(
-                purchase_order_item__purchase_order__supplier_id=int(supplier_id),
-                reversed=False,
-                reversal_of__isnull=True,
-            )
-            .select_related(
-                "purchase_order_item__purchase_order",
-                "purchase_order_item__uom",
-                "inventory_item__uom",
-            )
-            .order_by("-receive_date", "-id")[:200]
-        )
-
-        notes = {}
-        for receipt in receipts:
-            number = receipt.grn_number or "—"
-            line = receipt.purchase_order_item
-            note = notes.setdefault(number, {
-                "number": number,
-                "date": receipt.receive_date.isoformat() if receipt.receive_date else "",
-                "date_text": receipt.receive_date.strftime("%d-%m-%Y") if receipt.receive_date else "",
-                "order": line.purchase_order.purchase_num,
-                "quantity": Decimal("0.0000"),
-                "value": Decimal("0.00"),
-                "lines": [],
-            })
-            units = receipt.received_units
-            rate = receipt.retail_price or Decimal("0.00")
-            amount = (units * rate).quantize(TWO_DP)
-            note["quantity"] += units
-            note["value"] += amount
-            note["lines"].append({
-                "receipt_id": receipt.pk,
-                # What is still left to bill on this receipt. A note already
-                # part billed offers what remains, not what arrived.
-                "pending": float(receipt.pending_bill_qty),
-                "item_id": receipt.inventory_item_id,
-                "name": receipt.descr,
-                "quantity": float(units),
-                "uom_id": line.uom_id or receipt.inventory_item.uom_id or "",
-                "unit": line.uom.title if line.uom else (
-                    receipt.inventory_item.uom.title if receipt.inventory_item.uom else ""),
-                "rate": float(rate),
-                "amount": float(amount),
-            })
-
-        payload = []
-        for note in notes.values():
-            payload.append({
-                **note,
-                "quantity": float(note["quantity"]),
-                "value": float(note["value"]),
-                "items": len(note["lines"]),
-            })
-        return JsonResponse({"notes": payload})
-
-
 class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
     """This supplier's open orders, as the purchase invoice screen needs them.
 
@@ -1365,7 +1290,7 @@ class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
         if not supplier_id.isdigit():
             return JsonResponse({"orders": []})
 
-        rows = billable_order_lines(supplier=Supplier.objects.filter(pk=int(supplier_id)).first())
+        rows = open_order_lines(supplier=Supplier.objects.filter(pk=int(supplier_id)).first())
 
         orders = {}
         for line in rows:
@@ -1382,7 +1307,7 @@ class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
             })
             # What is still open on the line, not what was ordered: an order
             # part billed already offers the balance and nothing more.
-            pending = line.pending_bill_qty
+            pending = line.qty_pending
             rate = line.rate or Decimal("0.00")
             amount = (pending * rate).quantize(TWO_DP)
             held["quantity"] += pending
@@ -1408,17 +1333,19 @@ class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
         return JsonResponse({"orders": payload})
 
 
-class DirectPurchaseCreateView(InventoryManageMixin, View):
-    """Enter a supplier bill without raising an order first.
+class PurchaseInvoiceCreateView(InventoryManageMixin, View):
+    """Enter a supplier's invoice, with or without an order behind it.
 
-    The screen is one form: the party at the top, the goods in the middle, the
-    money at the bottom. Everything it posts goes through the same service the
-    ordered route uses, so there is one set of books either way.
+    One form: the party at the top, the goods in the middle, the money at the
+    bottom. Which route in it is depends on the supplier -- one with open
+    orders must be invoiced against one of them, one without is typed straight
+    off the paperwork -- and both post through the same service, so there is
+    one set of books either way.
     """
 
     page = "inventory.purchase_orders"
     action = "add"
-    template_name = "inventory/direct_purchase_form.html"
+    template_name = "inventory/purchase_invoice_form.html"
 
     def _context(self, **extra):
         items = (
@@ -1429,8 +1356,8 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         )
         context = {
             "title": "Purchase Invoice",
-            "next_invoice_no": next_direct_purchase_number(),
-            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "next_invoice_no": next_purchase_invoice_number(),
+            "suppliers": self._suppliers_with_balance(),
             "units": UOM.objects.order_by("title"),
             "today": timezone.localdate(),
             "items_json": json.dumps([
@@ -1450,11 +1377,109 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 for item in items
             ]),
         }
+        # The lines exactly as they were typed, so a rejected invoice comes back
+        # with its own rows rather than an empty grid. Read off the raw POST
+        # rather than off the cleaned lines: a row the service refused is the
+        # one the operator most needs to see, and cleaning drops it.
+        posted = extra.get("posted")
+        prefill = extra.pop("prefill_lines", None)
+        if prefill is not None:
+            rows = prefill
+        elif posted and hasattr(posted, "getlist"):
+            rows = self._posted_lines(posted)
+        else:
+            rows = []
+        context["posted_lines_json"] = json.dumps(rows)
         context.update(extra)
         return context
 
+    @staticmethod
+    def _suppliers_with_balance():
+        """Active suppliers, each carrying what is currently owed to it.
+
+        Hung on the object rather than passed as a second map, so the template
+        prints it beside the name it belongs to without a lookup filter.
+        """
+        from apps.finance.services import supplier_payable_balances
+
+        balances = supplier_payable_balances()
+        rows = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"))
+        for row in rows:
+            row.balance = balances.get(row.pk, Decimal("0.00"))
+        return rows
+
+    @staticmethod
+    def _posted_lines(posted):
+        """The line grid as it was submitted, as plain dicts."""
+        item_ids = posted.getlist("item_id")
+        quantities = posted.getlist("quantity")
+        rates = posted.getlist("rate")
+        uom_ids = posted.getlist("line_uom")
+        order_items = posted.getlist("row_order_item")
+
+        def at(values, index):
+            return values[index] if index < len(values) else ""
+
+        rows = []
+        for index, raw_id in enumerate(item_ids):
+            row = {
+                "item_id": (raw_id or "").strip(),
+                "quantity": at(quantities, index),
+                "rate": at(rates, index),
+                "uom_id": at(uom_ids, index),
+                "order_item_id": at(order_items, index),
+            }
+            # A wholly blank row carries nothing worth putting back.
+            if any(row.values()):
+                rows.append(row)
+        return rows
+
     def get(self, request, *args, **kwargs):
-        return render(request, self.template_name, self._context())
+        # Arrived from an order: the purchase orders board and an order's own
+        # page both link here naming one, so the screen opens on it rather than
+        # asking the operator to pick the supplier and the order back out of a
+        # list they have just come from.
+        return render(request, self.template_name, self._context(**self._from_order(request)))
+
+    @staticmethod
+    def _from_order(request):
+        """Supplier and lines for an order named in the query string."""
+        raw = (request.GET.get("order") or "").strip()
+        if not raw.isdigit():
+            return {}
+
+        order = (
+            PurchaseOrder.objects.filter(pk=int(raw))
+            .select_related("supplier").first()
+        )
+        if order is None:
+            return {}
+
+        # Only what is still open on it. An order already invoiced in full has
+        # nothing to copy, and offering its lines again would walk the operator
+        # into the over-invoice guard rather than telling them up front.
+        lines = open_order_lines(purchase_order=order)
+        if not lines:
+            messages.info(
+                request,
+                f"{order.purchase_num} has nothing left to invoice. "
+                f"Enter this invoice against another order, or without one.",
+            )
+            return {"posted": {"supplier": str(order.supplier_id)}}
+
+        return {
+            "posted": {"supplier": str(order.supplier_id)},
+            "prefill_lines": [
+                {
+                    "item_id": str(line.inventory_item_id),
+                    "quantity": f"{line.qty_pending.normalize():f}",
+                    "rate": f"{(line.rate or Decimal('0')):.2f}",
+                    "uom_id": str(line.uom_id or line.inventory_item.uom_id or ""),
+                    "order_item_id": str(line.pk),
+                }
+                for line in lines
+            ],
+        }
 
     def post(self, request, *args, **kwargs):
         posted = request.POST
@@ -1480,9 +1505,7 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
-        # A row copied off a purchase order carries that order line with it, so
-        # the bill is entered against the commitment rather than raising a
-        # second one for goods that were already ordered.
+        # A row copied off a purchase order carries that order line with it.
         order_item_ids = posted.getlist("row_order_item")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
@@ -1505,71 +1528,55 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
-        bill_date = posted.get("bill_date") or str(timezone.localdate())
+        invoice_date = posted.get("bill_date") or str(timezone.localdate())
 
-        # ── Billing an order that was already raised ───────────────────────
-        billed = [(index, pk) for index, pk in enumerate(order_item_ids) if (pk or "").strip().isdigit()]
-        if billed:
-            if len(billed) != len(lines):
-                # Half a page off an order and half typed by hand cannot be one
-                # document: one half would bill a commitment and the other
-                # would raise a new one.
-                messages.error(
-                    request,
-                    "Every line must come from the same purchase order, or none of them. "
-                    "Remove the typed lines, or start again without copying the order.",
-                )
-                return render(request, self.template_name, self._context(posted=posted))
-
-            picked = {
-                item.pk: item
-                for item in PurchaseOrderItem.objects.filter(
-                    pk__in=[int(pk) for _index, pk in billed]
-                ).select_related("purchase_order", "inventory_item")
-            }
-            bill_lines = []
-            for position, (_index, pk) in enumerate(billed):
-                order_item = picked.get(int(pk))
-                if not order_item:
-                    messages.error(request, "One of the purchase order lines no longer exists.")
-                    return render(request, self.template_name, self._context(posted=posted))
-                row = lines[position]
-                bill_lines.append({
-                    "order_item": order_item,
-                    "quantity": row["quantity"],
-                    "rate": row["rate"] or order_item.rate,
-                })
-            try:
-                bill = create_purchase_bill(
-                    supplier=supplier,
-                    supplier_invoice_num=(posted.get("bill_number") or "").strip(),
-                    supplier_invoice_date=bill_date,
-                    bill_date=bill_date,
-                    lines=bill_lines,
-                    discount_amount=money("discount_amount"),
-                    tax_amount=money("tax_amount"),
-                    remarks=(posted.get("remarks") or "").strip(),
-                    user=request.user,
-                )
-            except ValidationError as error:
-                for message in error.messages:
-                    messages.error(request, message)
-                return render(request, self.template_name, self._context(posted=posted))
-
-            messages.success(
+        # ── The rule the whole screen turns on ─────────────────────────────
+        # A supplier with open orders is invoiced against one of them. It is
+        # decided here, on the supplier in front of us, rather than by a
+        # setting: the reason to demand an order is that there is one waiting,
+        # and that is a fact about this supplier and this moment.
+        picked_order_lines = {
+            index: int(pk) for index, pk in enumerate(order_item_ids)
+            if (pk or "").strip().isdigit()
+        }
+        if not picked_order_lines and supplier_has_open_orders(supplier=supplier):
+            messages.error(
                 request,
-                f"Bill {bill.bill_num} posted for {bill.total_amount} against "
-                f"{bill.purchase_order.purchase_num}. Stock taken in, payable created.",
+                f"{supplier.name} has open purchase orders. Pick the order this invoice "
+                f"covers, or close the order first if the goods are never coming.",
             )
-            return redirect("inventory:purchase_bill_detail", pk=bill.pk)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        # Lines copied off an order carry that order line, so the invoice is
+        # entered against the commitment rather than raising a second one for
+        # goods that were already ordered. Typed lines carry none. Both may sit
+        # on one invoice: what bounds a line is its own order line, and a line
+        # without one was never bounded by anything.
+        order_items = {
+            item.pk: item
+            for item in PurchaseOrderItem.objects.filter(
+                pk__in=list(picked_order_lines.values())
+            ).select_related("purchase_order", "inventory_item")
+        }
+        for index, order_item_pk in picked_order_lines.items():
+            order_item = order_items.get(order_item_pk)
+            if not order_item:
+                messages.error(request, "One of the purchase order lines no longer exists.")
+                return render(request, self.template_name, self._context(posted=posted))
+            if index < len(lines):
+                lines[index]["order_item"] = order_item
+                if not lines[index].get("rate"):
+                    lines[index]["rate"] = order_item.rate
 
         try:
-            order, net = create_direct_purchase(
+            invoice = create_purchase_invoice(
                 supplier=supplier,
-                bill_number=(posted.get("bill_number") or "").strip(),
-                bill_date=bill_date,
+                supplier_invoice_num=(posted.get("bill_number") or "").strip(),
+                supplier_invoice_date=invoice_date,
+                invoice_date=invoice_date,
                 lines=lines,
                 discount_amount=money("discount_amount"),
+                freight_amount=money("freight_amount"),
                 tax_amount=money("tax_amount"),
                 paid_amount=money("paid_amount"),
                 remarks=(posted.get("remarks") or "").strip(),
@@ -1580,14 +1587,14 @@ class DirectPurchaseCreateView(InventoryManageMixin, View):
                 messages.error(request, message)
             return render(request, self.template_name, self._context(posted=posted))
 
-        messages.success(request, f"Purchase {order.purchase_num} saved for {net}.")
+        messages.success(
+            request,
+            f"Purchase invoice {invoice.invoice_num} posted for {invoice.total_amount}. "
+            f"Stock taken in, payable created.",
+        )
         if "save_and_new" in posted:
-            return redirect("inventory:direct_purchase_create")
-        # Straight to the printable copy of the bill just saved, rather than the
-        # record screen the operator would have to hunt the print link on.
-        if "save_and_print" in posted:
-            return redirect("inventory:purchase_order_print", pk=order.pk)
-        return redirect("inventory:purchase_order_detail", pk=order.pk)
+            return redirect("inventory:purchase_invoice_create")
+        return redirect("inventory:purchase_invoice_detail", pk=invoice.pk)
 
 
 class ItemConversionOptionsView(InventoryManageMixin, View):
@@ -1707,18 +1714,20 @@ class LedgerListView(InventoryListMixin, ListView):
 
         sale_ids = [r.ref_id for r in rows if r.ref_table == "inv_pos_details"]
         sale_map = dict(POSDetail.objects.filter(pk__in=sale_ids).values_list("pk", "pos_master_id"))
-        # Goods come in on the bill now. Rows written under the old goods-receipt
-        # flow name a document there is no longer a page for, so they are left
-        # unlinked rather than pointed at a route that does not exist.
-        bill_ids = {r.ref_id for r in rows if r.ref_table == "inv_purchase_bills"}
-        live_bills = set(PurchaseBill.objects.filter(pk__in=bill_ids).values_list("pk", flat=True))
+        # Goods come in on the invoice. Rows written under the goods-receipt or
+        # the bill flow name documents there is no longer a page for, so they
+        # are left unlinked rather than pointed at a route that does not exist.
+        invoice_ids = {r.ref_id for r in rows if r.ref_table == "inv_purchase_invoices"}
+        live_invoices = set(
+            PurchaseInvoice.objects.filter(pk__in=invoice_ids).values_list("pk", flat=True)
+        )
 
         for row in rows:
             url = None
             if row.ref_table == "inv_manual_transaction" and row.transaction_id:
                 url = reverse_lazy("inventory:manual_transaction_print", kwargs={"tx_id": row.transaction_id})
-            elif row.ref_table == "inv_purchase_bills" and row.ref_id in live_bills:
-                url = reverse_lazy("inventory:purchase_bill_detail", kwargs={"pk": row.ref_id})
+            elif row.ref_table == "inv_purchase_invoices" and row.ref_id in live_invoices:
+                url = reverse_lazy("inventory:purchase_invoice_detail", kwargs={"pk": row.ref_id})
             elif row.ref_table == "inv_pos_details" and row.ref_id in sale_map:
                 url = reverse_lazy("inventory:pos_receipt", kwargs={"pk": sale_map[row.ref_id]})
             row.ref_url = url
@@ -1862,7 +1871,7 @@ class PurchaseOrderDraftFinalizeView(InventoryManageMixin, View):
                     created_by=request.user,
                     updated_by=request.user,
                 )
-            order.status = STATUS_RAISED
+            order.status = STATUS_SUBMITTED
             order.updated_by = request.user
             order.save(update_fields=["status", "updated_by", "updated_at"])
 
@@ -1982,42 +1991,16 @@ class PurchaseApprovalLimitView(InventoryManageMixin, View):
         return redirect("inventory:purchase_order_board")
 
 
-class GoodsReceiptReverseView(InventoryManageMixin, View):
-    """Withdraw a posted goods receipt by posting its mirror image.
-
-    Held behind its own permission rather than behind ``edit``: whoever enters
-    a receipt should not, by that fact alone, be able to make one disappear.
-    """
-
-    page = "inventory.grn"
-    action = "reverse"
-
-    def post(self, request, pk):
-        receipt = get_object_or_404(PurchaseOrderItemReceived, pk=pk)
-        form = ReversalReasonForm(request.POST)
-        if not form.is_valid():
-            messages.error(request, "A reversal needs a reason.")
-            return redirect("inventory:grn_list")
-        try:
-            mirror = reverse_purchase_receipt(receipt=receipt, reason=form.cleaned_data["reason"], user=request.user)
-            messages.success(
-                request,
-                f"{receipt.grn_number} reversed by {mirror.grn_number}. The original stays in the books "
-                "with a nil net effect — nothing was deleted.",
-            )
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-        return redirect("inventory:grn_list")
-
-
 class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
-    """Purchases entered straight off the supplier's bill, with no order first.
+    """Every purchase. The invoice is the only financial document on this side.
 
     Read the same way as the purchase orders board, because it answers the same
-    kind of question about the same records -- but for the other route in. An
-    order is a thing still owed; these arrived, were received and were billed
-    the moment they were entered, so what the rows are waiting on is different
-    even though the shape is not.
+    kind of question about the same trade -- but from the other end. An order is
+    a thing still owed; an invoice is one that landed, took the goods in and
+    booked what is owed for them, all at once.
+
+    Whether an order was raised first is a column on the row, not a separate
+    board: it changes where the lines were copied from and nothing else.
     """
 
     page = "inventory.purchase_orders"
@@ -2025,24 +2008,25 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
     context_object_name = "invoices"
     paginate_by = 25
     queryset = (
-        PurchaseOrder.objects
-        .filter(is_direct=True)
-        .select_related("supplier", "created_by")
-        .prefetch_related("items__inventory_item", "items__uom", "bills")
-        .order_by("-purchase_date", "-id")
+        PurchaseInvoice.objects
+        .select_related("supplier", "created_by", "purchase_order")
+        .prefetch_related("items__inventory_item", "items__uom")
+        .order_by("-invoice_date", "-id")
     )
-    search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
+    search_fields = ("invoice_num", "supplier__name", "supplier_invoice_num", "remarks",
+                     "legacy_bill_no")
     filter_fields = {"supplier": "supplier_id"}
-    date_filters = [{"field": "purchase_date", "label": "Invoice date"}]
+    date_filters = [{"field": "invoice_date", "label": "Invoice date"}]
     # Only what the database can order by. What each one came to is added up
     # per row after the query, so its heading stays plain rather than offering
     # a sort that would quietly lie about the order.
     sort_fields = {
-        "purchase_num": "seq_num",
-        "purchase_date": ("purchase_date", "id"),
+        "invoice_num": "seq_num",
+        "invoice_date": ("invoice_date", "id"),
         "supplier": "supplier__name",
+        "total_amount": ("total_amount", "id"),
     }
-    default_sort = "purchase_date"
+    default_sort = "invoice_date"
     default_sort_dir = "desc"
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
@@ -2064,60 +2048,67 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # An entry whose bill never posted. Counted in the database rather than
-        # in Python so it narrows the page itself, not just what is shown of it.
-        if (self.request.GET.get("state") or "").strip() == "unbilled":
-            queryset = queryset.annotate(
-                live_bills=Count("bills", filter=~Q(bills__status=STATUS_REVERSED))
-            ).filter(live_bills=0)
+        # Withdrawn invoices are still on the board -- a reversal is part of the
+        # record -- but they are not what somebody scanning for live purchases
+        # wants first, so they are a state you ask for.
+        state = (self.request.GET.get("state") or "").strip()
+        if state == "reversed":
+            queryset = queryset.filter(status=STATUS_REVERSED)
+        elif state == "posted":
+            queryset = queryset.filter(status=STATUS_POSTED)
+        elif state == "against_order":
+            queryset = queryset.filter(purchase_order__isnull=False)
+        elif state == "direct":
+            queryset = queryset.filter(purchase_order__isnull=True)
         return queryset
 
     def tiles(self):
         """The figures over everything the filters allow, not just this page.
 
         Counted over the filtered set rather than the page, because "how much
-        did we buy without raising an order" is a question about the whole of
-        it. One pass in Python: the lines are prefetched anyway for the rows.
+        did we buy" is a question about the whole of it, and the totals are
+        read off the invoice header rather than re-added from the lines: the
+        header is what posted to the ledger, so it is the figure that is true.
         """
         rows = list(
-            super(PurchaseInvoiceListView, self).get_queryset()
-            .select_related("supplier")
-            .prefetch_related("items", "bills")
+            super(PurchaseInvoiceListView, self).get_queryset().select_related("supplier")
         )
         today = timezone.localdate()
         value = Decimal("0.00")
         month_value = Decimal("0.00")
         month_count = 0
-        unbilled_count = 0
-        unbilled_value = Decimal("0.00")
+        unpaid_count = 0
+        unpaid_value = Decimal("0.00")
         suppliers = set()
         for row in rows:
-            total = sum((line.total_amount for line in row.items.all()), Decimal("0.00"))
+            if row.status == STATUS_REVERSED:
+                continue
+            total = row.total_amount or Decimal("0.00")
             value += total
             suppliers.add(row.supplier_id)
-            if row.purchase_date and (row.purchase_date.year, row.purchase_date.month) == (today.year, today.month):
+            if row.invoice_date and (row.invoice_date.year, row.invoice_date.month) == (today.year, today.month):
                 month_count += 1
                 month_value += total
-            # A direct purchase posts its own bill as it is entered, so one
-            # without a live bill is not normal: it is an entry that did not
-            # finish, and its value is sitting in GRN clearing.
-            if not any(bill.status != STATUS_REVERSED for bill in row.bills.all()):
-                unbilled_count += 1
-                unbilled_value += total
+            # What is still owed on it. This is the only thing a posted invoice
+            # can still be waiting on: the goods are in and the books are made.
+            outstanding = row.balance_amount
+            if outstanding > Decimal("0.00"):
+                unpaid_count += 1
+                unpaid_value += outstanding
         # The month each tile would filter to, worked out here so the template
         # prints a date range rather than assembling one.
         month_start = today.replace(day=1)
         next_month = (month_start + timedelta(days=32)).replace(day=1)
         return {
-            "count": len(rows),
+            "count": len([r for r in rows if r.status != STATUS_REVERSED]),
             "value": value,
             "month_count": month_count,
             "month_value": month_value,
             "month_from": month_start.isoformat(),
             "month_to": (next_month - timedelta(days=1)).isoformat(),
             "supplier_count": len(suppliers),
-            "unbilled_count": unbilled_count,
-            "unbilled_value": unbilled_value,
+            "unpaid_count": unpaid_count,
+            "unpaid_value": unpaid_value,
         }
 
     def get_context_data(self, **kwargs):
@@ -2147,78 +2138,80 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         for invoice in context["invoices"]:
             lines = list(invoice.items.all())
             invoice.line_count = len(lines)
-            invoice.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
             invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            # The bill this purchase posted for itself. Named on the row, so
-            # the entry can be followed through to the payable it created.
-            live = [bill for bill in invoice.bills.all() if bill.status != STATUS_REVERSED]
-            invoice.bill = live[0] if live else None
-            page_total += invoice.total_amount
+            # total_amount is a column now, not a sum of the lines: it is what
+            # posted to the ledger, freight and tax included, so re-adding the
+            # lines here would quietly show a different figure to the books.
+            page_total += invoice.total_amount or Decimal("0.00")
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
         return context
 
 
 class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
-    """One purchase entered straight off a supplier's bill.
+    """One purchase invoice, read as the paper it stands for.
 
-    Read as the paper it stands for, the same way a purchase order is: who it
-    is from, what was bought, what it comes to. What is different is that
-    nothing here is still owed -- the goods were received and the bill posted
-    as it was entered -- so the page states what it created rather than what it
-    is waiting on.
+    Who it is from, what was bought, what it came to, and what it did to the
+    books. Nothing on it is still owed in goods: the invoice is what took them
+    in, so the page states what it created rather than what it is waiting on.
+    The one thing that can still be outstanding is the money.
     """
 
     page = "inventory.purchase_orders"
-    model = PurchaseOrder
+    model = PurchaseInvoice
     template_name = "inventory/purchase_invoice_detail.html"
     context_object_name = "invoice"
     queryset = (
-        PurchaseOrder.objects
-        .filter(is_direct=True)
-        .select_related("supplier", "created_by")
-        .prefetch_related("items__inventory_item", "items__uom", "items__receipts", "bills__items")
+        PurchaseInvoice.objects
+        .select_related("supplier", "created_by", "posted_by", "purchase_order")
+        .prefetch_related("items__inventory_item", "items__uom",
+                          "items__purchase_order_item__purchase_order")
     )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        order = self.object
-        lines = list(order.items.all())
+        invoice = self.object
+        lines = list(invoice.items.all())
         context["lines"] = lines
-        context["goods_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
+        context["goods_total"] = sum((line.amount or Decimal("0.00") for line in lines), Decimal("0.00"))
         context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
 
-        # The money lives on the bill this purchase posted for itself, not on
-        # the order: the order carries lines, the bill carries what was charged.
-        live = [bill for bill in order.bills.all() if bill.status != STATUS_REVERSED]
-        bill = live[0] if live else None
-        context["bill"] = bill
-        context["reversed_bills"] = [b for b in order.bills.all() if b.status == STATUS_REVERSED]
-
-        # The goods it booked in, as the notes they came in under -- one entry
-        # per note rather than per posting, because a note is the document.
-        notes = {}
+        # Which orders this invoice drew on. Usually none or one, but a single
+        # invoice may cover several, so the header's own FK is not the whole
+        # answer and the lines are what is asked.
+        orders = {}
         for line in lines:
-            for receipt in line.receipts.all():
-                number = receipt.grn_number or "—"
-                note = notes.setdefault(number, {
-                    "number": number, "date": receipt.receive_date,
-                    "quantity": Decimal("0.0000"), "value": Decimal("0.00"),
-                    "dead": True, "lines": [],
-                })
-                note["lines"].append(receipt)
-                if receipt.receive_date and (not note["date"] or receipt.receive_date > note["date"]):
-                    note["date"] = receipt.receive_date
-                if not receipt.reversed and receipt.reversal_of_id is None:
-                    note["dead"] = False
-                    note["quantity"] += receipt.received_units
-                    note["value"] += receipt.landed_amount or Decimal("0.00")
-        context["receipt_notes"] = sorted(
-            notes.values(), key=lambda note: (note["date"] or date.min, note["number"]), reverse=True
-        )
-        context["linked_documents"] = linked_documents(order)
+            order_item = line.purchase_order_item
+            if order_item is not None:
+                orders[order_item.purchase_order_id] = order_item.purchase_order
+        context["source_orders"] = sorted(orders.values(), key=lambda o: o.purchase_num)
+        context["is_direct"] = not orders
+
+        context["can_reverse"], context["reverse_blocked_reason"] = can_reverse_invoice(invoice)
+        context["reversal_reasons"] = INV_REVERSAL_REASONS
         context["invoices_url"] = reverse_lazy("inventory:purchase_invoice_list")
         return context
+
+
+class PurchaseInvoiceReverseView(InventoryManageMixin, View):
+    """Withdraw a posted invoice: stock back out, payable cancelled."""
+
+    page = "inventory.purchase_orders"
+    action = "delete"
+
+    def post(self, request, pk, *args, **kwargs):
+        invoice = get_object_or_404(PurchaseInvoice, pk=pk)
+        try:
+            reverse_purchase_invoice(
+                invoice=invoice,
+                reason=(request.POST.get("reason") or "").strip(),
+                user=request.user,
+            )
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+        else:
+            messages.success(request, f"{invoice.invoice_num} reversed.")
+        return redirect("inventory:purchase_invoice_detail", pk=invoice.pk)
 
 
 class PurchaseInvoiceExportView(InventoryListMixin, TableExportView):
@@ -2237,10 +2230,7 @@ class PurchaseInvoiceExportView(InventoryListMixin, TableExportView):
         for row in rows:
             lines = list(row.items.all())
             row.line_count = len(lines)
-            row.total_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
             row.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            live = [bill for bill in row.bills.all() if bill.status != STATUS_REVERSED]
-            row.bill = live[0] if live else None
         return rows
 
 
@@ -2260,11 +2250,11 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     paginate_by = 25
     queryset = (
         PurchaseOrder.objects
-        .filter(is_direct=False)
         .select_related("supplier", "created_by")
         # ``items__inventory_item``: the row opens out to its lines, and each
         # line names the item it was ordered against.
-        .prefetch_related("items__receipts", "items__uom", "items__inventory_item", "bills")
+        .prefetch_related("items__uom", "items__inventory_item", "invoices",
+                          "items__invoice_lines__invoice")
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
@@ -2309,9 +2299,8 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     def get_queryset(self):
         queryset = self.filtered_queryset()
         tab = self.current_tab()
-        if tab == TAB_UNBILLED:
-            # Goods booked in under a receipt that carries no supplier invoice.
-            queryset = queryset.filter(items__receipts__invoice_num="").distinct()
+        # Every tab is a status now: what an order is waiting on is its own
+        # status, because the invoice against it is the only thing that moves it.
         statuses = TAB_STATUSES.get(tab)
         if statuses:
             queryset = queryset.filter(status__in=statuses)
@@ -2341,8 +2330,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         everything = list(self.filtered_queryset())
         context["tiles"] = summarise(everything)
         def tab_count(key):
-            if key == TAB_UNBILLED:
-                return sum(1 for order in everything if order.unbilled_value)
             statuses = TAB_STATUSES.get(key)
             return sum(1 for order in everything
                        if not statuses or order.status in statuses)
@@ -2689,7 +2676,8 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
     queryset = (
         PurchaseOrder.objects
         .select_related("supplier", "created_by", "approved_by", "closed_by")
-        .prefetch_related("items__receipts", "items__uom", "items__inventory_item", "bills")
+        .prefetch_related("items__uom", "items__inventory_item", "invoices",
+                          "items__invoice_lines__invoice")
     )
 
     def get_context_data(self, **kwargs):
@@ -2705,75 +2693,15 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         # close-short gives up the balance of one that was part delivered. The
         # template is told which applies rather than working it out itself.
         lines = list(self.object.items.all())
-        anything_received = any((line.total_receive_qty or Decimal("0")) > 0 for line in lines)
-        outstanding = sum((line.open_receive_qty for line in lines), Decimal("0"))
-        context["can_cancel"] = self.object.status in (STATUS_DRAFT, STATUS_RAISED) and not anything_received
-        context["can_close_short"] = anything_received and outstanding > Decimal("0.0005")
-        context["is_closed_early"] = self.object.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT)
+        anything_invoiced = any((line.qty_invoiced or Decimal("0")) > 0 for line in lines)
+        outstanding = sum((line.qty_pending for line in lines), Decimal("0"))
+        context["can_cancel"] = self.object.status in (STATUS_DRAFT, STATUS_SUBMITTED) and not anything_invoiced
+        context["can_close_short"] = anything_invoiced and outstanding > Decimal("0.0005")
+        context["is_closed_early"] = self.object.status in (STATUS_CANCELLED, STATUS_CLOSED)
         context["outstanding_qty"] = outstanding
         context["cancel_form"] = PurchaseOrderCancelForm()
         context["close_short_form"] = PurchaseOrderCloseShortForm()
         context["reversal_form"] = ReversalReasonForm()
-        # Receipts on this order, with whether each may still be withdrawn.
-        receipts = []
-        for line in lines:
-            for receipt in line.receipts.all():
-                ok, why = can_reverse_receipt(receipt)
-                receipt.can_reverse = ok
-                receipt.cannot_reverse_because = why
-                # The order line this came in against, hung off the receipt so
-                # a note can be read beside what was ordered without going back
-                # to the database for every row.
-                receipt.line = line
-                receipts.append(receipt)
-        context["receipts"] = sorted(receipts, key=lambda r: (r.receive_date, r.pk), reverse=True)
-        # The same receipts read as the documents they were booked in on: one
-        # note, the items that came in under it, what it came to. A delivery is
-        # a document, and a page listing every posting flat makes the reader
-        # reassemble it in their head.
-        #
-        # Walked oldest first, because the balance a note leaves behind is the
-        # balance *after* that delivery -- the figure somebody checking the
-        # third note wants is what was still owed on the day it arrived, not
-        # what is owed today. Reading them newest first would put the same
-        # closing balance against every note.
-        notes = {}
-        taken = {}
-        for receipt in sorted(receipts, key=lambda r: (r.receive_date or date.min, r.pk)):
-            number = receipt.grn_number or "—"
-            note = notes.setdefault(number, {
-                "number": number, "date": receipt.receive_date, "lines": [],
-                "quantity": Decimal("0.0000"), "value": Decimal("0.00"), "pks": [],
-                "ordered": Decimal("0.0000"), "seen": set(), "closing": {},
-            })
-            note["lines"].append(receipt)
-            note["pks"].append(str(receipt.pk))
-            if receipt.receive_date and (not note["date"] or receipt.receive_date > note["date"]):
-                note["date"] = receipt.receive_date
-            # A reversal and the receipt it cancels both stay on the list, but
-            # neither counts towards what the note delivered -- nor towards the
-            # balance it left, because between them they moved nothing.
-            if not receipt.reversed and receipt.reversal_of_id is None:
-                note["quantity"] += receipt.received_units
-                note["value"] += receipt.landed_amount or Decimal("0.00")
-                taken[receipt.line.pk] = taken.get(receipt.line.pk, Decimal("0.0000")) + receipt.received_units
-            # Ordered belongs to the line, not to this delivery, so a line that
-            # came in twice under one note is counted once.
-            if receipt.line.pk not in note["seen"]:
-                note["seen"].add(receipt.line.pk)
-                note["ordered"] += receipt.line.quantity or Decimal("0.0000")
-            # What this line was still owed once this note had been booked in.
-            # Held per line and totalled after, so a later note on the same
-            # line overwrites rather than adds.
-            owed = (receipt.line.quantity or Decimal("0.0000")) - taken.get(receipt.line.pk, Decimal("0.0000"))
-            note["closing"][receipt.line.pk] = owed if owed > 0 else Decimal("0.0000")
-
-        for note in notes.values():
-            note["balance"] = sum(note["closing"].values(), Decimal("0.0000"))
-
-        context["receipt_notes"] = sorted(
-            notes.values(), key=lambda note: (note["date"] or date.min, note["number"]), reverse=True
-        )
         context["linked_documents"] = linked_documents(self.object)
         # What the document is for. The order carries no total of its own --
         # the lines are the record -- so it is added up for the sheet.
@@ -2786,7 +2714,7 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         # is closed or cancelled the figures are history, not a draft.
         context["can_edit_lines"] = (
             context.get("can_edit")
-            and self.object.status in (STATUS_DRAFT, STATUS_RAISED, STATUS_PARTIAL_RECEIVED)
+            and self.object.status in (STATUS_DRAFT, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
         )
         return context
 
@@ -2805,7 +2733,7 @@ class PurchaseOrderItemCreateView(InventoryManageMixin, View):
     action = "add"
     def post(self, request, pk):
         order = get_object_or_404(PurchaseOrder, pk=pk)
-        if order.status == STATUS_FULLY_RECEIVED:
+        if order.status == STATUS_FULLY_INVOICED:
             messages.error(request, "Fully received purchase order cannot be updated.")
             return redirect("inventory:purchase_order_detail", pk=pk)
         form = PurchaseOrderItemForm(request.POST)
@@ -2835,7 +2763,7 @@ class PurchaseOrderItemUpdateView(InventoryManageMixin, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if self.object.purchase_order.status != STATUS_RAISED:
+        if self.object.purchase_order.status != STATUS_SUBMITTED:
             messages.error(request, "Only items of a created purchase order can be edited.")
             return redirect("inventory:purchase_order_detail", pk=self.object.purchase_order_id)
         return super().dispatch(request, *args, **kwargs)
@@ -2883,7 +2811,7 @@ class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
         # A line is open to correction until the order is closed one way or
         # another. Once it is cancelled or closed short there is nothing left
         # to correct, and a received line is held to what arrived below.
-        if order.status not in (STATUS_DRAFT, STATUS_RAISED, STATUS_PARTIAL_RECEIVED):
+        if order.status not in (STATUS_DRAFT, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED):
             messages.error(request, f"{order.purchase_num} is closed, so its lines can no longer be edited.")
             return back
 
@@ -2902,10 +2830,10 @@ class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
                 return back
             # Ordering less than has already turned up would leave the line
             # owing a negative balance, which is not a thing that can be true.
-            if quantity < (item.total_receive_qty or Decimal("0")):
+            if quantity < (item.qty_invoiced or Decimal("0")):
                 messages.error(
                     request,
-                    f"{item.descr}: {item.total_receive_qty} has already been received, "
+                    f"{item.descr}: {item.qty_invoiced} has already been invoiced, "
                     f"so the order cannot be cut to {quantity}.",
                 )
                 return back
@@ -2984,11 +2912,9 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         context["supplier_address"] = " ".join(
             part for part in ((supplier.addr1 or ""), (supplier.addr2 or "")) if part
         ).strip() if supplier else ""
-        # Back to the list the document belongs to: a direct bill lives on the
-        # purchase invoices screen, which has no order row to reopen.
+        # Back to the board this document belongs to, with its own row opened.
         context["print_back_url"] = (
-            reverse_lazy("inventory:purchase_invoice_list") if self.object.is_direct
-            else f"{reverse_lazy('inventory:purchase_order_board')}?open={self.object.pk}"
+            f"{reverse_lazy('inventory:purchase_order_board')}?open={self.object.pk}"
         )
         return context
 
@@ -3002,26 +2928,6 @@ class PurchaseOrderItemToggleStatusView(InventoryManageMixin, View):
         item.updated_by = request.user
         item.save()
         return redirect_after_item(request, item.purchase_order_id)
-
-
-class PurchaseReceiveView(InventoryManageMixin, View):
-    page = "inventory.purchase_orders"
-    action = "edit"
-    def post(self, request, pk):
-        order = get_object_or_404(PurchaseOrder, pk=pk)
-        form = ReceivePOForm(request.POST)
-        form.fields["purchase_order_item"].queryset = order.items.all()
-        if form.is_valid():
-            try:
-                receive_purchase_order_item(user=request.user, **form.cleaned_data)
-                messages.success(request, "GRN posted and stock updated.")
-            except ValidationError as exc:
-                messages.error(request, exc)
-        else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
-        return redirect("inventory:purchase_order_detail", pk=pk)
 
 
 def _current_draft_tx_id():
@@ -3485,6 +3391,27 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "price": price, "uom": uom})
 
+        # A row copied off a sales order carries that order line with it, so the
+        # invoice draws the order down rather than leaving it open for ever.
+        # Unlike the purchase side this is offered rather than demanded: a
+        # customer at the counter buying off the shelf is a real sale even when
+        # an order of theirs is open elsewhere, and refusing it stops the till.
+        order_item_ids = posted.getlist("row_order_item")
+        picked = {
+            item.pk: item
+            for item in SalesOrderItem.objects.filter(
+                pk__in=[int(pk) for pk in order_item_ids if (pk or "").strip().isdigit()]
+            ).select_related("sales_order")
+        }
+        for index, raw_pk in enumerate(order_item_ids):
+            if not (raw_pk or "").strip().isdigit() or index >= len(lines):
+                continue
+            order_item = picked.get(int(raw_pk))
+            if not order_item:
+                messages.error(request, "One of the sales order lines no longer exists.")
+                return render(request, self.template_name, self._context(posted=posted))
+            lines[index]["order_item"] = order_item
+
         try:
             sale_date = posted.get("sale_date") or str(timezone.localdate())
             sale, net = create_direct_sale(
@@ -3506,6 +3433,220 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
         if "save_and_print" in posted:
             return redirect("inventory:pos_receipt", pk=sale.pk)
         return redirect("inventory:pos_detail", pk=sale.pk)
+
+
+class CustomerSalesOrderOptionsView(InventoryListMixin, View):
+    """This customer's open orders, as the sale invoice screen needs them.
+
+    Answers the picker rather than a page: the screen asks the moment a
+    customer is chosen, so the orders arrive without a reload. Only what is
+    still to be invoiced is offered.
+    """
+
+    page = "inventory.pos_sales"
+
+    def get(self, request, *args, **kwargs):
+        customer_id = (request.GET.get("customer") or "").strip()
+        if not customer_id.isdigit():
+            return JsonResponse({"orders": []})
+
+        rows = open_sales_order_lines(
+            customer=Customer.objects.filter(pk=int(customer_id)).first()
+        )
+
+        orders = {}
+        for line in rows:
+            order = line.sales_order
+            held = orders.setdefault(order.pk, {
+                "id": order.pk,
+                "number": order.order_num,
+                "date": order.order_date.isoformat() if order.order_date else "",
+                "date_text": order.order_date.strftime("%d-%m-%Y") if order.order_date else "",
+                "status": order.get_status_display(),
+                "quantity": Decimal("0.0000"),
+                "value": Decimal("0.00"),
+                "lines": [],
+            })
+            # What is still open on the line, not what was ordered.
+            pending = line.qty_pending
+            rate = line.rate or Decimal("0.00")
+            amount = (pending * rate).quantize(TWO_DP)
+            held["quantity"] += pending
+            held["value"] += amount
+            held["lines"].append({
+                "order_item_id": line.pk,
+                "item_id": line.inventory_item_id,
+                "name": line.descr,
+                "quantity": float(pending),
+                "ordered": float(line.quantity or 0),
+                "uom_id": line.uom_id or line.inventory_item.uom_id or "",
+                "unit": line.uom.title if line.uom else (
+                    line.inventory_item.uom.title if line.inventory_item.uom else ""),
+                "rate": float(rate),
+                "amount": float(amount),
+            })
+
+        payload = [
+            {**order, "quantity": float(order["quantity"]), "value": float(order["value"]),
+             "items": len(order["lines"])}
+            for order in sorted(orders.values(), key=lambda o: o["date"], reverse=True)
+        ]
+        return JsonResponse({"orders": payload})
+
+
+class SalesOrderListView(SortableListMixin, InventoryListMixin, ListView):
+    """Orders raised by customers: what is promised, and what is still to go.
+
+    Read the same way as the purchase orders board, because it is the same
+    question from the other side.
+    """
+
+    page = "inventory.pos_sales"
+    template_name = "inventory/sales_order_list.html"
+    context_object_name = "orders"
+    paginate_by = 25
+    queryset = (
+        SalesOrder.objects
+        .select_related("customer", "created_by")
+        .prefetch_related("items__inventory_item", "items__uom")
+        .order_by("-order_date", "-id")
+    )
+    search_fields = ("order_num", "customer__customer_name", "customer_ref", "remarks")
+    filter_fields = {"customer": "customer_id", "status": "status"}
+    date_filters = [{"field": "order_date", "label": "Order date"}]
+    sort_fields = {
+        "order_num": "seq_num",
+        "order_date": ("order_date", "id"),
+        "customer": "customer__customer_name",
+    }
+    default_sort = "order_date"
+    default_sort_dir = "desc"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = list(context["orders"])
+        for order in rows:
+            lines = list(order.items.all())
+            order.line_count = len(lines)
+            order.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            order.qty_still_due = sum((line.qty_pending for line in lines), Decimal("0"))
+            order.value_total = sum((line.total_amount for line in lines), Decimal("0.00"))
+        context["statuses"] = INV_SALES_ORDER_STATUS_CHOICES
+        context["create_url"] = reverse_lazy("inventory:sales_order_create")
+        return context
+
+
+class SalesOrderCreateView(InventoryManageMixin, View):
+    """Raise an order on a customer. Nothing is committed to the books by it."""
+
+    page = "inventory.pos_sales"
+    action = "add"
+    template_name = "inventory/sales_order_form.html"
+
+    def _context(self, **extra):
+        items = (
+            InventoryItem.objects
+            .select_related("uom", "secondary_uom", "stock")
+            .filter(status=STATUS_ACTIVE)
+            .order_by("item_name")
+        )
+        context = {
+            "title": "Sales Order",
+            "next_order_no": next_sales_order_number(),
+            "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
+            "units": UOM.objects.order_by("title"),
+            "today": timezone.localdate(),
+            "items_json": json.dumps([
+                {
+                    "id": item.pk,
+                    "name": item.item_name,
+                    "code": item.code,
+                    "uom": item.uom_id or "",
+                    "rate": float(item.price or 0),
+                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
+                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
+                    "unit": uom_title(item),
+                    "units": item_unit_options(item),
+                }
+                for item in items
+            ]),
+        }
+        context.update(extra)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request, *args, **kwargs):
+        posted = request.POST
+        customer_id = (posted.get("customer") or "").strip()
+        customer = Customer.objects.filter(pk=customer_id).first() if customer_id.isdigit() else None
+
+        lines = []
+        item_ids = posted.getlist("item_id")
+        quantities = posted.getlist("quantity")
+        rates = posted.getlist("rate")
+        uom_ids = posted.getlist("line_uom")
+        for index, raw_id in enumerate(item_ids):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            item = InventoryItem.objects.filter(pk=raw_id).first()
+            if not item:
+                continue
+            try:
+                quantity = decimal_of(quantities[index] if index < len(quantities) else "")
+                rate = decimal_of(rates[index] if index < len(rates) else "")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                return render(request, self.template_name, self._context(posted=posted))
+            if quantity > 0:
+                raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
+                uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
+                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
+
+        try:
+            order, total = create_sales_order(
+                customer=customer,
+                order_date=posted.get("order_date") or str(timezone.localdate()),
+                expected_date=posted.get("expected_date") or None,
+                customer_ref=(posted.get("customer_ref") or "").strip(),
+                lines=lines,
+                remarks=(posted.get("remarks") or "").strip(),
+                user=request.user,
+            )
+            # Raised and committed to in one go unless it is being parked: an
+            # order nobody has committed to is a draft, and the screen says so.
+            if "save_draft" not in posted:
+                submit_sales_order(order=order, user=request.user)
+        except ValidationError as error:
+            for message in error.messages:
+                messages.error(request, message)
+            return render(request, self.template_name, self._context(posted=posted))
+
+        messages.success(request, f"Sales order {order.order_num} raised for {total}.")
+        return redirect("inventory:sales_order_list")
+
+
+class SalesOrderCloseView(InventoryManageMixin, View):
+    """Stop an order early: the balance is given up on, not shipped."""
+
+    page = "inventory.pos_sales"
+    action = "edit"
+
+    def post(self, request, pk, *args, **kwargs):
+        order = get_object_or_404(SalesOrder, pk=pk)
+        try:
+            close_sales_order(
+                order=order,
+                reason=(request.POST.get("reason") or "").strip(),
+                remarks=(request.POST.get("remarks") or "").strip(),
+                user=request.user,
+            )
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+        else:
+            messages.success(request, f"{order.order_num} closed.")
+        return redirect("inventory:sales_order_list")
 
 
 class POSListView(InventoryManageMixin, View):
@@ -3836,537 +3977,6 @@ class POSReturnPostView(InventoryManageMixin, View):
         return redirect("inventory:pos_return_detail", pk=pk)
 
 
-class GRNListView(SortableListMixin, InventoryListMixin, ListView):
-    """The goods receipt register: one row per receipt, newest first.
-
-    A receipt is the record of what came through the gate, so the list is of
-    receipts rather than of the orders they were booked against. Booking a
-    delivery in happens on the goods receipt screen or from the order's own
-    row; this screen is for reading back what has already arrived.
-    """
-
-    page = "inventory.grn"
-    template_name = "inventory/grn_list.html"
-    context_object_name = "receipts"
-    paginate_by = 25
-    queryset = (
-        PurchaseOrderItemReceived.objects
-        .select_related(
-            "purchase_order_item__purchase_order__supplier",
-            "inventory_item",
-        )
-        .order_by("-receive_date", "-id")
-    )
-    search_fields = (
-        "grn_number",
-        "purchase_num",
-        "descr",
-        "invoice_num",
-        "purchase_order_item__purchase_order__supplier__name",
-    )
-    filter_fields = {"supplier": "purchase_order_item__purchase_order__supplier_id"}
-    date_filters = [{"field": "receive_date", "label": "Receive date"}]
-    # Only what the database can order by. Whether a receipt is billed is read
-    # off its own figures per row, so its heading stays plain rather than
-    # offering a sort that would quietly lie about the order.
-    sort_fields = {
-        "grn_number": ("grn_number", "id"),
-        "purchase_num": ("purchase_num", "id"),
-        "supplier": "purchase_order_item__purchase_order__supplier__name",
-        "item": "descr",
-        "receive_date": ("receive_date", "id"),
-        "quantity": "quantity",
-    }
-    default_sort = "receive_date"
-    default_sort_dir = "desc"
-
-    PER_PAGE_OPTIONS = (10, 25, 50, 100)
-
-    # What the tabs mean, said once. "Not billed" is the queue somebody works
-    # through; a reversed pair is kept out of it because it nets to nothing.
-    TAB_ALL = "all"
-    TAB_UNBILLED = "unbilled"
-    TAB_BILLED = "billed"
-    TAB_REVERSED = "reversed"
-    TABS = (
-        (TAB_ALL, "All"),
-        (TAB_UNBILLED, "Not billed"),
-        (TAB_BILLED, "Billed"),
-        (TAB_REVERSED, "Reversed"),
-    )
-
-    def current_tab(self):
-        tab = self.request.GET.get("tab", self.TAB_ALL)
-        return tab if tab in dict(self.TABS) else self.TAB_ALL
-
-    def get_paginate_by(self, queryset):
-        raw = (self.request.GET.get("per_page") or "").strip()
-        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
-            return int(raw)
-        return self.paginate_by
-
-    @staticmethod
-    def _live(queryset):
-        """Receipts standing for goods in hand: neither half of a reversal."""
-        return queryset.filter(reversed=False, reversal_of__isnull=True)
-
-    @staticmethod
-    def _annotated(queryset):
-        """Each row carrying what it actually took in, so it can be compared."""
-        return queryset.annotate(units_in=F("quantity") + F("extra_qty"))
-
-    def filtered_queryset(self):
-        """Everything the filter bar allows, before the tab narrows it.
-
-        The tiles are counted over this: clicking a tab must not change the
-        numbers above it, because they are what the tabs are for.
-        """
-        return super().get_queryset()
-
-    def get_queryset(self):
-        queryset = self.filtered_queryset()
-        tab = self.current_tab()
-        if tab == self.TAB_REVERSED:
-            return queryset.filter(Q(reversed=True) | Q(reversal_of__isnull=False))
-        if tab == self.TAB_UNBILLED:
-            return self._annotated(self._live(queryset)).filter(billed_qty__lt=F("units_in"))
-        if tab == self.TAB_BILLED:
-            return self._annotated(self._live(queryset)).filter(billed_qty__gte=F("units_in"))
-        return queryset
-
-    def get_filter_specs(self):
-        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
-                 "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
-
-    def tiles(self):
-        """The four figures, over everything the filters allow.
-
-        Counted in the database rather than over the page: a page is 25 rows
-        and the question these answer is about the whole register.
-        """
-        base = self.filtered_queryset()
-        live = self._annotated(self._live(base))
-        totals = live.aggregate(
-            count=Count("id"),
-            units=Sum(F("quantity") + F("extra_qty")),
-            value=Sum("landed_amount"),
-        )
-        unbilled = live.filter(billed_qty__lt=F("units_in")).aggregate(
-            count=Count("id"),
-            value=Sum("landed_amount"),
-        )
-        reversed_count = base.filter(Q(reversed=True) | Q(reversal_of__isnull=False)).count()
-        return {
-            "receipt_count": totals["count"] or 0,
-            "receipt_value": totals["value"] or Decimal("0.00"),
-            "units": totals["units"] or Decimal("0"),
-            "unbilled_count": unbilled["count"] or 0,
-            "unbilled_value": unbilled["value"] or Decimal("0.00"),
-            "reversed_count": reversed_count,
-        }
-
-    def _document_pks(self, receipts):
-        """Every receipt each note covers, so the GRN number opens the note.
-
-        A note covering four lines is one document, and the other three lines
-        may well be on another page -- so the link is built from the receipts
-        sharing the number, not from the one row that was clicked.
-        """
-        numbers = {r.grn_number for r in receipts if r.grn_number}
-        if not numbers:
-            return {}
-        pairs = (
-            PurchaseOrderItemReceived.objects
-            .filter(grn_number__in=numbers)
-            .values_list("grn_number", "pk")
-        )
-        grouped = {}
-        for number, pk in pairs:
-            grouped.setdefault(number, []).append(pk)
-        return grouped
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        carried = self.request.GET.copy()
-        for key in ("tab", "page"):
-            carried.pop(key, None)
-        context["base_query"] = carried.urlencode()
-        context["per_page"] = self.get_paginate_by(None)
-        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
-        context["tabs"] = self.TABS
-        context["current_tab"] = self.current_tab()
-        context["filters_active"] = any(
-            (self.request.GET.get(key) or "").strip()
-            for key in ("q", "supplier", "date_from", "date_to", "tab")
-        )
-        context["columns"] = GRN_COLUMNS.visible(self.request.session)
-        context["column_menu"] = GRN_COLUMNS.menu(self.request.session)
-        context["columns_url"] = reverse_lazy("inventory:grn_columns")
-        context["export_url"] = reverse_lazy("inventory:grn_export")
-        # The action cell is drawn by the table itself rather than being a
-        # column anyone may switch off.
-        context["column_span"] = len(context["columns"]) + 1
-        context["tiles"] = self.tiles()
-        context["reversal_form"] = ReversalReasonForm()
-
-        receipts = list(context["receipts"])
-        documents = self._document_pks(receipts)
-        page_value = Decimal("0.00")
-        for receipt in receipts:
-            state, label = receipt_state(receipt)
-            receipt.state = state
-            receipt.state_label = label
-            # Whether it may still be withdrawn, worked out here so the
-            # template prints an answer rather than guessing at one.
-            ok, why = can_reverse_receipt(receipt)
-            receipt.can_reverse = ok
-            receipt.cannot_reverse_because = why
-            receipt.document_pks = ",".join(str(pk) for pk in documents.get(receipt.grn_number, [receipt.pk]))
-            if state not in ("reversed", "reversal"):
-                page_value += receipt.landed_amount or Decimal("0.00")
-        context["page_value"] = page_value
-        return context
-
-
-class GRNDetailView(InventoryListMixin, TemplateView):
-    """One goods receipt note, read as the document it is.
-
-    The register lists postings; a note is what somebody was handed at the
-    gate, and several lines usually came in under one. So the page is keyed on
-    the note's number and gathers every receipt booked under it, whichever
-    order line each went against.
-    """
-
-    page = "inventory.grn"
-    template_name = "inventory/grn_detail.html"
-
-    def get_receipts(self):
-        number = self.kwargs["number"]
-        receipts = list(
-            PurchaseOrderItemReceived.objects
-            .filter(grn_number=number)
-            .select_related(
-                "purchase_order_item__purchase_order__supplier",
-                "purchase_order_item__uom",
-                "inventory_item",
-            )
-            .prefetch_related("purchase_order_item__receipts")
-            .order_by("purchase_order_item__seq_num", "id")
-        )
-        if not receipts:
-            raise Http404(f"No goods receipt numbered {number}.")
-        return receipts
-
-    @staticmethod
-    def trace_line(receipt):
-        """Where this delivery left the order line it was booked against.
-
-        A note showing 40 ordered, 5 received and 33 still due reads as an
-        arithmetic mistake unless the deliveries before it are on the page too.
-        So the row carries the whole sum: what was ordered, what had already
-        arrived by the time this note was written, what this note added, and
-        what was still owed afterwards.
-
-        Ordering is by receive date then id, which is the order the deliveries
-        actually happened in; "before" therefore means before this one, not
-        merely entered earlier.
-        """
-        line = receipt.purchase_order_item
-        ordered = line.quantity or Decimal("0.0000")
-
-        history = sorted(
-            line.receipts.all(),
-            key=lambda other: (other.receive_date or date.min, other.pk),
-        )
-        # A reversal and the receipt it cancels net to nothing, so neither
-        # counts towards what had arrived.
-        def moved(entry):
-            if entry.reversed or entry.reversal_of_id:
-                return Decimal("0.0000")
-            return entry.received_units
-
-        before = Decimal("0.0000")
-        for entry in history:
-            if (entry.receive_date or date.min, entry.pk) >= (receipt.receive_date or date.min, receipt.pk):
-                break
-            before += moved(entry)
-
-        now = moved(receipt)
-        after = before + now
-        due = ordered - after
-        receipt.qty_ordered = ordered
-        receipt.qty_before = before
-        receipt.qty_now = now
-        receipt.qty_after = after
-        receipt.qty_due = due if due > 0 else Decimal("0.0000")
-        # Where the line stood once this note was booked in, as two widths of
-        # one bar: what was already in, and what this delivery added.
-        if ordered > 0:
-            receipt.pct_before = min(float(before / ordered * 100), 100)
-            receipt.pct_now = min(float(now / ordered * 100), 100 - receipt.pct_before)
-        else:
-            receipt.pct_before = 0
-            receipt.pct_now = 100 if now else 0
-        # The line as a whole, not this delivery: a balance somebody has given
-        # up on is not still expected.
-        receipt.line_closed = line.closed
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        receipts = self.get_receipts()
-        first = receipts[0]
-        order = first.purchase_order_item.purchase_order
-
-        units = Decimal("0.0000")
-        value = Decimal("0.00")
-        unbilled = Decimal("0.0000")
-        live = 0
-        for receipt in receipts:
-            receipt.line = receipt.purchase_order_item
-            state, label = receipt_state(receipt)
-            receipt.state = state
-            receipt.state_label = label
-            ok, why = can_reverse_receipt(receipt)
-            receipt.can_reverse = ok
-            receipt.cannot_reverse_because = why
-            # A reversal and the receipt it cancels both stay on the note, but
-            # neither counts towards what it delivered: between them they moved
-            # nothing.
-            if state not in ("reversed", "reversal"):
-                units += receipt.received_units
-                value += receipt.landed_amount or Decimal("0.00")
-                unbilled += receipt.pending_bill_qty
-                live += 1
-            self.trace_line(receipt)
-
-        context["number"] = first.grn_number
-        context["receipts"] = receipts
-        context["receipt_pks"] = ",".join(str(r.pk) for r in receipts)
-        context["order"] = order
-        # A note is normally one delivery against one order. Said out loud
-        # rather than assumed, so a number that somehow spans two orders shows
-        # both instead of quietly naming one of them.
-        context["orders"] = sorted(
-            {r.purchase_order_item.purchase_order for r in receipts},
-            key=lambda o: o.purchase_num,
-        )
-        context["supplier"] = order.supplier
-        context["receive_date"] = max((r.receive_date for r in receipts if r.receive_date), default=None)
-        context["invoice_nums"] = sorted({r.invoice_num for r in receipts if r.invoice_num})
-        # What the store wrote at the gate. One delivery is usually booked in
-        # with one note against every line, so the same words repeat down the
-        # rows -- said once here, and only what a line adds of its own (what
-        # was rejected on it) stays beside that line.
-        shared = [note for note in dict.fromkeys(r.remarks.strip() for r in receipts if r.remarks.strip())]
-        context["narration"] = shared[0] if len(shared) == 1 else ""
-        context["narration_lines"] = shared if len(shared) > 1 else []
-        for receipt in receipts:
-            note = (receipt.remarks or "").strip()
-            receipt.own_remark = note if note and note != context["narration"] else ""
-        # What the gate recorded about the delivery itself. One note is one
-        # delivery, so these are facts about the whole of it -- the first line
-        # to carry each is the note's answer.
-        def first_of(field):
-            for receipt in receipts:
-                value = (getattr(receipt, field, "") or "").strip()
-                if value:
-                    return value
-            return ""
-
-        context["dc_number"] = first_of("dc_number")
-        context["vehicle_no"] = first_of("vehicle_no")
-        context["driver_number"] = first_of("driver_number")
-        context["inspected_by"] = first_of("inspected_by")
-        # Receipts booked before the DC and the vehicle were held apart still
-        # carry the two joined into one string; shown as it was stored rather
-        # than guessed at.
-        context["delivery_ref"] = "" if (context["dc_number"] or context["vehicle_no"]) else first_of("rv_number")
-        context["total_units"] = units
-        context["total_value"] = value
-        # The footer adds up the same sum the rows read across. Ordered, what
-        # had already arrived and what is still owed all belong to the line
-        # rather than to this delivery, so a line that came in twice under one
-        # note is counted once: its first row for what was already in, its last
-        # for what is still due.
-        first_row = {}
-        last_row = {}
-        for receipt in receipts:
-            first_row.setdefault(receipt.line.pk, receipt)
-            last_row[receipt.line.pk] = receipt
-        context["total_ordered"] = sum(
-            (r.qty_ordered for r in first_row.values()), Decimal("0.0000")
-        )
-        context["total_before"] = sum(
-            (r.qty_before for r in first_row.values()), Decimal("0.0000")
-        )
-        context["total_due"] = sum(
-            (Decimal("0.0000") if r.line_closed else r.qty_due for r in last_row.values()),
-            Decimal("0.0000"),
-        )
-        context["unbilled_qty"] = unbilled
-        # What the note is, as one word: the states of its lines rolled up, so
-        # the sheet says where the delivery stands without the reader adding
-        # the pills up themselves.
-        if not live:
-            context["note_state"] = "reversed"
-        elif unbilled and unbilled >= units:
-            context["note_state"] = "unbilled"
-        elif unbilled:
-            context["note_state"] = "part_billed"
-        else:
-            context["note_state"] = "billed"
-        # The order this delivery came in against, and nothing else. The rest
-        # of the chain -- the other notes, the bills, anything sent back --
-        # hangs off the order, so it is read there rather than repeated on
-        # every note booked against it.
-        context["linked_documents"] = [{
-            "kind": "Purchase Order",
-            "label": order.purchase_num,
-            "url": reverse("inventory:purchase_order_detail", args=[order.pk]),
-            "new_tab": False,
-            "dead": order.status in (STATUS_CANCELLED, STATUS_CLOSED_SHORT),
-        }]
-        context["reversal_form"] = ReversalReasonForm()
-        context["grn_url"] = reverse_lazy("inventory:grn_list")
-        return context
-
-
-class GRNExportView(InventoryListMixin, TableExportView):
-    """The goods receipt rows on screen, in whichever format was asked for."""
-
-    page = "inventory.grn"
-    columns = GRN_COLUMNS
-    filename = "goods-receipts"
-    title = "Goods Receipts"
-
-    def get_rows(self):
-        # Exactly the rows the screen is showing, tab and filters included, so
-        # the file matches what was on screen rather than the whole register.
-        return list(GRNListView(request=self.request, kwargs={}, args=()).get_queryset())
-
-
-class GRNColumnsView(InventoryListMixin, View):
-    """Which columns this person wants on the goods receipt table."""
-
-    page = "inventory.grn"
-
-    def post(self, request, *args, **kwargs):
-        GRN_COLUMNS.choose(request.session, request.POST.getlist("columns"))
-        carried = urlencode([
-            (key, value) for key, value in parse_qsl(request.POST.get("back", ""), keep_blank_values=False)
-            if key in ("q", "supplier", "date_from", "date_to", "per_page", "page")
-        ])
-        target = reverse_lazy("inventory:grn_list")
-        return redirect(f"{target}?{carried}" if carried else str(target))
-
-
-class GRNPrintView(PrintContextMixin, InventoryListMixin, DetailView):
-    page = "inventory.grn"
-    model = PurchaseOrder
-    template_name = "inventory/grn_print.html"
-    context_object_name = "order"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        receipt_pks_raw = self.request.GET.get("receipts", "")
-        if receipt_pks_raw:
-            pks = [p for p in receipt_pks_raw.split(",") if p.isdigit()]
-            receipts = list(PurchaseOrderItemReceived.objects.filter(pk__in=pks).select_related("purchase_order_item"))
-        else:
-            receipts = []
-            for item in self.object.items.prefetch_related("receipts").filter(status=YES):
-                last = item.receipts.order_by("-id").first()
-                if last:
-                    receipts.append(last)
-        for r in receipts:
-            r.line_total = r.quantity * r.retail_price
-        context["receipts"] = receipts
-        context["total_qty"] = sum(r.quantity for r in receipts)
-        context["grand_total"] = sum(r.line_total for r in receipts)
-        context["po_total_qty"] = sum(r.purchase_order_item.quantity for r in receipts)
-        context["receive_date"] = receipts[0].receive_date if receipts else timezone.localdate()
-        context["prepared_by"] = self.request.user.get_full_name() or self.request.user.username
-        context["is_reprint"] = self.request.GET.get("reprint") == "1"
-        # What the gate recorded about the delivery, the same facts the note's
-        # own page shows. The printed sheet is the copy that gets filed and
-        # signed, so it must not say less than the screen it was printed from.
-        def first_of(field):
-            for receipt in receipts:
-                value = (getattr(receipt, field, "") or "").strip()
-                if value:
-                    return value
-            return ""
-
-        context["grn_number"] = first_of("grn_number")
-        context["dc_number"] = first_of("dc_number")
-        context["vehicle_no"] = first_of("vehicle_no")
-        context["driver_number"] = first_of("driver_number")
-        context["inspected_by"] = first_of("inspected_by")
-        context["delivery_ref"] = "" if (context["dc_number"] or context["vehicle_no"]) else first_of("rv_number")
-        # One delivery is normally written up once, so the same words repeat
-        # down its lines: said once here, and kept in full where they differ.
-        notes = list(dict.fromkeys(r.remarks.strip() for r in receipts if (r.remarks or "").strip()))
-        context["store_remarks"] = notes
-        context["amount_in_words"] = amount_in_words(context["grand_total"])
-        context["print_back_url"] = reverse_lazy("inventory:grn_list")
-        return context
-
-
-class GRNBulkReceiveView(InventoryManageMixin, View):
-    page = "inventory.grn"
-    action = "edit"
-    def post(self, request, pk):
-        order = get_object_or_404(PurchaseOrder, pk=pk)
-        today = timezone.localdate()
-        errors = []
-        receipt_pks = []
-
-        # First pass: collect the lines actually being received.
-        recv_lines = []
-        for item in order.items.filter(status=YES):
-            raw = request.POST.get(f"recv_qty_{item.pk}", "").strip()
-            if not raw:
-                continue
-            try:
-                qty = Decimal(raw)
-            except Exception:
-                continue
-            if qty <= 0:
-                continue
-            unit_cost = item.retail_price or item.rate or Decimal("0")
-            recv_lines.append((item, qty, unit_cost))
-
-        try:
-            with transaction.atomic():
-                for item, qty, unit_cost in recv_lines:
-                    try:
-                        receipt = receive_purchase_order_item(
-                            purchase_order_item=item,
-                            quantity=qty,
-                            extra_qty=Decimal("0"),
-                            retail_price=unit_cost,
-                            receive_date=today,
-                            invoice_num="",
-                            invoice_date=None,
-                            rv_number="",
-                            remarks="",
-                            user=request.user,
-                        )
-                        receipt_pks.append(str(receipt.pk))
-                    except ValidationError as exc:
-                        errors.append(str(exc))
-                if errors:
-                    raise ValidationError(errors)
-        except ValidationError as exc:
-            for msg in exc.messages:
-                messages.error(request, msg)
-            return redirect("inventory:grn_list")
-        if receipt_pks:
-            messages.success(request, f"{len(receipt_pks)} item(s) received for {order.purchase_num}.")
-        return redirect(f"{reverse_lazy('inventory:grn_print', kwargs={'pk': pk})}?receipts={','.join(receipt_pks)}")
-
-
 class PurchaseReturnListView(InventoryListMixin, ListView):
     page = "inventory.purchase_returns"
     template_name = "inventory/purchase_return_list.html"
@@ -4383,19 +3993,19 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         all_orders = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__inventory_item", "items__uom").filter(
-            status__in=[STATUS_PARTIAL_RECEIVED, STATUS_FULLY_RECEIVED]
+            status__in=[STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED]
         ).order_by("-purchase_date", "-id")
         returnable_pks = []
         for o in all_orders:
             for item in o.items.all():
-                if (item.total_receive_qty or Decimal("0")) <= 0:
+                if (item.qty_invoiced or Decimal("0")) <= 0:
                     continue
                 already = PurchaseReturnDetail.objects.filter(
                     purchase_return_master__purchase_order=o,
                     purchase_return_master__posted=YES,
                     inventory_item=item.inventory_item,
                 ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
-                if item.total_receive_qty > already:
+                if item.qty_invoiced > already:
                     returnable_pks.append(o.pk)
                     break
         orders = all_orders.filter(pk__in=returnable_pks)
@@ -4407,14 +4017,14 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
         for o in orders:
             rows = []
             for i in o.items.all():
-                if (i.total_receive_qty or Decimal("0")) <= 0:
+                if (i.qty_invoiced or Decimal("0")) <= 0:
                     continue
                 already = PurchaseReturnDetail.objects.filter(
                     purchase_return_master__purchase_order=o,
                     purchase_return_master__posted=YES,
                     inventory_item=i.inventory_item,
                 ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
-                returnable = i.total_receive_qty - already
+                returnable = i.qty_invoiced - already
                 if returnable <= 0:
                     continue
                 rows.append({
@@ -4569,372 +4179,6 @@ class PurchaseReturnPostView(InventoryManageMixin, View):
 # billable is what actually arrived and nobody has invoiced yet, so that is
 # what the form lists -- and a quantity cannot be typed above it.
 # ══════════════════════════════════════════════════════════════════════════
-
-
-class PurchaseBillListView(InventoryListMixin, ListView):
-    """Supplier invoices entered against goods received.
-
-    The tile that matters is GRN Clearing: goods in the godown that no bill has
-    been entered for. While it is not zero the payables are understated, and by
-    exactly that much.
-    """
-
-    page = "inventory.purchase_orders"
-    template_name = "inventory/purchase_bill_list.html"
-    context_object_name = "bills"
-    paginate_by = 25
-    queryset = (
-        PurchaseBill.objects
-        .select_related("supplier", "purchase_order", "created_by")
-        .prefetch_related("items__inventory_item")
-        .order_by("-bill_date", "-id")
-    )
-    search_fields = ("bill_num", "supplier_invoice_num", "supplier__name", "purchase_order__purchase_num")
-    filter_fields = {"supplier": "supplier_id"}
-    date_filters = [{"field": "bill_date", "label": "Bill date"}]
-
-    def get_filter_specs(self):
-        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
-                 "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        pending = billable_order_lines()
-        context["unbilled_count"] = len(pending)
-        context["unbilled_value"] = sum(
-            ((row.pending_bill_qty * (row.rate or Decimal("0"))).quantize(Decimal("0.01")) for row in pending),
-            Decimal("0.00"),
-        )
-        context["reversal_form"] = ReversalReasonForm()
-        carried = self.request.GET.copy()
-        for key in ("page",):
-            carried.pop(key, None)
-        context["base_query"] = carried.urlencode()
-        return context
-
-
-class PurchaseBillCreateView(InventoryManageMixin, View):
-    """Enter a supplier's invoice against an open purchase order.
-
-    Every candidate line carries the ordered rate beside the one the supplier is
-    asking, so a rate that was never agreed is visible on the way in rather than
-    after it has been paid. Posting the bill is what takes the goods into stock.
-    """
-
-    page = "inventory.purchase_orders"
-    action = "add"
-    template_name = "inventory/purchase_bill_form.html"
-
-    def _candidates(self, supplier=None, order=None):
-        rows = billable_order_lines(supplier=supplier, purchase_order=order)
-        for row in rows:
-            row.order_ref = row.purchase_order
-            row.order_rate = row.rate
-        return rows
-
-    def get(self, request):
-        supplier = None
-        supplier_id = (request.GET.get("supplier") or "").strip()
-        if supplier_id.isdigit():
-            supplier = Supplier.objects.filter(pk=int(supplier_id)).first()
-
-        order = None
-        order_id = (request.GET.get("order") or "").strip()
-        if order_id.isdigit():
-            order = PurchaseOrder.objects.filter(pk=int(order_id)).first()
-            supplier = supplier or (order.supplier if order else None)
-
-        form = PurchaseBillForm(initial={
-            "supplier": supplier, "bill_date": timezone.localdate(), "supplier_invoice_date": timezone.localdate(),
-        })
-        return render(request, self.template_name, {
-            "title": "Purchase Bill",
-            "form": form,
-            "candidates": self._candidates(supplier=supplier, order=order),
-            "selected_supplier": supplier,
-            "selected_order": order,
-        })
-
-    def post(self, request):
-        form = PurchaseBillForm(request.POST)
-        supplier = None
-        supplier_id = (request.POST.get("supplier") or "").strip()
-        if supplier_id.isdigit():
-            supplier = Supplier.objects.filter(pk=int(supplier_id)).first()
-
-        if not form.is_valid():
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
-            return render(request, self.template_name, {
-                "title": "Purchase Bill", "form": form,
-                "candidates": self._candidates(supplier=supplier), "selected_supplier": supplier,
-            })
-
-        # Only the rows that were ticked, and only with the quantity and rate
-        # actually typed against them. An untouched row is not a line.
-        lines = []
-        for item_id in request.POST.getlist("order_item_id"):
-            if not request.POST.get(f"pick_{item_id}"):
-                continue
-            order_item = PurchaseOrderItem.objects.filter(pk=item_id).select_related(
-                "purchase_order", "inventory_item"
-            ).first()
-            if not order_item:
-                continue
-            try:
-                quantity = Decimal(request.POST.get(f"qty_{item_id}") or "0")
-                rate = Decimal(request.POST.get(f"rate_{item_id}") or "0")
-            except InvalidOperation:
-                messages.error(request, f"{order_item.descr}: quantity and rate must be numbers.")
-                return redirect("inventory:purchase_bill_create")
-            lines.append({"order_item": order_item, "quantity": quantity, "rate": rate})
-
-        data = form.cleaned_data
-        try:
-            bill = create_purchase_bill(
-                supplier=data["supplier"],
-                supplier_invoice_num=data["supplier_invoice_num"],
-                supplier_invoice_date=data.get("supplier_invoice_date"),
-                bill_date=data["bill_date"],
-                due_date=data.get("due_date"),
-                lines=lines,
-                freight_amount=data.get("freight_amount") or Decimal("0"),
-                discount_amount=data.get("discount_amount") or Decimal("0"),
-                tax_amount=data.get("tax_amount") or Decimal("0"),
-                remarks=data.get("remarks") or "",
-                variance_approved=bool(data.get("variance_approved")),
-                user=request.user,
-            )
-        except ValidationError as exc:
-            for message in exc.messages:
-                messages.error(request, message)
-            return render(request, self.template_name, {
-                "title": "Purchase Bill", "form": form,
-                "candidates": self._candidates(supplier=data["supplier"]), "selected_supplier": data["supplier"],
-            })
-
-        messages.success(
-            request,
-            f"Bill {bill.bill_num} posted for {bill.total_amount}. "
-            "Stock taken in, payable created, input tax claimable.",
-        )
-        return redirect("inventory:purchase_bill_detail", pk=bill.pk)
-
-
-class PurchaseBillDetailView(InventoryListMixin, DetailView):
-    page = "inventory.purchase_orders"
-    model = PurchaseBill
-    template_name = "inventory/purchase_bill_detail.html"
-    context_object_name = "bill"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        ok, why = can_reverse_bill(self.object)
-        context["can_reverse"] = ok
-        context["cannot_reverse_because"] = why
-        context["reversal_form"] = ReversalReasonForm()
-        return context
-
-
-class PurchaseBillReverseView(InventoryManageMixin, View):
-    """Withdraw a posted bill: stock back out, payable off."""
-
-    page = "inventory.purchase_orders"
-    action = "reverse"
-
-    def post(self, request, pk):
-        bill = get_object_or_404(PurchaseBill, pk=pk)
-        form = ReversalReasonForm(request.POST)
-        if not form.is_valid():
-            messages.error(request, "A reversal needs a reason.")
-            return redirect("inventory:purchase_bill_detail", pk=pk)
-        try:
-            mirror = reverse_purchase_bill(bill=bill, reason=form.cleaned_data["reason"], user=request.user)
-            messages.success(
-                request,
-                f"{bill.bill_num} reversed by {mirror.bill_num}. The receipts are unbilled again, "
-                "so the correct invoice can be entered against them.",
-            )
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-        return redirect("inventory:purchase_bill_detail", pk=pk)
-
-
-class GoodsReceiptCreateView(InventoryManageMixin, View):
-    """Book a delivery in against an order, as one document.
-
-    The register already lets a row be expanded and received in place, and an
-    order's own page has a panel for it. This is the third way in, and it is the
-    one for the store: somebody standing at the gate with a delivery in front of
-    them, who knows the supplier and the vehicle but has not got a particular
-    row on a list in mind.
-
-    It receives several lines of one order in a single pass, which is what a
-    delivery actually is.
-    """
-
-    page = "inventory.grn"
-    action = "edit"
-    template_name = "inventory/goods_receipt_form.html"
-
-    def _open_orders(self, supplier=None):
-        """Orders goods can still be booked in against.
-
-        Draft orders are left out: nobody has committed to them, so nothing
-        should be arriving. So are the ones cancelled or closed short, where the
-        business has already said the goods are not coming.
-        """
-        rows = (
-            PurchaseOrder.objects
-            .filter(is_direct=False, status__in=(STATUS_RAISED, STATUS_PARTIAL_RECEIVED))
-            .select_related("supplier")
-            .prefetch_related("items__inventory_item", "items__uom")
-            .order_by("-purchase_date", "-id")
-        )
-        if supplier is not None:
-            rows = rows.filter(supplier=supplier)
-        picked = []
-        for order in rows:
-            # The lines still owed on this order, hung off it so the picker can
-            # show what is actually outstanding without a second query per row.
-            order.open_lines = [line for line in order.items.all() if line.open_receive_qty > 0]
-            if not order.open_lines:
-                continue
-            # Totals over the whole order, not only the lines still open, so the
-            # picker states how far along the order is rather than what is left.
-            lines = list(order.items.all())
-            order.ordered_qty = sum((line.quantity + line.extra_qty for line in lines), Decimal("0.0000"))
-            order.received_qty = sum((line.total_receive_qty for line in lines), Decimal("0.0000"))
-            order.balance_qty = sum((line.open_receive_qty for line in lines), Decimal("0.0000"))
-            order.order_amount = sum((line.total_amount for line in lines), Decimal("0.00"))
-            order.item_count = len(lines)
-            picked.append(order)
-        return picked
-
-    def _context(self, request, supplier=None, order=None):
-        # Kept across the supplier/order reload, which is a GET, so a date typed
-        # before the order was picked is not quietly thrown away.
-        grn_date = (request.GET.get("grn_date") or "").strip()
-        orders = self._open_orders(supplier=supplier)
-        if order is not None and order not in orders:
-            # Somebody arrived on a link to an order that has since been
-            # completed or closed. Say so rather than showing an empty grid.
-            order = None
-        lines = []
-        if order is not None:
-            for line in order.items.all():
-                if line.open_receive_qty <= 0:
-                    continue
-                line.max_now = line.open_receive_qty
-                lines.append(line)
-        return {
-            "title": "Goods Receipt Note",
-            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
-            "orders": orders,
-            "selected_supplier": supplier,
-            "selected_order": order,
-            "lines": lines,
-            "today": timezone.localdate(),
-            "next_grn_no": next_grn_number(),
-            "grn_date": grn_date,
-            "clearing_balance": -(balance_of_grn_clearing()),
-        }
-
-    def get(self, request):
-        supplier = Supplier.objects.filter(pk=request.GET.get("supplier") or 0).first()
-        order = PurchaseOrder.objects.filter(pk=request.GET.get("order") or 0).first()
-        if order and not supplier:
-            supplier = order.supplier
-        return render(request, self.template_name, self._context(request, supplier=supplier, order=order))
-
-    def post(self, request):
-        supplier = Supplier.objects.filter(pk=request.POST.get("supplier") or 0).first()
-        order = PurchaseOrder.objects.filter(pk=request.POST.get("order") or 0).first()
-        if not order:
-            messages.error(request, "Choose the purchase order these goods arrived against.")
-            return redirect("inventory:goods_receipt_create")
-
-        receive_date = request.POST.get("receive_date") or str(timezone.localdate())
-        # One delivery, one GRN number: every line booked in this pass carries it.
-        grn_number = (request.POST.get("grn_number") or "").strip()
-        rv_number = " ".join(part for part in (
-            (request.POST.get("dc_number") or "").strip(),
-            (request.POST.get("vehicle") or "").strip(),
-        ) if part)[:80]
-        # What the store saw, kept with the receipt rather than in somebody's
-        # head. The inspector is a field of its own now, so the narration holds
-        # the store's own words and nothing else.
-        dc_number = (request.POST.get("dc_number") or "").strip()
-        vehicle_no = (request.POST.get("vehicle") or "").strip()
-        driver_number = (request.POST.get("driver_number") or "").strip()
-        inspected = (request.POST.get("inspected_by") or "").strip()
-        remarks = (request.POST.get("remarks") or "").strip()
-        # Nothing typed at the gate: the receipt still says what it is, and the
-        # rejection note below appends to that rather than standing alone.
-        if not remarks:
-            remarks = default_receipt_narration(
-                purchase_order=order, receive_date=receive_date, rv_number=rv_number
-            )
-
-        picked = []
-        for line in order.items.all():
-            try:
-                quantity = Decimal(request.POST.get(f"qty_{line.pk}") or "0")
-                rejected = Decimal(request.POST.get(f"rej_{line.pk}") or "0")
-                rate = Decimal(request.POST.get(f"rate_{line.pk}") or "0")
-            except InvalidOperation:
-                messages.error(request, f"{line.descr}: quantity, rejected and rate must be numbers.")
-                return redirect(f"{reverse_lazy('inventory:goods_receipt_create')}?order={order.pk}")
-            accepted = quantity - rejected
-            if accepted <= 0:
-                continue
-            picked.append((line, accepted, rejected, rate or line.rate or Decimal("0")))
-
-        if not picked:
-            messages.error(request, "Nothing was accepted — enter a received quantity on at least one line.")
-            return redirect(f"{reverse_lazy('inventory:goods_receipt_create')}?order={order.pk}")
-
-        receipt_pks = []
-        try:
-            with transaction.atomic():
-                for line, accepted, rejected, rate in picked:
-                    line_note = remarks
-                    if rejected > 0:
-                        # A rejection is a fact about the delivery and belongs on
-                        # the receipt. It is not taken into stock, so it appears
-                        # nowhere else at all unless it is written down here.
-                        line_note = f"{line_note} — {rejected} rejected" if line_note else f"{rejected} rejected"
-                    receipt = receive_purchase_order_item(
-                        purchase_order_item=line,
-                        quantity=accepted,
-                        extra_qty=Decimal("0"),
-                        retail_price=rate,
-                        receive_date=receive_date,
-                        invoice_num="",
-                        invoice_date=None,
-                        rv_number=rv_number,
-                        dc_number=dc_number,
-                        vehicle_no=vehicle_no,
-                        driver_number=driver_number,
-                        inspected_by=inspected,
-                        remarks=line_note,
-                        user=request.user,
-                        grn_number=grn_number,
-                    )
-                    receipt_pks.append(str(receipt.pk))
-        except ValidationError as exc:
-            for message in exc.messages:
-                messages.error(request, message)
-            return redirect(f"{reverse_lazy('inventory:goods_receipt_create')}?order={order.pk}")
-
-        messages.success(
-            request,
-            f"Goods receipt posted for {order.purchase_num}: {len(receipt_pks)} line(s) into stock. "
-            "The value waits in GRN clearing until the supplier's bill is entered.",
-        )
-        return redirect(f"{reverse_lazy('inventory:grn_print', kwargs={'pk': order.pk})}?receipts={','.join(receipt_pks)}")
 
 
 def balance_of_grn_clearing():

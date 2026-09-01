@@ -6,6 +6,12 @@
   /* The notes a line came in under. Several fit in the cell without widening
      it, so they wrap as chips rather than pushing the money columns off. */
   .po-grns { min-width: 9rem; }
+  .po-lines-done { color: #059669; font-weight: 600; }
+  .dark .po-lines-done { color: #34d399; }
+  .po-lines-foot-label { font-weight: 700; color: #475569; }
+  .dark .po-lines-foot-label { color: #cbd5e1; }
+  .po-lines tfoot td { border-top: 2px solid #e2e8f0; padding-top: .5rem; }
+  .dark .po-lines tfoot td { border-top-color: #1e293b; }
   .po-grn {
     display: inline-flex;
     align-items: baseline;
@@ -247,7 +253,7 @@
     </div>
   </a>
 
-  <a class="po-tile po-tile--payable" href="{% url 'inventory:purchase_bill_list' %}">
+  <a class="po-tile po-tile--payable" href="{% url 'inventory:purchase_invoice_list' %}">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2" y="6" width="20" height="12" rx="2"></rect>
@@ -257,9 +263,9 @@
     <div class="po-tile-body">
       <div class="po-tile-head">
         <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
-        <p class="po-tile-label">Received, not billed</p>
+        <p class="po-tile-label">Awaiting invoice</p>
       </div>
-      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} arrived, not invoiced</p>
+      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} ordered, not invoiced</p>
     </div>
   </a>
 </div>
@@ -279,8 +285,7 @@
           {% if "buyer" in columns %}<th>Raised by</th>{% endif %}
           {% if "expected" in columns %}{% include "components/table/sort_header.html" with label="Expected" field="expected" %}{% endif %}
           {% if "value" in columns %}<th class="po-right">Order value</th>{% endif %}
-          {% if "received" in columns %}<th style="width: 10rem;">Received</th>{% endif %}
-          {% if "grn" in columns %}<th>Goods receipt</th>{% endif %}
+          {% if "received" in columns %}<th style="width: 10rem;">Progress</th>{% endif %}
           {% if "billed" in columns %}<th>Invoiced</th>{% endif %}
           {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
           <th class="print-hide po-actions-head">Actions</th>
@@ -320,16 +325,12 @@
                    style="width: {{ order.received_percent }}%;"></div>
             </div>
             <span class="po-bar-note{% if order.days_late %} po-bar-note--late{% endif %}">
-              {% if order.short_closed_qty %}{{ order.short_closed_qty|qty }} never delivered
+              {% if order.short_closed_qty %}{{ order.short_closed_qty|qty }} never invoiced
               {% elif order.days_late %}{{ order.days_late }} day{{ order.days_late|pluralize }} late
-              {% elif order.grn_number %}{{ order.grn_number }}
-              {% elif order.received_percent %}{{ order.received_percent }}% received
-              {% else %}Not received{% endif %}
+              {% elif order.received_percent %}{{ order.received_percent }}% invoiced
+              {% else %}Not invoiced{% endif %}
             </span>
           </td>
-          {% endif %}
-          {% if "grn" in columns %}
-          <td class="whitespace-nowrap">{% if order.grn_number %}{{ order.grn_number }}{% else %}<span class="po-muted">—</span>{% endif %}</td>
           {% endif %}
           {% if "billed" in columns %}
           <td>
@@ -344,12 +345,12 @@
             {# A state, never an instruction: what to do about it is the button #}
             {# at the end of the row, and the two must not be spoken in one voice. #}
             {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
-            {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
-            {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partly received</span>
-            {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Received</span>
-            {% elif order.status == "closed_short" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
+            {% elif order.days_late %}<span class="po-pill po-pill--late">Overdue</span>
+            {% elif order.status == "partially_invoiced" %}<span class="po-pill po-pill--open">Partly invoiced</span>
+            {% elif order.status == "fully_invoiced" %}<span class="po-pill po-pill--done">Fully invoiced</span>
+            {% elif order.status == "closed" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
             {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Cancelled</span>
-            {% else %}<span class="po-pill po-pill--open">Awaiting goods</span>{% endif %}
+            {% else %}<span class="po-pill po-pill--open">Awaiting invoice</span>{% endif %}
           </td>
           {% endif %}
           <td class="print-hide">
@@ -393,7 +394,7 @@
                 </svg>
               </a>
               {% elif order.next_action == "bill" %}
-              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_bill_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}" title="Bill &mdash; enter the supplier's invoice against what arrived" aria-label="Enter the bill for this order">
+              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_invoice_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}" title="Invoice &mdash; enter the supplier's invoice against this order" aria-label="Enter the invoice for this order">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
                   <path d="M9 8h6M9 12h6"></path>
@@ -462,6 +463,9 @@
           <td colspan="{{ column_span }}" class="po-lines-cell print-hide">
             {% with poi_list=order.items.all %}
             {% if poi_list %}
+            {# Two questions get asked of an open order, and they are different #}
+            {# questions: what is left on each line, and which invoices took    #}
+            {# the rest. The lines answer the first, the history the second.    #}
             <table class="po-lines">
               <thead>
                 <tr>
@@ -470,11 +474,11 @@
                   <th class="po-right">Ordered</th>
                   <th>Unit</th>
                   <th class="po-right">Rate</th>
-                  <th class="po-right">Discount</th>
                   <th class="po-right">Amount</th>
-                  <th class="po-right">Received</th>
-                  <th class="po-right">Balance</th>
-                  <th>Goods receipt</th>
+                  <th class="po-right">Invoiced</th>
+                  <th class="po-right">Pending</th>
+                  <th class="po-right">Value pending</th>
+                  <th>Invoices</th>
                 </tr>
               </thead>
               <tbody>
@@ -485,26 +489,29 @@
                     <span class="font-semibold">{{ poi.descr }}</span>
                     {% if poi.inventory_item.item_code %}<span class="po-sub">{{ poi.inventory_item.item_code }}</span>{% endif %}
                   </td>
-                  <td class="po-right">{{ poi.quantity|qty }}</td>
+                  <td class="po-right">{{ poi.qty_ordered|qty }}</td>
                   <td>{{ poi.uom.title|default:"—" }}</td>
                   <td class="po-right">{{ poi.rate|amount }}</td>
-                  <td class="po-right">{{ poi.discount_amount|amount }}</td>
                   <td class="po-right font-semibold">{{ poi.total_amount|amount }}</td>
-                  <td class="po-right {% if poi.total_receive_qty %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.total_receive_qty|qty }}</td>
-                  {# What is still genuinely expected: a line closed short is #}
-                  {# nil here, not outstanding, the same as everywhere else.  #}
-                  <td class="po-right {% if poi.open_receive_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">
-                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>{% else %}{{ poi.open_receive_qty|qty }}{% endif %}
+                  <td class="po-right {% if poi.qty_invoiced %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.qty_invoiced|qty }}</td>
+                  {# Nil on a line closed short: the balance was given up on, #}
+                  {# not left outstanding, the same as everywhere else.       #}
+                  <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
+                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>
+                    {% elif poi.qty_pending %}{{ poi.qty_pending|qty }}
+                    {% else %}<span class="po-lines-done">Complete</span>{% endif %}
                   </td>
-                  {# Every note this line came in under, not only the last: a #}
-                  {# delivery a week for a month is four, and which of them a  #}
-                  {# quantity arrived on is the question being asked here.     #}
+                  {# What the balance is worth, so a part-invoiced order can be #}
+                  {# read in money without the reader doing the multiplication. #}
+                  <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
+                    {% if poi.qty_pending %}{{ poi.pending_value|amount }}{% else %}&mdash;{% endif %}
+                  </td>
                   <td class="po-grns">
-                    {% for ref in poi.grn_refs %}
-                    <span class="po-grn"
-                          title="{{ ref.number }} &mdash; {{ ref.qty|qty }} received {{ ref.date|dmy }}">
+                    {% for ref in poi.invoice_refs %}
+                    <a class="po-grn" href="{% url 'inventory:purchase_invoice_detail' ref.pk %}"
+                       title="{{ ref.number }} &mdash; {{ ref.qty|qty }} invoiced {{ ref.date|dmy }}{% if ref.supplier_ref %} on {{ ref.supplier_ref }}{% endif %}">
                       {{ ref.number }}<span class="po-grn-qty">{{ ref.qty|qty }}</span>
-                    </span>
+                    </a>
                     {% empty %}
                     <span class="po-lines-nil">&mdash;</span>
                     {% endfor %}
@@ -512,7 +519,19 @@
                 </tr>
                 {% endfor %}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2" class="po-lines-foot-label">Order total</td>
+                  <td class="po-right">{{ order.ordered_qty|qty }}</td>
+                  <td colspan="2"></td>
+                  <td class="po-right font-semibold">{{ order.total_amount|amount }}</td>
+                  <td class="po-right po-lines-in">{{ order.invoiced_qty|qty }}</td>
+                  <td class="po-right {% if order.pending_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">{{ order.pending_qty|qty }}</td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
             </table>
+
             {% else %}
             <p class="po-lines-empty">Nothing on this order yet.</p>
             {% endif %}
@@ -611,7 +630,7 @@
     {# Said plainly rather than as a red banner: it is a fact about the action, #}
     {# not an alarm about a mistake nobody has made yet. #}
     <p class="approve-note">
-      Approval cannot be undone from this screen. Goods can then be received against the order.
+      Approval cannot be undone from this screen. The order can then be invoiced against.
     </p>
 
     <form method="post" :action="approval?.url" class="approve-actions">{% csrf_token %}

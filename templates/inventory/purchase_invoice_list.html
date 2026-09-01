@@ -13,7 +13,7 @@
 
   <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
-    {% url 'inventory:direct_purchase_create' as add_url %}
+    {% url 'inventory:purchase_invoice_create' as add_url %}
     {% include "components/ui/button.html" with label="Purchase Invoice" href=add_url variant="primary" icon="+" only %}
     {% endif %}
   </div>
@@ -70,25 +70,23 @@
     </div>
   </a>
 
-  {# A direct purchase posts its own bill as it is entered, so one without a #}
-  {# live bill is an entry that did not finish -- and its value is sitting   #}
-  {# in GRN clearing saying nobody has been invoiced for it.                 #}
-  <a class="po-tile po-tile--payable{% if state == 'unbilled' %} is-on{% endif %}"
-     href="?{{ tile_query }}&amp;state=unbilled" title="Only the entries whose bill never posted">
+  {# The goods are in and the books are made the moment an invoice is       #}
+  {# entered, so the only thing one can still be waiting on is the money.    #}
+  <a class="po-tile po-tile--payable{% if state == 'posted' %} is-on{% endif %}"
+     href="?{{ tile_query }}&amp;state=posted" title="Only the invoices still standing">
     <span class="po-tile-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 9v4M12 17h.01"></path>
-        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+        <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
       </svg>
     </span>
     <div class="po-tile-body">
       <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
-        <p class="po-tile-label">No bill posted</p>
+        <p class="po-tile-value">{{ tiles.unpaid_count }}</p>
+        <p class="po-tile-label">Unpaid</p>
       </div>
-      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">
-        {% if tiles.unbilled_count %}Rs {{ tiles.unbilled_value|short_amount }} left in GRN clearing
-        {% else %}Every entry posted its bill{% endif %}
+      <p class="po-tile-note{% if tiles.unpaid_count %} po-tile-note--alert{% endif %}">
+        {% if tiles.unpaid_count %}Rs {{ tiles.unpaid_value|short_amount }} still owed
+        {% else %}Nothing outstanding{% endif %}
       </p>
     </div>
   </a>
@@ -103,13 +101,13 @@
       <thead>
         <tr>
           <th class="print-hide po-expand-head"></th>
-          {% include "components/table/sort_header.html" with label="Invoice #" field="purchase_num" %}
-          {% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}
+          {% include "components/table/sort_header.html" with label="Invoice #" field="invoice_num" %}
+          {% include "components/table/sort_header.html" with label="Date" field="invoice_date" %}
           {% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}
           <th>Entered by</th>
           <th class="po-right">Items</th>
           <th class="po-right">Quantity</th>
-          <th>Bill</th>
+          <th>Order</th>
           <th class="po-right">Amount</th>
           <th class="print-hide po-right">Actions</th>
         </tr>
@@ -127,20 +125,20 @@
             </button>
           </td>
           <td>
-            <a class="po-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.purchase_num }}</a>
+            <a class="po-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a>
             {# The supplier's own number on the paper it was entered from. #}
-            {% if invoice.quot_num %}<span class="po-sub">{{ invoice.quot_num }}</span>{% endif %}
+            {% if invoice.supplier_invoice_num %}<span class="po-sub">{{ invoice.supplier_invoice_num }}</span>{% endif %}
           </td>
-          <td class="whitespace-nowrap">{{ invoice.purchase_date|dmy }}</td>
+          <td class="whitespace-nowrap">{{ invoice.invoice_date|dmy }}</td>
           <td><span class="font-semibold">{{ invoice.supplier.name }}</span></td>
           <td class="whitespace-nowrap">{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</td>
           <td class="po-right text-slate-500">{{ invoice.line_count }}</td>
           <td class="po-right">{{ invoice.qty_total|qty }}</td>
           <td>
-            {% if invoice.bill %}
-            <a class="po-num" href="{% url 'inventory:purchase_bill_detail' invoice.bill.pk %}">{{ invoice.bill.bill_num }}</a>
+            {% if invoice.purchase_order %}
+            <a class="po-num" href="{% url 'inventory:purchase_order_detail' invoice.purchase_order.pk %}">{{ invoice.purchase_order.purchase_num }}</a>
             {% else %}
-            <span class="po-pill po-pill--bill" title="This entry posted no bill, so its value is still in GRN clearing">No bill</span>
+            <span class="po-pill" title="Entered straight off the supplier's invoice, with no order raised first">Direct</span>
             {% endif %}
           </td>
           <td class="po-right font-semibold">{{ invoice.total_amount|amount }}</td>

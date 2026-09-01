@@ -20,7 +20,6 @@ from django.db import transaction
 from apps.inventory.models import (
     InventoryItem,
     PurchaseOrderItem,
-    PurchaseOrderItemReceived,
     Stock,
 )
 
@@ -89,9 +88,6 @@ class Command(BaseCommand):
             if item:
                 PurchaseOrderItem.all_objects.filter(inventory_item=item).update(
                     rate=cost, retail_price=cost
-                )
-                PurchaseOrderItemReceived.all_objects.filter(inventory_item=item).update(
-                    retail_price=cost
                 )
             changed += 1
 

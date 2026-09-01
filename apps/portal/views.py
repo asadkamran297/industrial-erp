@@ -15,7 +15,7 @@ from apps.finance.services import (
     ledger_integrity,
 )
 from apps.hr.models import Employee
-from apps.inventory.models import POSDetail, POSMaster, PurchaseOrderItemReceived
+from apps.inventory.models import POSDetail, POSMaster, PurchaseInvoice
 from apps.payroll.models import Payroll
 
 ZERO = Decimal("0.00")
@@ -97,13 +97,17 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             if key in sales_by_month:
                 sales_by_month[key] += row["total"] or ZERO
 
-        for row in PurchaseOrderItemReceived.objects.filter(receive_date__gte=months[0]).values(
-            "receive_date", "quantity", "extra_qty", "retail_price"
+        # Read off the invoice, which is what a purchase now is. A reversed one
+        # is left out: the chart shows what was bought, and a withdrawn invoice
+        # is a purchase that in the end was not.
+        for row in (
+            PurchaseInvoice.objects
+            .filter(invoice_date__gte=months[0], status=STATUS_POSTED)
+            .values("invoice_date", "total_amount")
         ):
-            key = _month_key(row["receive_date"])
+            key = _month_key(row["invoice_date"])
             if key in purchases_by_month:
-                units = (row["quantity"] or ZERO) + (row["extra_qty"] or ZERO)
-                purchases_by_month[key] += units * (row["retail_price"] or ZERO)
+                purchases_by_month[key] += row["total_amount"] or ZERO
 
         # Drop the empty lead-in. A young ledger otherwise renders as ten flat
         # months and one spike, which reads as a broken chart rather than a

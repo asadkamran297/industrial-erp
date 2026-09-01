@@ -170,38 +170,12 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' invoice.pk %}" target="_blank">Print</a>
-      {% if bill %}
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_bill_detail' bill.pk %}">Bill</a>
-      {% endif %}
+      {% for order in source_orders %}
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
+      {% endfor %}
       <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' invoice.supplier_id %}">Supplier</a>
     </div>
   </div>
-
-  {# A purchase entered this way posts its own bill as it is typed, so one #}
-  {# without a live bill did not finish: its value is sitting in GRN       #}
-  {# clearing saying nobody has been invoiced for goods that are in stock. #}
-  {% if not bill %}
-  <div class="pur-note pur-note--bad">
-    <span class="pur-note-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 9v4M12 17h.01"></path>
-        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
-      </svg>
-    </span>
-    <div class="flex-1">
-      <p><b>No bill posted against this purchase.</b></p>
-      <p>
-        The goods were taken into stock, so their value is waiting in GRN clearing rather than in
-        the supplier's account. Enter the bill to move it across.
-      </p>
-      {% if can_add %}
-      <a class="pur-btn pur-btn--ghost mt-3"
-         href="{% url 'inventory:purchase_bill_create' %}?order={{ invoice.pk }}&amp;supplier={{ invoice.supplier_id }}">Enter the bill</a>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
 
   {# ── Linked documents ────────────────────────────────────────────────── #}
   {% if linked_documents %}
@@ -226,8 +200,8 @@
       </div>
       <div class="pur-doc-stamp">
         <p class="pur-doc-kind">Purchase Invoice</p>
-        <p class="pur-doc-no">{{ invoice.purchase_num }}</p>
-        <p class="pur-doc-date">{{ invoice.purchase_date|dmy }}</p>
+        <p class="pur-doc-no">{{ invoice.invoice_num }}</p>
+        <p class="pur-doc-date">{{ invoice.invoice_date|dmy }}</p>
       </div>
     </div>
 
@@ -235,8 +209,8 @@
       <div>
         <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ invoice.supplier.name }}</span></p>
         {# Their number on the paper this was typed from, not ours. #}
-        {% if invoice.quot_num %}
-        <p class="mt-2"><span class="pur-doc-cap">Supplier's bill no:</span> {{ invoice.quot_num }}</p>
+        {% if invoice.supplier_invoice_num %}
+        <p class="mt-2"><span class="pur-doc-cap">Supplier's invoice no:</span> {{ invoice.supplier_invoice_num }}</p>
         {% endif %}
         <p class="mt-2"><span class="pur-doc-cap">Entered by:</span>
           {{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</p>
@@ -245,8 +219,12 @@
       {# must not appear to be in two different states.                       #}
       <p class="pur-doc-right">
         <span class="pur-doc-cap">Status:</span>
-        {% if bill %}<span class="po-pill po-pill--done">Billed</span>
-        {% else %}<span class="po-pill po-pill--bill">No bill</span>{% endif %}
+        {% if invoice.status == "reversed" %}<span class="po-pill po-pill--bill">Reversed</span>
+        {% else %}<span class="po-pill po-pill--done">Posted</span>{% endif %}
+        {% if invoice.legacy_bill_no %}
+        {# What this purchase was numbered before it became one document. #}
+        <span class="po-pill" title="The bill number this purchase carried before purchases became one document">{{ invoice.legacy_bill_no }}</span>
+        {% endif %}
       </p>
     </div>
 
@@ -297,99 +275,22 @@
     <div class="pur-doc-foot">
       <div>
         <p class="pur-doc-cap">Narration</p>
-        <p class="pur-doc-narration">{{ invoice.descr|default:"&mdash;"|linebreaksbr }}</p>
+        <p class="pur-doc-narration">{{ invoice.remarks|default:"&mdash;"|linebreaksbr }}</p>
       </div>
-      {# What the supplier actually charged, read off the bill this purchase #}
-      {# posted for itself rather than added up again here.                   #}
+      {# Read off the invoice header rather than added up again here: the    #}
+      {# header is what posted to the ledger, so it is the figure that is true. #}
       <div class="pur-sums">
-        <div><span>Goods</span><b>{{ goods_total|amount }}</b></div>
-        {% if bill %}
-        {% if bill.freight_amount %}<div><span>Freight</span><b>{{ bill.freight_amount|amount }}</b></div>{% endif %}
-        {% if bill.tax_amount %}<div><span>Sales tax</span><b>{{ bill.tax_amount|amount }}</b></div>{% endif %}
-        <div class="pur-sums-net"><span>Invoice total</span><b>{{ bill.total_amount|amount }}</b></div>
-        {% else %}
-        <div class="pur-sums-net"><span>Invoice total</span><b>{{ goods_total|amount }}</b></div>
+        <div><span>Goods</span><b>{{ invoice.goods_amount|amount }}</b></div>
+        {% if invoice.discount_amount %}<div><span>Discount</span><b>{{ invoice.discount_amount|amount }}</b></div>{% endif %}
+        {% if invoice.freight_amount %}<div><span>Freight</span><b>{{ invoice.freight_amount|amount }}</b></div>{% endif %}
+        {% if invoice.tax_amount %}<div><span>Sales tax</span><b>{{ invoice.tax_amount|amount }}</b></div>{% endif %}
+        <div class="pur-sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
+        {% if invoice.paid_amount %}
+        <div><span>Paid</span><b>{{ invoice.paid_amount|amount }}</b></div>
+        <div><span>Balance</span><b>{{ invoice.balance_amount|amount }}</b></div>
         {% endif %}
       </div>
     </div>
   </div>
 
-  {# ── What it booked into stock ───────────────────────────────────────── #}
-  {# A purchase entered this way receives itself as it is typed, so the note #}
-  {# below is what it created rather than something that arrived later.      #}
-  {% if receipt_notes %}
-  <div class="pur-card" x-data="{ open: [] }">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Goods taken into stock</h2>
-      <span class="pur-card-hint">Received as this invoice was entered</span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="pur-table">
-        <thead>
-          <tr>
-            <th style="width: 2.5rem;"></th>
-            <th>Goods receipt</th>
-            <th>Date</th>
-            <th class="pur-num">Items</th>
-            <th class="pur-num">Quantity</th>
-            <th class="pur-num">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for note in receipt_notes %}
-          <tr {% if note.dead %}class="pur-void"{% endif %}>
-            <td>
-              <button type="button" class="pur-fold"
-                      @click="open = open.includes({{ forloop.counter0 }}) ? open.filter(n => n !== {{ forloop.counter0 }}) : [...open, {{ forloop.counter0 }}]"
-                      aria-label="Show the items on this goods receipt">
-                <span x-text="open.includes({{ forloop.counter0 }}) ? '−' : '+'">+</span>
-              </button>
-            </td>
-            <td class="pur-strong">
-              <span class="pur-doc">{{ note.number }}</span>
-            </td>
-            <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
-            <td class="pur-num pur-muted">{{ note.lines|length }}</td>
-            <td class="pur-num pur-in">{{ note.quantity|qty }}</td>
-            <td class="pur-num pur-strong">{{ note.value|amount }}</td>
-          </tr>
-          <tr class="pur-lines-row" x-show="open.includes({{ forloop.counter0 }})" x-cloak>
-            <td colspan="6" class="pur-lines-cell">
-              <table class="pur-lines">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th class="pur-num">Received</th>
-                    <th class="pur-num">Rate</th>
-                    <th class="pur-num">Value</th>
-                    <th>Billed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for receipt in note.lines %}
-                  <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
-                    <td class="pur-strong">{{ receipt.descr }}</td>
-                    <td class="pur-num pur-in">{{ receipt.received_units|qty }}</td>
-                    <td class="pur-num">{{ receipt.retail_price|amount }}</td>
-                    <td class="pur-num">{{ receipt.landed_amount|amount }}</td>
-                    <td>
-                      {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
-                      {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
-                      {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
-                      {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
-
-</section>
 {% endblock %}

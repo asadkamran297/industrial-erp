@@ -1,6 +1,14 @@
 (function () {
   function enhanceSelect(select) {
     if (select.dataset.searchableEnhanced === 'true') {
+      // Already enhanced, but the value underneath may have been written since
+      // -- a screen that copies a purchase order onto its lines sets the native
+      // select directly. The button is what the operator reads, so it is put
+      // back in step rather than left showing the placeholder over a field that
+      // is in fact filled in.
+      if (typeof select.searchableSync === 'function') {
+        select.searchableSync();
+      }
       return;
     }
     select.dataset.searchableEnhanced = 'true';
@@ -161,6 +169,9 @@
     // Picking with the mouse or the keyboard both land here: close, then leave
     // focus on the control so Tab carries on down the form.
     wrapper.addEventListener('selected', () => button.focus());
+    // Handed to the select itself so a later sweep can put the button back in
+    // step with a value written straight onto it.
+    select.searchableSync = updateLabel;
     updateLabel();
   }
 

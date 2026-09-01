@@ -58,8 +58,8 @@ class Command(BaseCommand):
             ("customers", lambda: seed_demo_customers(count)),
             ("employees, salaries and payroll", lambda: seed_demo_employees(count)),
             ("purchase orders", lambda: seed_demo_purchase_orders(count, user=user)),
-            ("supplier bills", lambda: seed_demo_purchase_bills(count, user=user)),
-            ("purchase invoices", lambda: seed_demo_direct_purchases(count, user=user)),
+            ("invoices against orders", lambda: seed_demo_purchase_bills(count, user=user)),
+            ("direct invoices", lambda: seed_demo_direct_purchases(count, user=user)),
             ("sales", lambda: seed_demo_sales(count, user=user)),
             ("vouchers", lambda: seed_demo_vouchers(count, user=user)),
         ]

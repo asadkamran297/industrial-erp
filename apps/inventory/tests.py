@@ -1,15 +1,16 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.configurations.models import City
-from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_RAISED, STATUS_FULLY_RECEIVED, STATUS_PARTIAL_RECEIVED
+from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
 from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseMaster
-from .services import generate_transaction_id, post_purchase_return, post_sale, post_sale_return, receive_purchase_order_item
+from .services import create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
 class InventoryFlowTests(TestCase):
@@ -43,11 +44,18 @@ class InventoryFlowTests(TestCase):
     def test_receive_sale_and_returns_update_stock(self):
         po = PurchaseOrder.objects.create(supplier=self.supplier, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
         po_item = PurchaseOrderItem.objects.create(purchase_order=po, inventory_item=self.item, quantity=Decimal("10.0000"), rate=Decimal("100.00"), unit_rate=Decimal("100.0000"), uom=self.uom, descr=self.item.item_name, created_by=self.user, updated_by=self.user)
-        receive_purchase_order_item(purchase_order_item=po_item, quantity=Decimal("10.0000"), extra_qty=Decimal("0.0000"), retail_price=Decimal("120.00"), receive_date=timezone.localdate(), invoice_num="INV-1", invoice_date=timezone.localdate(), rv_number="RV-1", remarks="Receive test", user=self.user)
+        po.status = STATUS_SUBMITTED
+        po.save(update_fields=["status"])
+        create_purchase_invoice(
+            supplier=self.supplier,
+            supplier_invoice_num="INV-1",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("10.0000"),
+                    "rate": Decimal("120.00"), "order_item": po_item}],
+            user=self.user,
+        )
         self.item.stock.refresh_from_db()
         self.assertEqual(self.item.stock.current_quantity, Decimal("10.0000"))
         self.assertEqual(self.item.stock.current_price, Decimal("120.00"))
-        self.assertEqual(self.item.stock.last_price, Decimal("100.00"))
 
         sale = POSMaster.objects.create(transaction_id=generate_transaction_id("SAL", POSMaster), sale_date=timezone.localdate(), customer=self.customer, total_paid=Decimal("500.00"), created_by=self.user, updated_by=self.user)
         POSDetail.objects.create(pos_master=sale, inventory_item=self.item, quantity=Decimal("2.0000"), price=Decimal("150.00"), created_by=self.user, updated_by=self.user)
@@ -67,53 +75,104 @@ class InventoryFlowTests(TestCase):
         post_purchase_return(purchase_return=purchase_return, user=self.user)
         self.item.stock.refresh_from_db()
         self.assertEqual(self.item.stock.current_quantity, Decimal("8.0000"))
-    def test_purchase_order_status_moves_from_created_to_partial_to_fully_received(self):
-        po = PurchaseOrder.objects.create(supplier=self.supplier, purchase_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
+    def test_purchase_order_status_moves_from_draft_to_partial_to_fully_invoiced(self):
+        """An order is moved along by the invoices against it, and nothing else."""
+        po = PurchaseOrder.objects.create(
+            supplier=self.supplier, purchase_date=timezone.localdate(),
+            created_by=self.user, updated_by=self.user,
+        )
         po_item = PurchaseOrderItem.objects.create(
-            purchase_order=po,
-            inventory_item=self.item,
-            quantity=Decimal("10.0000"),
-            rate=Decimal("100.00"),
-            unit_rate=Decimal("100.0000"),
-            uom=self.uom,
-            descr=self.item.item_name,
-            created_by=self.user,
-            updated_by=self.user,
+            purchase_order=po, inventory_item=self.item, quantity=Decimal("10.0000"),
+            rate=Decimal("100.00"), unit_rate=Decimal("100.0000"), uom=self.uom,
+            descr=self.item.item_name, created_by=self.user, updated_by=self.user,
         )
 
-        # An order starts raised, not created: "created" was a status this
-        # model no longer has, and the default has been STATUS_RAISED for some
-        # time. The rest of what this test checks -- part received, then fully
-        # received -- is unchanged.
-        self.assertEqual(po.status, STATUS_RAISED)
+        # An order starts as a draft: nobody has committed to it yet, and
+        # nothing may be invoiced against it until somebody has.
+        self.assertEqual(po.status, STATUS_DRAFT)
+        po.status = STATUS_SUBMITTED
+        po.save(update_fields=["status"])
 
-        receive_purchase_order_item(
-            purchase_order_item=po_item,
-            quantity=Decimal("4.0000"),
-            extra_qty=Decimal("0.0000"),
-            retail_price=Decimal("120.00"),
-            receive_date=timezone.localdate(),
-            invoice_num="INV-PO-1",
-            invoice_date=timezone.localdate(),
-            rv_number="RV-PO-1",
-            remarks="Partial receive",
+        create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-PO-1",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("4.0000"),
+                    "rate": Decimal("120.00"), "order_item": po_item}],
             user=self.user,
         )
         po.refresh_from_db()
-        self.assertEqual(po.status, STATUS_PARTIAL_RECEIVED)
+        po_item.refresh_from_db()
+        self.assertEqual(po.status, STATUS_PARTIALLY_INVOICED)
+        self.assertEqual(po_item.qty_invoiced, Decimal("4.0000"))
+        self.assertEqual(po_item.qty_pending, Decimal("6.0000"))
 
-        receive_purchase_order_item(
-            purchase_order_item=po_item,
-            quantity=Decimal("6.0000"),
-            extra_qty=Decimal("0.0000"),
-            retail_price=Decimal("120.00"),
-            receive_date=timezone.localdate(),
-            invoice_num="INV-PO-2",
-            invoice_date=timezone.localdate(),
-            rv_number="RV-PO-2",
-            remarks="Full receive",
+        create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-PO-2",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("6.0000"),
+                    "rate": Decimal("120.00"), "order_item": po_item}],
             user=self.user,
         )
         po.refresh_from_db()
-        self.assertEqual(po.status, STATUS_FULLY_RECEIVED)
+        po_item.refresh_from_db()
+        # Auto-closed by the invoice that finished it, not by anybody saying so.
+        self.assertEqual(po.status, STATUS_FULLY_INVOICED)
+        self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
 
+    def test_invoice_cannot_run_past_what_was_ordered(self):
+        po = PurchaseOrder.objects.create(
+            supplier=self.supplier, purchase_date=timezone.localdate(),
+            status=STATUS_SUBMITTED, created_by=self.user, updated_by=self.user,
+        )
+        po_item = PurchaseOrderItem.objects.create(
+            purchase_order=po, inventory_item=self.item, quantity=Decimal("5.0000"),
+            rate=Decimal("100.00"), unit_rate=Decimal("100.0000"), uom=self.uom,
+            descr=self.item.item_name, created_by=self.user, updated_by=self.user,
+        )
+        with self.assertRaises(ValidationError):
+            create_purchase_invoice(
+                supplier=self.supplier, supplier_invoice_num="INV-OVER",
+                lines=[{"inventory_item": self.item, "quantity": Decimal("6.0000"),
+                        "rate": Decimal("100.00"), "order_item": po_item}],
+                user=self.user,
+            )
+
+    def test_same_supplier_invoice_number_is_refused_twice(self):
+        """The supplier's own number is what catches one invoice entered twice."""
+        for _ in range(1):
+            create_purchase_invoice(
+                supplier=self.supplier, supplier_invoice_num="DUP-1",
+                lines=[{"inventory_item": self.item, "quantity": Decimal("1.0000"),
+                        "rate": Decimal("100.00")}],
+                user=self.user,
+            )
+        with self.assertRaises(ValidationError):
+            create_purchase_invoice(
+                supplier=self.supplier, supplier_invoice_num="DUP-1",
+                lines=[{"inventory_item": self.item, "quantity": Decimal("1.0000"),
+                        "rate": Decimal("100.00")}],
+                user=self.user,
+            )
+
+    def test_direct_invoice_posts_a_balanced_voucher(self):
+        """Goods, freight and tax in; one payable out; the two sides agree."""
+        from django.db.models import Sum
+
+        from apps.finance.models import AccountVoucher
+
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="GL-1",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("10.0000"),
+                    "rate": Decimal("100.00")}],
+            freight_amount=Decimal("500.00"),
+            tax_amount=Decimal("170.00"),
+            discount_amount=Decimal("50.00"),
+            user=self.user,
+        )
+        self.assertIsNone(invoice.purchase_order)
+        self.assertEqual(invoice.total_amount, Decimal("1620.00"))
+
+        voucher = AccountVoucher.objects.get(source_ref=f"inv_purchase_invoices:{invoice.pk}")
+        totals = voucher.lines.aggregate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+        self.assertEqual(totals["debit"], totals["credit"])
+        self.assertEqual(totals["credit"], invoice.total_amount)
+        # The invoice names the voucher it posted, so it reads on its own.
+        self.assertEqual(invoice.journal_ref, voucher.voucher_no)

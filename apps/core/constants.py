@@ -29,6 +29,13 @@ STATUS_CLOSED_SHORT: Final = "closed_short"
 # A supplier bill, from entered to matched against what actually arrived.
 STATUS_MATCHED: Final = "matched"
 STATUS_REVERSED: Final = "reversed"
+# How far through an order has been invoiced. An order commits nothing to the
+# books, so what moves it along is the invoice against it and nothing else.
+STATUS_PARTIALLY_INVOICED: Final = "partially_invoiced"
+STATUS_FULLY_INVOICED: Final = "fully_invoiced"
+# Finished with, whether it ran out or was stopped. One word, because a reader
+# looking for an order that is no longer running does not know which it was.
+STATUS_CLOSED: Final = "closed"
 
 ALLOWANCE: Final = "allowance"
 DEDUCTION: Final = "deduction"
@@ -227,6 +234,10 @@ GL_INPUT_TAX_PATH: Final = ("ASSETS", "Current Assets", "Input Sales Tax")
 # of units that may already have been sold, so the difference is taken to the
 # profit and loss account instead.
 GL_PURCHASE_VARIANCE_PATH: Final = ("EXPENSES", "Direct Expenses", "Purchase Price Variance")
+# Carriage a supplier charged on the invoice. A cost in its own right
+# rather than a variance: with no receipt to match the invoice against,
+# there is no second figure for it to be the difference from.
+GL_FREIGHT_PATH: Final = ("EXPENSES", "Direct Expenses", "Freight and Carriage")
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
 
 # Counterparts for an inventory reconciliation. A genuine count difference is a
@@ -407,12 +418,30 @@ INV_POS_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_PARTIAL_RETURNED, "Partial Returned"),
 )
 
+# Draft -> Submitted -> Partially Invoiced -> Fully Invoiced -> Closed.
+# Nothing here touches stock or the ledger; the invoice does that.
 INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_DRAFT, "Draft"),
-    (STATUS_RAISED, "Raised"),
-    (STATUS_PARTIAL_RECEIVED, "Partial Received"),
-    (STATUS_FULLY_RECEIVED, "Fully Received"),
-    (STATUS_CLOSED_SHORT, "Closed"),
+    (STATUS_SUBMITTED, "Submitted"),
+    (STATUS_PARTIALLY_INVOICED, "Partially Invoiced"),
+    (STATUS_FULLY_INVOICED, "Fully Invoiced"),
+    (STATUS_CLOSED, "Closed"),
+    (STATUS_CANCELLED, "Cancelled"),
+)
+
+# A sales order runs the same course as a purchase order, so it reads off the
+# same list rather than a parallel one that could drift from it.
+INV_SALES_ORDER_STATUS_CHOICES: Final[StatusChoices] = INV_PURCHASE_ORDER_STATUS_CHOICES
+
+# An order still working its way through: committed, not yet finished.
+INV_ORDER_OPEN_STATUSES: Final = (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
+
+# The invoice is the only financial document, so it is either standing or it
+# has been withdrawn. There is no matched state left to be in.
+INV_PURCHASE_INVOICE_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_DRAFT, "Draft"),
+    (STATUS_POSTED, "Posted"),
+    (STATUS_REVERSED, "Reversed"),
     (STATUS_CANCELLED, "Cancelled"),
 )
 

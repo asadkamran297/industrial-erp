@@ -1,0 +1,157 @@
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+
+{# An order commits nothing to the books, so this screen asks for less than #}
+{# the invoice does: no money boxes, no payment, no tax. What was asked for #}
+{# and when it was promised, and nothing else.                              #}
+
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <h1 class="title-accent text-2xl font-bold">{{ title }}</h1>
+  {% include "components/ui/back_button.html" %}
+</div>
+
+<form method="post" id="so-form"
+      class="card-rail mt-5 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      x-data="salesOrderForm()">{% csrf_token %}
+
+  {# ── The party and the paperwork ─────────────────────────────────────── #}
+  <div class="grid gap-4 border-b border-slate-200 p-5 dark:border-slate-800 md:grid-cols-4">
+    <div>
+      <label class="form-label" for="customer">Customer</label>
+      <select name="customer" id="customer" class="form-input h-10 w-full" required>
+        <option value="">Select a customer</option>
+        {% for row in customers %}
+        <option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label" for="order-no">Order #</label>
+      <input type="text" id="order-no" class="form-input h-10 w-full font-bold tabular-nums"
+             value="{{ next_order_no }}" readonly>
+    </div>
+    <div>
+      <label class="form-label" for="order_date">Order date</label>
+      <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full"
+             value="{% if posted.order_date %}{{ posted.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
+    </div>
+    <div>
+      {# Nothing enforces it. It is what makes an order late, which is the #}
+      {# only way one quietly going nowhere is ever noticed.               #}
+      <label class="form-label" for="expected_date">Promised by</label>
+      <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full"
+             value="{{ posted.expected_date|default:'' }}">
+    </div>
+    <div class="md:col-span-2">
+      <label class="form-label" for="customer_ref">Customer's reference</label>
+      <input type="text" name="customer_ref" id="customer_ref" class="form-input h-10 w-full"
+             value="{{ posted.customer_ref|default:'' }}" placeholder="Their order number, if they gave one">
+    </div>
+    <div class="md:col-span-2">
+      <label class="form-label" for="remarks">Narration</label>
+      <input type="text" name="remarks" id="remarks" class="form-input h-10 w-full"
+             value="{{ posted.remarks|default:'' }}">
+    </div>
+  </div>
+
+  {# ── The goods ───────────────────────────────────────────────────────── #}
+  <div class="overflow-x-auto">
+    <table class="po-table">
+      <thead>
+        <tr>
+          <th style="min-width:16rem">Item</th>
+          <th style="width:9rem" class="po-right">Quantity</th>
+          <th style="width:9rem">Unit</th>
+          <th style="width:10rem" class="po-right">Rate</th>
+          <th style="width:11rem" class="po-right">Amount</th>
+          <th style="width:3rem"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(row, index) in rows" :key="row.key">
+          <tr>
+            <td>
+              <select class="form-input h-10 w-full" name="item_id" x-model="row.item"
+                      @change="pickItem(index)">
+                <option value="">Select an item</option>
+                <template x-for="item in items" :key="item.id">
+                  <option :value="item.id" x-text="item.name"></option>
+                </template>
+              </select>
+            </td>
+            <td><input type="text" class="form-input h-10 w-full text-right tabular-nums"
+                       name="quantity" x-model="row.quantity" inputmode="decimal"></td>
+            <td>
+              <select class="form-input h-10 w-full" name="line_uom" x-model="row.uom">
+                <option value="">—</option>
+                {% for unit in units %}<option value="{{ unit.pk }}">{{ unit.title }}</option>{% endfor %}
+              </select>
+            </td>
+            <td><input type="text" class="form-input h-10 w-full text-right tabular-nums"
+                       name="rate" x-model="row.rate" inputmode="decimal"></td>
+            <td class="po-right font-semibold tabular-nums" x-text="money(lineTotal(row))"></td>
+            <td class="po-right">
+              <button type="button" class="po-icon-btn" @click="removeRow(index)"
+                      aria-label="Remove this line" title="Remove this line">×</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6">
+            <button type="button" class="pur-btn pur-btn--ghost" @click="addRow()">+ Add line</button>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="4" class="po-right font-semibold">Order value</td>
+          <td class="po-right font-bold tabular-nums" x-text="money(total())"></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 p-5 dark:border-slate-800">
+    {# Parked rather than committed to. A draft shows on the board but is not #}
+    {# offered to the invoice screen, because nobody has agreed to it yet.    #}
+    <button type="submit" name="save_draft" value="1" class="pur-btn pur-btn--ghost">Save as draft</button>
+    <button type="submit" class="pur-btn pur-btn--primary">Raise order</button>
+  </div>
+</form>
+
+<script id="items-data" type="application/json">{{ items_json|safe }}</script>
+<script>
+  function salesOrderForm() {
+    return {
+      items: JSON.parse(document.getElementById("items-data").textContent || "[]"),
+      rows: [],
+      nextKey: 1,
+      init() { this.addRow(); },
+      addRow() { this.rows.push({ key: this.nextKey++, item: "", quantity: "", uom: "", rate: "" }); },
+      removeRow(index) {
+        this.rows.splice(index, 1);
+        if (!this.rows.length) this.addRow();
+      },
+      pickItem(index) {
+        const row = this.rows[index];
+        const item = this.items.find((candidate) => String(candidate.id) === String(row.item));
+        if (!item) return;
+        // The sale price off the item, so the common case is typed once.
+        if (!row.rate) row.rate = item.rate;
+        if (!row.uom) row.uom = item.uom;
+      },
+      lineTotal(row) {
+        return (parseFloat(row.quantity) || 0) * (parseFloat(row.rate) || 0);
+      },
+      total() {
+        return this.rows.reduce((sum, row) => sum + this.lineTotal(row), 0);
+      },
+      money(value) {
+        return (value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+    };
+  }
+</script>
+{% endblock %}
