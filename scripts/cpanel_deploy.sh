@@ -24,6 +24,9 @@ fi
 "$VENV/bin/pip" install --upgrade pip
 "$VENV/bin/pip" install -r requirements-cpanel.txt
 
+# Say which database is being migrated; a stale .env is otherwise silent.
+"$VENV/bin/python" -c "import django; django.setup(); from django.conf import settings; d = settings.DATABASES['default']; print('TARGET DB:', d['ENGINE'], d['NAME'], d.get('HOST'))"
+
 "$VENV/bin/python" manage.py migrate --no-input
 "$VENV/bin/python" manage.py collectstatic --no-input
 # Live data is users, roles and permissions only; no demo/master seeding.
