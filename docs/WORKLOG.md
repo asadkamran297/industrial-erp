@@ -85,12 +85,12 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - A full `VersionControl/update` + `VersionControlDeployment/create` cycle now
   runs pip install, migrate, collectstatic, seed and restart, and reports
   `TARGET DB: django.db.backends.mysql`.
-- Empty `flouruge_erp` and `flouruge_pgtest` PostgreSQL databases were left
-  behind by the attempt; safe to drop.
+- The empty `flouruge_erp` and `flouruge_pgtest` PostgreSQL databases and the
+  `flouruge_app` role left by the attempt were dropped; the account now has no
+  PostgreSQL objects. Live MySQL and the site were verified unaffected.
 
 ### Open
 
 - cPanel password was shared in plaintext during setup; rotate it.
-- Drop the two empty PostgreSQL databases left by the version attempt.
 - Local dev Postgres has a stray `admin` superuser from a probe run; delete with
   `python manage.py shell -c "from django.contrib.auth import get_user_model as g; g().objects.filter(username='admin').delete()"`.
