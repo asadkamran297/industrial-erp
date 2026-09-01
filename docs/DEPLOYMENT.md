@@ -19,8 +19,22 @@ The entrypoint is kept **outside** the git checkout so deploys never overwrite
 it, and because the CloudLinux selector rewrites `passenger_wsgi.py` inside any
 directory it manages.
 
+## Database: MySQL, not PostgreSQL
+
+The project targets PostgreSQL, and cPanel offers it here, but the host runs
+**PostgreSQL 10.23** while Django 5.2 requires 14 or later
+(`NotSupportedError: PostgreSQL 14 or later is required (found 10.23)`).
+Live therefore runs on **MySQL** through PyMySQL. Do not spend time trying to
+switch it again without first checking the server's PostgreSQL version.
+
 ## Constraints on this class of host
 
+0. **`manage.py` defaults to `config.settings.local`**, whose `USE_SQLITE`
+   default is `True`. Any deploy command that forgets
+   `DJANGO_SETTINGS_MODULE=config.settings.production` silently migrates and
+   seeds `db.sqlite3` inside the checkout while the served app uses the real
+   database — the deploy reports success and changes nothing. The deploy script
+   exports it; keep it that way, and trust the `TARGET DB:` line it logs.
 1. **SSH shell is disabled** (`Shell access is not enabled on your account!`).
    Everything is done through the cPanel API over HTTPS.
 2. **LiteSpeed only routes to the app** when `.htaccess` carries
@@ -191,10 +205,22 @@ curl -sS -b jar.txt -X POST "https://$CPANEL_HOST:2083$TOKEN/execute/SSL/install
 Then check `https://$DOMAIN/` with curl **without** `-k`. Set
 `SECURE_SSL_REDIRECT=True` in the server `.env` so Django 301s HTTP to HTTPS.
 
+## Keeping deployment enabled
+
+cPanel sets `deployable: 0` whenever the checkout's working tree is not clean,
+and then `VersionControlDeployment/create` returns `{"data": null}` and does
+nothing. Anything a deploy writes inside the checkout must therefore be
+untracked and git-ignored: `staticfiles/` (collected output — `STATIC_ROOT`
+points outside the checkout anyway) and `tmp/` (the Passenger restart trigger,
+which now lives under the app root instead).
+
+If a pull reports *"local changes would be overwritten"*, the named files are
+the culprits. Restore them with the committed bytes — `git show <commit>:<path>`
+— and upload through `Fileman/upload_files`; do **not** upload the Windows
+working copy, whose CRLF endings make git see a difference.
+
 ## Known gaps on the current account
 
-- **`staticfiles/` is tracked in git.** Earlier `collectstatic` runs modified
-  136 tracked files in the checkout, which is why `deployable` is `0`. Fix is
-  to untrack the directory (`git rm -r --cached staticfiles`) and pull with a
-  clean tree; `STATIC_ROOT` already points outside the checkout so it will not
-  happen again.
+- No AutoSSL; the certificate is renewed by hand (see above).
+- PostgreSQL is too old to use, so production runs on MySQL while local
+  development runs on PostgreSQL.

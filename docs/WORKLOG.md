@@ -65,12 +65,32 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - Standing rule written into `docs/DATABASE_RULES.md` and `CLAUDE.md`: every new
   table ships its indexes in the migration that creates it.
 
+### Live — PostgreSQL attempt, and auto-deploy fixed
+
+- Tried moving live to PostgreSQL (the project targets it). The host has the
+  cPanel feature and the service runs, but it is **PostgreSQL 10.23** and
+  Django 5.2 requires 14+. Reverted; live stays on MySQL. Recorded in
+  `docs/DEPLOYMENT.md` so it is not retried blindly.
+- Found why every deploy looked successful but changed nothing: `manage.py`
+  defaults to `config.settings.local`, whose `USE_SQLITE` default is `True`, so
+  deploy migrations and seeds were going into `db.sqlite3` inside the checkout
+  while the served app used the real database. The deploy script now exports
+  `DJANGO_SETTINGS_MODULE=config.settings.production` and logs a `TARGET DB:`
+  line (commits `4c6889a`, `cdad035`).
+- Auto-deploy is **working now**. `deployable` was `0` because the checkout was
+  never clean: `staticfiles/` was tracked and rewritten by `collectstatic`, and
+  the deploy script touched `tmp/restart.txt` inside the checkout. Both are now
+  untracked/ignored and the restart trigger moved to the app root (commits
+  `60e8df6`, `42830dc`, `4f01df3`).
+- A full `VersionControl/update` + `VersionControlDeployment/create` cycle now
+  runs pip install, migrate, collectstatic, seed and restart, and reports
+  `TARGET DB: django.db.backends.mysql`.
+- Empty `flouruge_erp` and `flouruge_pgtest` PostgreSQL databases were left
+  behind by the attempt; safe to drop.
+
 ### Open
 
-- Auto-deploy (`push` → live) is not active: cPanel reports `deployable: 0`
-  because 136 tracked files under `staticfiles/` are modified in the checkout.
-  Until that is cleaned, redeploys go through `VersionControl/update` +
-  restart.
 - cPanel password was shared in plaintext during setup; rotate it.
+- Drop the two empty PostgreSQL databases left by the version attempt.
 - Local dev Postgres has a stray `admin` superuser from a probe run; delete with
   `python manage.py shell -c "from django.contrib.auth import get_user_model as g; g().objects.filter(username='admin').delete()"`.
