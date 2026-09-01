@@ -5,6 +5,11 @@
 # this script - override these by editing the defaults, not the yml.
 set -o errexit
 
+# manage.py defaults to config.settings.local, whose USE_SQLITE default sends
+# everything into db.sqlite3 inside the checkout. The served app runs on
+# production settings, so the deploy must too or it migrates the wrong database.
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.production}"
+
 # The git checkout.
 APPROOT="${APPROOT:-$HOME/industrial_erp}"
 # The Passenger application root, deliberately outside the checkout so deploys
@@ -25,7 +30,7 @@ fi
 "$VENV/bin/pip" install -r requirements-cpanel.txt
 
 # Say which database is being migrated; a stale .env is otherwise silent.
-"$VENV/bin/python" -c "import django; django.setup(); from django.conf import settings; d = settings.DATABASES['default']; print('TARGET DB:', d['ENGINE'], d['NAME'], d.get('HOST'))"
+"$VENV/bin/python" manage.py shell -c "from django.conf import settings; d = settings.DATABASES['default']; print('TARGET DB:', d['ENGINE'], d['NAME'], d.get('HOST'))"
 
 "$VENV/bin/python" manage.py migrate --no-input
 "$VENV/bin/python" manage.py collectstatic --no-input
