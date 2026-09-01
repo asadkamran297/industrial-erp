@@ -1,0 +1,15 @@
+# Host-specific deployment values. Copy to deploy/cpanel.config (git-ignored)
+# and fill in. Switching hosting accounts means editing only this file.
+CPANEL_HOST=premium289.web-hosting.com
+CPANEL_USER=flouruge
+CPANEL_PASS=
+DOMAIN=flourorbit.com
+APP_ROOT=/home/flouruge/erp_app
+CHECKOUT=/home/flouruge/industrial_erp
+VENV=/home/flouruge/virtualenv/erp_app/3.12
+STATIC_ROOT=/home/flouruge/staticfiles
+PYTHON_VERSION=3.12
+GIT_REMOTE=https://github.com/asadkamran297/industrial-erp.git
+GIT_BRANCH=master
+DB_NAME=flouruge_erp
+DB_USER=flouruge_erp

@@ -1,0 +1,11 @@
+# Upload to $HOME/public_html/.htaccess.
+# AppType and StartupFile are required: without them LiteSpeed never routes to
+# the app and serves the parking page instead.
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/flouruge/erp_app"
+PassengerBaseURI "/"
+PassengerAppType wsgi
+PassengerStartupFile passenger_wsgi.py
+PassengerPython "/home/flouruge/virtualenv/erp_app/3.12/bin/python"
+PassengerAppLogFile "/home/flouruge/erp_app/passenger.log"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
