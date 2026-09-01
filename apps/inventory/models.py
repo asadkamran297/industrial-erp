@@ -318,7 +318,15 @@ class PurchaseOrder(BaseModel):
         # Unique within a kind rather than across both: PO-1 and PI-000001 are
         # different documents and are allowed to share a sequence number.
         constraints = [models.UniqueConstraint(fields=["is_direct", "seq_num"], name="uniq_purchase_seq_per_kind")]
-        indexes = [models.Index(fields=["purchase_num"]), models.Index(fields=["purchase_date"])]
+        indexes = [
+            models.Index(fields=["purchase_num"]),
+            models.Index(fields=["purchase_date"]),
+            # Order lists filter by status and page newest first.
+            models.Index(fields=["status", "-purchase_date"]),
+            # Supplier history and the pending-receipt lookup.
+            models.Index(fields=["supplier", "-purchase_date"]),
+            models.Index(fields=["is_direct", "status"]),
+        ]
 
     @property
     def is_closed(self):
@@ -555,7 +563,12 @@ class PurchaseBill(BaseModel):
                 name="uniq_supplier_invoice_num",
             )
         ]
-        indexes = [models.Index(fields=["bill_num"]), models.Index(fields=["bill_date"])]
+        indexes = [
+            models.Index(fields=["bill_num"]),
+            models.Index(fields=["bill_date"]),
+            models.Index(fields=["status", "-bill_date"]),
+            models.Index(fields=["supplier", "-bill_date"]),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -676,7 +689,15 @@ class ItemLedger(BaseModel):
     class Meta:
         db_table = "inv_item_ledgers"
         ordering = ["-transaction_date", "-id"]
-        indexes = [models.Index(fields=["transaction_id"]), models.Index(fields=["transaction_no"]), models.Index(fields=["transaction_date"])]
+        indexes = [
+            models.Index(fields=["transaction_id"]),
+            models.Index(fields=["transaction_no"]),
+            models.Index(fields=["transaction_date"]),
+            # Stock card: one item over a date range.
+            models.Index(fields=["inventory_item", "-transaction_date"]),
+            # Tracing entries back to the document that produced them.
+            models.Index(fields=["ref_table", "ref_id"]),
+        ]
 
     def save(self, *args, **kwargs):
         if self.pk:
@@ -727,7 +748,12 @@ class CustomerLedger(BaseModel):
     class Meta:
         db_table = "inv_customer_ledgers"
         ordering = ["-transaction_date", "-id"]
-        indexes = [models.Index(fields=["transaction_no"]), models.Index(fields=["customer"]), models.Index(fields=["transaction_date"])]
+        indexes = [
+            models.Index(fields=["transaction_no"]),
+            models.Index(fields=["transaction_date"]),
+            # Customer statement over a date range.
+            models.Index(fields=["customer", "-transaction_date"]),
+        ]
 
     def save(self, *args, **kwargs):
         if self.pk:
@@ -765,7 +791,14 @@ class POSMaster(BaseModel):
     class Meta:
         db_table = "inv_pos_masters"
         ordering = ["-sale_date", "-id"]
-        indexes = [models.Index(fields=["transaction_id"]), models.Index(fields=["sale_num"]), models.Index(fields=["sale_date"])]
+        indexes = [
+            models.Index(fields=["transaction_id"]),
+            models.Index(fields=["sale_num"]),
+            models.Index(fields=["sale_date"]),
+            models.Index(fields=["status", "-sale_date"]),
+            models.Index(fields=["posted", "-sale_date"]),
+            models.Index(fields=["customer", "-sale_date"]),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.sale_seq_num:
@@ -835,7 +868,12 @@ class POSReturnMaster(BaseModel):
     class Meta:
         db_table = "inv_pos_return_masters"
         ordering = ["-return_date", "-id"]
-        indexes = [models.Index(fields=["transaction_id"]), models.Index(fields=["return_num"]), models.Index(fields=["return_date"])]
+        indexes = [
+            models.Index(fields=["transaction_id"]),
+            models.Index(fields=["return_num"]),
+            models.Index(fields=["return_date"]),
+            models.Index(fields=["status", "-return_date"]),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.return_seq_num:
@@ -910,7 +948,12 @@ class PurchaseReturnMaster(BaseModel):
     class Meta:
         db_table = "inv_purchase_return_masters"
         ordering = ["-return_date", "-id"]
-        indexes = [models.Index(fields=["transaction_id"]), models.Index(fields=["return_num"]), models.Index(fields=["return_date"])]
+        indexes = [
+            models.Index(fields=["transaction_id"]),
+            models.Index(fields=["return_num"]),
+            models.Index(fields=["return_date"]),
+            models.Index(fields=["status", "-return_date"]),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.return_seq_num:

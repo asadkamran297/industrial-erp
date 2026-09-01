@@ -10,9 +10,12 @@ class ActiveManager(models.Manager):
 
 class BaseModel(models.Model):
     is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # Indexed on the abstract base so every table inherits them: created_at
+    # drives the default "newest first" listing, and deleted_at is in the WHERE
+    # clause of every query that goes through ActiveManager.
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

@@ -310,6 +310,15 @@ class AccountVoucher(BaseModel):
     class Meta:
         db_table = "fin_account_voucher"
         ordering = ["-voucher_date", "-id"]
+        indexes = [
+            # Account ledger and trial balance: one account over a date range.
+            models.Index(fields=["account_no", "-voucher_date"]),
+            # Register screens are per voucher type, newest first.
+            models.Index(fields=["voucher_type", "-voucher_date"]),
+            # Posting run picks up everything still unposted.
+            models.Index(fields=["posted", "-voucher_date"]),
+            models.Index(fields=["status"]),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["source_ref"], condition=~models.Q(source_ref=""), name="uniq_voucher_source_ref"
@@ -486,6 +495,11 @@ class AccountVoucherLine(BaseModel):
         db_table = "fin_account_voucher_lines"
         ordering = ["voucher", "line_number"]
         unique_together = ("voucher", "line_number")
+        indexes = [
+            # Account statements are built from the lines, not the headers.
+            models.Index(fields=["account_no", "-voucher_date"]),
+            models.Index(fields=["voucher_no"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.voucher_no} - {self.line_number}"
