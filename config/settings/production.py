@@ -37,7 +37,9 @@ for host in config("ALLOWED_HOSTS", default="", cast=Csv()):  # noqa: F405
 
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = False  # Railway handles HTTPS termination
+# Platforms that terminate TLS in front of the app (Railway, Render) must
+# leave this off; hosts serving TLS directly turn it on in the environment.
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=False)  # noqa: F405
 SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=31536000, cast=int)  # noqa: F405
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
