@@ -48,6 +48,23 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   `https://flourorbit.com/accounts/login/` 200, `https://www.flourorbit.com/`
   200, `http://` → 301 to `https://`.
 
+### Local + Live — database indexing
+
+- `BaseModel` now indexes `created_at` and `deleted_at`, so all 58 existing
+  tables and every future one are covered (commit `6e11d9e`). `deleted_at` was
+  in the WHERE clause of every `ActiveManager` query with nothing indexing it.
+- Composite indexes added for the real access paths: `(status, -date)` on
+  purchase orders, bills, sales and returns; `(supplier, -date)`,
+  `(customer, -date)`, `(inventory_item, -transaction_date)` for per-party
+  history; `(ref_table, ref_id)` on the item ledger; `(account_no,
+  -voucher_date)`, `(voucher_type, -voucher_date)`, `(posted, -voucher_date)`
+  on vouchers and voucher lines.
+- Verified with `EXPLAIN QUERY PLAN`: voucher list, account ledger, stock card
+  and purchase order list all seek an index instead of scanning.
+- Migrations applied to the dev database and to live MySQL.
+- Standing rule written into `docs/DATABASE_RULES.md` and `CLAUDE.md`: every new
+  table ships its indexes in the migration that creates it.
+
 ### Open
 
 - Auto-deploy (`push` → live) is not active: cPanel reports `deployable: 0`
