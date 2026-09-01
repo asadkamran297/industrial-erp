@@ -64,7 +64,14 @@ curl -sS -b cpj.txt "$B/VersionControl/retrieve"
 ```
 
 Sessions expire in roughly 15–30 minutes; re-login when responses stop being
-JSON. On Git Bash, export `MSYS2_ARG_CONV_EXCL='*'` and `MSYS_NO_PATHCONV=1`
+JSON.
+
+**Log in sparingly.** The server's brute-force protection blocks the client IP
+from *every* management port (2082, 2083, 2087, 2096 and SSH) after enough
+logins in a day, while port 443 keeps serving the site normally — so the symptom
+is "the site is up but cPanel will not connect". Reuse one session for a batch
+of calls instead of logging in per call. A block clears on its own after an hour
+or so; otherwise ask Namecheap support to lift it, or work from another network. On Git Bash, export `MSYS2_ARG_CONV_EXCL='*'` and `MSYS_NO_PATHCONV=1`
 first or curl arguments starting with `/` get mangled into Windows paths.
 
 ### CloudLinux Python selector

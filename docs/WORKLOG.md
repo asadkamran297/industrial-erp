@@ -89,8 +89,29 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   `flouruge_app` role left by the attempt were dropped; the account now has no
   PostgreSQL objects. Live MySQL and the site were verified unaffected.
 
+### Local — demo seeder
+
+- `seed_demo` rewritten to build 50 of each: customers, employees with salary
+  components and payroll, purchase orders, supplier bills, sales and vouchers
+  (commit `4a65f74`). Purchase and sale documents go through the real services,
+  so stock, the item ledger and the general ledger move as they do on screen.
+- Verified on a fresh database: 452 records on the first run, 0 on the second
+  (idempotent), GL lines balance, no negative stock, stock on hand equals
+  receipts less sales.
+- Two things the seeder had to work around, both by design in the app: the
+  first sale to a customer rewrites `customer_code` to their chart-of-accounts
+  code, so demo customers key on their email instead; and a voucher must be
+  headed by a cash/bank leaf of the chart, with both sides on its lines.
+- `SEED_DEMO=1` in `.cpanel.yml` now makes a deploy seed the demo book
+  (commit `46dc3cd`). **Still set — take it back out after the live seeding.**
+
 ### Open
 
+- **Demo data is not on live yet.** The seeder is pushed and the deploy is set
+  to run it, but the server's brute-force protection blocked this machine's IP
+  from every management port (2082/2083/2087/2096 and SSH 21098) after the
+  day's logins. Port 443 is unaffected and the site is up. Retry the deploy
+  once the block clears, then revert `SEED_DEMO=1` in `.cpanel.yml`.
 - cPanel password was shared in plaintext during setup; rotate it.
 - Local dev Postgres has a stray `admin` superuser from a probe run; delete with
   `python manage.py shell -c "from django.contrib.auth import get_user_model as g; g().objects.filter(username='admin').delete()"`.
