@@ -42,6 +42,9 @@ fi
 # when a test book is wanted, then take it back out. It is idempotent, so a
 # repeat deploy with the flag still set adds nothing.
 if [ "${SEED_DEMO:-0}" = "1" ]; then
+    # The demo book hangs off the master data - departments, designations,
+    # allowance/deduction heads, units, item classes - so seed all of it first.
+    "$VENV/bin/python" manage.py seed
     "$VENV/bin/python" manage.py seed_demo
 fi
 
