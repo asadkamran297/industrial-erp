@@ -17,6 +17,7 @@ from apps.core.constants import STATUS_DRAFT
 from apps.inventory.models import Customer, InventoryItem, PurchaseBill, PurchaseOrder, POSMaster, Stock, Supplier
 from apps.inventory.services import (
     approve_purchase_order,
+    create_direct_purchase,
     create_direct_sale,
     create_purchase_bill,
     create_purchase_order,
@@ -24,6 +25,7 @@ from apps.inventory.services import (
 
 PO_MARKER = "DEMO-Q-%03d"
 BILL_MARKER = "DEMO-INV-%03d"
+DIRECT_PURCHASE_MARKER = "DEMO-PINV-%03d"
 SALE_MARKER = "DEMO-SALE-%03d"
 
 
@@ -123,6 +125,57 @@ def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
             lines=lines,
             tax_amount=Decimal("0"),
             remarks=f"Demo supplier bill {index}",
+            user=user,
+        )
+        created_count += 1
+
+    return created_count
+
+
+def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
+    """Purchases typed straight off the supplier's bill, with no order first.
+
+    These are what the purchase invoice board lists: the same tables as an
+    ordered purchase, flagged ``is_direct`` so they stay off the outstanding
+    orders list. Seeded separately because the ordered route above never
+    produces one.
+    """
+    suppliers = list(Supplier.objects.order_by("pk"))
+    items = list(InventoryItem.objects.order_by("pk"))
+    if not suppliers or not items:
+        return 0
+
+    today = timezone.localdate()
+    created_count = 0
+
+    for index in range(1, count + 1):
+        bill_number = DIRECT_PURCHASE_MARKER % index
+        if PurchaseOrder.all_objects.filter(quot_num=bill_number, is_direct=True).exists():
+            continue
+
+        # Offset into the item list so these do not buy the same rows the
+        # ordered purchases did, and the stock spread stays wide.
+        supplier = suppliers[(index + 2) % len(suppliers)]
+        lines = []
+        goods_total = Decimal("0.00")
+        for offset in range((index % 3) + 1):
+            item = items[(index * 2 + offset) % len(items)]
+            quantity = Decimal(8 + (index % 12) * 4)
+            rate = _rate_for(item, index + offset)
+            goods_total += (quantity * rate).quantize(Decimal("0.01"))
+            lines.append({"inventory_item": item, "quantity": quantity, "rate": rate})
+
+        # Every third invoice is settled in full, the rest part-paid, so the
+        # supplier ledger carries both states.
+        paid = goods_total if index % 3 == 0 else (goods_total / 2).quantize(Decimal("0.01"))
+
+        create_direct_purchase(
+            supplier=supplier,
+            bill_number=bill_number,
+            bill_date=today,
+            lines=lines,
+            paid_amount=paid,
+            remarks=f"Demo purchase invoice {index}",
             user=user,
         )
         created_count += 1

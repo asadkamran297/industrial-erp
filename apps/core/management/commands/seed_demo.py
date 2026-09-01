@@ -9,7 +9,7 @@ Idempotent: every record carries a marker, so a second run adds nothing.
 """
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.finance.seeders.demo_vouchers import (
     seed_demo_accounts,
@@ -19,6 +19,7 @@ from apps.finance.seeders.demo_vouchers import (
 from apps.hr.seeders.demo_employees import seed_demo_employees
 from apps.inventory.seeders.demo_customers import seed_demo_customers
 from apps.inventory.seeders.demo_transactions import (
+    seed_demo_direct_purchases,
     seed_demo_purchase_bills,
     seed_demo_purchase_orders,
     seed_demo_sales,
@@ -41,6 +42,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         count = options["count"]
         user = get_user_model().objects.filter(is_superuser=True).order_by("pk").first()
+        # The purchase and sale services run their real permission checks, and
+        # those dereference the user, so a fresh database with no superuser
+        # crashes deep inside a service instead of failing here.
+        if user is None:
+            raise CommandError(
+                "No superuser found. Run `python manage.py ensure_superuser` first."
+            )
 
         # Order matters: bills need approved orders, and sales need the stock
         # those bills brought in.
@@ -51,6 +59,7 @@ class Command(BaseCommand):
             ("employees, salaries and payroll", lambda: seed_demo_employees(count)),
             ("purchase orders", lambda: seed_demo_purchase_orders(count, user=user)),
             ("supplier bills", lambda: seed_demo_purchase_bills(count, user=user)),
+            ("purchase invoices", lambda: seed_demo_direct_purchases(count, user=user)),
             ("sales", lambda: seed_demo_sales(count, user=user)),
             ("vouchers", lambda: seed_demo_vouchers(count, user=user)),
         ]
