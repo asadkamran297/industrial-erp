@@ -102,16 +102,28 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   first sale to a customer rewrites `customer_code` to their chart-of-accounts
   code, so demo customers key on their email instead; and a voucher must be
   headed by a cash/bank leaf of the chart, with both sides on its lines.
-- `SEED_DEMO=1` in `.cpanel.yml` now makes a deploy seed the demo book
-  (commit `46dc3cd`). **Still set — take it back out after the live seeding.**
+- `SEED_DEMO=1` in `.cpanel.yml` makes a deploy seed the demo book (commit
+  `46dc3cd`), and also seeds the master data the demo hangs off, since live
+  otherwise carries only users, roles and permissions (commit `b670af5`). The
+  flag was set for the seeding deploys and taken back out again (`fed06b8`).
+- A demo voucher soft-deleted from the screens still holds its unique
+  `voucher_no`, so reseeding collided with it; the seeder now looks vouchers up
+  through `all_objects` and clears the soft-delete (commit `e11aa8d`).
+
+### Live — demo book loaded
+
+- Seeded on live over two deploys. The IP block on the management ports cleared
+  on its own after about an hour; port 443 was never affected.
+- Live now carries 57 suppliers, 147 items, 52 customers, 50 employees and 51
+  purchase orders, with their bills, sales, item-ledger and general-ledger
+  entries behind them. Verified by logging into the live site and reading the
+  list screens.
+- The purchase and sale documents were built while live still had only two
+  items and two suppliers, so the flow data is concentrated on those. The full
+  catalogue is loaded now; reseeding with a higher `--count` would spread new
+  documents across it if more variety is wanted.
 
 ### Open
-
-- **Demo data is not on live yet.** The seeder is pushed and the deploy is set
-  to run it, but the server's brute-force protection blocked this machine's IP
-  from every management port (2082/2083/2087/2096 and SSH 21098) after the
-  day's logins. Port 443 is unaffected and the site is up. Retry the deploy
-  once the block clears, then revert `SEED_DEMO=1` in `.cpanel.yml`.
 - cPanel password was shared in plaintext during setup; rotate it.
 - Local dev Postgres has a stray `admin` superuser from a probe run; delete with
   `python manage.py shell -c "from django.contrib.auth import get_user_model as g; g().objects.filter(username='admin').delete()"`.
