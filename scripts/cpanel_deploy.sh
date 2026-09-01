@@ -38,5 +38,12 @@ fi
 "$VENV/bin/python" manage.py seed core access_control
 "$VENV/bin/python" manage.py ensure_superuser
 
+# Demo trading data is opt-in: set SEED_DEMO=1 in .cpanel.yml for one deploy
+# when a test book is wanted, then take it back out. It is idempotent, so a
+# repeat deploy with the flag still set adds nothing.
+if [ "${SEED_DEMO:-0}" = "1" ]; then
+    "$VENV/bin/python" manage.py seed_demo
+fi
+
 mkdir -p "$PASSENGER_ROOT/tmp"
 touch "$PASSENGER_ROOT/tmp/restart.txt"
