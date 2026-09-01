@@ -797,15 +797,20 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
+    # The supplier's own number where they gave one, ours where they did not:
+    # a narration reading "on " with nothing after it tells the next reader
+    # less than the invoice number they can actually look up.
+    reference = invoice.supplier_invoice_num or invoice.invoice_num
+
     entries = [(inventory.code, stock_value, zero, f"Stock taken in on {invoice.invoice_num}")]
     if freight:
         entries.append((gl_account(GL_FREIGHT_PATH, user=user).code, freight, zero,
                         f"Freight and charges on {invoice.invoice_num}"))
     if tax:
         entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
-                        f"Input sales tax on {invoice.supplier_invoice_num}"))
+                        f"Input sales tax on {reference}"))
     entries.append((supplier_account.code, zero, payable,
-                    f"Payable to {supplier.name} on {invoice.supplier_invoice_num}"))
+                    f"Payable to {supplier.name} on {reference}"))
 
     return _post_voucher(
         source_ref=f"inv_purchase_invoices:{invoice.pk}",
@@ -813,7 +818,7 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
         voucher_date=invoice.invoice_date,
         settlement_mode=SETTLEMENT_CREDIT,
         account_no=supplier_account.code,
-        remarks=f"Auto-posted from purchase invoice {invoice.invoice_num} ({invoice.supplier_invoice_num})",
+        remarks=f"Auto-posted from purchase invoice {invoice.invoice_num} ({reference})",
         entries=entries,
         user=user,
     )

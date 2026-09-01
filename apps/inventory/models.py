@@ -500,10 +500,12 @@ class PurchaseInvoice(BaseModel):
                                        on_delete=models.PROTECT, db_column="inv_purchase_order_id")
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     invoice_num = models.CharField(max_length=40, unique=True, blank=True)
-    # The supplier's own number. Required, and unique per supplier, because it
-    # is the only thing that catches the same invoice being entered twice --
-    # which is the most common way a supplier is paid twice for one delivery.
-    supplier_invoice_num = models.CharField(max_length=80)
+    # The supplier's own number. Optional -- a delivery often arrives before the
+    # paperwork does, and an invoice that cannot be entered until it turns up is
+    # an invoice entered late or not at all. Where it is given it is unique per
+    # supplier, because it is the only thing that catches the same invoice being
+    # entered twice, which is the most common way a supplier is paid twice.
+    supplier_invoice_num = models.CharField(max_length=80, blank=True)
     supplier_invoice_date = models.DateField(null=True, blank=True)
     invoice_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
@@ -539,9 +541,12 @@ class PurchaseInvoice(BaseModel):
         # One invoice number per supplier. The database says it as well as the
         # service does, so a double submit cannot slip a duplicate through.
         constraints = [
+            # Blanks are excluded: two invoices whose numbers are both unknown
+            # are not two entries of the same invoice, and a constraint that
+            # said so would stop the second one being entered at all.
             models.UniqueConstraint(
                 fields=["supplier", "supplier_invoice_num"],
-                condition=Q(status=STATUS_POSTED),
+                condition=Q(status=STATUS_POSTED) & ~Q(supplier_invoice_num=""),
                 name="uniq_supplier_invoice_number",
             )
         ]

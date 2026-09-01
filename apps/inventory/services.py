@@ -1070,11 +1070,10 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
     if not supplier:
         raise ValidationError("Pick the supplier this invoice is from.")
+    # Optional. The duplicate guard is the reason to ask for it, so it runs
+    # only when there is something to check; an invoice entered without one is
+    # simply an invoice nobody can catch a second copy of.
     supplier_invoice_num = (supplier_invoice_num or "").strip()
-    if not supplier_invoice_num:
-        raise ValidationError(
-            "Enter the supplier's own invoice number - it is how a duplicate invoice is caught."
-        )
     existing = duplicate_supplier_invoice_number(
         supplier=supplier, supplier_invoice_num=supplier_invoice_num
     )
@@ -1279,7 +1278,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             payment_date=invoice.invoice_date,
             supplier=supplier,
             amount=paid,
-            reference=supplier_invoice_num,
+            reference=supplier_invoice_num or invoice.invoice_num,
             user=user,
         )
 

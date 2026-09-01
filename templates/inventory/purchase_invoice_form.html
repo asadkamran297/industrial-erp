@@ -366,10 +366,15 @@
      left for somebody to work out from what they clicked. */
   .bill-mode {
     display: none; align-items: center; gap: .375rem; margin-top: .375rem;
+    cursor: pointer; transition: background .12s ease;
     border-radius: .5rem; background: #ecfdf5; padding: .1875rem .5rem;
     font-size: .6875rem; font-weight: 600; color: #047857;
   }
   .bill-mode.is-on { display: inline-flex; }
+  .bill-mode:hover { background: #d1fae5; }
+  .dark .bill-mode:hover { background: rgba(6, 78, 59, .6); }
+  .bill-mode:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .bill-mode b { text-decoration: underline; text-underline-offset: 2px; }
   .dark .bill-mode { background: rgba(6, 78, 59, .4); color: #6ee7b7; }
   .po-pick-again {
     display: none; align-items: center; gap: .375rem; margin-top: .375rem;
@@ -378,6 +383,15 @@
   }
   .po-pick-again.is-on { display: inline-flex; }
   a.po-pick-again { text-decoration: none; }
+  .po-view-card { max-width: 46rem; }
+  .po-view-lines { width: 100%; }
+  .po-view-lines td { padding: .5rem .875rem; border-top: 1px solid #e8eef5; color: #334155; }
+  .dark .po-view-lines td { border-top-color: rgba(30, 41, 59, .9); color: #cbd5e1; }
+  .po-view-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .875rem 1.25rem; border-top: 1px solid #e2e8f0;
+  }
+  .dark .po-view-foot { border-top-color: #1e293b; }
   .po-pick-again:hover { background: #f8fafc; }
   .dark .po-pick-again { border-color: #1e293b; color: #cbd5e1; }
   .dark .po-pick-again:hover { background: rgba(30, 41, 59, .6); }
@@ -410,19 +424,13 @@
         {# What this supplier is owed, off the ledger. Shown as soon as one is #}
         {# picked, including when the screen opened on one already chosen.     #}
         <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
-        <span id="bill-mode" class="bill-mode">
+        {# The badge is the control: it already names the order, so asking it #}
+        {# to open it costs no second button and no second thing to read.     #}
+        <button type="button" id="bill-mode" class="bill-mode"
+                data-url="{% url 'inventory:purchase_order_detail' 0 %}"
+                title="Show what is on this order">
           Against <b id="bill-mode-no"></b>
-        </span>
-        {# Once the invoice is against an order, "use it" is done and the thing #}
-        {# somebody wants is to read it. The picker keeps its own button so an  #}
-        {# order chosen by mistake can still be swapped.                        #}
-        <a id="po-view" class="po-pick-again" target="_blank" rel="noopener"
-           data-url="{% url 'inventory:purchase_order_detail' 0 %}" href="#">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle>
-          </svg>
-          <span id="po-view-text">View order</span>
-        </a>
+        </button>
         <button type="button" id="po-pick-open" class="po-pick-again">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -441,9 +449,9 @@
         {# invoice being entered twice, which is how a supplier gets paid     #}
         {# twice for one delivery.                                            #}
         <div class="w-48">
-          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_number">Supplier&rsquo;s bill no</label>
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_number">Supplier&rsquo;s bill no <span class="font-normal normal-case text-slate-400">(optional)</span></label>
           <input type="text" name="bill_number" id="bill_number" class="form-input h-10 w-full"
-                 value="{{ posted.bill_number|default:'' }}" placeholder="Off their invoice">
+                 value="{{ posted.bill_number|default:'' }}" placeholder="Off their invoice, if it came with one">
         </div>
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
@@ -549,6 +557,44 @@
       </div>
     </div>
     <iframe id="entity-frame" title="New Supplier" src="about:blank"></iframe>
+  </div>
+</div>
+
+<div class="po-pick po-pick-backdrop" id="po-view-modal" role="dialog" aria-modal="true" aria-labelledby="po-view-title">
+  <div class="po-pick-card po-view-card">
+    <div class="po-pick-head">
+      <div>
+        <h2 class="po-pick-title" id="po-view-title">
+          <span id="po-view-no"></span>
+          <span id="po-view-status"></span>
+        </h2>
+        <p class="po-pick-sub" id="po-view-sub"></p>
+      </div>
+      <button type="button" class="po-pick-close" data-view-close aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="po-pick-body">
+      <table class="po-pick-lines po-view-lines">
+        <thead>
+          <tr>
+            <th>#</th><th>Item</th><th class="is-num">Ordered</th>
+            <th class="is-num">Still to invoice</th><th>Unit</th>
+            <th class="is-num">Rate</th><th class="is-num">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="po-view-lines"></tbody>
+      </table>
+    </div>
+    {# The order's own page, for anybody who wants the rest of it -- the #}
+    {# approvals, the history, the print copy. Off to one side, because  #}
+    {# leaving mid-invoice is the rarer thing to want.                    #}
+    <div class="po-view-foot">
+      <span id="po-view-total" class="po-pick-amt"></span>
+      <a id="po-view-full" class="pur-btn pur-btn--ghost" target="_blank" rel="noopener" href="#">
+        Open the full order
+      </a>
+    </div>
   </div>
 </div>
 
@@ -868,7 +914,7 @@
     supplierBalance.classList.toggle('pur-bal--credit', owed < 0);
     supplierBalance.textContent = owed < 0
       ? 'In credit: ' + moneyText(Math.abs(owed))
-      : 'Balance owed: ' + moneyText(owed);
+      : 'Balance: ' + moneyText(owed);
   }
 
   supplier.addEventListener('change', () => {
@@ -893,8 +939,13 @@
   let lastFocused = null;
   const pickAgain = document.getElementById('po-pick-open');
   const pickAgainText = document.getElementById('po-pick-open-text');
-  const viewOrder = document.getElementById('po-view');
-  const viewOrderText = document.getElementById('po-view-text');
+  const viewer = document.getElementById('po-view-modal');
+  const viewerNo = document.getElementById('po-view-no');
+  const viewerStatus = document.getElementById('po-view-status');
+  const viewerSub = document.getElementById('po-view-sub');
+  const viewerLines = document.getElementById('po-view-lines');
+  const viewerTotal = document.getElementById('po-view-total');
+  const viewerFull = document.getElementById('po-view-full');
   let orders = [];
 
   // A dialog that does not hold focus is a dialog a keyboard walks straight
@@ -916,20 +967,73 @@
     lastFocused = null;
   }
 
-  picker.addEventListener('keydown', event => {
-    if (event.key !== 'Tab') return;
-    const stops = Array.from(picker.querySelectorAll(FOCUSABLE))
-      .filter(el => el.offsetParent !== null);
-    if (!stops.length) return;
-    const first = stops[0];
-    const last = stops[stops.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  // Written once and given to both dialogs: two copies of a focus trap is two
+  // places for one to fall out of step with the other.
+  function trapFocus(dialog) {
+    dialog.addEventListener('keydown', event => {
+      if (event.key !== 'Tab') return;
+      const stops = Array.from(dialog.querySelectorAll(FOCUSABLE))
+        .filter(el => el.offsetParent !== null);
+      if (!stops.length) return;
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+  trapFocus(picker);
+  trapFocus(viewer);
+
+  // ----- the order, read where it is being invoiced -----
+  // Opened as a dialog rather than a new tab: the question it answers is "what
+  // was on this order", asked in the middle of typing the invoice against it,
+  // and a tab switch loses the half-typed page from view to answer it.
+  function openViewer() {
+    const order = orders.find(row => String(row.id) === String(billingId));
+    if (!order) return;
+
+    viewerNo.textContent = order.number;
+    viewerStatus.innerHTML = statusPill(order);
+    const supplierName = supplier.options[supplier.selectedIndex];
+    viewerSub.textContent = [order.date_text, supplierName ? supplierName.textContent.trim() : '']
+      .filter(Boolean).join(' \u00b7 ');
+    viewerFull.href = modeNote.dataset.url.replace('/0/', '/' + order.id + '/');
+
+    let total = 0;
+    viewerLines.innerHTML = (order.lines || []).map((line, index) => {
+      total += Number(line.amount) || 0;
+      return '<tr><td>' + (index + 1) + '</td>' +
+        '<td>' + escapeText(line.name) + '</td>' +
+        '<td class="is-num">' + qtyText(line.ordered) + '</td>' +
+        '<td class="is-num">' + qtyText(line.quantity) + '</td>' +
+        '<td>' + escapeText(line.unit || '') + '</td>' +
+        '<td class="is-num">' + moneyText(line.rate) + '</td>' +
+        '<td class="is-num">' + moneyText(line.amount) + '</td></tr>';
+    }).join('');
+    viewerTotal.textContent = 'Still to invoice: ' + moneyText(total);
+
+    // The badge that opened it, not whatever happened to hold focus: a click
+    // does not always leave focus on the control that was clicked.
+    lastFocused = modeNote;
+    viewer.classList.add('is-open');
+    viewer.querySelector('[data-view-close]').focus();
+  }
+
+  function closeViewer() {
+    if (!viewer.classList.contains('is-open')) return;
+    viewer.classList.remove('is-open');
+    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+    lastFocused = null;
+  }
+
+  modeNote.addEventListener('click', openViewer);
+  viewer.addEventListener('click', event => {
+    if (event.target === viewer || event.target.closest('[data-view-close]')) closeViewer();
   });
 
   function loadOrders(supplierId, name, autoOpen) {
@@ -1104,15 +1208,8 @@
     modeNote.classList.toggle('is-on', on);
     if (on) modeNumber.textContent = billing;
 
-    // Against an order: read it, or swap it. Not against one: choose one.
-    // Two buttons that both say "use purchase order PO-51" are one button too
-    // many, and neither of them is the one somebody is reaching for.
-    const canView = on && Boolean(billingId);
-    viewOrder.classList.toggle('is-on', canView);
-    if (canView) {
-      viewOrder.href = viewOrder.dataset.url.replace('/0/', '/' + billingId + '/');
-      viewOrderText.textContent = 'View ' + billing;
-    }
+    // Against an order: the badge reads it, the button swaps it. Not against
+    // one: the button is the only way in.
     if (orders.length) {
       pickAgainText.textContent = on
         ? 'Change order'
@@ -1126,7 +1223,10 @@
     if (event.target === picker || event.target.closest('[data-po-close]')) closePicker();
   });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && picker.classList.contains('is-open')) closePicker();
+    if (event.key !== 'Escape') return;
+    // The viewer opens over the picker, so it is the one Escape answers first.
+    if (viewer.classList.contains('is-open')) closeViewer();
+    else if (picker.classList.contains('is-open')) closePicker();
   });
   pickAgain.addEventListener('click', openPicker);
 
