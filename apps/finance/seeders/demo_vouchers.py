@@ -23,7 +23,7 @@ from apps.core.constants import (
     VOUCHER_TYPE_PAYMENT,
     VOUCHER_TYPE_RECEIPT,
 )
-from apps.finance.models import AccountConfiguration, AccountVoucher, FiscalYear
+from apps.finance.models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
 from apps.finance.services import gl_account
 
 # Codes carry the prefix AccountConfiguration.clean() demands for each type:
@@ -116,9 +116,14 @@ def seed_demo_vouchers(count: int = 50, *, user=None) -> int:
         money_debit = Decimal("0.00") if is_payment else amount
         money_credit = amount if is_payment else Decimal("0.00")
 
-        voucher, created = AccountVoucher.objects.update_or_create(
+        # all_objects, not objects: a demo voucher soft-deleted from the screens
+        # is invisible to ActiveManager but still holds the unique voucher_no,
+        # so looking it up through the default manager re-inserts and blows up.
+        voucher, created = AccountVoucher.all_objects.update_or_create(
             voucher_no=f"{'E' if is_payment else 'R'}-DEMO-{index:03d}",
             defaults={
+                "is_active": True,
+                "deleted_at": None,
                 "voucher_type": voucher_type,
                 "account_no": cash.code,
                 "voucher_date": today,
@@ -134,27 +139,31 @@ def seed_demo_vouchers(count: int = 50, *, user=None) -> int:
         )
         created_count += int(created)
 
-        if created:
-            for line_number, (line_account, line_debit, line_credit) in enumerate(
-                (
-                    (cash, money_debit, money_credit),
-                    (counter_account, money_credit, money_debit),
-                ),
-                start=1,
-            ):
-                voucher.lines.create(
-                    line_number=line_number,
-                    voucher_no=voucher.voucher_no,
-                    account_no=line_account.code,
-                    voucher_date=today,
-                    payment_method=payment_method,
-                    debit_amount=line_debit,
-                    credit_amount=line_credit,
-                    remarks=narration,
-                    person_organization="Trading partner",
-                    person_organization_title=f"Demo partner {index}",
-                    created_by=user,
-                    updated_by=user,
-                )
+        for line_number, (line_account, line_debit, line_credit) in enumerate(
+            (
+                (cash, money_debit, money_credit),
+                (counter_account, money_credit, money_debit),
+            ),
+            start=1,
+        ):
+            AccountVoucherLine.all_objects.update_or_create(
+                voucher=voucher,
+                line_number=line_number,
+                defaults={
+                    "is_active": True,
+                    "deleted_at": None,
+                    "voucher_no": voucher.voucher_no,
+                    "account_no": line_account.code,
+                    "voucher_date": today,
+                    "payment_method": payment_method,
+                    "debit_amount": line_debit,
+                    "credit_amount": line_credit,
+                    "remarks": narration,
+                    "person_organization": "Trading partner",
+                    "person_organization_title": f"Demo partner {index}",
+                    "created_by": user,
+                    "updated_by": user,
+                },
+            )
 
     return created_count
