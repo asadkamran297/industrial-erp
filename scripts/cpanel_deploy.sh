@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Deploy tasks run by cPanel Git Version Control (see .cpanel.yml).
 # cPanel performs the git pull itself; this script only builds and migrates.
+# Each .cpanel.yml task runs in its own shell, so exports there do not reach
+# this script - override these by editing the defaults, not the yml.
 set -o errexit
 
+# The git checkout.
 APPROOT="${APPROOT:-$HOME/industrial_erp}"
-# The CloudLinux Python selector owns this virtualenv and Passenger boots the
-# app with its interpreter, so install into it rather than building our own.
-VENV="${VENV:-$HOME/virtualenv/industrial_erp/3.12}"
+# The Passenger application root, deliberately outside the checkout so deploys
+# never overwrite passenger_wsgi.py and its restart trigger never dirties the
+# working tree.
+PASSENGER_ROOT="${PASSENGER_ROOT:-$HOME/erp_app}"
+# Owned by the CloudLinux Python selector; Passenger boots the app with it.
+VENV="${VENV:-$HOME/virtualenv/erp_app/3.12}"
 
 cd "$APPROOT"
 
@@ -24,5 +30,5 @@ fi
 "$VENV/bin/python" manage.py seed core access_control
 "$VENV/bin/python" manage.py ensure_superuser
 
-mkdir -p "$APPROOT/tmp"
-touch "$APPROOT/tmp/restart.txt"
+mkdir -p "$PASSENGER_ROOT/tmp"
+touch "$PASSENGER_ROOT/tmp/restart.txt"
