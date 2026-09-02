@@ -1,6 +1,7 @@
-{# The menu on the purchase order form: which boxes it shows, and the ones this #}
-{# site added for itself. Every change is a plain POST that comes straight back #}
-{# here, so the menu never holds a half-applied state of its own. #}
+{# The menu on a purchase form: which boxes it shows, and the ones this site   #}
+{# added for itself. Every change is a plain POST that comes straight back      #}
+{# here, so the menu never holds a half-applied state of its own.               #}
+{# Shared by the order and the invoice; the caller supplies ``settings_url``.   #}
 <style>
   .form-settings { position: relative; }
   .form-settings-panel {
@@ -84,7 +85,7 @@
     {# ── Which boxes the form shows ─────────────────────────────────────── #}
     {# Its own form, posted on Apply: ticking six boxes should be one trip, #}
     {# not six. #}
-    <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}">{% csrf_token %}
+    <form method="post" action="{{ settings_url }}">{% csrf_token %}
       <input type="hidden" name="step" value="fields">
       <p class="fs-heading">Show on this form</p>
       {% regroup layout.optional_fields by group as field_groups %}
@@ -114,7 +115,7 @@
       </span>
       {# Removing takes the box off the form; what earlier orders recorded #}
       {# under it stays on those orders. #}
-      <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}">{% csrf_token %}
+      <form method="post" action="{{ settings_url }}">{% csrf_token %}
         <input type="hidden" name="step" value="remove">
         <input type="hidden" name="code" value="{{ field.code }}">
         <button type="submit" class="text-rose-600 hover:text-rose-700" title="Remove this field" aria-label="Remove {{ field.label }}">&times;</button>
@@ -122,7 +123,7 @@
     </div>
     {% endfor %}
 
-    <form method="post" action="{% url 'inventory:purchase_order_form_settings' %}" class="fs-add">{% csrf_token %}
+    <form method="post" action="{{ settings_url }}" class="fs-add">{% csrf_token %}
       <input type="hidden" name="step" value="add">
       {# Only the label is asked for. What the value is filed under is worked #}
       {# out from it, because a storage key is not the operator's business.    #}

@@ -1048,7 +1048,8 @@ def _refresh_order_invoiced_status(order, *, user=None):
 def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_date=None,
                             invoice_date=None, due_date=None, lines,
                             discount_amount=Decimal("0"), freight_amount=Decimal("0"),
-                            tax_amount=None, paid_amount=Decimal("0"), remarks="", user):
+                            tax_amount=None, paid_amount=Decimal("0"), remarks="",
+                            extra_data=None, user):
     """Enter a supplier's invoice. The one financial document on this side.
 
     ``lines`` is a list of dicts carrying ``inventory_item``, ``quantity`` and
@@ -1181,6 +1182,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         posted_at=timezone.now(),
         posted_by=user,
         remarks=remarks or "",
+        extra_data=extra_data or {},
         created_by=user,
         updated_by=user,
     )

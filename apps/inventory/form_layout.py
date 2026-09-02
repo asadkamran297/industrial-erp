@@ -25,7 +25,16 @@ import re
 
 from apps.configurations.models import SystemConfiguration
 
-SETTING_KEY = "inventory.purchase_order_form"
+# One record per form. The purchase order keeps the key it already had, so a
+# site that has configured its order form does not lose that on upgrade.
+FORM_PURCHASE_ORDER = "purchase_order"
+FORM_PURCHASE_INVOICE = "purchase_invoice"
+
+SETTING_KEYS = {
+    FORM_PURCHASE_ORDER: "inventory.purchase_order_form",
+    FORM_PURCHASE_INVOICE: "inventory.purchase_invoice_form",
+}
+SETTING_KEY = SETTING_KEYS[FORM_PURCHASE_ORDER]
 
 # A code is what the value is filed under on the order, so it has to be stable,
 # unique and safe to put in an input name.
@@ -66,18 +75,51 @@ OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
     OptionalField("tax_amount", "Tax", "Money"),
     OptionalField("amount_words", "Amount in words panel", "Money"),
 )
+# The invoice asks for money the order does not, and does not ask for the
+# quotation the order does. Held apart rather than merged: a box offered on a
+# form that never draws it is a switch that does nothing.
+INVOICE_OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
+    OptionalField("bill_number", "Supplier's bill no", "Header",
+                  "Off, a duplicate supplier invoice cannot be caught."),
+    OptionalField("due_date", "Due date", "Header"),
+    OptionalField("line_uom", "Unit column", "Lines",
+                  "Off, every line is written in the item's own unit."),
+    OptionalField("line_stock", "Stock in hand chip", "Lines"),
+    OptionalField("supplier_balance", "Supplier balance", "Header"),
+    OptionalField("remarks", "Narration", "Money"),
+    OptionalField("discount_amount", "Discount", "Money"),
+    OptionalField("freight_amount", "Freight", "Money"),
+    OptionalField("tax_amount", "Tax", "Money"),
+    OptionalField("paid_amount", "Paid and balance owed", "Money"),
+    OptionalField("amount_words", "Amount in words panel", "Money"),
+)
+
+FORM_FIELDS = {
+    FORM_PURCHASE_ORDER: OPTIONAL_FIELDS,
+    FORM_PURCHASE_INVOICE: INVOICE_OPTIONAL_FIELDS,
+}
+
 OPTIONAL_FIELD_CODES = {field.code for field in OPTIONAL_FIELDS}
+
+
+def _fields_for(form):
+    return FORM_FIELDS.get(form, OPTIONAL_FIELDS)
+
+
+def _codes_for(form):
+    return {field.code for field in _fields_for(form)}
 
 # The codes a site may not take for one of its own fields, because the form
 # already posts something under each of them.
-RESERVED_CODES = OPTIONAL_FIELD_CODES | {
+RESERVED_CODES = OPTIONAL_FIELD_CODES | {field.code for field in INVOICE_OPTIONAL_FIELDS} | {
     "supplier", "order_date", "quantity", "rate", "item_id", "csrfmiddlewaretoken",
     "save_and_print", "save_and_new", "tax_percent",
+    "bill_date", "line_uom", "row_order_item", "order",
 }
 
 
-def _record():
-    row = SystemConfiguration.objects.filter(key=SETTING_KEY).first()
+def _record(form=FORM_PURCHASE_ORDER):
+    row = SystemConfiguration.objects.filter(key=SETTING_KEYS[form]).first()
     return row.value if row and isinstance(row.value, dict) else {}
 
 
@@ -107,10 +149,11 @@ def _clean_extra(raw):
     }
 
 
-def get_layout():
+def get_layout(form=FORM_PURCHASE_ORDER):
     """What the form should render, cleaned and ready for a template."""
-    record = _record()
-    hidden = {code for code in record.get("hidden", []) if code in OPTIONAL_FIELD_CODES}
+    record = _record(form)
+    codes = _codes_for(form)
+    hidden = {code for code in record.get("hidden", []) if code in codes}
 
     extra, seen = [], set()
     for raw in record.get("extra", []):
@@ -122,28 +165,30 @@ def get_layout():
 
     return {
         # ``shown`` is what a template asks: ``{% if layout.shown.tax_amount %}``.
-        "shown": {field.code: field.code not in hidden for field in OPTIONAL_FIELDS},
+        "shown": {field.code: field.code not in hidden for field in _fields_for(form)},
         "hidden": sorted(hidden),
         "extra": extra,
+        "form": form,
         "optional_fields": [
             {"code": field.code, "label": field.label, "group": field.group,
              "note": field.note, "on": field.code not in hidden}
-            for field in OPTIONAL_FIELDS
+            for field in _fields_for(form)
         ],
     }
 
 
-def _save(hidden, extra):
+def _save(hidden, extra, form=FORM_PURCHASE_ORDER):
     SystemConfiguration.objects.update_or_create(
-        key=SETTING_KEY,
+        key=SETTING_KEYS[form],
         defaults={"value": {"hidden": sorted(set(hidden)), "extra": extra}},
     )
 
 
-def set_hidden(codes):
+def set_hidden(codes, form=FORM_PURCHASE_ORDER):
     """Replace the hidden set with ``codes``, ignoring anything not on offer."""
-    record = get_layout()
-    _save([code for code in codes if code in OPTIONAL_FIELD_CODES], record["extra"])
+    record = get_layout(form)
+    allowed = _codes_for(form)
+    _save([code for code in codes if code in allowed], record["extra"], form)
 
 
 def code_for(label):
@@ -170,7 +215,7 @@ def _free_code(label, taken):
     return ""
 
 
-def add_extra_field(*, label, kind, required=False, options=()):
+def add_extra_field(*, label, kind, required=False, options=(), form=FORM_PURCHASE_ORDER):
     """Put one of the site's own fields on the form.
 
     Returns an error message, or None where it was added. The caller shows the
@@ -180,8 +225,8 @@ def add_extra_field(*, label, kind, required=False, options=()):
     label = (label or "").strip()
     if not label:
         return "Give the field a label."
-    record = get_layout()
-    taken = RESERVED_CODES | {field["code"] for field in record["extra"]}
+    record = get_layout(form)
+    taken = RESERVED_CODES | _codes_for(form) | {field["code"] for field in record["extra"]}
     code = _free_code(label, taken)
     if not code:
         return "That label cannot be filed under a name. Start it with a letter."
@@ -196,18 +241,18 @@ def add_extra_field(*, label, kind, required=False, options=()):
         "code": code, "label": label[:60], "type": kind,
         "required": bool(required), "options": options,
     }]
-    _save(record["hidden"], extra)
+    _save(record["hidden"], extra, form)
     return None
 
 
-def remove_extra_field(code):
+def remove_extra_field(code, form=FORM_PURCHASE_ORDER):
     """Take one of the site's own fields off the form.
 
     What earlier orders recorded under it is left alone: the value stays on the
     order, so a field removed by mistake loses nothing but its box.
     """
-    record = get_layout()
-    _save(record["hidden"], [field for field in record["extra"] if field["code"] != code])
+    record = get_layout(form)
+    _save(record["hidden"], [field for field in record["extra"] if field["code"] != code], form)
 
 
 def read_extra_values(posted, layout=None):

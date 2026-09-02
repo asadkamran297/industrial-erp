@@ -30,7 +30,7 @@ from apps.finance.views import AuditSaveMixin
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
-from .form_layout import EXTRA_FIELD_TYPES, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
+from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
 from .services import close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
 
@@ -1358,6 +1358,13 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             "title": "Purchase Invoice",
             "next_invoice_no": next_purchase_invoice_number(),
             "suppliers": self._suppliers_with_balance(),
+            "layout": get_layout(FORM_PURCHASE_INVOICE),
+            "extra_field_types": EXTRA_FIELD_TYPES,
+            "settings_url": reverse_lazy("inventory:purchase_invoice_form_settings"),
+            # This view renders straight to a template, so the permission flags
+            # the list mixin would add are not here; the menu needs the one it
+            # is gated on.
+            "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "units": UOM.objects.order_by("title"),
             "today": timezone.localdate(),
             "items_json": json.dumps([
@@ -1568,12 +1575,22 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 if not lines[index].get("rate"):
                     lines[index]["rate"] = order_item.rate
 
+        # The site's own fields, read against what it declared rather than off
+        # whatever the request happens to carry.
+        layout = get_layout(FORM_PURCHASE_INVOICE)
+        extra_values, extra_error = read_extra_values(posted, layout)
+        if extra_error:
+            messages.error(request, extra_error)
+            return render(request, self.template_name, self._context(posted=posted))
+
         try:
             invoice = create_purchase_invoice(
                 supplier=supplier,
                 supplier_invoice_num=(posted.get("bill_number") or "").strip(),
                 supplier_invoice_date=invoice_date,
                 invoice_date=invoice_date,
+                due_date=(posted.get("due_date") or "").strip() or None,
+                extra_data=extra_values,
                 lines=lines,
                 discount_amount=money("discount_amount"),
                 freight_amount=money("freight_amount"),
@@ -2496,6 +2513,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             "title": "Purchase Order",
             # What this site has taken off the form and what it has added.
             "layout": get_layout(),
+            "settings_url": reverse_lazy("inventory:purchase_order_form_settings"),
             "extra_field_types": EXTRA_FIELD_TYPES,
             # A plain View builds its own context, so the permission the menu
             # is gated on has to be put there by hand.
@@ -2610,16 +2628,22 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
 
 
 class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
-    """The settings menu on the purchase order form: what it shows, and what it adds.
+    """The settings menu on a purchase form: what it shows, and what it adds.
 
     Everything arrives as a plain POST and sends the operator back to the form,
     so the menu never has to keep a half-applied state of its own. Configuring
     the screen is an edit to how the site works, so it wants the manage
     permission and not merely the right to raise an order.
+
+    Serves both purchase forms. Which one is a class attribute rather than a
+    posted field: the form being configured decides where the operator is sent
+    back to, and that is not something a request should be able to choose.
     """
 
     page = "inventory.purchase_orders"
     action = "edit"
+    form_key = FORM_PURCHASE_ORDER
+    redirect_to = "inventory:purchase_order_create"
 
     def post(self, request, *args, **kwargs):
         step = request.POST.get("step")
@@ -2627,8 +2651,8 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
         if step == "fields":
             # The menu posts what stays on; anything not ticked comes off.
             shown = set(request.POST.getlist("shown"))
-            set_hidden([field["code"] for field in get_layout()["optional_fields"]
-                        if field["code"] not in shown])
+            set_hidden([field["code"] for field in get_layout(self.form_key)["optional_fields"]
+                        if field["code"] not in shown], self.form_key)
             messages.success(request, "Form fields updated.")
 
         elif step == "add":
@@ -2639,6 +2663,7 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
                 # One choice per line is how a list is typed; commas belong
                 # inside a choice, not between them.
                 options=(request.POST.get("options") or "").splitlines(),
+                form=self.form_key,
             )
             if error:
                 messages.error(request, error)
@@ -2646,10 +2671,17 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
                 messages.success(request, "Field added to the form.")
 
         elif step == "remove":
-            remove_extra_field((request.POST.get("code") or "").strip())
-            messages.success(request, "Field removed from the form. What earlier orders recorded under it is kept.")
+            remove_extra_field((request.POST.get("code") or "").strip(), self.form_key)
+            messages.success(request, "Field removed from the form. What earlier records held under it is kept.")
 
-        return redirect("inventory:purchase_order_create")
+        return redirect(self.redirect_to)
+
+
+class PurchaseInvoiceFormSettingsView(PurchaseOrderFormSettingsView):
+    """The same menu, configuring the invoice form instead."""
+
+    form_key = FORM_PURCHASE_INVOICE
+    redirect_to = "inventory:purchase_invoice_create"
 
 
 class PurchaseOrderUpdateView(InventoryManageMixin, View):

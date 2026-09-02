@@ -401,7 +401,10 @@
   .pur-head > div { flex: 0 1 auto; min-width: 0; }
 </style>
 
-<div class="flex items-center gap-3">{% include "components/ui/back_button.html" %}<h1 class="title-accent text-xl font-bold">Purchase Invoice</h1></div>
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div class="flex items-center gap-3">{% include "components/ui/back_button.html" %}<h1 class="title-accent text-xl font-bold">Purchase Invoice</h1></div>
+  {% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}
+</div>
 
 <section class="mt-3">
   <form method="post" id="purchase-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
@@ -423,7 +426,7 @@
         </div>
         {# What this supplier is owed, off the ledger. Shown as soon as one is #}
         {# picked, including when the screen opened on one already chosen.     #}
-        <p id="supplier-balance" class="pur-bal mt-1 hidden"></p>
+        {% if layout.shown.supplier_balance %}<p id="supplier-balance" class="pur-bal mt-1 hidden"></p>{% endif %}
         {# The badge is the control: it already names the order, so asking it #}
         {# to open it costs no second button and no second thing to read.     #}
         <button type="button" id="bill-mode" class="bill-mode"
@@ -448,11 +451,34 @@
         {# Their number, not ours. It is the only thing that catches the same #}
         {# invoice being entered twice, which is how a supplier gets paid     #}
         {# twice for one delivery.                                            #}
-        <div class="w-48">
+        {% if layout.shown.bill_number %}<div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_number">Supplier&rsquo;s bill no <span class="font-normal normal-case text-slate-400">(optional)</span></label>
           <input type="text" name="bill_number" id="bill_number" class="form-input h-10 w-full"
                  value="{{ posted.bill_number|default:'' }}" placeholder="Off their invoice, if it came with one">
+        </div>{% endif %}
+        {% if layout.shown.due_date %}
+        <div class="w-48">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="due_date">Due date</label>
+          <input type="date" name="due_date" id="due_date" class="form-input h-10 w-full" value="{{ posted.due_date|default:'' }}">
         </div>
+        {% endif %}
+        {# Whatever this site added to the invoice form for itself. #}
+        {% for field in layout.extra %}
+        <div class="w-48">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="extra__{{ field.code }}">
+            {{ field.label }}{% if field.required %} <span class="text-rose-500">*</span>{% endif %}
+          </label>
+          {% if field.type == "select" %}
+          <select name="extra__{{ field.code }}" id="extra__{{ field.code }}" class="form-input h-10 w-full"{% if field.required %} required{% endif %}>
+            <option value="">Select…</option>
+            {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+          </select>
+          {% else %}
+          <input type="{{ field.type }}" name="extra__{{ field.code }}" id="extra__{{ field.code }}"
+                 class="form-input h-10 w-full"{% if field.required %} required{% endif %}>
+          {% endif %}
+        </div>
+        {% endfor %}
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_date">Date</label>
           <input type="date" name="bill_date" id="bill_date" class="form-input h-10 w-full" value="{% if posted.bill_date %}{{ posted.bill_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}">
@@ -462,22 +488,22 @@
 
     {# ── Lines ────────────────────────────────────────────────────────────── #}
     <div class="border-y border-slate-200 dark:border-slate-800">
-      <div class="pur-grid pur-head">
+      <div class="pur-grid pur-head{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
         <div>#</div>
         <div class="pur-head-item">Item
           <button type="button" id="add-item" class="head-action" title="Add a new item" aria-label="Add a new item">+</button>
         </div>
-        <div class="pur-right">Qty</div><div>Unit</div>
+        <div class="pur-right">Qty</div>{% if layout.shown.line_uom %}<div>Unit</div>{% endif %}
         <div class="pur-right">Price/Unit</div><div class="pur-right">Amount</div><div></div>
       </div>
 
       <div id="line-rows"></div>
 
-      <div class="pur-grid pur-foot border-t border-slate-200 dark:border-slate-800">
+      <div class="pur-grid pur-foot border-t border-slate-200 dark:border-slate-800{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
         <div></div>
         <div><button type="button" id="add-row" class="text-sm font-semibold text-[var(--primary-color)]">+ Add Row</button></div>
         <div class="pur-right" id="total-qty">0</div>
-        <div></div>
+        {% if layout.shown.line_uom %}<div></div>{% endif %}
         <div class="pur-right text-xs uppercase tracking-wide text-slate-400">Total</div>
         <div class="pur-amount" id="total-amount">0.00</div>
         <div></div>
@@ -487,33 +513,33 @@
     {# ── Money ────────────────────────────────────────────────────────────── #}
     <div class="grid gap-6 px-6 py-6 lg:grid-cols-3">
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
-        <div class="sm:col-span-2">
+        {% if layout.shown.remarks %}<div class="sm:col-span-2">
           <label class="mb-1.5 block text-sm font-medium" for="remarks">Narration</label>
           <textarea name="remarks" id="remarks" rows="2" class="form-input w-full" placeholder="Anything worth recording against this bill">{{ posted.remarks|default:'' }}</textarea>
-        </div>
+        </div>{% endif %}
 
       <div class="rounded-xl bg-slate-50 p-5 sm:col-span-2 dark:bg-slate-800/40">
         <div class="pur-total-row">
           <span class="pur-label">Sub Total</span>
           <span class="pur-value" id="sub-total">0.00</span>
         </div>
-        <div class="pur-total-row">
+        {% if layout.shown.discount_amount %}<div class="pur-total-row">
           <label class="pur-label" for="discount_amount">Discount (Rs)</label>
           <input type="number" step="0.01" min="0" name="discount_amount" id="discount_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.discount_amount|default:'' }}" placeholder="0.00">
-        </div>
-        <div class="pur-total-row">
+        </div>{% endif %}
+        {% if layout.shown.freight_amount %}<div class="pur-total-row">
           <label class="pur-label" for="freight_amount">Freight (Rs)</label>
           <input type="number" step="0.01" min="0" name="freight_amount" id="freight_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.freight_amount|default:'' }}" placeholder="0.00">
-        </div>
-        <div class="pur-total-row">
+        </div>{% endif %}
+        {% if layout.shown.tax_amount %}<div class="pur-total-row">
           <label class="pur-label" for="tax_amount">Tax (Rs)</label>
           <input type="number" step="0.01" min="0" name="tax_amount" id="tax_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.tax_amount|default:'' }}" placeholder="0.00">
-        </div>
+        </div>{% endif %}
         <div class="pur-total-row pur-grand">
           <span>Total</span>
           <span class="pur-value" id="grand-total">0.00</span>
         </div>
-        <div class="pur-total-row">
+        {% if layout.shown.paid_amount %}<div class="pur-total-row">
           <label class="pur-label" for="paid_amount">Paid</label>
           <input type="number" step="0.01" min="0" name="paid_amount" id="paid_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.paid_amount|default:'' }}" placeholder="0.00">
         </div>
@@ -521,12 +547,12 @@
           <span class="pur-label">Balance owed</span>
           <span class="pur-value font-semibold text-rose-600" id="balance-owed">0.00</span>
         </div>
-        <p class="mt-2 text-xs text-slate-400">Paid settles against the supplier's account. Leave it blank for a credit purchase.</p>
+        <p class="mt-2 text-xs text-slate-400">Paid settles against the supplier's account. Leave it blank for a credit purchase.</p>{% endif %}
       </div>
       </div>
 
       {# What the bill comes to, spelled out — the figure the operator checks against the paper. #}
-      {% include "inventory/_amount_panel.html" %}
+      {% if layout.shown.amount_words %}{% include "inventory/_amount_panel.html" %}{% endif %}
     </div>
 
     {# ── Footer ───────────────────────────────────────────────────────────── #}
@@ -632,12 +658,16 @@
   </div>
 </div>
 
+<script id="form-layout" type="application/json">{"unit": {{ layout.shown.line_uom|yesno:"true,false" }}, "stock": {{ layout.shown.line_stock|yesno:"true,false" }}}</script>
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
 {# The grid as it was submitted, put back when the server refuses the invoice. #}
 <script id="posted-lines" type="application/json">{{ posted_lines_json|safe }}</script>
 <script>
 (function () {
   const ITEMS = JSON.parse(document.getElementById('items-data').textContent);
+  // Which columns the site left on the form. Read once: a row built without the
+  // unit cell must not be given one later, or the grid stops lining up.
+  const SHOW = JSON.parse(document.getElementById('form-layout').textContent);
   const UNITS = [{% for unit in units %}{ id: {{ unit.pk }}, name: '{{ unit.title|escapejs }}' }{% if not forloop.last %},{% endif %}{% endfor %}];
   const rowsBox = document.getElementById('line-rows');
 
@@ -669,7 +699,7 @@
 
   function addRow() {
     const row = document.createElement('div');
-    row.className = 'pur-grid pur-row';
+    row.className = 'pur-grid pur-row' + (SHOW.unit ? '' : ' pur-grid--no-unit');
     row.innerHTML =
       '<div class="text-center text-xs text-slate-400 row-num"></div>' +
       // Set only when the row was copied off a purchase order. Its presence is
@@ -679,7 +709,9 @@
         '<span class="stock-chip line-stock" hidden></span></div>' +
       '<div><input type="number" step="0.0001" min="0" name="quantity" class="pur-cell pur-right line-qty" placeholder="0">' +
         '<span class="unit-note line-qty-unit"></span></div>' +
-      '<div><select name="line_uom" class="pur-cell line-unit">' + unitOptions('') + '</select></div>' +
+      (SHOW.unit
+        ? '<div><select name="line_uom" class="pur-cell line-unit">' + unitOptions('') + '</select></div>'
+        : '<select name="line_uom" class="line-unit" hidden>' + unitOptions('') + '</select>') +
       '<div><input type="number" step="0.01" min="0" name="rate" class="pur-cell pur-right line-rate" placeholder="0.00">' +
         '<span class="unit-note line-rate-unit"></span></div>' +
       '<div class="pur-amount line-amount">0.00</div>' +
@@ -802,7 +834,7 @@
   function writeStock(row, boughtSoFar) {
     const chip = row.querySelector('.line-stock');
     const chosen = ITEMS.find(i => String(i.id) === row.querySelector('.line-item').value);
-    if (!chosen || !chosen.stocked) { chip.hidden = true; return; }
+    if (!SHOW.stock || !chosen || !chosen.stocked) { chip.hidden = true; return; }
 
     const held = Number(chosen.stock) || 0;
     const factor = baseFactor(row);

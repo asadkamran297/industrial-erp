@@ -534,6 +534,11 @@ class PurchaseInvoice(BaseModel):
     reverse_reason = models.CharField(max_length=40, blank=True)
     reversed_on = models.DateField(null=True, blank=True)
     remarks = models.TextField(blank=True)
+    # Whatever the site added to the invoice form for itself, keyed by the
+    # field's code. Held as JSON rather than as columns because the set is
+    # configured by the site and changes without a migration; nothing in the
+    # books reads it, so an invoice posts the same with or without it.
+    extra_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "inv_purchase_invoices"
