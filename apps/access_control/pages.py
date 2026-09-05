@@ -59,6 +59,13 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("inventory.pos_returns", "POS Returns", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),
     Page("inventory.purchase_returns", "Purchase Returns", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),
     Page("inventory.purchase_report", "Purchase Report", "Inventory", READ_ONLY),
+    # Products (flour mill product tree)
+    Page("products.products", "Products", "Products", MASTER_NO_DELETE),
+    Page("products.account_links", "Account Linking", "Products", MASTER_NO_DELETE),
+    Page("products.raw_bardana", "Raw Bardana Linking", "Products", MASTER_NO_DELETE),
+    Page("products.finish_bardana", "Finish Bardana Linking", "Products", MASTER_NO_DELETE),
+    Page("products.opening_balances", "Product Opening Balance", "Products", MASTER_NO_DELETE),
+    Page("products.rates", "Product Rate Update", "Products", MASTER_NO_DELETE),
     # Finance
     Page("finance.fiscal_years", "Fiscal Years", "Finance", MASTER_NO_DELETE),
     Page("finance.accounts", "Chart of Accounts", "Finance", MASTER_NO_DELETE),

@@ -572,3 +572,118 @@ ACTION_LABELS: Final[dict[str, str]] = {
     ACTION_APPROVE: "Approve",
     ACTION_REVERSE: "Reverse",
 }
+
+
+# ── Products (flour mill product tree) ───────────────────────────────────────
+# A product's code is GG-SS-III. Levels are numbered so a comparison reads the
+# same way the code does: 1 is the group, 3 is the postable item.
+PRD_LEVEL_GROUP: Final[int] = 1
+PRD_LEVEL_SUB_GROUP: Final[int] = 2
+PRD_LEVEL_ITEM: Final[int] = 3
+
+PRD_LEVEL_CHOICES: Final[tuple[tuple[int, str], ...]] = (
+    (PRD_LEVEL_GROUP, "Group"),
+    (PRD_LEVEL_SUB_GROUP, "Sub Group"),
+    (PRD_LEVEL_ITEM, "Item"),
+)
+
+# Segment widths, in the order the code is written.
+PRD_SEGMENT_WIDTHS: Final[dict[int, int]] = {
+    PRD_LEVEL_GROUP: 2,
+    PRD_LEVEL_SUB_GROUP: 2,
+    PRD_LEVEL_ITEM: 3,
+}
+
+PRD_SPEC_RAW_ITEM: Final = "raw_item"
+PRD_SPEC_RAW_PACKING: Final = "raw_packing"
+PRD_SPEC_FINISH_ITEM: Final = "finish_item"
+PRD_SPEC_FINISH_PACKING: Final = "finish_packing"
+PRD_SPEC_BYPRODUCT: Final = "byproduct"
+PRD_SPEC_SERVICE_ITEM: Final = "service_item"
+PRD_SPEC_WAGE_ITEM: Final = "wage_item"
+
+PRD_SPECIFICATION_CHOICES: Final[StatusChoices] = (
+    (PRD_SPEC_RAW_ITEM, "Raw Item"),
+    (PRD_SPEC_RAW_PACKING, "Raw Packing"),
+    (PRD_SPEC_FINISH_ITEM, "Finish Item"),
+    (PRD_SPEC_FINISH_PACKING, "Finish Packing"),
+    (PRD_SPEC_BYPRODUCT, "By-Product"),
+    (PRD_SPEC_SERVICE_ITEM, "Service Item"),
+    (PRD_SPEC_WAGE_ITEM, "Wage Item"),
+)
+
+# What each specification is allowed to do. Held as data rather than as
+# scattered ifs, because purchase, production and packing screens all ask the
+# same four questions of a product and must all get the same answer.
+#   (can_buy, can_produce, can_sell, keeps_stock)
+PRD_SPEC_RULES: Final[dict[str, dict[str, bool]]] = {
+    PRD_SPEC_RAW_ITEM: {"can_buy": True, "can_produce": False, "can_sell": True, "keeps_stock": True},
+    PRD_SPEC_RAW_PACKING: {"can_buy": True, "can_produce": False, "can_sell": False, "keeps_stock": True},
+    # Never bought: a bag of atta exists because the mill made it.
+    PRD_SPEC_FINISH_ITEM: {"can_buy": False, "can_produce": True, "can_sell": True, "keeps_stock": True},
+    PRD_SPEC_FINISH_PACKING: {"can_buy": True, "can_produce": False, "can_sell": False, "keeps_stock": True},
+    PRD_SPEC_BYPRODUCT: {"can_buy": False, "can_produce": True, "can_sell": True, "keeps_stock": True},
+    # Bought or sold, but nothing to count: no ledger row is ever written.
+    PRD_SPEC_SERVICE_ITEM: {"can_buy": True, "can_produce": False, "can_sell": True, "keeps_stock": False},
+    PRD_SPEC_WAGE_ITEM: {"can_buy": False, "can_produce": False, "can_sell": False, "keeps_stock": False},
+}
+
+PRD_BUYABLE_SPECS: Final[tuple[str, ...]] = tuple(
+    spec for spec, rules in PRD_SPEC_RULES.items() if rules["can_buy"]
+)
+PRD_STOCKED_SPECS: Final[tuple[str, ...]] = tuple(
+    spec for spec, rules in PRD_SPEC_RULES.items() if rules["keeps_stock"]
+)
+PRD_SELLABLE_SPECS: Final[tuple[str, ...]] = tuple(
+    spec for spec, rules in PRD_SPEC_RULES.items() if rules["can_sell"]
+)
+# What comes off the grinding floor and therefore needs a bag chosen for it.
+PRD_PACKABLE_SPECS: Final[tuple[str, ...]] = (PRD_SPEC_FINISH_ITEM, PRD_SPEC_BYPRODUCT)
+
+PRD_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_ACTIVE, "Active"),
+    # Off for now; the code stays reserved and the history stays readable.
+    (STATUS_INACTIVE, "Inactive"),
+    # Retired for good. Never reopened, never reused for another product.
+    (STATUS_CLOSED, "Closed"),
+)
+
+PRD_UNIT_KG: Final = "kg"
+PRD_UNIT_PIECE: Final = "piece"
+PRD_UNIT_MOUND: Final = "mound"
+
+PRD_UNIT_CHOICES: Final[StatusChoices] = (
+    (PRD_UNIT_KG, "Kg"),
+    (PRD_UNIT_PIECE, "Piece"),
+    (PRD_UNIT_MOUND, "Mound"),
+)
+
+# Kilograms in one unit, where the unit is fixed by definition. A piece has no
+# fixed weight -- a 10 kg bag and a 50 kg bag are both pieces -- so the product
+# carries its own unit_weight for those.
+PRD_UNIT_BASE_WEIGHT: Final[dict[str, str]] = {
+    PRD_UNIT_KG: "1",
+    PRD_UNIT_MOUND: "40",
+}
+
+PRD_LEDGER_OPENING: Final = "opening"
+PRD_LEDGER_PURCHASE: Final = "purchase"
+PRD_LEDGER_PURCHASE_RETURN: Final = "purchase_return"
+PRD_LEDGER_SALE: Final = "sale"
+PRD_LEDGER_SALE_RETURN: Final = "sale_return"
+PRD_LEDGER_PRODUCTION_IN: Final = "production_in"
+PRD_LEDGER_PRODUCTION_OUT: Final = "production_out"
+PRD_LEDGER_PACKING_OUT: Final = "packing_out"
+PRD_LEDGER_ADJUSTMENT: Final = "adjustment"
+
+PRD_LEDGER_SOURCE_CHOICES: Final[StatusChoices] = (
+    (PRD_LEDGER_OPENING, "Opening Balance"),
+    (PRD_LEDGER_PURCHASE, "Purchase"),
+    (PRD_LEDGER_PURCHASE_RETURN, "Purchase Return"),
+    (PRD_LEDGER_SALE, "Sale"),
+    (PRD_LEDGER_SALE_RETURN, "Sale Return"),
+    (PRD_LEDGER_PRODUCTION_IN, "Production Receipt"),
+    (PRD_LEDGER_PRODUCTION_OUT, "Grinding Issue"),
+    (PRD_LEDGER_PACKING_OUT, "Packing Consumption"),
+    (PRD_LEDGER_ADJUSTMENT, "Stock Adjustment"),
+)

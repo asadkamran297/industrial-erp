@@ -10,6 +10,8 @@ from apps.inventory.seeders.items import seed_items
 from apps.inventory.seeders.uoms import seed_uoms
 from apps.inventory.seeders.suppliers import seed_suppliers
 from apps.organizations.seeders.organizations import seed_organizations
+from apps.products.seeders.account_links import seed_account_links
+from apps.products.seeders.products import seed_products
 
 
 SEEDERS = {
@@ -20,10 +22,11 @@ SEEDERS = {
         ("roles", seed_roles),
     ],
     "organizations": [("organizations", seed_organizations)],
+    "products": [("product tree", seed_products), ("product account links", seed_account_links)],
     "inventory": [("units of measure", seed_uoms), ("inventory classes", seed_inventory_classes), ("suppliers", seed_suppliers), ("items", seed_items), ("customers", seed_customers)],
 }
 
-DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory"]
+DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory", "products"]
 
 
 class Command(BaseCommand):

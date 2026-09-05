@@ -73,6 +73,14 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Item Ledger", permission="inventory.item_ledger.index", url_name="inventory:ledger_list"),
         NavigationItem("Ledger Report", permission="inventory.item_ledger.index", url_name="inventory:report_ledger"),
     )),
+    NavigationItem("Products", permission=None, section=SECTION_OPERATIONS, icon="F", children=(
+        NavigationItem("Product List", permission="products.products.index", url_name="products:product_list"),
+        NavigationItem("Account Linking", permission="products.account_links.index", url_name="products:account_linking"),
+        NavigationItem("Raw Bardana Linking", permission="products.raw_bardana.index", url_name="products:raw_bardana_linking"),
+        NavigationItem("Finish Bardana Linking", permission="products.finish_bardana.index", url_name="products:finish_bardana_linking"),
+        NavigationItem("Opening Balance", permission="products.opening_balances.index", url_name="products:opening_balance"),
+        NavigationItem("Rate Update", permission="products.rates.index", url_name="products:rate_update"),
+    )),
     NavigationItem("Production", permission="operations.index", section=SECTION_OPERATIONS, icon="P"),
 
     # ── Accounts ────────────────────────────────────────────────────────
