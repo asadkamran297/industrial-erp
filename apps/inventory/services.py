@@ -1101,8 +1101,9 @@ def _refresh_order_invoiced_status(order, *, user=None):
     return order
 
 
-WEIGHT_FIELDS = ("party_weight", "mill_weight", "selected_weight", "katla", "khoot",
-                 "moisture", "sack_weight_deduction")
+WEIGHT_FIELDS = ("party_load_weight", "party_tare_weight", "mill_load_weight",
+                 "mill_tare_weight", "party_weight", "mill_weight", "selected_weight",
+                 "katla", "khoot", "moisture", "sack_weight_deduction")
 
 
 def _prepare_product_line(line, product, order_item=None):
@@ -1164,10 +1165,11 @@ def _prepare_product_line(line, product, order_item=None):
         rate = Decimal(line.get("rate") or 0)
         if quantity <= 0:
             raise ValidationError(f"{product.name}: enter how much arrived.")
-        if rate <= 0:
-            raise ValidationError(
-                f"{product.name}: enter a price - the system will not guess what was agreed."
-            )
+        if rate < 0:
+            raise ValidationError(f"{product.name}: a price cannot be negative.")
+        # A price of zero is a real answer on sacks, unlike on a stores line:
+        # bardana the mill keeps very often arrives with the load at no charge.
+        # It is still counted in, because grinding has to see it.
         amount = (quantity * rate).quantize(TWO_DP)
         weights["credit_weight"] = None
         weights["rate_per_mund"] = None
@@ -1194,6 +1196,7 @@ def _prepare_product_line(line, product, order_item=None):
 def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_date=None,
                             invoice_date=None, due_date=None, lines,
                             discount_amount=Decimal("0"), freight_amount=Decimal("0"),
+                            freight_paid_by_mill=False, brokerage_borne_by_supplier=False,
                             tax_amount=None, paid_amount=Decimal("0"), remarks="",
                             godown=None, vehicle_no="", broker=None,
                             brokerage_rate_per_100kg=Decimal("0"), withholding_rate_per_40kg=Decimal("0"),
@@ -1359,7 +1362,11 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     tax_total = (
         Decimal(tax_amount or 0).quantize(TWO_DP) if tax_amount is not None else tax_from_lines
     )
-    total = (goods_total + freight - discount + tax_total).quantize(TWO_DP)
+    # Freight the mill paid at the gate is not part of what the supplier is
+    # owed -- it is money already handed over on his behalf -- so it stays off
+    # the bill and is recovered from him in the posting instead.
+    total = (goods_total + (Decimal("0.00") if freight_paid_by_mill else freight)
+             - discount + tax_total).quantize(TWO_DP)
 
     # Brokerage and withholding are quoted against weight, so they are worked
     # out off the credit weight this invoice bought. No wheat on the invoice
@@ -1403,6 +1410,8 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         goods_amount=goods_total,
         discount_amount=discount,
         freight_amount=freight,
+        freight_paid_by_mill=freight_paid_by_mill,
+        brokerage_borne_by_supplier=brokerage_borne_by_supplier,
         tax_amount=tax_total,
         total_amount=total,
         paid_amount=paid,

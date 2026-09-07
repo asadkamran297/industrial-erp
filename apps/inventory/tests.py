@@ -421,3 +421,125 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(totals["credit"], invoice.total_amount)
         # The invoice names the voucher it posted, so it reads on its own.
         self.assertEqual(invoice.journal_ref, voucher.voucher_no)
+
+
+class WheatPurchaseScreenTests(TestCase):
+    """The gate's wheat slip: what it computes, and what it posts.
+
+    The real entry the mill checks the screen against is the one written into
+    the spec, so the numbers here are that entry rather than round figures --
+    a rounding mistake in the mound arithmetic would pass a tidier test.
+    """
+
+    def setUp(self):
+        from apps.core.constants import (PRD_LEVEL_GROUP, PRD_LEVEL_ITEM, PRD_LEVEL_SUB_GROUP,
+                                         PRD_SPEC_RAW_ITEM, PRD_SPEC_RAW_PACKING,
+                                         PRD_UNIT_KG, PRD_UNIT_PIECE)
+        from apps.products.models import ProductNode
+
+        self.user = get_user_model().objects.create_superuser(username="gate", password="pass12345")
+        self.city = City.objects.create(title="Lahore", code="LHE", status=STATUS_ACTIVE)
+        self.supplier = Supplier.objects.create(
+            name="M.Din & Co", code="MDIN", city=self.city, status=STATUS_ACTIVE,
+            created_by=self.user, updated_by=self.user,
+        )
+        group = ProductNode.objects.create(level=PRD_LEVEL_GROUP, code_segment="01", name="Raw")
+        sub = ProductNode.objects.create(parent=group, level=PRD_LEVEL_SUB_GROUP,
+                                         code_segment="01", name="Wheat Private")
+        self.wheat = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Wheat Pvt - P",
+            specification=PRD_SPEC_RAW_ITEM, unit=PRD_UNIT_KG,
+            starting_date=timezone.localdate(),
+        )
+        self.bag = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="002", name="Poly-B (Wheat Pvt)",
+            specification=PRD_SPEC_RAW_PACKING, unit=PRD_UNIT_PIECE, unit_weight=Decimal("0.100"),
+            starting_date=timezone.localdate(),
+        )
+
+    def _entry(self, **overrides):
+        payload = {
+            "voucher_date": "2026-09-06",
+            "supplier": self.supplier.pk,
+            "wheat_product": self.wheat.pk,
+            "remark": "Unload silos#2",
+            "withholding_rate": "0.6",
+            "brokerage_rate": "10.0",
+            "party_load": "74,567", "party_tare": "0",
+            "mill_load": "74,567", "mill_tare": "0",
+            "selected_weight": "74,567",
+            "katla": "", "impurities": "", "moisture": "",
+            "rate_per_mund": "4,830",
+            "vehicle_no": "Jv-7454", "driver_phone": "0302-4254786",
+            "freight": "451,050",
+            "bardana": [{"product": self.bag.pk, "qty": "1,500", "ownership": "mill",
+                         "rate": "0", "ded_per_bag": "0"}],
+        }
+        payload.update(overrides)
+        return payload
+
+    def _post(self, payload):
+        import json
+
+        self.client.force_login(self.user)
+        return self.client.post(
+            reverse("inventory:wheat_purchase_create"),
+            data=json.dumps(payload), content_type="application/json",
+        )
+
+    def test_the_screen_renders_its_calculated_boxes_as_read_only(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("inventory:wheat_purchase_create"))
+        self.assertEqual(response.status_code, 200)
+        # The three the supplier argues about, and the marker that says which
+        # boxes the system owns.
+        self.assertContains(response, 'id="credit_weight"')
+        self.assertContains(response, 'id="total_bill"')
+        self.assertContains(response, "wp-f--calc")
+
+    def test_the_mills_real_entry_prices_and_posts_as_the_gate_wrote_it(self):
+        from django.db.models import Sum
+
+        from apps.finance.models import AccountVoucher
+
+        response = self._post(self._entry())
+        self.assertEqual(response.status_code, 200, response.content)
+
+        invoice = PurchaseInvoice.objects.get(invoice_num=response.json()["invoice_num"])
+        wheat_line = invoice.items.get(product=self.wheat)
+        self.assertEqual(wheat_line.credit_weight, Decimal("74567.000"))
+        self.assertEqual(wheat_line.amount, Decimal("9003965.25"))
+        # Both weighments are kept as taken, not only as the net.
+        self.assertEqual(wheat_line.party_load_weight, Decimal("74567.000"))
+        self.assertEqual(wheat_line.mill_tare_weight, Decimal("0.000"))
+
+        self.assertEqual(invoice.withholding_amount, Decimal("1118.50"))
+        self.assertEqual(invoice.brokerage_amount, Decimal("7456.70"))
+        # Freight the mill paid stays off the bill and is recovered instead.
+        self.assertEqual(invoice.total_amount, Decimal("9003965.25"))
+        self.assertEqual(invoice.supplier_payable_amount, Decimal("8544340.05"))
+
+        voucher = AccountVoucher.objects.get(voucher_no=invoice.journal_ref)
+        totals = voucher.lines.aggregate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+        self.assertEqual(totals["debit"], totals["credit"])
+
+    def test_mill_bardana_may_arrive_free_and_is_still_counted_in(self):
+        response = self._post(self._entry())
+        invoice = PurchaseInvoice.objects.get(invoice_num=response.json()["invoice_num"])
+        bag_line = invoice.items.get(product=self.bag)
+        self.assertEqual(bag_line.quantity, Decimal("1500.0000"))
+        self.assertEqual(bag_line.amount, Decimal("0.00"))
+
+    def test_a_sack_allowance_comes_off_the_wheat_it_arrived_with(self):
+        payload = self._entry()
+        payload["bardana"][0]["ded_per_bag"] = "0.1"
+        response = self._post(payload)
+        invoice = PurchaseInvoice.objects.get(invoice_num=response.json()["invoice_num"])
+        wheat_line = invoice.items.get(product=self.wheat)
+        self.assertEqual(wheat_line.sack_weight_deduction, Decimal("150.000"))
+        self.assertEqual(wheat_line.credit_weight, Decimal("74417.000"))
+
+    def test_deductions_larger_than_the_load_are_refused_in_plain_words(self):
+        response = self._post(self._entry(katla="80,000"))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("deductions", response.json()["errors"][0])

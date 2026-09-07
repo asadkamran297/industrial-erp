@@ -573,6 +573,17 @@ class PurchaseInvoice(BaseModel):
     goods_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     freight_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    # Who actually paid the truck. False is the stores case the module was
+    # built on: the supplier arranged carriage, charged it, and is owed it, so
+    # it is added to the bill. True is the mill's wheat slip: the mill paid the
+    # transporter cash at the gate on the supplier's behalf, so it comes off
+    # what the supplier is owed instead of being added to it.
+    freight_paid_by_mill = models.BooleanField(default=False)
+    # Whose brokerage it is. False is the stores case: the mill engaged the
+    # broker, so the brokerage is the mill's own cost of buying. True is the
+    # wheat slip: the seller engaged him, the mill remits it on the seller's
+    # behalf, and it comes off what the seller is credited with.
+    brokerage_borne_by_supplier = models.BooleanField(default=False)
     tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
@@ -641,13 +652,23 @@ class PurchaseInvoice(BaseModel):
 
     @property
     def supplier_payable_amount(self):
-        """What the supplier is actually owed: the total, less tax withheld.
+        """What the supplier is actually owed: the total, less what was held or
+        paid out on his behalf.
 
         Withholding is not a discount -- the money is still owed, it is simply
         owed to the revenue rather than to the supplier -- so it comes off what
-        the supplier is credited with and lands in its own liability.
+        the supplier is credited with and lands in its own liability. Freight
+        the mill settled at the gate and brokerage the seller engaged come off
+        for the same reason: the mill has already parted with the cash.
         """
-        return (self.total_amount or Decimal("0.00")) - (self.withholding_amount or Decimal("0.00"))
+        payable = (self.total_amount or Decimal("0.00")) - (self.withholding_amount or Decimal("0.00"))
+        # Money the mill handed over for the supplier -- to the truck, to the
+        # broker -- is recovered here rather than being chased separately.
+        if self.freight_paid_by_mill:
+            payable -= (self.freight_amount or Decimal("0.00"))
+        if self.brokerage_borne_by_supplier:
+            payable -= (self.brokerage_amount or Decimal("0.00"))
+        return payable
 
     @property
     def balance_amount(self):
@@ -717,6 +738,13 @@ class PurchaseInvoiceLine(BaseModel):
     # decide both the money and the quantity that reaches the ledger: what the
     # party weighed, what the mill weighed, which of the two was accepted, and
     # then what comes off it before it is paid for.
+    # Both weighments are kept as they were taken -- loaded and empty -- not
+    # only as the net. The gate slip is the document the supplier argues from,
+    # and a net with no tare behind it cannot be checked against his own ticket.
+    party_load_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    party_tare_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    mill_load_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    mill_tare_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     party_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     mill_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     selected_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)

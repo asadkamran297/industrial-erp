@@ -784,6 +784,13 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     A discount the supplier allowed is already off the goods, because it
     reduces what the stock actually cost.
 
+    Where the invoice says the mill paid the freight, the two lines change to
+    Dr Supplier / Cr Cash: the money went to the transporter, not to the
+    supplier, and the supplier is credited that much less. This is the wheat
+    slip's case, where the mill settles the truck at the gate. Brokerage the
+    seller engaged is recovered the same way: the broker is still credited, but
+    the charge is debited to the seller rather than to the mill's expense.
+
     Brokerage and withholding are the two charges quoted against weight rather
     than value, and neither belongs to the supplier. Brokerage is owed to the
     broker and is a cost of buying, not part of what the wheat cost, so it goes
@@ -819,16 +826,31 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     reference = invoice.supplier_invoice_num or invoice.invoice_num
 
     entries = [(inventory.code, stock_value, zero, f"Stock taken in on {invoice.invoice_num}")]
-    if freight:
+    if freight and invoice.freight_paid_by_mill:
+        # The mill paid the truck at the gate, for the supplier's account. Cash
+        # left the mill and the supplier owes that much less -- it is not a
+        # carriage cost of the mill's own, so it never reaches the freight
+        # expense.
+        entries.append((supplier_account.code, freight, zero,
+                        f"Freight paid for {supplier.name} on {invoice.invoice_num}"))
+        entries.append((gl_account(GL_CASH_PATH, user=user).code, zero, freight,
+                        f"Freight paid on {invoice.invoice_num}"))
+    elif freight:
         entries.append((gl_account(GL_FREIGHT_PATH, user=user).code, freight, zero,
                         f"Freight and charges on {invoice.invoice_num}"))
     if tax:
         entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
                         f"Input sales tax on {reference}"))
     brokerage = (invoice.brokerage_amount or zero).quantize(TWO_DP)
-    if brokerage:
+    if brokerage and invoice.brokerage_borne_by_supplier:
+        # The seller's own broker. The mill pays him and takes it off the
+        # seller, so it never becomes a cost of the mill's.
+        entries.append((supplier_account.code, brokerage, zero,
+                        f"Brokerage recovered from {supplier.name} on {invoice.invoice_num}"))
+    elif brokerage:
         entries.append((gl_account(GL_BROKERAGE_PATH, user=user).code, brokerage, zero,
                         f"Brokerage on {invoice.invoice_num}"))
+    if brokerage:
         # Owed to the named broker where the invoice names one, and to the
         # heading itself where it does not, so the cost is never left with
         # nowhere to sit.

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -65,6 +67,14 @@ class SystemSetting(BaseModel):
     )
     login_background_image = models.ImageField(upload_to="branding/login/", blank=True)
     footer_text = models.CharField(max_length=220, blank=True, default="Authorized users only.")
+
+    # -- Mill purchase defaults ---------------------------------------------
+    # The two rates the gate quotes against weight rather than against money.
+    # They change with the season and with the government's notification, so
+    # they are settings the office edits, not constants a release has to carry.
+    # The clerk still overrides either one on an individual purchase.
+    wheat_withholding_rate_per_40kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    wheat_brokerage_rate_per_100kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
     class Meta:
         verbose_name = "System setting"

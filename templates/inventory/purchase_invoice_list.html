@@ -13,6 +13,10 @@
 
   <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
+    {# The gate's own slip, offered beside the stores invoice: wheat is entered
+       on its own screen because it is weighed rather than counted. #}
+    {% url 'inventory:wheat_purchase_create' as wheat_url %}
+    {% include "components/ui/button.html" with label="Wheat Purchase" href=wheat_url variant="secondary" icon="+" only %}
     {% url 'inventory:purchase_invoice_create' as add_url %}
     {% include "components/ui/button.html" with label="Purchase Invoice" href=add_url variant="primary" icon="+" only %}
     {% endif %}

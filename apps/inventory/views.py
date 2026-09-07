@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -21,6 +22,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from apps.core.constants import GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
+from apps.core.models import SystemSetting
 from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
@@ -4574,3 +4576,197 @@ def balance_of_grn_clearing():
         debit=Sum("debit_amount"), credit=Sum("credit_amount")
     )
     return (rows["debit"] or Decimal("0")) - (rows["credit"] or Decimal("0"))
+
+
+class WheatPurchaseEntryView(InventoryManageMixin, View):
+    """The gate's own wheat purchase slip, laid out the way the mill writes it.
+
+    A separate screen from the general purchase invoice on purpose. A stores
+    purchase is a list of lines; a wheat purchase is one item, weighed twice,
+    argued over at the gate, with the sacks it arrived in priced beside it. The
+    two do not fit one grid without making both worse.
+
+    Read-only for now: it renders, calculates and previews what it would post,
+    and the save endpoint is deliberately not wired yet.
+    """
+
+    page = "inventory.purchase_orders"
+    action = "add"
+    template_name = "inventory/wheat_purchase_form.html"
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request, *args, **kwargs):
+        """Save the slip, answering in JSON so the screen never reloads.
+
+        The gate types this at night on a connection that drops; a reload would
+        empty a filled form. Everything the clerk entered stays in the page, and
+        a failure comes back as something he can read and act on.
+        """
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except ValueError:
+            return JsonResponse({"errors": ["The entry could not be read. Try saving again."]}, status=400)
+
+        def weight(name):
+            """A weight box, or None where the clerk left it blank.
+
+            Blank is not zero here: a tare that was never taken and a tare of
+            zero are different facts, and only one of them belongs on the slip.
+            """
+            raw = str(payload.get(name) or "").replace(",", "").strip()
+            if not raw:
+                return None
+            try:
+                return Decimal(raw)
+            except InvalidOperation:
+                return None
+
+        def money(name):
+            return weight(name) or Decimal("0.00")
+
+        supplier = Supplier.objects.filter(pk=payload.get("supplier") or 0, status=STATUS_ACTIVE).first()
+        wheat = wheat_product_options().filter(pk=payload.get("wheat_product") or 0).first()
+        if not supplier:
+            return JsonResponse({"errors": ["Choose the sender before saving."]}, status=400)
+        if not wheat:
+            return JsonResponse({"errors": ["Choose the wheat item before saving."]}, status=400)
+
+        bag_ids = {row.pk: row for row in bardana_product_options()}
+        bardana_lines, sack_deduction = [], Decimal("0.000")
+        for row in payload.get("bardana") or []:
+            product = bag_ids.get(int(row.get("product") or 0))
+            if product is None:
+                continue
+            qty = Decimal(str(row.get("qty") or "0").replace(",", "") or "0")
+            if qty <= 0:
+                continue
+            per_bag = Decimal(str(row.get("ded_per_bag") or "0").replace(",", "") or "0")
+            # The sacks' own weight comes off the wheat, so it is summed here
+            # and carried onto the wheat line rather than left on the bags.
+            sack_deduction += qty * per_bag
+            bardana_lines.append({
+                "product": product,
+                "quantity": qty,
+                "rate": Decimal(str(row.get("rate") or "0").replace(",", "") or "0"),
+                "bardana_ownership": (row.get("ownership") or "").strip(),
+            })
+
+        party_net, mill_net = None, None
+        if weight("party_load") is not None:
+            party_net = (weight("party_load") or Decimal("0")) - (weight("party_tare") or Decimal("0"))
+        if weight("mill_load") is not None:
+            mill_net = (weight("mill_load") or Decimal("0")) - (weight("mill_tare") or Decimal("0"))
+
+        wheat_line = {
+            "product": wheat,
+            "party_load_weight": weight("party_load"),
+            "party_tare_weight": weight("party_tare"),
+            "mill_load_weight": weight("mill_load"),
+            "mill_tare_weight": weight("mill_tare"),
+            "party_weight": party_net,
+            "mill_weight": mill_net,
+            "selected_weight": weight("selected_weight"),
+            "katla": weight("katla"),
+            # The screen calls it impurities, which is what the gate calls it;
+            # the column has carried the trade's name since the module was built.
+            "khoot": weight("impurities"),
+            "moisture": weight("moisture"),
+            "sack_weight_deduction": sack_deduction or None,
+            "rate_per_mund": weight("rate_per_mund"),
+        }
+
+        # ``picked`` reads a posted form, where every value is a string; this
+        # screen posts JSON, where an id arrives as a number.
+        text_payload = {key: ("" if value is None else str(value)) for key, value in payload.items()
+                        if not isinstance(value, (list, dict))}
+
+        try:
+            from apps.godowns.models import Godown
+
+            invoice = create_purchase_invoice(
+                supplier=supplier,
+                supplier_invoice_num="",
+                invoice_date=parse_date(payload.get("voucher_date") or "") or timezone.localdate(),
+                lines=[wheat_line] + bardana_lines,
+                freight_amount=money("freight"),
+                # The gate pays the truck in cash and takes it off the sender's
+                # account. This is the mill's practice, not the stores case.
+                freight_paid_by_mill=True,
+                # The wheat seller engages the broker; the mill remits the
+                # brokerage for him and deducts it off the bill.
+                brokerage_borne_by_supplier=True,
+                remarks=(payload.get("remark") or "").strip(),
+                godown=picked(text_payload, "godown", Godown.objects.filter(status=STATUS_ACTIVE)),
+                vehicle_no=(payload.get("vehicle_no") or "").strip()[:30],
+                broker=picked(text_payload, "broker", broker_options()),
+                brokerage_rate_per_100kg=money("brokerage_rate"),
+                withholding_rate_per_40kg=money("withholding_rate"),
+                # The rest of the carrier. Kept beside the purchase rather than
+                # as columns because nothing in the books reads it -- it is what
+                # the mill rings when a load has not arrived.
+                extra_data={
+                    key: (payload.get(key) or "").strip()
+                    for key in ("transporter", "driver_phone", "builty_no")
+                    if (payload.get(key) or "").strip()
+                },
+                user=request.user,
+            )
+        except ValidationError as exc:
+            return JsonResponse({"errors": list(exc.messages)}, status=400)
+
+        return JsonResponse({
+            "invoice_num": invoice.invoice_num,
+            "detail_url": reverse("inventory:purchase_invoice_detail", args=[invoice.pk]),
+            "over_invoiced": invoice.extra_data.get("over_invoiced") or [],
+        })
+
+    def _context(self):
+        setting = SystemSetting.get_solo()
+        wheat = wheat_product_options()
+        bardana = list(bardana_product_options())
+        suppliers = PurchaseInvoiceCreateView._suppliers_with_balance()
+        return {
+            "title": "Wheat Purchase",
+            "list_url": reverse_lazy("inventory:purchase_invoice_list"),
+            # Advisory, like every other number preview on the purchase side.
+            # The real one is allocated when the entry is saved, so the box is
+            # shown rather than typed into: a wheat slip is a purchase invoice
+            # and carries the same number the bill list will show it under.
+            "next_voucher_no": next_purchase_invoice_number(),
+            "today": timezone.localdate(),
+            "suppliers": suppliers,
+            "wheat_products": wheat,
+            "bardana_products": bardana,
+            "brokers": broker_options(),
+            "godowns": godown_options(),
+            "bardana_ownership_choices": INV_BARDANA_OWNERSHIP_CHOICES,
+            "default_withholding_rate": setting.wheat_withholding_rate_per_40kg,
+            "default_brokerage_rate": setting.wheat_brokerage_rate_per_100kg,
+            "wheat_json": json.dumps([
+                {
+                    "id": row.pk,
+                    "code": row.complete_code,
+                    "name": row.name,
+                    # Carried so the screen can guess the sack: govt wheat and
+                    # private wheat arrive in different bardana, and the
+                    # specification is the only thing on the item that says so.
+                    "spec": row.specification or "",
+                }
+                for row in wheat
+            ]),
+            "bardana_json": json.dumps([
+                {
+                    "id": row.pk,
+                    "code": row.complete_code,
+                    "name": row.name,
+                    "spec": row.specification or "",
+                }
+                for row in bardana
+            ]),
+            "supplier_json": json.dumps([
+                {"id": row.pk, "name": row.name, "balance": float(row.balance or 0)}
+                for row in suppliers
+            ]),
+        }

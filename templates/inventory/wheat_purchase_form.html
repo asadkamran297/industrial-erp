@@ -1,0 +1,730 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+<style>
+  /* The gate's slip. Plain CSS, like every other purchase screen: the Tailwind
+     bundle is prebuilt, so a new utility here would not exist until a rebuild. */
+
+  .wp-wrap { max-width: 78rem; margin: 0 auto; padding-bottom: 5rem; }
+  .wp-section + .wp-section { margin-top: 1rem; }
+
+  .wp-legend {
+    font-size: .6875rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--secondary-color, #0f172a);
+  }
+  .dark .wp-legend { color: #cbd5e1; }
+
+  /* Labels sit above their field, always, so a row reads top to bottom in the
+     order the clerk's eye already runs. */
+  .wp-grid { display: grid; gap: .875rem 1rem; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .wp-f { display: flex; flex-direction: column; gap: .3125rem; min-width: 0; }
+  .wp-f > label { font-size: .75rem; font-weight: 600; color: #475569; }
+  .dark .wp-f > label { color: #94a3b8; }
+
+  .c2 { grid-column: span 2; } .c3 { grid-column: span 3; }
+  .c4 { grid-column: span 4; } .c12 { grid-column: span 12; }
+  /* A tablet stacks the rows; the sections keep their order, which is the part
+     the staff have memorised. */
+  @media (max-width: 860px) { .c2, .c3, .c4 { grid-column: span 12; } }
+
+  /* Read across a desk, at night. 40px is the floor, not the target. */
+  .wp-in {
+    width: 100%; height: 2.5rem; border: 1px solid #cbd5e1; border-radius: .5rem;
+    background: #fff; padding: 0 .625rem; font-size: .9375rem; color: #0f172a;
+    outline: none; font-variant-numeric: tabular-nums;
+  }
+  .wp-in:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--ring-primary); }
+  .dark .wp-in { border-color: #334155; background: #0f172a; color: #e2e8f0; }
+  .wp-in--num { text-align: right; }
+
+  /* The system's own numbers: grey, borderless, right-aligned, a size up. The
+     clerk should never have to wonder which boxes he owns. */
+  .wp-out {
+    width: 100%; height: 2.5rem; display: flex; align-items: center; justify-content: flex-end;
+    border: 0; border-radius: .5rem; background: #f1f5f9; padding: 0 .625rem;
+    font-size: 1rem; font-weight: 600; color: #334155; font-variant-numeric: tabular-nums;
+  }
+  .dark .wp-out { background: rgba(30, 41, 59, .7); color: #e2e8f0; }
+  .wp-f--calc > label::after { content: " (auto)"; font-weight: 500; color: #94a3b8; }
+
+  /* The three figures argued over at the gate. */
+  .wp-out--key { height: 3rem; font-size: 1.375rem; font-weight: 800; color: #0f172a; }
+  .dark .wp-out--key { color: #f8fafc; }
+  .wp-in--key { height: 3rem; font-size: 1.375rem; font-weight: 800; }
+
+  .wp-bill {
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+    gap: .75rem; border-top: 2px solid #e2e8f0; margin-top: 1rem; padding-top: 1rem;
+  }
+  .dark .wp-bill { border-top-color: #1e293b; }
+  .wp-bill-label { font-size: .875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+  .wp-bill-value { font-size: 2.25rem; font-weight: 800; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .dark .wp-bill-value { color: #f8fafc; }
+
+  .wp-note { font-weight: 700; color: #b45309; }
+  .dark .wp-note { color: #fbbf24; }
+  .wp-hint { font-size: .75rem; color: #64748b; font-variant-numeric: tabular-nums; }
+  .dark .wp-hint { color: #94a3b8; }
+  .wp-link { text-decoration: underline; }
+
+  /* Bardana grid */
+  .wp-tbl { width: 100%; border-collapse: collapse; }
+  .wp-tbl th {
+    padding: .5rem; text-align: left; font-size: .6875rem; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: #94a3b8;
+    background: #f8fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+  }
+  .dark .wp-tbl th { background: rgba(30, 41, 59, .5); border-bottom-color: #1e293b; }
+  .wp-tbl td { padding: .375rem .5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .dark .wp-tbl td { border-bottom-color: #1e293b; }
+  .wp-tbl-scroll { overflow-x: auto; }
+  .wp-del {
+    display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .375rem;
+    border: 0; background: transparent; color: #94a3b8; cursor: pointer;
+  }
+  .wp-del:hover { background: #fef2f2; color: #dc2626; }
+
+  .wp-add {
+    display: inline-flex; align-items: center; gap: .375rem; height: 2.25rem;
+    border-radius: .5rem; border: 1px solid #a7f3d0; background: #ecfdf5;
+    padding: 0 .875rem; font-size: .8125rem; font-weight: 700; color: #047857; cursor: pointer;
+  }
+  .wp-add:hover { background: #d1fae5; }
+  .dark .wp-add { border-color: rgba(16, 185, 129, .35); background: rgba(6, 78, 59, .3); color: #6ee7b7; }
+  .wp-ghost { border-color: #cbd5e1; background: #f8fafc; color: #334155; }
+  .dark .wp-ghost { border-color: #334155; background: rgba(30, 41, 59, .6); color: #cbd5e1; }
+
+  /* Always reachable, however long the slip runs. */
+  .wp-save-bar {
+    position: sticky; bottom: 0; z-index: 30; margin-top: 1rem;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
+    border: 1px solid #e2e8f0; border-radius: .75rem; background: rgba(255, 255, 255, .94);
+    backdrop-filter: blur(6px); padding: .75rem 1rem;
+    box-shadow: 0 -6px 20px -14px rgba(2, 6, 23, .5);
+  }
+  .dark .wp-save-bar { border-color: #1e293b; background: rgba(15, 23, 42, .94); }
+  .wp-save {
+    height: 2.75rem; border: 0; border-radius: .5rem; background: var(--secondary-color, #0f172a);
+    padding: 0 1.75rem; font-size: .9375rem; font-weight: 700; color: #fff; cursor: pointer;
+  }
+  .wp-save:hover { filter: brightness(1.2); }
+
+  /* Confirmation: what this one screen is about to write, before it writes it. */
+  .wp-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(2, 6, 23, .55); }
+  .wp-modal[data-open="true"] { display: flex; }
+  .wp-modal-box { width: min(46rem, 100%); max-height: 88vh; overflow-y: auto; border-radius: .75rem; background: #fff; padding: 1.25rem; }
+  .dark .wp-modal-box { background: #0f172a; color: #e2e8f0; }
+  .wp-eff { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+  .wp-eff td { padding: .375rem .5rem; border-bottom: 1px solid #f1f5f9; }
+  .dark .wp-eff td { border-bottom-color: #1e293b; }
+  .wp-eff .num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wp-eff .code { font-weight: 700; letter-spacing: .04em; }
+  .wp-eff .post { color: #64748b; font-size: .75rem; }
+  .dark .wp-eff .post { color: #94a3b8; }
+
+  .wp-errors { display: none; border: 1px solid #fecdd3; border-radius: .5rem; background: #fff1f2; padding: .75rem 1rem; color: #9f1239; font-size: .8125rem; }
+  .wp-errors[data-open="true"] { display: block; }
+  .dark .wp-errors { border-color: rgba(244, 63, 94, .35); background: rgba(136, 19, 55, .25); color: #fda4af; }
+</style>
+
+<div class="wp-wrap">
+  <div class="pur-head-row">
+    <h1 class="pur-title">Wheat Purchase</h1>
+    {% include "components/ui/back_button.html" with back_url=list_url %}
+  </div>
+
+  <form id="wp-form" class="mt-4" autocomplete="off" novalidate>
+    {% csrf_token %}
+
+    {# -- Header ------------------------------------------------------------ #}
+    <section class="pur-card wp-section">
+      <div class="pur-card-body">
+        <div class="wp-grid">
+          <div class="wp-f wp-f--calc c2">
+            <label>V. No.</label>
+            <div class="wp-out" id="voucher_no" style="justify-content: flex-start;">{{ next_voucher_no }}</div>
+          </div>
+          <div class="wp-f c2">
+            <label for="voucher_date">Date</label>
+            <input class="wp-in" type="date" id="voucher_date" name="voucher_date" value="{{ today|date:'Y-m-d' }}">
+          </div>
+          <div class="wp-f c4">
+            <label for="supplier">Sender</label>
+            <select class="wp-in" id="supplier" name="supplier" data-searchable>
+              <option value="">Select sender</option>
+              {% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
+            </select>
+            <span class="wp-hint" id="supplier-balance"></span>
+          </div>
+          <div class="wp-f c4">
+            <label for="wheat_product">Wheat Item</label>
+            <select class="wp-in" id="wheat_product" name="wheat_product" data-searchable>
+              <option value="">Select wheat</option>
+              {% for p in wheat_products %}<option value="{{ p.pk }}">{{ p.complete_code }} &mdash; {{ p.name }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div class="wp-f c2">
+            <label for="withholding_rate">WHT / 40kg</label>
+            <input class="wp-in wp-in--num" id="withholding_rate" name="withholding_rate"
+                   data-amount value="{{ default_withholding_rate|floatformat:2 }}">
+          </div>
+          <div class="wp-f c4">
+            <label for="broker">Broker</label>
+            <select class="wp-in" id="broker" name="broker" data-searchable>
+              <option value="">No broker</option>
+              {% for b in brokers %}<option value="{{ b.pk }}">{{ b.title }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="wp-f c2">
+            <label for="brokerage_rate">Brokerage / 100kg</label>
+            <input class="wp-in wp-in--num" id="brokerage_rate" name="brokerage_rate"
+                   data-amount value="{{ default_brokerage_rate|floatformat:2 }}">
+          </div>
+          <div class="wp-f c4">
+            <label for="godown">Godown</label>
+            <select class="wp-in" id="godown" name="godown" data-searchable>
+              <option value="">Select godown</option>
+              {% for g in godowns %}<option value="{{ g.pk }}">{{ g.code }} &mdash; {{ g.title }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div class="wp-f c12">
+            <label for="remark">Manual Remark</label>
+            <input class="wp-in" id="remark" name="remark" placeholder="Unload silos#2" data-no-amount>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {# -- Bardana ----------------------------------------------------------- #}
+    <section class="pur-card wp-section">
+      <div class="pur-card-head"><span class="wp-legend">Bardana Detail</span></div>
+      <div class="pur-card-body pur-card-body--flush">
+        <div class="wp-tbl-scroll">
+          <table class="wp-tbl">
+            <thead>
+              <tr>
+                <th style="min-width: 16rem;">Bag Type</th>
+                <th style="width: 7rem;">Qty</th>
+                <th style="width: 10rem;">Ownership</th>
+                <th style="width: 8rem;">Item Price</th>
+                <th style="width: 9rem;">Amount</th>
+                <th style="width: 8rem;">Ded. / Bag</th>
+                <th style="width: 9rem;">Total Ded.</th>
+                <th style="width: 3rem;"></th>
+              </tr>
+            </thead>
+            <tbody id="bardana-rows"></tbody>
+          </table>
+        </div>
+        <div style="padding: 1rem;">
+          <button type="button" class="wp-add" id="add-bardana">+ Add New Item</button>
+        </div>
+      </div>
+    </section>
+
+    {# -- Stock details ------------------------------------------------------ #}
+    <section class="pur-card wp-section">
+      <div class="pur-card-head"><span class="wp-legend">Stock Details</span></div>
+      <div class="pur-card-body">
+        <div class="wp-grid">
+          <div class="wp-f c4">
+            <label for="party_load">Party Load Wgt.</label>
+            <input class="wp-in wp-in--num" id="party_load" name="party_load" data-no-amount data-weight>
+          </div>
+          <div class="wp-f c4">
+            <label for="party_tare">Party Tare Wgt.</label>
+            <input class="wp-in wp-in--num" id="party_tare" name="party_tare" data-no-amount data-weight>
+          </div>
+          <div class="wp-f wp-f--calc c4">
+            <label>Party Net Wgt.</label>
+            <div class="wp-out" id="party_net">0</div>
+          </div>
+
+          <div class="wp-f c4">
+            <label for="mill_load">Mill Load Wgt.</label>
+            <input class="wp-in wp-in--num" id="mill_load" name="mill_load" data-no-amount data-weight>
+          </div>
+          <div class="wp-f c4">
+            <label for="mill_tare">Mill Tare Wgt.</label>
+            <input class="wp-in wp-in--num" id="mill_tare" name="mill_tare" data-no-amount data-weight>
+          </div>
+          <div class="wp-f wp-f--calc c4">
+            <label>Mill Net Wgt.</label>
+            <div class="wp-out" id="mill_net">0</div>
+          </div>
+
+          <div class="wp-f c4">
+            <label for="selected_weight">Selected Wgt.</label>
+            <input class="wp-in wp-in--num" id="selected_weight" name="selected_weight" data-no-amount data-weight>
+            <span class="wp-hint">
+              <button type="button" class="wp-link" data-use="party">use party</button> &middot;
+              <button type="button" class="wp-link" data-use="mill">use mill</button>
+              <span class="wp-note" id="weight-gap"></span>
+            </span>
+          </div>
+          <div class="wp-f c2">
+            <label for="katla">Katla</label>
+            <input class="wp-in wp-in--num" id="katla" name="katla" data-no-amount data-weight>
+          </div>
+          <div class="wp-f c2">
+            <label for="impurities">Impurities</label>
+            <input class="wp-in wp-in--num" id="impurities" name="impurities" data-no-amount data-weight>
+          </div>
+          <div class="wp-f c2">
+            <label for="moisture">Mois. Ded.</label>
+            <input class="wp-in wp-in--num" id="moisture" name="moisture" data-no-amount data-weight>
+          </div>
+          <div class="wp-f wp-f--calc c2">
+            <label>Bag Ded.</label>
+            <div class="wp-out" id="bag_deduction_total">0</div>
+          </div>
+
+          <div class="wp-f wp-f--calc c4">
+            <label>Credit Wgt.</label>
+            <div class="wp-out wp-out--key" id="credit_weight">0</div>
+          </div>
+          <div class="wp-f c4">
+            <label for="rate_per_mund">@ / 40kg</label>
+            <input class="wp-in wp-in--num wp-in--key" id="rate_per_mund" name="rate_per_mund" data-amount>
+          </div>
+          <div class="wp-f wp-f--calc c4">
+            <label>Stock Amount</label>
+            <div class="wp-out" id="stock_amount">0</div>
+          </div>
+
+          <div class="wp-f wp-f--calc c4">
+            <label>Bags Amount</label>
+            <div class="wp-out" id="bags_amount">0</div>
+          </div>
+        </div>
+
+        <div class="wp-bill">
+          <span class="wp-bill-label">Total Bill</span>
+          <span class="wp-bill-value" id="total_bill">0</span>
+        </div>
+      </div>
+    </section>
+
+    {# -- Carrier ------------------------------------------------------------ #}
+    <section class="pur-card wp-section">
+      <div class="pur-card-head"><span class="wp-legend">Carrier</span></div>
+      <div class="pur-card-body">
+        <div class="wp-grid">
+          <div class="wp-f c3">
+            <label for="transporter">Transporter Name</label>
+            <input class="wp-in" id="transporter" name="transporter" data-no-amount>
+          </div>
+          <div class="wp-f c2">
+            <label for="vehicle_no">Vehicle No.</label>
+            <input class="wp-in" id="vehicle_no" name="vehicle_no" placeholder="Jv-7454" data-no-amount>
+          </div>
+          <div class="wp-f c3">
+            <label for="driver_phone">Driver Phone</label>
+            <input class="wp-in" id="driver_phone" name="driver_phone" placeholder="0302-4254786" data-no-amount>
+          </div>
+          <div class="wp-f c2">
+            <label for="builty_no">Builty No.</label>
+            <input class="wp-in" id="builty_no" name="builty_no" data-no-amount>
+          </div>
+          <div class="wp-f c2">
+            <label for="freight">Freight</label>
+            <input class="wp-in wp-in--num" id="freight" name="freight" data-amount>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="wp-errors" id="wp-errors" style="margin-top: .75rem;"></div>
+
+    <div class="wp-save-bar">
+      <span class="wp-hint">Ctrl+S saves &middot; Enter in the bardana grid adds a line</span>
+      <button type="submit" class="wp-save" id="wp-save">Save</button>
+    </div>
+  </form>
+</div>
+
+{# -- Confirmation --------------------------------------------------------- #}
+<div class="wp-modal" id="wp-confirm" role="dialog" aria-modal="true" aria-labelledby="wp-confirm-title">
+  <div class="wp-modal-box">
+    <h2 class="wp-legend" id="wp-confirm-title">This entry will create</h2>
+    <p class="wp-hint" style="margin-top: .375rem;">One voucher, carrying all four effects. Nothing is entered twice.</p>
+    <table class="wp-eff" style="margin-top: .75rem;"><tbody id="wp-vouchers"></tbody></table>
+    <h3 class="wp-legend" style="margin-top: 1rem;">Stock in</h3>
+    <table class="wp-eff" style="margin-top: .5rem;"><tbody id="wp-stock"></tbody></table>
+    <div class="wp-bill">
+      <span class="wp-bill-label" id="wp-net-label">Net effect</span>
+      <span class="wp-bill-value" id="wp-net-value" style="font-size: 1.5rem;">0</span>
+    </div>
+    <div class="wp-errors" id="wp-save-error" style="margin-top: .75rem;"></div>
+    <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: .5rem;">
+      <button type="button" class="wp-add wp-ghost" id="wp-back">Go Back</button>
+      <button type="button" class="wp-save" id="wp-commit">Confirm &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<script id="wp-wheat-data" type="application/json">{{ wheat_json|safe }}</script>
+<script id="wp-bardana-data" type="application/json">{{ bardana_json|safe }}</script>
+<script id="wp-supplier-data" type="application/json">{{ supplier_json|safe }}</script>
+
+<script>
+(function () {
+  const WHEAT = JSON.parse(document.getElementById('wp-wheat-data').textContent);
+  const BAGS = JSON.parse(document.getElementById('wp-bardana-data').textContent);
+  const SUPPLIERS = JSON.parse(document.getElementById('wp-supplier-data').textContent);
+  const OWNERSHIP = [{% for value, label in bardana_ownership_choices %}["{{ value|escapejs }}", "{{ label|escapejs }}"]{% if not forloop.last %}, {% endif %}{% endfor %}];
+
+  const form = document.getElementById('wp-form');
+  const rowsBox = document.getElementById('bardana-rows');
+  const el = id => document.getElementById(id);
+
+  // Money boxes are grouped with commas by amount-format.js, so what is read
+  // back off the page is text, not a number. Blank is zero everywhere: the
+  // clerk is never made to type 0.0 into a field that does not apply.
+  const num = v => {
+    const n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
+    return isFinite(n) ? n : 0;
+  };
+  const val = id => num(el(id).value);
+  const fmt = (n, dp) => {
+    if (!isFinite(n)) n = 0;
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: dp === undefined ? 2 : dp,
+    });
+  };
+  const put = (id, n, dp) => { el(id).textContent = fmt(n, dp); };
+
+  // -- Bardana lines ------------------------------------------------------
+  const bagOptions = () =>
+    '<option value="">-</option>' +
+    BAGS.map(b => '<option value="' + b.id + '">' + b.code + ' - ' + b.name + '</option>').join('');
+  const ownOptions = () =>
+    OWNERSHIP.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('');
+
+  function addRow(bagId) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><select class="wp-in b-bag" name="bardana_product" data-searchable>' + bagOptions() + '</select></td>' +
+      '<td><input class="wp-in wp-in--num b-qty" name="bardana_qty" data-no-amount data-weight></td>' +
+      '<td><select class="wp-in b-own" name="bardana_ownership" data-searchable>' + ownOptions() + '</select></td>' +
+      '<td><input class="wp-in wp-in--num b-rate" name="bardana_rate" data-amount></td>' +
+      '<td><div class="wp-out b-amount">0</div></td>' +
+      '<td><input class="wp-in wp-in--num b-ded" name="bardana_ded_per_bag" data-no-amount data-weight></td>' +
+      '<td><div class="wp-out b-total-ded">0</div></td>' +
+      '<td><button type="button" class="wp-del" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
+    rowsBox.appendChild(tr);
+    if (bagId) tr.querySelector('.b-bag').value = String(bagId);
+    enhanceWeights(tr);
+    refreshPickers();
+    recalc();
+    return tr;
+  }
+
+  function focusQty(row) {
+    const qty = row.querySelector('.b-qty');
+    if (qty) qty.focus();
+  }
+
+  el('add-bardana').addEventListener('click', () => focusQty(addRow(defaultBagId())));
+
+  rowsBox.addEventListener('click', e => {
+    const del = e.target.closest('.wp-del');
+    if (!del) return;
+    del.closest('tr').remove();
+    recalc();
+  });
+
+  // Enter inside the grid means "next line", not "submit". A gate clerk enters
+  // bag after bag and never reaches for the mouse.
+  rowsBox.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    focusQty(addRow(defaultBagId()));
+  });
+
+  // -- Defaults that follow the wheat -------------------------------------
+  // The sack usually follows the wheat's specification -- government wheat
+  // arrives in different bardana -- but it stays an ordinary dropdown,
+  // because "usually" is not "always".
+  function defaultBagId() {
+    const wheat = WHEAT.find(w => String(w.id) === el('wheat_product').value);
+    if (wheat && wheat.spec) {
+      const match = BAGS.find(b => b.spec === wheat.spec);
+      if (match) return match.id;
+    }
+    return BAGS.length === 1 ? BAGS[0].id : null;
+  }
+
+  el('wheat_product').addEventListener('change', () => {
+    const fallback = defaultBagId();
+    if (!fallback) return;
+    rowsBox.querySelectorAll('.b-bag').forEach(sel => {
+      if (!sel.value) sel.value = String(fallback);
+    });
+    refreshPickers();
+  });
+
+  el('supplier').addEventListener('change', () => {
+    const row = SUPPLIERS.find(s => String(s.id) === el('supplier').value);
+    const box = el('supplier-balance');
+    if (!row) { box.textContent = ''; return; }
+    const bal = row.balance || 0;
+    box.textContent = Math.abs(bal) < 0.005
+      ? 'Balance: nil'
+      : 'Balance: ' + fmt(Math.abs(bal)) + (bal > 0 ? ' payable' : ' advance');
+  });
+
+  const partyNet = () => val('party_load') - val('party_tare');
+  const millNet = () => val('mill_load') - val('mill_tare');
+
+  document.querySelectorAll('[data-use]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const weight = btn.dataset.use === 'party' ? partyNet() : millNet();
+      el('selected_weight').value = fmt(weight, 3);
+      recalc();
+    });
+  });
+
+  // -- The whole calculation, live on every keystroke ---------------------
+  function recalc() {
+    put('party_net', partyNet(), 3);
+    put('mill_net', millNet(), 3);
+
+    let bagsAmount = 0;
+    let bagDeduction = 0;
+    rowsBox.querySelectorAll('tr').forEach(tr => {
+      const qty = num(tr.querySelector('.b-qty').value);
+      const amount = qty * num(tr.querySelector('.b-rate').value);
+      const totalDed = qty * num(tr.querySelector('.b-ded').value);
+      tr.querySelector('.b-amount').textContent = fmt(amount);
+      tr.querySelector('.b-total-ded').textContent = fmt(totalDed, 3);
+      bagsAmount += amount;
+      bagDeduction += totalDed;
+    });
+    put('bag_deduction_total', bagDeduction, 3);
+
+    const credit = val('selected_weight') - val('katla') - val('impurities') - val('moisture') - bagDeduction;
+    const stockAmount = credit / 40 * val('rate_per_mund');
+    put('credit_weight', credit, 3);
+    put('stock_amount', stockAmount);
+    put('bags_amount', bagsAmount);
+    put('total_bill', stockAmount + bagsAmount);
+
+    // The disagreement the two weighments exist to capture. Shown, never
+    // blocked: the clerk records what happened, he does not arbitrate it.
+    const gap = partyNet() - millNet();
+    el('weight-gap').textContent = (partyNet() && millNet() && Math.abs(gap) > 0.0005)
+      ? ' · party and mill differ by ' + fmt(Math.abs(gap), 3) + ' kg'
+      : '';
+
+    return { bagsAmount: bagsAmount, credit: credit, stockAmount: stockAmount, total: stockAmount + bagsAmount };
+  }
+
+  form.addEventListener('input', recalc);
+  form.addEventListener('change', recalc);
+
+  // searchable-select.js sweeps on its own event; rows built here ask for it
+  // by name rather than borrowing another script's.
+  function refreshPickers() {
+    document.dispatchEvent(new CustomEvent('searchable-select:refresh'));
+  }
+
+  // Weights are grouped here rather than by amount-format.js, which rounds to
+  // two places. A weighbridge reads to three, and a slip that quietly dropped
+  // the third would be argued over at the gate.
+  function groupWeight(raw) {
+    let cleaned = String(raw).replace(/[^\d.]/g, '');
+    const dot = cleaned.indexOf('.');
+    if (dot !== -1) cleaned = cleaned.slice(0, dot + 1) + cleaned.slice(dot + 1).replace(/\./g, '');
+    if (!cleaned) return '';
+    const parts = cleaned.split('.');
+    const whole = (parts[0] || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    // A half-typed "74,567." has to survive the keystroke that made it.
+    return parts.length > 1 ? whole + '.' + parts[1].slice(0, 3) : whole;
+  }
+
+  function enhanceWeights(scope) {
+    (scope || document).querySelectorAll('input[data-weight]').forEach(input => {
+      if (input.dataset.weightReady) return;
+      input.dataset.weightReady = '1';
+      input.inputMode = 'decimal';
+      input.addEventListener('input', () => {
+        const tail = input.value.length - (input.selectionEnd || 0);
+        input.value = groupWeight(input.value);
+        const caret = Math.max(0, input.value.length - tail);
+        input.setSelectionRange(caret, caret);
+      });
+      input.addEventListener('focus', () => input.select());
+    });
+  }
+
+  // -- What this one screen is about to write -----------------------------
+  function problemsWithEntry() {
+    const totals = recalc();
+    const problems = [];
+    if (!el('supplier').value) problems.push('Choose the sender before saving.');
+    if (!el('wheat_product').value) problems.push('Choose the wheat item before saving.');
+    if (!val('mill_load')) problems.push('Enter the mill weight before saving.');
+    if (!val('selected_weight')) problems.push('Enter the weight this purchase is settled on.');
+    if (!val('rate_per_mund')) problems.push('Enter the rate per 40kg before saving.');
+    if (totals.credit < 0) problems.push('The deductions come to more than the load. Check katla, impurities and moisture.');
+    return problems;
+  }
+
+  function buildPreview() {
+    const t = recalc();
+    const supplier = SUPPLIERS.find(s => String(s.id) === el('supplier').value);
+    const wheat = WHEAT.find(w => String(w.id) === el('wheat_product').value);
+    const name = supplier ? supplier.name : 'the sender';
+    const wht = t.credit / 40 * val('withholding_rate');
+    const brokerage = t.credit / 100 * val('brokerage_rate');
+    const freight = val('freight');
+    const brokerPick = el('broker').selectedOptions[0];
+    const brokerName = el('broker').value && brokerPick ? brokerPick.text : 'Broker';
+
+    // Worded as the voucher is actually posted, so the panel and the ledger
+    // never tell the reader two different stories.
+    const lines = [['WP', 'Wheat purchase', t.total, 'Dr Inventory / Cr ' + name]];
+    if (wht) lines.push(['WHT', 'Withholding tax', wht, 'Cr Tax withheld, off ' + name + "'s credit"]);
+    if (freight) lines.push(['FRT', 'Freight', freight, 'Dr ' + name + ' / Cr Cash in Hand']);
+    if (brokerage) lines.push(['COM', 'Brokerage', brokerage, 'Dr ' + name + ' / Cr ' + brokerName]);
+
+    el('wp-vouchers').innerHTML = lines.map(l =>
+      '<tr><td class="code">' + l[0] + '</td><td>' + l[1] + '</td>' +
+      '<td class="num">' + fmt(l[2]) + '</td><td class="post">' + l[3] + '</td></tr>'
+    ).join('');
+
+    const stock = [];
+    if (wheat) stock.push([fmt(t.credit, 3) + ' kg', wheat.name]);
+    rowsBox.querySelectorAll('tr').forEach(tr => {
+      const qty = num(tr.querySelector('.b-qty').value);
+      const bag = BAGS.find(b => String(b.id) === tr.querySelector('.b-bag').value);
+      if (qty && bag) stock.push([fmt(qty, 0) + ' pcs', bag.name]);
+    });
+    el('wp-stock').innerHTML = stock.length
+      ? stock.map(s => '<tr><td class="num" style="width: 10rem;">' + s[0] + '</td><td>' + s[1] + '</td></tr>').join('')
+      : '<tr><td class="post">Nothing goes into stock.</td></tr>';
+
+    // What the sender is actually left holding once the three deductions come
+    // off the bill. This is the line staff go looking for when they think the
+    // screen has entered the purchase twice.
+    const net = t.total - wht - freight - brokerage;
+    el('wp-net-label').textContent = 'Net effect on ' + name;
+    el('wp-net-value').textContent = fmt(Math.abs(net)) + (net >= 0 ? ' credit' : ' debit');
+  }
+
+  const modal = el('wp-confirm');
+  const errors = el('wp-errors');
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const problems = problemsWithEntry();
+    if (problems.length) {
+      errors.innerHTML = problems.map(p => '<div>' + p + '</div>').join('');
+      errors.dataset.open = 'true';
+      errors.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+    errors.dataset.open = 'false';
+    el('wp-save-error').dataset.open = 'false';
+    buildPreview();
+    modal.dataset.open = 'true';
+    el('wp-commit').focus();
+  });
+
+  el('wp-back').addEventListener('click', () => { modal.dataset.open = 'false'; });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && modal.dataset.open === 'true') modal.dataset.open = 'false';
+  });
+
+  // The gate loses its connection, and a filled slip must never be thrown
+  // away. Nothing reloads: a failure leaves the form exactly as it was typed
+  // and the button turns into a Retry.
+  const SAVE_URL = '{% url "inventory:wheat_purchase_create" %}';
+  const csrf = form.querySelector('[name="csrfmiddlewaretoken"]').value;
+  const commit = el('wp-commit');
+
+  function payload() {
+    return {
+      voucher_date: el('voucher_date').value,
+      supplier: el('supplier').value,
+      wheat_product: el('wheat_product').value,
+      godown: el('godown').value,
+      broker: el('broker').value,
+      remark: el('remark').value,
+      withholding_rate: el('withholding_rate').value,
+      brokerage_rate: el('brokerage_rate').value,
+      party_load: el('party_load').value,
+      party_tare: el('party_tare').value,
+      mill_load: el('mill_load').value,
+      mill_tare: el('mill_tare').value,
+      selected_weight: el('selected_weight').value,
+      katla: el('katla').value,
+      impurities: el('impurities').value,
+      moisture: el('moisture').value,
+      rate_per_mund: el('rate_per_mund').value,
+      transporter: el('transporter').value,
+      vehicle_no: el('vehicle_no').value,
+      driver_phone: el('driver_phone').value,
+      builty_no: el('builty_no').value,
+      freight: el('freight').value,
+      bardana: Array.prototype.map.call(rowsBox.querySelectorAll('tr'), tr => ({
+        product: tr.querySelector('.b-bag').value,
+        qty: tr.querySelector('.b-qty').value,
+        ownership: tr.querySelector('.b-own').value,
+        rate: tr.querySelector('.b-rate').value,
+        ded_per_bag: tr.querySelector('.b-ded').value,
+      })).filter(row => row.product && num(row.qty) > 0),
+    };
+  }
+
+  function saveFailed(messages, retryable) {
+    const box = el('wp-save-error');
+    box.dataset.open = 'true';
+    box.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
+    commit.disabled = false;
+    commit.textContent = retryable ? 'Retry' : 'Confirm & Save';
+  }
+
+  commit.addEventListener('click', () => {
+    el('wp-save-error').dataset.open = 'false';
+    commit.disabled = true;
+    commit.textContent = 'Saving...';
+    fetch(SAVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify(payload()),
+    }).then(response => response.json().then(body => ({ ok: response.ok, body: body })))
+      .then(result => {
+        if (!result.ok) {
+          // The server refused the entry itself. Retrying the same slip would
+          // be refused again, so the button goes back to what it was.
+          saveFailed(result.body.errors || ['The entry was not saved.'], false);
+          return;
+        }
+        window.location.href = result.body.detail_url;
+      })
+      .catch(() => saveFailed(
+        ['The connection dropped before the entry was saved. Nothing was written, '
+         + 'and your entry is still here.'], true));
+  });
+
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || (e.key !== 's' && e.key !== 'S')) return;
+    e.preventDefault();
+    if (modal.dataset.open === 'true') el('wp-commit').click();
+    else form.requestSubmit();
+  });
+
+  enhanceWeights(document);
+  addRow(null);
+  recalc();
+  // The first box the clerk actually fills. The voucher number is allocated
+  // by the save, so focusing it would only park the cursor on a label.
+  el('voucher_date').focus();
+})();
+</script>
+{% endblock %}
