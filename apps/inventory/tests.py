@@ -10,7 +10,7 @@ from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
 from .models import ItemLedger, Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
-from .services import create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
+from .services import create_purchase_order, create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
 class InventoryFlowTests(TestCase):
@@ -148,6 +148,188 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(excess["ordered_balance"], Decimal("5.0000"))
         # Nothing is left owing on a line that was over-delivered.
         self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
+
+    def test_receiving_stock_averages_the_cost_it_does_not_replace_it(self):
+        """A delivery mixes into the pile; it does not re-price what is there.
+
+        100 at 100 plus 100 at 200 is 200 units at 150, not 200 at 200. The
+        old behaviour restated every existing unit at the newest rate, and
+        every cost of sales off that stock was wrong afterwards.
+        """
+        stock = self.item.stock
+        stock.current_quantity = Decimal("100.0000")
+        stock.current_price = Decimal("100.00")
+        stock.save()
+
+        create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-AVG",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("100.0000"),
+                    "rate": Decimal("200.00")}],
+            user=self.user,
+        )
+        stock.refresh_from_db()
+        self.assertEqual(stock.current_quantity, Decimal("200.0000"))
+        self.assertEqual(stock.current_price, Decimal("150.00"))
+
+    def test_an_order_can_commit_to_wheat_and_the_invoice_draws_it_down(self):
+        """Wheat ordered ahead, then delivered in two trucks.
+
+        The order moves nothing. Each invoice takes what actually arrived off
+        the order line, and the order finds its own status from what is left.
+        """
+        from apps.core.constants import PRD_LEVEL_ITEM, PRD_SPEC_RAW_ITEM, PRD_UNIT_KG
+        from apps.products.models import ProductNode
+
+        group = ProductNode.objects.create(
+            level=1, code_segment="92", name="Probe Raw Two", complete_code="92-000-000",
+            created_by=self.user, updated_by=self.user,
+        )
+        sub = ProductNode.objects.create(
+            parent=group, level=2, code_segment="01", name="Probe Wheat Group Two",
+            created_by=self.user, updated_by=self.user,
+        )
+        wheat = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Probe Wheat Two",
+            specification=PRD_SPEC_RAW_ITEM, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+            created_by=self.user, updated_by=self.user,
+        )
+
+        order, _net = create_purchase_order(
+            supplier=self.supplier, quot_num="", quot_date=None,
+            order_date=timezone.localdate(),
+            lines=[{"product": wheat, "quantity": Decimal("40000"), "rate": Decimal("100")}],
+            status=STATUS_SUBMITTED, user=self.user,
+        )
+        line = order.items.get()
+        self.assertTrue(line.is_product_line)
+        self.assertIsNone(line.inventory_item_id)
+
+        # A commitment this size is over the buyer's own limit, so it lands as
+        # a draft. Released here directly: who may approve is its own rule with
+        # its own test, and what is under test here is the draw-down.
+        if order.status == STATUS_DRAFT:
+            order.status = STATUS_SUBMITTED
+            order.save(update_fields=["status"])
+
+        create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-W1",
+            lines=[{"product": wheat, "order_item": line,
+                    "selected_weight": "15000", "katla": "20", "rate_per_mund": "4000"}],
+            tax_amount=Decimal("0"), user=self.user,
+        )
+        line.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(line.qty_invoiced, Decimal("14980.0000"))
+        self.assertEqual(order.status, STATUS_PARTIALLY_INVOICED)
+
+        second = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-W2",
+            lines=[{"product": wheat, "order_item": line,
+                    "selected_weight": "25200", "rate_per_mund": "4000"}],
+            tax_amount=Decimal("0"), user=self.user,
+        )
+        line.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(line.qty_invoiced, Decimal("40180.0000"))
+        self.assertEqual(order.status, STATUS_FULLY_INVOICED)
+        # 180 over the 25,020 that was left. Taken in, and reported.
+        self.assertEqual(second.over_invoiced[0]["excess"], Decimal("180.0000"))
+
+    def test_party_bardana_is_counted_in_but_not_bought(self):
+        """The party's sacks reach the ledger and nothing reaches the bill."""
+        from django.db.models import Sum
+
+        from apps.core.constants import (
+            INV_BARDANA_MILL, INV_BARDANA_PARTY, PRD_LEVEL_ITEM, PRD_SPEC_RAW_PACKING, PRD_UNIT_KG,
+        )
+        from apps.products.models import ProductLedger, ProductNode
+
+        group = ProductNode.objects.create(
+            level=1, code_segment="93", name="Probe Packing", complete_code="93-000-000",
+            created_by=self.user, updated_by=self.user,
+        )
+        sub = ProductNode.objects.create(
+            parent=group, level=2, code_segment="01", name="Probe Bags",
+            created_by=self.user, updated_by=self.user,
+        )
+        bag = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Probe Bag",
+            specification=PRD_SPEC_RAW_PACKING, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+            created_by=self.user, updated_by=self.user,
+        )
+
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-BAGS",
+            lines=[
+                {"product": bag, "quantity": "300", "rate": "90",
+                 "bardana_ownership": INV_BARDANA_MILL},
+                {"product": bag, "quantity": "50", "rate": "90",
+                 "bardana_ownership": INV_BARDANA_PARTY},
+            ],
+            tax_amount=Decimal("0"), user=self.user,
+        )
+        mill_line = invoice.items.get(bardana_ownership=INV_BARDANA_MILL)
+        party_line = invoice.items.get(bardana_ownership=INV_BARDANA_PARTY)
+        self.assertEqual(mill_line.amount, Decimal("27000.00"))
+        self.assertEqual(party_line.amount, Decimal("0.00"))
+        self.assertEqual(invoice.goods_amount, Decimal("27000.00"))
+        # Both are held, so both are counted.
+        self.assertEqual(
+            ProductLedger.objects.filter(product=bag).aggregate(q=Sum("quantity"))["q"],
+            Decimal("350.000"),
+        )
+
+    def test_weight_charges_leave_the_supplier_credited_net_of_withholding(self):
+        """Brokerage is owed to the broker; withholding is kept back."""
+        from apps.core.constants import PRD_LEVEL_ITEM, PRD_SPEC_RAW_ITEM, PRD_UNIT_KG
+        from apps.products.models import ProductNode
+
+        group = ProductNode.objects.create(
+            level=1, code_segment="94", name="Probe Raw Three", complete_code="94-000-000",
+            created_by=self.user, updated_by=self.user,
+        )
+        sub = ProductNode.objects.create(
+            parent=group, level=2, code_segment="01", name="Probe Wheat Group Three",
+            created_by=self.user, updated_by=self.user,
+        )
+        wheat = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Probe Wheat Three",
+            specification=PRD_SPEC_RAW_ITEM, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+            created_by=self.user, updated_by=self.user,
+        )
+
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-CHG",
+            lines=[{"product": wheat, "selected_weight": "20000", "rate_per_mund": "4000"}],
+            tax_amount=Decimal("0"),
+            brokerage_rate_per_100kg=Decimal("15"),
+            withholding_rate_per_40kg=Decimal("6"),
+            user=self.user,
+        )
+        self.assertEqual(invoice.brokerage_amount, Decimal("3000.00"))
+        self.assertEqual(invoice.withholding_amount, Decimal("3000.00"))
+        self.assertEqual(invoice.total_amount, Decimal("2000000.00"))
+        self.assertEqual(invoice.supplier_payable_amount, Decimal("1997000.00"))
+
+        # The voucher must balance with the two extra legs on it.
+        from apps.finance.models import AccountVoucher, AccountVoucherLine
+
+        voucher = AccountVoucher.objects.get(source_ref=f"inv_purchase_invoices:{invoice.pk}")
+        lines = AccountVoucherLine.objects.filter(voucher=voucher)
+        debit = sum((row.debit_amount or Decimal("0")) for row in lines)
+        credit = sum((row.credit_amount or Decimal("0")) for row in lines)
+        self.assertEqual(debit, credit)
+
+    def test_a_charge_with_no_weight_behind_it_is_refused(self):
+        """Both charges are quoted per weight, so weightless is meaningless."""
+        with self.assertRaises(ValidationError):
+            create_purchase_invoice(
+                supplier=self.supplier, supplier_invoice_num="INV-NOWEIGHT",
+                lines=[{"inventory_item": self.item, "quantity": Decimal("1.0000"),
+                        "rate": Decimal("100.00")}],
+                brokerage_rate_per_100kg=Decimal("15"),
+                user=self.user,
+            )
 
     def test_wheat_line_is_priced_by_the_mound_and_posts_to_the_product_ledger(self):
         """The paid weight is what is bought, and it goes to the product ledger.

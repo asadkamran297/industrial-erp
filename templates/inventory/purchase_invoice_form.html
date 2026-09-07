@@ -589,7 +589,7 @@
               <th></th>
             </tr>
           </thead>
-          <tbody id="bardana-rows"></tbody>
+          <tbody id="bardana-rows" data-ids="{% for p in bardana_products %}{{ p.pk }}{% if not forloop.last %},{% endif %}{% endfor %}"></tbody>
         </table>
       </div>
       <p class="mt-2 text-xs text-slate-400">Party and returnable sacks are counted in but not bought.</p>
@@ -1040,7 +1040,8 @@
       const row = document.createElement('tr');
       row.className = 'wheat-row border-t border-slate-100 dark:border-slate-800';
       row.innerHTML =
-        `<td class="py-1 pr-2"><select name="wheat_product" class="form-select min-w-52"><option value="">—</option>${WHEAT_OPTIONS}</select></td>` +
+        `<td class="py-1 pr-2"><select name="wheat_product" class="form-select min-w-52"><option value="">—</option>${WHEAT_OPTIONS}</select>` +
+        `<input type="hidden" name="wheat_order_item" class="w-order-item" value=""></td>` +
         cell('wheat_party_weight', 'w-party') +
         cell('wheat_mill_weight', 'w-mill') +
         cell('wheat_selected_weight', 'w-selected') +
@@ -1058,7 +1059,8 @@
       const row = document.createElement('tr');
       row.className = 'bardana-row border-t border-slate-100 dark:border-slate-800';
       row.innerHTML =
-        `<td class="py-1 pr-2"><select name="bardana_product" class="form-select min-w-52"><option value="">—</option>${BAG_OPTIONS}</select></td>` +
+        `<td class="py-1 pr-2"><select name="bardana_product" class="form-select min-w-52"><option value="">—</option>${BAG_OPTIONS}</select>` +
+        `<input type="hidden" name="bardana_order_item" class="b-order-item" value=""></td>` +
         `<td class="py-1 px-2"><input type="number" step="1" min="0" name="bardana_qty" class="form-input w-24 text-right b-qty" placeholder="0"></td>` +
         `<td class="py-1 px-2"><select name="bardana_ownership" class="form-select b-own">${OWNERSHIP_OPTIONS}</select></td>` +
         `<td class="py-1 px-2"><input type="number" step="0.01" min="0" name="bardana_rate" class="form-input w-24 text-right b-rate" placeholder="0.00"></td>` +
@@ -1110,6 +1112,33 @@
     document.addEventListener('click', e => {
       if (e.target.classList.contains('drop-row')) { e.target.closest('tr').remove(); recalcMill(); }
     });
+
+    // What the order picker calls with the product lines it found. Wheat is
+    // pre-filled with the balance as its selected weight -- the balance is what
+    // is still expected -- and the clerk types over it with what actually came.
+    window.fillMillLinesFromOrder = function (lines) {
+      (lines || []).forEach(line => {
+        if (line.kind !== 'product') return;
+        const isBag = !!(bardanaBox && bardanaBox.dataset.ids &&
+                         bardanaBox.dataset.ids.split(',').includes(String(line.product_id)));
+        if (isBag && bardanaBox) {
+          const row = addBardana();
+          row.querySelector('select[name="bardana_product"]').value = String(line.product_id);
+          row.querySelector('.b-order-item').value = String(line.order_item_id);
+          row.querySelector('.b-qty').value = line.quantity;
+          row.querySelector('.b-rate').value = line.rate;
+        } else if (wheatBox) {
+          const row = addWheat();
+          row.querySelector('select[name="wheat_product"]').value = String(line.product_id);
+          row.querySelector('.w-order-item').value = String(line.order_item_id);
+          row.querySelector('.w-selected').value = line.quantity;
+          row.querySelector('.w-selected').dataset.touched = '1';
+          // An order is written per mound, which is how wheat is bought.
+          row.querySelector('.w-rate').value = (Number(line.rate) * 40).toFixed(2);
+        }
+      });
+      recalcMill();
+    };
 
     const addWheatBtn = document.getElementById('add-wheat');
     const addBagBtn = document.getElementById('add-bardana');
@@ -1377,7 +1406,11 @@
   function copyOrder(order) {
     if (!order) return;
     rowsBox.innerHTML = '';
-    order.lines.forEach(line => {
+    // Wheat and bardana ordered ahead go to their own grids: they are entered
+    // differently and they post to a different ledger.
+    const millLines = order.lines.filter(line => line.kind === 'product');
+    if (millLines.length && window.fillMillLinesFromOrder) window.fillMillLinesFromOrder(millLines);
+    order.lines.filter(line => line.kind !== 'product').forEach(line => {
       const row = addRow();
       const itemPick = row.querySelector('.line-item');
       itemPick.value = String(line.item_id);

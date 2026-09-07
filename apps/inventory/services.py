@@ -737,6 +737,14 @@ def post_purchase_return(*, purchase_return, user):
     if purchase_return.posted == YES:
         raise ValidationError("Posted purchase return cannot be changed.")
     invoice = purchase_return.purchase_invoice
+    # A purchase return moves inventory stock. Wheat and bardana live in the
+    # product ledger and go back through it, so a return raised against an
+    # invoice that bought nothing else has nothing it can send back.
+    if not invoice.items.filter(inventory_item__isnull=False).exists():
+        raise ValidationError(
+            f"{invoice.invoice_num} bought wheat or bardana only. Send those back "
+            "through the product ledger, not on a purchase return."
+        )
     total = Decimal("0.00")
     for item in purchase_return.items.all():
         # What may go back is what this invoice brought in, and nothing else.
@@ -1233,7 +1241,10 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         if product is not None:
             order_item = line.get("order_item")
             if order_item is not None:
-                order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+                # ``of`` matters: an order line names a stores item or a
+                # product, so both FKs are nullable and select_related makes
+                # outer joins -- and Postgres will not lock the nullable side.
+                order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
                     "purchase_order", "product"
                 ).get(pk=order_item.pk)
                 order = order_item.purchase_order
@@ -1281,7 +1292,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
         order_item = line.get("order_item")
         if order_item is not None:
-            order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+            order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
                 "purchase_order", "inventory_item"
             ).get(pk=order_item.pk)
             order = order_item.purchase_order
@@ -1537,7 +1548,7 @@ def reverse_purchase_invoice(*, invoice, reason, user):
     for line in invoice.items.select_related("inventory_item", "purchase_order_item").all():
         order_item = line.purchase_order_item
         if order_item is not None:
-            order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+            order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
                 "purchase_order"
             ).get(pk=order_item.pk)
             order_item.qty_invoiced = max(

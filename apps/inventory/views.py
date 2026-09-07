@@ -1365,15 +1365,21 @@ class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
             amount = (pending * rate).quantize(TWO_DP)
             held["quantity"] += pending
             held["value"] += amount
+            # A product line and a stores line are both offered, and each says
+            # which it is: the invoice screen fills a different grid for each,
+            # because the two post to different ledgers.
             held["lines"].append({
                 "order_item_id": line.pk,
+                "kind": "product" if line.is_product_line else "item",
                 "item_id": line.inventory_item_id,
+                "product_id": line.product_id,
                 "name": line.descr,
                 "quantity": float(pending),
                 "ordered": float(line.quantity or 0),
-                "uom_id": line.uom_id or line.inventory_item.uom_id or "",
+                "uom_id": line.uom_id or (line.inventory_item.uom_id if line.inventory_item else "") or "",
                 "unit": line.uom.title if line.uom else (
-                    line.inventory_item.uom.title if line.inventory_item.uom else ""),
+                    line.inventory_item.uom.title
+                    if line.inventory_item and line.inventory_item.uom else ""),
                 "rate": float(rate),
                 "amount": float(amount),
             })
@@ -1537,6 +1543,8 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
 
         return {
             "posted": {"supplier": str(order.supplier_id)},
+            # Stores lines only: a wheat or bardana line is filled into its own
+            # grid by the order picker, which knows how those are entered.
             "prefill_lines": [
                 {
                     "item_id": str(line.inventory_item_id),
@@ -1545,7 +1553,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                     "uom_id": str(line.uom_id or line.inventory_item.uom_id or ""),
                     "order_item_id": str(line.pk),
                 }
-                for line in lines
+                for line in lines if line.inventory_item_id
             ],
         }
 
@@ -1605,6 +1613,17 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             raw = (values[index] if index < len(values) else "").strip().replace(",", "")
             return raw or None
 
+        # A row pulled off an order carries that order line with it, exactly as
+        # a stores row does, so the balance falls on the line it came from.
+        def order_line_at(name, index):
+            values = posted.getlist(name)
+            raw = (values[index] if index < len(values) else "").strip()
+            return int(raw) if raw.isdigit() else None
+
+        product_order_items = {
+            row.pk: row for row in open_order_lines(supplier=supplier) if row.product_id
+        }
+
         wheat_products = {
             product.pk: product for product in wheat_product_options()
         }
@@ -1619,6 +1638,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 continue
             lines.append({
                 "product": product,
+                "order_item": product_order_items.get(order_line_at("wheat_order_item", index)),
                 "party_weight": weight_at("wheat_party_weight", index),
                 "mill_weight": weight_at("wheat_mill_weight", index),
                 "selected_weight": selected,
@@ -1649,6 +1669,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 return render(request, self.template_name, self._context(posted=posted))
             lines.append({
                 "product": product,
+                "order_item": product_order_items.get(order_line_at("bardana_order_item", index)),
                 "quantity": quantity,
                 "rate": weight_at("bardana_rate", index) or "0",
                 "bardana_ownership": ownership,
@@ -1666,11 +1687,19 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             index: int(pk) for index, pk in enumerate(order_item_ids)
             if (pk or "").strip().isdigit()
         }
-        # Orders are raised on stores items. Wheat and bardana arrive against the
-        # deal rather than a numbered order line, so an invoice that is only
-        # wheat is not held back for an order it could never have been raised on.
-        only_products = all(line.get("product") for line in lines)
-        if not picked_order_lines and not only_products and supplier_has_open_orders(supplier=supplier):
+        # A wheat load that arrived at the gate with no order behind it is not
+        # held back because a stores order happens to be open on the same
+        # supplier: the two have nothing to do with each other. It is held back
+        # only where this supplier has an open order for the very thing on the
+        # invoice, which is the case the rule exists for.
+        only_products = lines and all(line.get("product") for line in lines)
+        open_product_ids = {
+            row.product_id for row in open_order_lines(supplier=supplier) if row.product_id
+        }
+        invoice_product_ids = {line["product"].pk for line in lines if line.get("product")}
+        if only_products and not (open_product_ids & invoice_product_ids):
+            pass
+        elif not picked_order_lines and supplier_has_open_orders(supplier=supplier):
             messages.error(
                 request,
                 f"{supplier.name} has open purchase orders. Pick the order this invoice "
@@ -2786,6 +2815,10 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             "units": UOM.objects.order_by("title"),
             "godowns": godown_options(),
             "brokers": broker_options(),
+            # An order may commit to wheat and sacks as well as to stores
+            # items. It still moves nothing either way.
+            "wheat_products": wheat_product_options(),
+            "bardana_products": bardana_product_options(),
             "today": timezone.localdate(),
             "items_json": json.dumps([
                 {
@@ -2850,6 +2883,31 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
+
+        # Wheat and bardana ordered ahead. Their own rows, entered as a
+        # quantity and a rate like any commitment: the weighbridge and the
+        # deductions belong to the invoice, which is where the goods arrive.
+        product_ids = posted.getlist("order_product")
+        product_qtys = posted.getlist("order_product_qty")
+        product_rates = posted.getlist("order_product_rate")
+        orderable = {
+            product.pk: product
+            for product in list(wheat_product_options()) + list(bardana_product_options())
+        }
+        for index, raw_id in enumerate(product_ids):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            product = orderable.get(int(raw_id))
+            if not product:
+                continue
+            try:
+                quantity = decimal_of(product_qtys[index] if index < len(product_qtys) else "")
+                rate = decimal_of(product_rates[index] if index < len(product_rates) else "")
+            except (InvalidOperation, ValueError):
+                messages.error(request, f"Check the quantity and rate on the {product.name} line.")
+                return render(request, self.template_name, self._context(posted=posted))
+            if quantity > 0:
+                lines.append({"product": product, "quantity": quantity, "rate": rate})
 
         # Whatever the site added to the form. A required one that was left
         # blank stops the save, the same as any other required box.
@@ -4333,6 +4391,11 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
         for invoice in invoices:
             rows = []
             for line in invoice.items.all():
+                # A return is written against a stores item. Wheat and bardana
+                # go back through the product ledger, not through this screen,
+                # so they are not offered here rather than offered and failing.
+                if not line.inventory_item_id:
+                    continue
                 already = returned.get((invoice.pk, line.inventory_item_id)) or zero
                 returnable = (line.quantity or zero) - already
                 if returnable <= 0:
