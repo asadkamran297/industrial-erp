@@ -4,8 +4,4 @@ deployment:
     # One task: each .cpanel.yml task runs in its own shell, so an export on a
     # line of its own would not reach the script. Add SEED_DEMO=1 here for a
     # single deploy when a demo book is wanted, then take it back out.
-    # TEMPORARY: one deploy that builds the demo database. DB_NAME overrides
-    # the .env value (decouple reads the environment first), so migrate and
-    # seed_demo hit flouruge_erpdemo and the live database is not touched.
-    # Revert this line to the plain one below straight after the deploy.
-    - export APPROOT=/home/flouruge/industrial_erp DB_NAME=flouruge_erpdemo SEED_DEMO=1 && /bin/bash $APPROOT/scripts/cpanel_deploy.sh
+    - export APPROOT=/home/flouruge/industrial_erp && /bin/bash $APPROOT/scripts/cpanel_deploy.sh
