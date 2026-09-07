@@ -37,7 +37,7 @@ def amount_in_words(amount):
 
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -70,6 +70,19 @@ from .models import (
     Stock,
     UOMConversion,
 )
+
+
+def lock_of(*fields):
+    """``select_for_update`` kwargs that name the rows to lock.
+
+    Postgres will not lock the nullable side of an outer join, so a locked read
+    that carries a ``select_related`` over a nullable FK has to say ``of``.
+    MySQL has no ``FOR UPDATE OF`` at all and raises ``NotSupportedError``, so
+    the clause is dropped there and the whole join is locked instead.
+    """
+    if connection.features.has_select_for_update_of:
+        return {"of": fields}
+    return {}
 
 
 def generate_transaction_id(prefix: str, model):
@@ -733,7 +746,7 @@ def post_sale_return(*, sale_return, user):
 def post_purchase_return(*, purchase_return, user):
     # ``of`` matters: the order is nullable now, so select_related makes it an
     # outer join, and Postgres refuses to lock the nullable side of one.
-    purchase_return = PurchaseReturnMaster.objects.select_for_update(of=("self",)).select_related("purchase_invoice", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
+    purchase_return = PurchaseReturnMaster.objects.select_for_update(**lock_of("self")).select_related("purchase_invoice", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
     if purchase_return.posted == YES:
         raise ValidationError("Posted purchase return cannot be changed.")
     invoice = purchase_return.purchase_invoice
@@ -1244,7 +1257,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                 # ``of`` matters: an order line names a stores item or a
                 # product, so both FKs are nullable and select_related makes
                 # outer joins -- and Postgres will not lock the nullable side.
-                order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
+                order_item = PurchaseOrderItem.objects.select_for_update(**lock_of("self")).select_related(
                     "purchase_order", "product"
                 ).get(pk=order_item.pk)
                 order = order_item.purchase_order
@@ -1292,7 +1305,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
         order_item = line.get("order_item")
         if order_item is not None:
-            order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
+            order_item = PurchaseOrderItem.objects.select_for_update(**lock_of("self")).select_related(
                 "purchase_order", "inventory_item"
             ).get(pk=order_item.pk)
             order = order_item.purchase_order
@@ -1548,7 +1561,7 @@ def reverse_purchase_invoice(*, invoice, reason, user):
     for line in invoice.items.select_related("inventory_item", "purchase_order_item").all():
         order_item = line.purchase_order_item
         if order_item is not None:
-            order_item = PurchaseOrderItem.objects.select_for_update(of=("self",)).select_related(
+            order_item = PurchaseOrderItem.objects.select_for_update(**lock_of("self")).select_related(
                 "purchase_order"
             ).get(pk=order_item.pk)
             order_item.qty_invoiced = max(
