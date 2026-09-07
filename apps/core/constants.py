@@ -238,6 +238,23 @@ GL_PURCHASE_VARIANCE_PATH: Final = ("EXPENSES", "Direct Expenses", "Purchase Pri
 # rather than a variance: with no receipt to match the invoice against,
 # there is no second figure for it to be the difference from.
 GL_FREIGHT_PATH: Final = ("EXPENSES", "Direct Expenses", "Freight and Carriage")
+# Brokers are named on the purchase documents and are owed brokerage, so each
+# one is an account under this heading rather than a name typed on a form. The
+# heading holds no balance of its own; the brokers under it do.
+GL_BROKERS_GROUP_PATH: Final = ("LIABILITIES", "Current Liabilities", "Brokers")
+# Brokerage the mill owes on a purchase. A cost of buying, not a cost of the
+# wheat: it is owed to the broker rather than to the supplier, and settles on
+# its own, so it never loads onto the stock value.
+GL_BROKERAGE_PATH: Final = ("EXPENSES", "Direct Expenses", "Brokerage")
+# Tax withheld from the supplier and owed to the revenue instead. It is money
+# the mill holds back rather than money it spends, so it is a liability the day
+# the invoice is entered and stays one until it is deposited.
+GL_WITHHOLDING_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Withholding Tax Payable")
+# Brokerage is quoted per 100 kg and withholding per 40 kg -- one mound. Both
+# are read off the weight actually bought, which is the credit weight.
+BROKERAGE_WEIGHT_UNIT_KG: Final = "100"
+WITHHOLDING_WEIGHT_UNIT_KG: Final = "40"
+GL_BROKERS_GROUP_TITLE: Final = "Brokers"
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
 
 # Counterparts for an inventory reconciliation. A genuine count difference is a
@@ -468,6 +485,21 @@ INV_PO_CLOSE_SHORT_REASONS: Final[StatusChoices] = (
     ("over_ordered", "Ordered in excess by mistake"),
     ("accepted_as_final", "Delivered short and accepted as final"),
 )
+
+# Who owns the sacks that came in on a purchase. The mill keeps custody of all
+# three, so all three move the product ledger; only its own are bought, and only
+# its own are paid for. Party bags belong to the supplier and go back on their
+# next trip; returnable bags are the mill's to send back when they are empty.
+INV_BARDANA_MILL: Final = "mill"
+INV_BARDANA_PARTY: Final = "party"
+INV_BARDANA_RETURNABLE: Final = "returnable"
+INV_BARDANA_OWNERSHIP_CHOICES: Final[StatusChoices] = (
+    (INV_BARDANA_MILL, "Mill's own"),
+    (INV_BARDANA_PARTY, "Party's"),
+    (INV_BARDANA_RETURNABLE, "Returnable"),
+)
+# The two that are somebody else's: held, counted, never bought.
+INV_BARDANA_NOT_PURCHASED: Final = (INV_BARDANA_PARTY, INV_BARDANA_RETURNABLE)
 
 # Why a posted document was reversed. A reversal without one is unusable to
 # whoever reads the books afterwards, which is the whole point of keeping it.

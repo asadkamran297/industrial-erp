@@ -281,6 +281,29 @@
           <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full" value="{{ posted.expected_date|default:'' }}">
         </div>
         {% endif %}
+        {# Where the goods are expected, and who arranged the deal. #}
+        {% if layout.shown.godown %}
+        <div class="w-48">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="godown">Godown</label>
+          <select name="godown" id="godown" class="form-select h-10 w-full">
+            <option value="">—</option>
+            {% for g in godowns %}
+            <option value="{{ g.pk }}" {% if posted.godown == g.pk|stringformat:"s" %}selected{% endif %}>{{ g.code }} — {{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if layout.shown.broker %}
+        <div class="w-56">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="broker">Broker</label>
+          <select name="broker" id="broker" class="form-select h-10 w-full">
+            <option value="">—</option>
+            {% for b in brokers %}
+            <option value="{{ b.pk }}" {% if posted.broker == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         {# What the supplier quoted, so the order can be checked back against it. #}
         {% if layout.shown.quot_num %}
         <div class="w-40">

@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
-from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
+from .models import ItemLedger, Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
 from .services import create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
@@ -117,7 +117,14 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(po.status, STATUS_FULLY_INVOICED)
         self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
 
-    def test_invoice_cannot_run_past_what_was_ordered(self):
+    def test_over_receipt_is_taken_in_and_reported(self):
+        """More than was ordered is posted, and the excess is handed back.
+
+        A supplier sending a little over is ordinary and the truck is already
+        at the gate, so the entry must go through. What it must not do is go
+        through quietly: the excess comes back on the invoice for the screen
+        to say out loud.
+        """
         po = PurchaseOrder.objects.create(
             supplier=self.supplier, purchase_date=timezone.localdate(),
             status=STATUS_SUBMITTED, created_by=self.user, updated_by=self.user,
@@ -127,13 +134,69 @@ class InventoryFlowTests(TestCase):
             rate=Decimal("100.00"), unit_rate=Decimal("100.0000"), uom=self.uom,
             descr=self.item.item_name, created_by=self.user, updated_by=self.user,
         )
-        with self.assertRaises(ValidationError):
-            create_purchase_invoice(
-                supplier=self.supplier, supplier_invoice_num="INV-OVER",
-                lines=[{"inventory_item": self.item, "quantity": Decimal("6.0000"),
-                        "rate": Decimal("100.00"), "order_item": po_item}],
-                user=self.user,
-            )
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-OVER",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("6.0000"),
+                    "rate": Decimal("100.00"), "order_item": po_item}],
+            user=self.user,
+        )
+        po_item.refresh_from_db()
+        self.assertEqual(po_item.qty_invoiced, Decimal("6.0000"))
+        self.assertEqual(len(invoice.over_invoiced), 1)
+        excess = invoice.over_invoiced[0]
+        self.assertEqual(excess["excess"], Decimal("1.0000"))
+        self.assertEqual(excess["ordered_balance"], Decimal("5.0000"))
+        # Nothing is left owing on a line that was over-delivered.
+        self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
+
+    def test_wheat_line_is_priced_by_the_mound_and_posts_to_the_product_ledger(self):
+        """The paid weight is what is bought, and it goes to the product ledger.
+
+        Deductions come off the selected weight; the rest is priced per mound
+        of 40 kg. Wheat never touches inventory stock -- grinding reads the
+        product ledger, and two ledgers holding the same sack is how a mill
+        ends up with two answers.
+        """
+        from django.db.models import Sum
+
+        from apps.core.constants import PRD_LEVEL_ITEM, PRD_SPEC_RAW_ITEM, PRD_UNIT_KG
+        from apps.products.models import ProductLedger, ProductNode
+
+        group = ProductNode.objects.create(
+            level=1, code_segment="91", name="Probe Raw", complete_code="91-000-000",
+            created_by=self.user, updated_by=self.user,
+        )
+        sub = ProductNode.objects.create(
+            parent=group, level=2, code_segment="01", name="Probe Wheat Group",
+            created_by=self.user, updated_by=self.user,
+        )
+        wheat = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Probe Wheat",
+            specification=PRD_SPEC_RAW_ITEM, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+            created_by=self.user, updated_by=self.user,
+        )
+
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="INV-WHEAT",
+            lines=[{
+                "product": wheat, "party_weight": "10100", "mill_weight": "10000",
+                "selected_weight": "10000", "katla": "20", "khoot": "10",
+                "moisture": "30", "sack_weight_deduction": "40",
+                "rate_per_mund": "4000",
+            }],
+            tax_amount=Decimal("0"), user=self.user,
+        )
+
+        line = invoice.items.get()
+        self.assertEqual(line.credit_weight, Decimal("9900.000"))
+        self.assertEqual(line.amount, Decimal("990000.00"))
+        self.assertEqual(line.rate, Decimal("100.00"))  # 4000 / 40
+        self.assertIsNone(line.inventory_item_id)
+
+        moved = ProductLedger.objects.filter(product=wheat).aggregate(q=Sum("quantity"))["q"]
+        self.assertEqual(moved, Decimal("9900.000"))
+        # The stores ledger knows nothing about it.
+        self.assertFalse(ItemLedger.objects.filter(ref_no=invoice.invoice_num).exists())
 
     def test_same_supplier_invoice_number_is_refused_twice(self):
         """The supplier's own number is what catches one invoice entered twice."""

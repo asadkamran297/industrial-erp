@@ -212,6 +212,15 @@
         {% if invoice.supplier_invoice_num %}
         <p class="mt-2"><span class="pur-doc-cap">Supplier's invoice no:</span> {{ invoice.supplier_invoice_num }}</p>
         {% endif %}
+        {% if invoice.godown %}
+        <p class="mt-2"><span class="pur-doc-cap">Godown:</span> {{ invoice.godown.code }} — {{ invoice.godown.name }}</p>
+        {% endif %}
+        {% if invoice.vehicle_no %}
+        <p class="mt-2"><span class="pur-doc-cap">Vehicle:</span> {{ invoice.vehicle_no }}</p>
+        {% endif %}
+        {% if invoice.broker %}
+        <p class="mt-2"><span class="pur-doc-cap">Broker:</span> {{ invoice.broker.title }}</p>
+        {% endif %}
         <p class="mt-2"><span class="pur-doc-cap">Entered by:</span>
           {{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</p>
       </div>
@@ -248,6 +257,17 @@
             <td>
               <span class="pur-strong">{{ line.descr }}</span>
               {% if line.inventory_item.item_code %}<span class="pur-sub">{{ line.inventory_item.item_code }}</span>{% endif %}
+              {% if line.product %}<span class="pur-sub">{{ line.product.complete_code }}</span>{% endif %}
+              {# What the weighbridge said and what came off it, so the credit #}
+              {# weight beside it can be checked rather than taken on trust.   #}
+              {% if line.credit_weight %}
+              <span class="pur-sub">Party {{ line.party_weight|qty }} &middot; Mill {{ line.mill_weight|qty }} &middot;
+                Selected {{ line.selected_weight|qty }}
+                &minus; katla {{ line.katla|default:0|qty }}, khoot {{ line.khoot|default:0|qty }},
+                moisture {{ line.moisture|default:0|qty }}, sacks {{ line.sack_weight_deduction|default:0|qty }}
+                = credit {{ line.credit_weight|qty }} kg @ {{ line.rate_per_mund|amount }}/mund</span>
+              {% endif %}
+              {% if line.bardana_ownership %}<span class="pur-sub">{{ line.get_bardana_ownership_display }}{% if not line.is_purchased_bardana %} — held, not bought{% endif %}</span>{% endif %}
             </td>
             <td class="pur-num">{{ line.quantity|qty }}</td>
             <td>{{ line.uom.title|default:"&mdash;" }}</td>
@@ -285,6 +305,15 @@
         {% if invoice.freight_amount %}<div><span>Freight</span><b>{{ invoice.freight_amount|amount }}</b></div>{% endif %}
         {% if invoice.tax_amount %}<div><span>Sales tax</span><b>{{ invoice.tax_amount|amount }}</b></div>{% endif %}
         <div class="pur-sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
+        {# Owed to the broker, not to the supplier: shown here because it is #}
+        {# part of what this purchase cost, and it settles on its own.       #}
+        {% if invoice.brokerage_amount %}
+        <div><span>Brokerage @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg</span><b>{{ invoice.brokerage_amount|amount }}</b></div>
+        {% endif %}
+        {% if invoice.withholding_amount %}
+        <div><span>Withheld @ {{ invoice.withholding_rate_per_40kg|amount }}/40kg</span><b>&minus;{{ invoice.withholding_amount|amount }}</b></div>
+        <div class="pur-sums-net"><span>Payable to supplier</span><b>{{ invoice.supplier_payable_amount|amount }}</b></div>
+        {% endif %}
         {% if invoice.paid_amount %}
         <div><span>Paid</span><b>{{ invoice.paid_amount|amount }}</b></div>
         <div><span>Balance</span><b>{{ invoice.balance_amount|amount }}</b></div>

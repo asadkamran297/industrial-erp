@@ -1,0 +1,113 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{# What is still to come in, by supplier. Read down the page: a supplier, the
+   orders still owed on them, and the lines inside each one. #}
+<section class="space-y-4">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Pending Orders</h1>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Ordered and not yet invoiced</p>
+    </div>
+  </div>
+
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="stat-tile">
+      <div>
+        <p class="stat-label">Still to come</p>
+        <p class="stat-value">{{ pending_value|amount }}</p>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div>
+        <p class="stat-label">Open orders</p>
+        <p class="stat-value">{{ pending_orders }}</p>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div>
+        <p class="stat-label">Suppliers</p>
+        <p class="stat-value">{{ pending_suppliers }}</p>
+      </div>
+    </div>
+    <div class="stat-tile">
+      <div>
+        <p class="stat-label">Past expected date</p>
+        <p class="stat-value{% if overdue_orders %} text-rose-600{% endif %}">{{ overdue_orders }}</p>
+      </div>
+    </div>
+  </div>
+
+  {% include "components/table/search_filters.html" %}
+
+  {% for group in groups %}
+  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+      <a href="{% url 'inventory:supplier_detail' group.supplier.pk %}" class="text-sm font-semibold text-slate-900 hover:text-[var(--primary-color)] dark:text-slate-100">
+        {{ group.supplier.name }}
+      </a>
+      <span class="text-sm font-semibold tabular-nums">{{ group.value|amount }}</span>
+    </div>
+
+    {% for order in group.orders %}
+    <div class="border-b border-slate-100 last:border-0 dark:border-slate-800">
+      <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <a class="font-medium text-[var(--primary-color)]" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
+          <span class="text-slate-500">{{ order.purchase_date|dmy }}</span>
+          {% if order.godown %}<span class="text-slate-500">{{ order.godown.name }}</span>{% endif %}
+          {% if order.expected_date %}
+          <span class="text-xs {% if order.days_late %}text-rose-600{% else %}text-slate-500{% endif %}">Expected {{ order.expected_date|dmy }}{% if order.days_late %} · {{ order.days_late }} day{{ order.days_late|pluralize }} late{% endif %}</span>
+          {% endif %}
+        </div>
+        <span class="text-sm font-semibold tabular-nums">{{ order.pending_value|amount }}</span>
+      </div>
+
+      <div class="overflow-x-auto px-4 pb-3">
+        <table class="w-full text-left text-sm">
+          <thead class="text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="py-1 pr-2">Item</th>
+              <th class="py-1 px-2 text-right">Ordered</th>
+              <th class="py-1 px-2 text-right">Invoiced</th>
+              <th class="py-1 px-2 text-right">Balance</th>
+              <th class="py-1 px-2">Unit</th>
+              <th class="py-1 px-2 text-right">Rate</th>
+              <th class="py-1 pl-2 text-right">Value</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for row in order.pending_rows %}
+            <tr>
+              <td class="py-1.5 pr-2">{{ row.item.descr }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums text-slate-500">{{ row.ordered|qty }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums text-slate-500">{{ row.invoiced|qty }}</td>
+              <td class="py-1.5 px-2 text-right font-semibold tabular-nums">{{ row.pending|qty }}</td>
+              <td class="py-1.5 px-2 text-xs text-slate-500">{{ row.uom }}</td>
+              <td class="py-1.5 px-2 text-right tabular-nums">{{ row.item.rate|amount }}</td>
+              <td class="py-1.5 pl-2 text-right font-semibold tabular-nums">{{ row.value|amount }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% empty %}
+  <div class="rounded-lg border border-slate-200 bg-white px-4 py-12 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+    Nothing is on order. Every raised order has been invoiced in full.
+  </div>
+  {% endfor %}
+
+  {% if groups %}
+  <div class="flex justify-end px-1 text-sm">
+    <span class="text-slate-500">Total on this page:&nbsp;</span>
+    <span class="font-semibold tabular-nums">{{ page_value|amount }}</span>
+  </div>
+  {% endif %}
+
+  {% include "components/table/pagination.html" %}
+
+</section>
+{% endblock %}

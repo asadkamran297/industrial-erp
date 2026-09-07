@@ -19,7 +19,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
+from apps.core.constants import GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
@@ -29,7 +29,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
 from .services import close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
@@ -55,6 +55,58 @@ def uom_title(record):
     survive the empty case rather than reaching through a null relation.
     """
     return record.uom.title if record and record.uom_id else ""
+
+
+def godown_options():
+    """Every godown a document may name, cheapest query that answers it."""
+    from apps.godowns.models import Godown
+
+    return Godown.objects.filter(status=STATUS_ACTIVE).order_by("code")
+
+
+def broker_options():
+    """The brokers on file: postable accounts under the Brokers heading.
+
+    Not every account in the chart — a broker is owed brokerage, so it is one of
+    the accounts kept for that, and offering the whole chart would let a purchase
+    name the bank as its broker.
+    """
+    return (
+        ChartOfAccount.objects
+        .filter(is_group=False, status=STATUS_ACTIVE, parent__title=GL_BROKERS_GROUP_TITLE)
+        .order_by("title")
+    )
+
+
+def wheat_product_options():
+    """The wheat the mill buys: raw items on the product tree, nothing else.
+
+    Read off the tree rather than a list of codes on this screen, so a second
+    variety of wheat is added by the people who add products and needs no
+    release here.
+    """
+    from apps.products.selectors import wheat_items
+
+    return wheat_items().order_by("complete_code")
+
+
+def bardana_product_options():
+    """The sacks: raw packing items on the product tree."""
+    from apps.products.selectors import raw_packing_items
+
+    return raw_packing_items().order_by("complete_code")
+
+
+def picked(posted, name, queryset):
+    """The row a select posted, or None where nothing was chosen.
+
+    Looked up through the same queryset the picker was built from, so a value
+    typed into the request that the operator was never offered is not accepted.
+    """
+    raw = (posted.get(name) or "").strip()
+    if not raw.isdigit():
+        return None
+    return queryset.filter(pk=raw).first()
 
 
 def item_unit_options(item):
@@ -1367,6 +1419,14 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             # is gated on.
             "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "units": UOM.objects.order_by("title"),
+            "godowns": godown_options(),
+            "brokers": broker_options(),
+            # The mill's own two kinds of purchase, kept apart from the stores
+            # items because they are weighed rather than counted and they post
+            # to the product ledger rather than to inventory.
+            "wheat_products": wheat_product_options(),
+            "bardana_products": bardana_product_options(),
+            "bardana_ownership_choices": INV_BARDANA_OWNERSHIP_CHOICES,
             "today": timezone.localdate(),
             "items_json": json.dumps([
                 {
@@ -1536,6 +1596,65 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
+        # ── Wheat and bardana ──────────────────────────────────────────────
+        # Their own grids, because they are entered differently: wheat by the
+        # weighbridge and the deductions, sacks by the count and whose they are.
+        # Both end up as product lines on the same invoice.
+        def weight_at(name, index):
+            values = posted.getlist(name)
+            raw = (values[index] if index < len(values) else "").strip().replace(",", "")
+            return raw or None
+
+        wheat_products = {
+            product.pk: product for product in wheat_product_options()
+        }
+        for index, raw_id in enumerate(posted.getlist("wheat_product")):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            product = wheat_products.get(int(raw_id))
+            if not product:
+                continue
+            selected = weight_at("wheat_selected_weight", index)
+            if selected is None:
+                continue
+            lines.append({
+                "product": product,
+                "party_weight": weight_at("wheat_party_weight", index),
+                "mill_weight": weight_at("wheat_mill_weight", index),
+                "selected_weight": selected,
+                "katla": weight_at("wheat_katla", index),
+                "khoot": weight_at("wheat_khoot", index),
+                "moisture": weight_at("wheat_moisture", index),
+                "sack_weight_deduction": weight_at("wheat_sack_deduction", index),
+                "rate_per_mund": weight_at("wheat_rate_per_mund", index),
+            })
+
+        bardana_products = {
+            product.pk: product for product in bardana_product_options()
+        }
+        ownership_codes = dict(INV_BARDANA_OWNERSHIP_CHOICES)
+        for index, raw_id in enumerate(posted.getlist("bardana_product")):
+            if not (raw_id or "").strip().isdigit():
+                continue
+            product = bardana_products.get(int(raw_id))
+            if not product:
+                continue
+            quantity = weight_at("bardana_qty", index)
+            if quantity is None:
+                continue
+            ownership = (posted.getlist("bardana_ownership")[index]
+                         if index < len(posted.getlist("bardana_ownership")) else "").strip()
+            if ownership not in ownership_codes:
+                messages.error(request, f"Say whose sacks the {product.name} line is.")
+                return render(request, self.template_name, self._context(posted=posted))
+            lines.append({
+                "product": product,
+                "quantity": quantity,
+                "rate": weight_at("bardana_rate", index) or "0",
+                "bardana_ownership": ownership,
+                "bag_weight": weight_at("bardana_bag_weight", index),
+            })
+
         invoice_date = posted.get("bill_date") or str(timezone.localdate())
 
         # ── The rule the whole screen turns on ─────────────────────────────
@@ -1547,7 +1666,11 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             index: int(pk) for index, pk in enumerate(order_item_ids)
             if (pk or "").strip().isdigit()
         }
-        if not picked_order_lines and supplier_has_open_orders(supplier=supplier):
+        # Orders are raised on stores items. Wheat and bardana arrive against the
+        # deal rather than a numbered order line, so an invoice that is only
+        # wheat is not held back for an order it could never have been raised on.
+        only_products = all(line.get("product") for line in lines)
+        if not picked_order_lines and not only_products and supplier_has_open_orders(supplier=supplier):
             messages.error(
                 request,
                 f"{supplier.name} has open purchase orders. Pick the order this invoice "
@@ -1591,6 +1714,11 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 supplier_invoice_date=invoice_date,
                 invoice_date=invoice_date,
                 due_date=(posted.get("due_date") or "").strip() or None,
+                godown=picked(posted, "godown", godown_options()),
+                vehicle_no=(posted.get("vehicle_no") or "").strip(),
+                broker=picked(posted, "broker", broker_options()),
+                brokerage_rate_per_100kg=money("brokerage_rate_per_100kg"),
+                withholding_rate_per_40kg=money("withholding_rate_per_40kg"),
                 extra_data=extra_values,
                 lines=lines,
                 discount_amount=money("discount_amount"),
@@ -1610,6 +1738,16 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             f"Purchase invoice {invoice.invoice_num} posted for {invoice.total_amount}. "
             f"Stock taken in, payable created.",
         )
+        # More arrived than was ordered. Allowed, and posted -- but never in
+        # silence, because the order it was raised against now reads as
+        # over-delivered and somebody has to know why.
+        for row in getattr(invoice, "over_invoiced", []):
+            messages.warning(
+                request,
+                f"{row['item']} on {row['order_num']} line {row['seq_num']}: "
+                f"{row['excess']} more than the {row['ordered_balance']} still on order. "
+                f"Taken in and paid for. Tell the buyer if this was not agreed.",
+            )
         if "save_and_new" in posted:
             return redirect("inventory:purchase_invoice_create")
         return redirect("inventory:purchase_invoice_detail", pk=invoice.pk)
@@ -2027,13 +2165,15 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
     paginate_by = 25
     queryset = (
         PurchaseInvoice.objects
-        .select_related("supplier", "created_by", "purchase_order")
+        .select_related("supplier", "created_by", "purchase_order", "godown")
         .prefetch_related("items__inventory_item", "items__uom")
         .order_by("-invoice_date", "-id")
     )
+    # The vehicle is searchable because at a gate it is often the only thing
+    # anybody remembers about a delivery.
     search_fields = ("invoice_num", "supplier__name", "supplier_invoice_num", "remarks",
-                     "legacy_bill_no")
-    filter_fields = {"supplier": "supplier_id"}
+                     "legacy_bill_no", "vehicle_no")
+    filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
     date_filters = [{"field": "invoice_date", "label": "Invoice date"}]
     # Only what the database can order by. What each one came to is added up
     # per row after the query, so its heading stays plain rather than offering
@@ -2062,6 +2202,9 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         return [
             {"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
              "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
+            {"name": "godown", "label": "All godowns", "short_label": "Godown",
+             "choices": list(godown_options().values_list("id", "name")),
+             "value": self.request.GET.get("godown", "")},
         ]
 
     def get_queryset(self):
@@ -2268,7 +2411,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     paginate_by = 25
     queryset = (
         PurchaseOrder.objects
-        .select_related("supplier", "created_by")
+        .select_related("supplier", "created_by", "godown")
         # ``items__inventory_item``: the row opens out to its lines, and each
         # line names the item it was ordered against.
         .prefetch_related("items__uom", "items__inventory_item", "invoices",
@@ -2276,7 +2419,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
-    filter_fields = {"supplier": "supplier_id"}
+    filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
     date_filters = [{"field": "purchase_date", "label": "Order date"}]
     # Only the columns the database can order by. What has arrived and what is
     # billed are worked out per row after the query, so they cannot be sorted
@@ -2297,8 +2440,11 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
     def current_tab(self):
-        tab = self.request.GET.get("tab", TAB_ALL)
-        return tab if tab in dict(TABS) else TAB_ALL
+        # Opens on the orders still owed. Everything else is one click away,
+        # and "all" stays reachable, but the screen that greets the clerk is
+        # the work rather than the archive.
+        tab = self.request.GET.get("tab", TAB_LIVE)
+        return tab if tab in dict(TABS) else TAB_LIVE
 
     def get_paginate_by(self, queryset):
         raw = (self.request.GET.get("per_page") or "").strip()
@@ -2331,6 +2477,8 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         return [
             {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
              "value": self.request.GET.get("supplier", "")},
+            {"name": "godown", "label": "All godowns", "choices": list(godown_options().values_list("id", "name")),
+             "value": self.request.GET.get("godown", "")},
         ]
 
     def get_context_data(self, **kwargs):
@@ -2490,6 +2638,120 @@ class PurchaseReportView(InventoryListMixin, ListView):
         return context
 
 
+class PendingOrdersReportView(InventoryListMixin, ListView):
+    """What is still to come in, by supplier. The owner's morning question.
+
+    Only orders that are live: raised, or part invoiced with a balance still
+    owed. A draft has been committed to nobody and a closed or cancelled order
+    is not expected, so neither is anything still to come.
+
+    The balance is read off the order lines, which carry ``qty_invoiced``, so
+    the figure is the same one the order screen shows rather than a second
+    calculation that could disagree with it. A line closed short counts as
+    nothing outstanding without pretending it arrived -- that is what closing
+    short means, and it is why the report can be trusted as a commitment list.
+    """
+
+    page = "inventory.purchase_report"
+    template_name = "inventory/pending_orders_report.html"
+    context_object_name = "orders"
+    paginate_by = 25
+    queryset = (
+        PurchaseOrder.objects
+        .filter(status__in=[STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED])
+        .select_related("supplier", "godown")
+        .prefetch_related("items__inventory_item", "items__uom")
+        .order_by("supplier__name", "purchase_date", "id")
+    )
+    search_fields = ("purchase_num", "supplier__name", "quot_num")
+    filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
+    date_filters = [{"field": "purchase_date", "label": "Order date"}]
+
+    def get_filter_specs(self):
+        supplier_choices = list(
+            Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
+        )
+        return [
+            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
+             "value": self.request.GET.get("supplier", "")},
+            {"name": "godown", "label": "All godowns", "choices": list(godown_options().values_list("id", "name")),
+             "value": self.request.GET.get("godown", "")},
+        ]
+
+    @staticmethod
+    def _outstanding(order):
+        """The lines still owed on one order, and what they come to."""
+        zero = Decimal("0.0000")
+        rows, value = [], Decimal("0.00")
+        for item in order.items.all():
+            pending = item.qty_pending
+            if pending <= zero:
+                continue
+            line_value = (pending * (item.rate or Decimal("0"))).quantize(TWO_DP)
+            value += line_value
+            rows.append({
+                "item": item,
+                "ordered": item.qty_ordered,
+                "invoiced": item.qty_invoiced or zero,
+                "pending": pending,
+                "value": line_value,
+                "uom": uom_title(item),
+            })
+        return rows, value
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        zero = Decimal("0.00")
+
+        # Grouped by supplier, because the question this answers is "what is
+        # this supplier still to send", not "what orders exist".
+        groups, page_value = [], zero
+        current = None
+        today = timezone.localdate()
+        for order in context["orders"]:
+            order.pending_rows, order.pending_value = self._outstanding(order)
+            if not order.pending_rows:
+                continue
+            # Promised by a date that has passed, and not all in. The same
+            # figure the orders board shows, worked out the same way.
+            order.days_late = (
+                (today - order.expected_date).days
+                if order.expected_date and order.expected_date < today else 0
+            )
+            page_value += order.pending_value
+            if current is None or current["supplier"].pk != order.supplier_id:
+                current = {"supplier": order.supplier, "orders": [], "value": zero}
+                groups.append(current)
+            current["orders"].append(order)
+            current["value"] += order.pending_value
+        context["groups"] = groups
+        context["page_value"] = page_value
+
+        # The tiles count the whole filtered set rather than this page: "what is
+        # still to come in" is a question about all of it.
+        everything = list(
+            self.filtered_queryset().prefetch_related("items")
+            if hasattr(self, "filtered_queryset")
+            else self.get_queryset().prefetch_related("items")
+        )
+        total_value, order_count, supplier_ids = zero, 0, set()
+        overdue = 0
+        for order in everything:
+            _rows, value = self._outstanding(order)
+            if value <= zero:
+                continue
+            total_value += value
+            order_count += 1
+            supplier_ids.add(order.supplier_id)
+            if order.expected_date and order.expected_date < today:
+                overdue += 1
+        context["pending_value"] = total_value
+        context["pending_orders"] = order_count
+        context["pending_suppliers"] = len(supplier_ids)
+        context["overdue_orders"] = overdue
+        return context
+
+
 class PurchaseOrderCreateView(InventoryManageMixin, View):
     """Raise an order on a supplier.
 
@@ -2522,6 +2784,8 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             "next_order_no": next_purchase_order_number(),
             "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
             "units": UOM.objects.order_by("title"),
+            "godowns": godown_options(),
+            "brokers": broker_options(),
             "today": timezone.localdate(),
             "items_json": json.dumps([
                 {
@@ -2601,6 +2865,8 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 quot_date=(posted.get("quot_date") or "") or None,
                 order_date=posted.get("order_date") or str(timezone.localdate()),
                 expected_date=(posted.get("expected_date") or "") or None,
+                godown=picked(posted, "godown", godown_options()),
+                broker=picked(posted, "broker", broker_options()),
                 lines=lines,
                 discount_amount=money("discount_amount"),
                 tax_amount=money("tax_amount"),
@@ -2736,6 +3002,22 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         context["close_short_form"] = PurchaseOrderCloseShortForm()
         context["reversal_form"] = ReversalReasonForm()
         context["linked_documents"] = linked_documents(self.object)
+        # Every invoice raised against this order, with its date and what it
+        # took: the question "how much of this has actually turned up, and
+        # when" is answered on the order rather than by opening each invoice.
+        invoice_rows = []
+        for invoice in self.object.invoices.select_related("supplier").prefetch_related("items").order_by("invoice_date", "id"):
+            taken = sum(
+                (line.quantity or Decimal("0") for line in invoice.items.all()
+                 if line.purchase_order_item_id and line.purchase_order_item.purchase_order_id == self.object.pk),
+                Decimal("0"),
+            )
+            invoice_rows.append({
+                "invoice": invoice,
+                "quantity": taken,
+                "reversed": invoice.status == STATUS_REVERSED,
+            })
+        context["order_invoices"] = invoice_rows
         # What the document is for. The order carries no total of its own --
         # the lines are the record -- so it is added up for the sheet.
         context["order_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
@@ -2934,6 +3216,8 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
             ("Expected", self.object.expected_date if shown.get("expected_date", True) else ""),
             ("Quot Num", self.object.quot_num if shown.get("quot_num", True) else ""),
             ("Quot Date", self.object.quot_date if shown.get("quot_date", True) else ""),
+            ("Godown", str(self.object.godown) if self.object.godown_id and shown.get("godown", True) else ""),
+            ("Broker", self.object.broker.title if self.object.broker_id and shown.get("broker", True) else ""),
             ("Approved By", approver.get_full_name() or approver.username if approver else ""),
             ("Supplier Name", supplier.name if supplier else ""),
             ("Phone", (supplier.tel1 or supplier.tel2) if supplier else ""),

@@ -440,7 +440,9 @@
     {# Who it is on and where it stands, side by side: the two things read #}
     {# together, so they sit on one line rather than one under the other.  #}
     <div class="pur-doc-parties">
-      <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ order.supplier.name }}</span></p>
+      <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ order.supplier.name }}</span>
+        {% if order.godown %}<span class="pur-doc-cap ml-4">Godown:</span> {{ order.godown.code }} — {{ order.godown.name }}{% endif %}
+        {% if order.broker %}<span class="pur-doc-cap ml-4">Broker:</span> {{ order.broker.title }}{% endif %}</p>
       {# The same pill the register draws, in the same words: one order shown #}
       {# on two screens must not appear to be in two different states.        #}
       <p class="pur-doc-right">
@@ -644,6 +646,45 @@
                 </tbody>
               </table>
             </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── What has been invoiced against this order ─────────────────────────── #}
+  {# The question every reader of an order asks second: how much of it has    #}
+  {# actually turned up, and when. Answered here rather than by opening each  #}
+  {# invoice in turn.                                                          #}
+  {% if order_invoices %}
+  <div class="pur-doc mt-6">
+    <p class="pur-doc-cap px-1 pb-2">Invoices against this order</p>
+    <div class="overflow-x-auto">
+      <table class="pur-table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Date</th>
+            <th>Supplier's ref</th>
+            <th>Vehicle</th>
+            <th class="pur-num">Quantity</th>
+            <th class="pur-num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in order_invoices %}
+          <tr {% if row.reversed %}class="pur-void"{% endif %}>
+            <td>
+              <a class="pur-strong" href="{% url 'inventory:purchase_invoice_detail' row.invoice.pk %}">{{ row.invoice.invoice_num }}</a>
+              {% if row.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>{% endif %}
+            </td>
+            <td>{{ row.invoice.invoice_date|dmy }}</td>
+            <td>{{ row.invoice.supplier_invoice_num|default:"&mdash;" }}</td>
+            <td>{{ row.invoice.vehicle_no|default:"&mdash;" }}</td>
+            <td class="pur-num">{{ row.quantity|qty }}</td>
+            <td class="pur-num pur-strong">{{ row.invoice.total_amount|amount }}</td>
           </tr>
           {% endfor %}
         </tbody>

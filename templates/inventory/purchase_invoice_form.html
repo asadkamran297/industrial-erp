@@ -462,6 +462,36 @@
           <input type="date" name="due_date" id="due_date" class="form-input h-10 w-full" value="{{ posted.due_date|default:'' }}">
         </div>
         {% endif %}
+        {# Where the goods landed, which truck brought them, who arranged it. #}
+        {% if layout.shown.godown %}
+        <div class="w-48">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="godown">Godown</label>
+          <select name="godown" id="godown" class="form-select h-10 w-full">
+            <option value="">—</option>
+            {% for g in godowns %}
+            <option value="{{ g.pk }}" {% if posted.godown == g.pk|stringformat:"s" %}selected{% endif %}>{{ g.code }} — {{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if layout.shown.vehicle_no %}
+        <div class="w-40">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="vehicle_no">Vehicle no</label>
+          <input type="text" name="vehicle_no" id="vehicle_no" class="form-input h-10 w-full uppercase"
+                 value="{{ posted.vehicle_no|default:'' }}" placeholder="Off the plate">
+        </div>
+        {% endif %}
+        {% if layout.shown.broker %}
+        <div class="w-56">
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="broker">Broker</label>
+          <select name="broker" id="broker" class="form-select h-10 w-full">
+            <option value="">—</option>
+            {% for b in brokers %}
+            <option value="{{ b.pk }}" {% if posted.broker == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
         {# Whatever this site added to the invoice form for itself. #}
         {% for field in layout.extra %}
         <div class="w-48">
@@ -510,6 +540,62 @@
       </div>
     </div>
 
+    {# ── Wheat and bardana ──────────────────────────────────────────────── #}
+    {# Their own grids, because the gate enters them differently: wheat off   #}
+    {# the weighbridge and its deductions, sacks by the count and whose they  #}
+    {# are. Same document, same screen, one truck one entry.                  #}
+    {% if wheat_products or bardana_products %}
+    <div class="border-t border-slate-200 px-6 py-5 dark:border-slate-800" id="mill-lines">
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Wheat</h3>
+        <button type="button" id="add-wheat" class="text-sm font-semibold text-[var(--primary-color)]">+ Add wheat line</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm" id="wheat-table">
+          <thead class="text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="py-1 pr-2">Wheat</th>
+              <th class="py-1 px-2 text-right">Party wt</th>
+              <th class="py-1 px-2 text-right">Mill wt</th>
+              <th class="py-1 px-2 text-right">Selected</th>
+              <th class="py-1 px-2 text-right">Katla</th>
+              <th class="py-1 px-2 text-right">Khoot</th>
+              <th class="py-1 px-2 text-right">Moisture</th>
+              <th class="py-1 px-2 text-right">Sacks</th>
+              <th class="py-1 px-2 text-right">Credit wt</th>
+              <th class="py-1 px-2 text-right">Rate / mund</th>
+              <th class="py-1 pl-2 text-right">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="wheat-rows"></tbody>
+        </table>
+      </div>
+
+      <div class="mt-6 mb-3 flex items-center justify-between">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Bardana</h3>
+        <button type="button" id="add-bardana" class="text-sm font-semibold text-[var(--primary-color)]">+ Add bardana line</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm" id="bardana-table">
+          <thead class="text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="py-1 pr-2">Bag</th>
+              <th class="py-1 px-2 text-right">Bags</th>
+              <th class="py-1 px-2">Whose</th>
+              <th class="py-1 px-2 text-right">Price</th>
+              <th class="py-1 px-2 text-right">Bag wt (kg)</th>
+              <th class="py-1 pl-2 text-right">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="bardana-rows"></tbody>
+        </table>
+      </div>
+      <p class="mt-2 text-xs text-slate-400">Party and returnable sacks are counted in but not bought.</p>
+    </div>
+    {% endif %}
+
     {# ── Money ────────────────────────────────────────────────────────────── #}
     <div class="grid gap-6 px-6 py-6 lg:grid-cols-3">
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
@@ -530,6 +616,14 @@
         {% if layout.shown.freight_amount %}<div class="pur-total-row">
           <label class="pur-label" for="freight_amount">Freight (Rs)</label>
           <input type="number" step="0.01" min="0" name="freight_amount" id="freight_amount" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.freight_amount|default:'' }}" placeholder="0.00">
+        </div>{% endif %}
+        {% if wheat_products %}<div class="pur-total-row">
+          <label class="pur-label" for="brokerage_rate_per_100kg">Brokerage / 100 kg</label>
+          <input type="number" step="0.01" min="0" name="brokerage_rate_per_100kg" id="brokerage_rate_per_100kg" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.brokerage_rate_per_100kg|default:'' }}" placeholder="0.00">
+        </div>
+        <div class="pur-total-row">
+          <label class="pur-label" for="withholding_rate_per_40kg">Withholding / 40 kg</label>
+          <input type="number" step="0.01" min="0" name="withholding_rate_per_40kg" id="withholding_rate_per_40kg" class="form-input pur-right" style="max-width:9rem;" value="{{ posted.withholding_rate_per_40kg|default:'' }}" placeholder="0.00">
         </div>{% endif %}
         {% if layout.shown.tax_amount %}<div class="pur-total-row">
           <label class="pur-label" for="tax_amount">Tax (Rs)</label>
@@ -921,6 +1015,107 @@
   });
 
   document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
+
+  // ── Wheat and bardana ───────────────────────────────────────────────────
+  // Kept apart from the stores grid above on purpose: the two are entered
+  // differently and post to different ledgers, and merging them would mean one
+  // row shape carrying columns that are blank for most of what it holds.
+  (function millLines() {
+    const wheatBox = document.getElementById('wheat-rows');
+    const bardanaBox = document.getElementById('bardana-rows');
+    if (!wheatBox && !bardanaBox) return;
+
+    const MUND = 40;
+    const num = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
+    const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const WHEAT_OPTIONS = `{% for p in wheat_products %}<option value="{{ p.pk }}">{{ p.complete_code }} {{ p.name }}</option>{% endfor %}`;
+    const BAG_OPTIONS = `{% for p in bardana_products %}<option value="{{ p.pk }}">{{ p.complete_code }} {{ p.name }}</option>{% endfor %}`;
+    const OWNERSHIP_OPTIONS = `{% for value, label in bardana_ownership_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}`;
+
+    const cell = (name, extra) =>
+      `<td class="py-1 px-2"><input type="number" step="0.001" min="0" name="${name}" class="form-input w-24 text-right ${extra || ''}" placeholder="0"></td>`;
+
+    function addWheat() {
+      const row = document.createElement('tr');
+      row.className = 'wheat-row border-t border-slate-100 dark:border-slate-800';
+      row.innerHTML =
+        `<td class="py-1 pr-2"><select name="wheat_product" class="form-select min-w-52"><option value="">—</option>${WHEAT_OPTIONS}</select></td>` +
+        cell('wheat_party_weight', 'w-party') +
+        cell('wheat_mill_weight', 'w-mill') +
+        cell('wheat_selected_weight', 'w-selected') +
+        cell('wheat_katla', 'w-ded') + cell('wheat_khoot', 'w-ded') +
+        cell('wheat_moisture', 'w-ded') + cell('wheat_sack_deduction', 'w-ded') +
+        `<td class="py-1 px-2 text-right font-semibold tabular-nums w-credit">0.000</td>` +
+        `<td class="py-1 px-2"><input type="number" step="0.01" min="0" name="wheat_rate_per_mund" class="form-input w-24 text-right w-rate" placeholder="0.00"></td>` +
+        `<td class="py-1 pl-2 text-right font-semibold tabular-nums w-amount">0.00</td>` +
+        `<td class="py-1 pl-2"><button type="button" class="drop-row text-slate-400 hover:text-rose-500" title="Remove">&times;</button></td>`;
+      wheatBox.appendChild(row);
+      return row;
+    }
+
+    function addBardana() {
+      const row = document.createElement('tr');
+      row.className = 'bardana-row border-t border-slate-100 dark:border-slate-800';
+      row.innerHTML =
+        `<td class="py-1 pr-2"><select name="bardana_product" class="form-select min-w-52"><option value="">—</option>${BAG_OPTIONS}</select></td>` +
+        `<td class="py-1 px-2"><input type="number" step="1" min="0" name="bardana_qty" class="form-input w-24 text-right b-qty" placeholder="0"></td>` +
+        `<td class="py-1 px-2"><select name="bardana_ownership" class="form-select b-own">${OWNERSHIP_OPTIONS}</select></td>` +
+        `<td class="py-1 px-2"><input type="number" step="0.01" min="0" name="bardana_rate" class="form-input w-24 text-right b-rate" placeholder="0.00"></td>` +
+        `<td class="py-1 px-2"><input type="number" step="0.001" min="0" name="bardana_bag_weight" class="form-input w-24 text-right" placeholder="0"></td>` +
+        `<td class="py-1 pl-2 text-right font-semibold tabular-nums b-amount">0.00</td>` +
+        `<td class="py-1 pl-2"><button type="button" class="drop-row text-slate-400 hover:text-rose-500" title="Remove">&times;</button></td>`;
+      bardanaBox.appendChild(row);
+      return row;
+    }
+
+    function recalcMill() {
+      wheatBox && Array.from(wheatBox.children).forEach(row => {
+        const selected = num(row.querySelector('.w-selected').value);
+        let deductions = 0;
+        row.querySelectorAll('.w-ded').forEach(box => { deductions += num(box.value); });
+        const credit = Math.max(selected - deductions, 0);
+        const amount = credit / MUND * num(row.querySelector('.w-rate').value);
+        row.querySelector('.w-credit').textContent = credit.toFixed(3);
+        row.querySelector('.w-amount').textContent = money(amount);
+        // Over-deducted is an entry to fix at the gate, not after posting.
+        row.querySelector('.w-credit').classList.toggle('text-rose-600', selected > 0 && credit <= 0);
+      });
+      bardanaBox && Array.from(bardanaBox.children).forEach(row => {
+        const own = row.querySelector('.b-own').value;
+        const bought = own === 'mill';
+        const rateBox = row.querySelector('.b-rate');
+        rateBox.disabled = !bought;
+        rateBox.classList.toggle('opacity-40', !bought);
+        const amount = bought ? num(row.querySelector('.b-qty').value) * num(rateBox.value) : 0;
+        row.querySelector('.b-amount').textContent = money(amount);
+      });
+    }
+
+    // The mill scale is what the mill goes by; the party's figure is recorded
+    // beside it. Typing either fills the selected weight, and the clerk can
+    // still overwrite it, which is what "selected" means.
+    document.addEventListener('input', e => {
+      const row = e.target.closest('.wheat-row');
+      if (row && (e.target.classList.contains('w-mill') || e.target.classList.contains('w-party'))) {
+        const selected = row.querySelector('.w-selected');
+        if (!selected.dataset.touched) {
+          selected.value = row.querySelector('.w-mill').value || row.querySelector('.w-party').value;
+        }
+      }
+      if (e.target.classList.contains('w-selected')) e.target.dataset.touched = '1';
+      if (e.target.closest('#mill-lines')) recalcMill();
+    });
+    document.addEventListener('change', e => { if (e.target.closest('#mill-lines')) recalcMill(); });
+    document.addEventListener('click', e => {
+      if (e.target.classList.contains('drop-row')) { e.target.closest('tr').remove(); recalcMill(); }
+    });
+
+    const addWheatBtn = document.getElementById('add-wheat');
+    const addBagBtn = document.getElementById('add-bardana');
+    addWheatBtn && addWheatBtn.addEventListener('click', () => { addWheat().querySelector('select').focus(); });
+    addBagBtn && addBagBtn.addEventListener('click', () => { addBardana().querySelector('select').focus(); });
+  })();
   ['discount_amount', 'tax_amount', 'paid_amount'].forEach(id =>
     document.getElementById(id).addEventListener('input', recalc)
   );

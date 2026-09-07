@@ -21,6 +21,8 @@ from apps.core.constants import (
     INV_RETURN_STATUS_CHOICES,
     INV_SALES_ORDER_STATUS_CHOICES,
     INV_TRANSACTION_TYPE_CHOICES,
+    INV_BARDANA_NOT_PURCHASED,
+    INV_BARDANA_OWNERSHIP_CHOICES,
     INVENTORY_KIND_PRODUCT,
     NO,
     PAY_MODE_CHOICES,
@@ -281,6 +283,15 @@ class PurchaseOrder(BaseModel):
     # delivery late, which is the only way an order that is quietly not
     # arriving ever gets noticed.
     expected_date = models.DateField(null=True, blank=True)
+    # Where the goods are expected. Recorded on the document; stock itself is
+    # still one pool per item, so this says where they should arrive rather
+    # than holding a per-godown balance.
+    godown = models.ForeignKey("godowns.Godown", null=True, blank=True, related_name="purchase_orders",
+                               on_delete=models.PROTECT, db_column="godown_id")
+    # Who arranged the deal. An account rather than a name, because brokerage
+    # is owed to them and has to be able to settle on its own.
+    broker = models.ForeignKey("finance.ChartOfAccount", null=True, blank=True, related_name="broker_purchase_orders",
+                               on_delete=models.PROTECT, db_column="broker_account_id")
     # Whatever the site added to the purchase order form for itself, keyed by
     # the field's code. Held as JSON rather than as columns because the set is
     # configured by the site and changes without a migration; nothing in the
@@ -322,6 +333,8 @@ class PurchaseOrder(BaseModel):
             models.Index(fields=["status", "-purchase_date"]),
             # Supplier history and the pending-receipt lookup.
             models.Index(fields=["supplier", "-purchase_date"]),
+            # What is on order for one godown, newest first.
+            models.Index(fields=["godown", "-purchase_date"], name="inv_po_godown_date_idx"),
         ]
 
     @property
@@ -385,7 +398,12 @@ class PurchaseOrderItem(BaseModel):
     purchase_num = models.CharField(max_length=40)
     purchase_date = models.DateField()
     status = models.CharField(max_length=20, choices=YES_NO_CHOICES, default=YES)
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    # The same two kinds the invoice carries: stores items, and the products
+    # the mill buys by weight. An order commits to either and moves neither.
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
+                                       on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="purchase_order_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
     unit_rate = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
@@ -414,6 +432,19 @@ class PurchaseOrderItem(BaseModel):
         db_table = "inv_purchase_order_items"
         ordering = ["purchase_order", "seq_num"]
         unique_together = (("purchase_order", "seq_num"),)
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_po_line_one_item_kind",
+            ),
+        ]
+        indexes = [
+            # What is on order for one product, latest first.
+            models.Index(fields=["product", "-id"], name="inv_po_line_product_idx"),
+        ]
 
     @property
     def pending_receive_qty(self):
@@ -461,10 +492,29 @@ class PurchaseOrderItem(BaseModel):
     def total_amount(self):
         return (self.quantity or Decimal("0")) * (self.rate or Decimal("0")) - (self.discount_amount or Decimal("0"))
 
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
+
     def is_duplicate_in_order(self):
-        if not (self.purchase_order_id and self.inventory_item_id):
+        if not self.purchase_order_id:
             return False
-        return PurchaseOrderItem.objects.filter(purchase_order_id=self.purchase_order_id, inventory_item_id=self.inventory_item_id).exclude(pk=self.pk).exists()
+        if self.product_id:
+            twins = PurchaseOrderItem.objects.filter(
+                purchase_order_id=self.purchase_order_id, product_id=self.product_id
+            )
+        elif self.inventory_item_id:
+            twins = PurchaseOrderItem.objects.filter(
+                purchase_order_id=self.purchase_order_id, inventory_item_id=self.inventory_item_id
+            )
+        else:
+            return False
+        return twins.exclude(pk=self.pk).exists()
+
+    def clean(self):
+        super().clean()
+        if bool(self.inventory_item_id) == bool(self.product_id):
+            raise ValidationError("An order line names either a stores item or a product, not both and not neither.")
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -472,7 +522,7 @@ class PurchaseOrderItem(BaseModel):
             self.seq_num = last + 1
         self.purchase_num = self.purchase_order.purchase_num
         self.purchase_date = self.purchase_order.purchase_date
-        self.descr = self.inventory_item.item_name
+        self.descr = self.product.name if self.is_product_line else self.inventory_item.item_name
         if not self.unit_rate:
             self.unit_rate = self.rate
         self.full_clean()
@@ -510,12 +560,32 @@ class PurchaseInvoice(BaseModel):
     invoice_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
 
+    # Where the goods were received, which truck brought them, and who
+    # arranged the deal. The vehicle is free text on purpose: it is copied off
+    # a number plate at a gate, at night, and a picker of known vehicles would
+    # simply stop the entry the first time an unknown truck turned up.
+    godown = models.ForeignKey("godowns.Godown", null=True, blank=True, related_name="purchase_invoices",
+                               on_delete=models.PROTECT, db_column="godown_id")
+    vehicle_no = models.CharField(max_length=30, blank=True)
+    broker = models.ForeignKey("finance.ChartOfAccount", null=True, blank=True, related_name="broker_purchase_invoices",
+                               on_delete=models.PROTECT, db_column="broker_account_id")
+
     goods_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     freight_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+
+    # -- Charges quoted against weight --------------------------------------
+    # Both are rates the trade quotes per weight rather than per rupee, and both
+    # are worked out off the credit weight -- the weight actually bought. The
+    # rate is kept beside the amount so a printed invoice can be checked back
+    # against what was agreed, rather than only showing the answer.
+    brokerage_rate_per_100kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    brokerage_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    withholding_rate_per_40kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    withholding_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
     status = models.CharField(max_length=20, choices=INV_PURCHASE_INVOICE_STATUS_CHOICES, default=STATUS_POSTED)
     # When it hit the books, and which voucher carries it. Kept on the invoice
@@ -564,12 +634,33 @@ class PurchaseInvoice(BaseModel):
             models.Index(fields=["supplier", "-invoice_date"]),
             # Walking back from an order to what was invoiced against it.
             models.Index(fields=["purchase_order"]),
+            # What came into one godown, newest first: the filter the list screen
+            # offers and the one a godown incharge reads every morning.
+            models.Index(fields=["godown", "-invoice_date"], name="inv_pi_godown_date_idx"),
         ]
+
+    @property
+    def supplier_payable_amount(self):
+        """What the supplier is actually owed: the total, less tax withheld.
+
+        Withholding is not a discount -- the money is still owed, it is simply
+        owed to the revenue rather than to the supplier -- so it comes off what
+        the supplier is credited with and lands in its own liability.
+        """
+        return (self.total_amount or Decimal("0.00")) - (self.withholding_amount or Decimal("0.00"))
 
     @property
     def balance_amount(self):
         """Still owed on this invoice. Derived, so it cannot drift from paid."""
-        return (self.total_amount or Decimal("0.00")) - (self.paid_amount or Decimal("0.00"))
+        return self.supplier_payable_amount - (self.paid_amount or Decimal("0.00"))
+
+    @property
+    def credit_weight_total(self):
+        """The weight this invoice bought, which the weight-based charges read."""
+        return sum(
+            (line.credit_weight or Decimal("0.000") for line in self.items.all()),
+            Decimal("0.000"),
+        )
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -601,7 +692,16 @@ class PurchaseInvoiceLine(BaseModel):
     purchase_order_item = models.ForeignKey(PurchaseOrderItem, null=True, blank=True,
                                             related_name="invoice_lines", on_delete=models.PROTECT,
                                             db_column="inv_purchase_order_item_id")
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    # A line names one or the other, never both and never neither. The mill
+    # buys two different kinds of thing through the same gate: stores items,
+    # which live in the inventory ledger, and wheat and bardana, which live in
+    # the product ledger that grinding reads. Keeping them apart in the schema
+    # is what stops the two stock worlds drifting into each other; keeping them
+    # on one document is what stops the clerk entering the same truck twice.
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
+                                       on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="purchase_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
     seq_num = models.PositiveIntegerField()
     descr = models.CharField(max_length=255)
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
@@ -612,14 +712,85 @@ class PurchaseInvoiceLine(BaseModel):
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
+    # -- Wheat weights ------------------------------------------------------
+    # Filled only on a wheat line, and columns rather than JSON because they
+    # decide both the money and the quantity that reaches the ledger: what the
+    # party weighed, what the mill weighed, which of the two was accepted, and
+    # then what comes off it before it is paid for.
+    party_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    mill_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    selected_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    katla = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    khoot = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    moisture = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    sack_weight_deduction = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    # The paid weight: selected, less every deduction. Stored rather than
+    # derived on read, because it is the quantity that went into the ledger and
+    # it must still read the same if the deduction rules ever change.
+    credit_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    # Wheat is priced by the mound of 40 kg, not by the kilo.
+    rate_per_mund = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+
+    # -- Bardana ------------------------------------------------------------
+    # Sacks that came in with the load. Whose they are decides whether they are
+    # bought: the mill keeps custody of all of them and counts all of them, but
+    # only its own are paid for. Blank on every line that is not sacks.
+    bardana_ownership = models.CharField(max_length=20, choices=INV_BARDANA_OWNERSHIP_CHOICES, blank=True)
+    # What one empty sack weighs, so the sack allowance on the wheat line can be
+    # checked against the sacks that actually came with it.
+    bag_weight = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+
     class Meta:
         db_table = "inv_purchase_invoice_items"
         ordering = ["invoice", "seq_num"]
         unique_together = (("invoice", "seq_num"),)
+        constraints = [
+            # Exactly one side. The database says it as well as the service, so
+            # a line that belongs to neither stock world cannot be written at
+            # all -- it would post nowhere and be found months later.
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_pi_line_one_item_kind",
+            ),
+        ]
         indexes = [
             # An item's purchase history, read straight off the lines.
             models.Index(fields=["inventory_item", "-id"]),
+            # The same question asked of a product: what wheat came in, latest first.
+            models.Index(fields=["product", "-id"], name="inv_pi_line_product_idx"),
         ]
+
+    MUND_KG = Decimal("40")
+
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
+
+    @property
+    def is_purchased_bardana(self):
+        """Sacks the mill bought, as against sacks it is merely holding."""
+        return bool(self.bardana_ownership) and self.bardana_ownership not in INV_BARDANA_NOT_PURCHASED
+
+    def computed_credit_weight(self):
+        """Selected weight less every deduction, floored at zero.
+
+        Floored rather than allowed negative: deductions larger than the load
+        mean the entry is wrong, and a negative paid weight would credit the
+        supplier for wheat they never sent.
+        """
+        zero = Decimal("0.000")
+        selected = self.selected_weight
+        if selected is None:
+            return None
+        deductions = sum(
+            (value or zero)
+            for value in (self.katla, self.khoot, self.moisture, self.sack_weight_deduction)
+        )
+        net = Decimal(selected) - Decimal(deductions)
+        return net if net > zero else zero
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -629,13 +800,32 @@ class PurchaseInvoiceLine(BaseModel):
             )
             self.seq_num = last + 1
         if not self.descr:
-            self.descr = self.inventory_item.item_name
-        self.amount = (
-            (self.quantity or Decimal("0")) * (self.rate or Decimal("0"))
-            - (self.discount_amount or Decimal("0.00"))
-        ).quantize(TWO_DP)
+            self.descr = self.product.name if self.is_product_line else self.inventory_item.item_name
+        # A wheat line is priced off the weight actually paid for, by the mound;
+        # everything else is quantity times rate. Both end in the same amount
+        # column, so an invoice adds up one way whatever it is buying.
+        if self.rate_per_mund is not None and self.selected_weight is not None:
+            self.credit_weight = self.computed_credit_weight()
+            self.quantity = Decimal(self.credit_weight)
+            # Kept in step so any reader of the line, print included, sees a
+            # per-kilo rate that multiplies out to the amount beside it.
+            self.rate = (Decimal(self.rate_per_mund) / self.MUND_KG).quantize(TWO_DP)
+            self.amount = (
+                Decimal(self.credit_weight) / self.MUND_KG * Decimal(self.rate_per_mund)
+                - (self.discount_amount or Decimal("0.00"))
+            ).quantize(TWO_DP)
+        else:
+            self.amount = (
+                (self.quantity or Decimal("0")) * (self.rate or Decimal("0"))
+                - (self.discount_amount or Decimal("0.00"))
+            ).quantize(TWO_DP)
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if bool(self.inventory_item_id) == bool(self.product_id):
+            raise ValidationError("A line names either a stores item or a product, not both and not neither.")
 
 
 class LegacyReadOnly:

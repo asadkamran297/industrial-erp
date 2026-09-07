@@ -38,8 +38,13 @@ TAB_CLOSED = "closed"
 # Kept so anything still importing it by name does not break; the board no
 # longer offers it, because there is no unbilled state left for it to mean.
 TAB_UNBILLED = "unbilled"
+TAB_LIVE = "live"
+TAB_LIVE = "live"
 
 TABS = (
+    # First, and the one the board opens on: the purchasing clerk's morning
+    # question is what is still owed, not what has ever been ordered.
+    (TAB_LIVE, "Still expected"),
     (TAB_ALL, "All"),
     (TAB_PENDING, "Awaiting approval"),
     (TAB_OPEN, "Awaiting invoice"),
@@ -49,6 +54,9 @@ TABS = (
 )
 
 TAB_STATUSES = {
+    # Raised and part invoiced together: both are orders with goods still to
+    # come, and the clerk chasing them does not care which of the two it is.
+    TAB_LIVE: (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED),
     TAB_PENDING: (STATUS_DRAFT,),
     TAB_OPEN: (STATUS_SUBMITTED,),
     TAB_PARTIAL: (STATUS_PARTIALLY_INVOICED,),

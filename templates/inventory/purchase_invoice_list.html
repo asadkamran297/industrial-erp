@@ -108,6 +108,7 @@
           <th class="po-right">Items</th>
           <th class="po-right">Quantity</th>
           <th>Order</th>
+          <th>Vehicle</th>
           <th class="po-right">Amount</th>
           <th class="print-hide po-right">Actions</th>
         </tr>
@@ -141,6 +142,7 @@
             <span class="po-pill" title="Entered straight off the supplier's invoice, with no order raised first">Direct</span>
             {% endif %}
           </td>
+          <td class="whitespace-nowrap">{% if invoice.vehicle_no %}{{ invoice.vehicle_no }}{% if invoice.godown %}<span class="po-sub">{{ invoice.godown.name }}</span>{% endif %}{% elif invoice.godown %}{{ invoice.godown.name }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
           <td class="po-right font-semibold">{{ invoice.total_amount|amount }}</td>
           <td class="print-hide">
             <div class="po-row-actions">
@@ -165,7 +167,7 @@
 
         {# ── The invoice's own lines, opened from the + on the row ────────── #}
         <tr class="po-lines-row print-hide" x-show="isRowOpen({{ invoice.pk }})" x-cloak>
-          <td colspan="10" class="po-lines-cell print-hide">
+          <td colspan="11" class="po-lines-cell print-hide">
             {% with line_list=invoice.items.all %}
             {% if line_list %}
             <table class="po-lines">
@@ -204,13 +206,13 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="10" class="px-4 py-12 text-center text-slate-500">No purchase invoices here.</td></tr>
+        <tr><td colspan="11" class="px-4 py-12 text-center text-slate-500">No purchase invoices here.</td></tr>
         {% endfor %}
       </tbody>
       {% if invoices %}
       <tfoot>
         <tr class="po-foot">
-          <td colspan="8">Total on this page</td>
+          <td colspan="9">Total on this page</td>
           <td class="po-right">{{ page_total|amount }}</td>
           <td></td>
         </tr>

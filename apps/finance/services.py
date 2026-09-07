@@ -6,6 +6,9 @@ from django.db.models import Sum
 from django.core.exceptions import ValidationError
 
 from apps.core.constants import (
+    GL_BROKERAGE_PATH,
+    GL_BROKERS_GROUP_PATH,
+    GL_WITHHOLDING_PAYABLE_PATH,
     ACCOUNT_TYPE_ASSET,
     ACCOUNT_TYPE_CAPITAL,
     ACCOUNT_TYPE_EXPENSE,
@@ -766,7 +769,10 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
         Dr Inventory            the goods, at the rate invoiced, net of discount
         Dr Freight              carriage the supplier charged
         Dr Input Sales Tax      tax the supplier charged, recoverable
-            Cr Supplier payable     what is now owed
+        Dr Brokerage            brokerage on the deal, per 100 kg bought
+            Cr Broker payable       what the broker is owed for arranging it
+            Cr Withholding payable  tax held back from the supplier
+            Cr Supplier payable     what the supplier is now owed
 
     Nothing is held in a clearing account and nothing is matched later. There
     is no receipt between the order and the invoice, so the asset and the debt
@@ -777,6 +783,16 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     compare against there is no second figure for it to be a difference from.
     A discount the supplier allowed is already off the goods, because it
     reduces what the stock actually cost.
+
+    Brokerage and withholding are the two charges quoted against weight rather
+    than value, and neither belongs to the supplier. Brokerage is owed to the
+    broker and is a cost of buying, not part of what the wheat cost, so it goes
+    to its own expense and its own payable. Withholding is money kept back from
+    the supplier and owed to the revenue instead: the supplier is credited with
+    that much less, and the difference sits in its own liability until it is
+    deposited. Both ride on this voucher rather than raising vouchers of their
+    own -- they arise from this invoice and nothing else, and a voucher per
+    charge would make one purchase read as three unrelated events.
     """
     zero = Decimal("0.00")
     supplier = invoice.supplier
@@ -809,7 +825,23 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     if tax:
         entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
                         f"Input sales tax on {reference}"))
-    entries.append((supplier_account.code, zero, payable,
+    brokerage = (invoice.brokerage_amount or zero).quantize(TWO_DP)
+    if brokerage:
+        entries.append((gl_account(GL_BROKERAGE_PATH, user=user).code, brokerage, zero,
+                        f"Brokerage on {invoice.invoice_num}"))
+        # Owed to the named broker where the invoice names one, and to the
+        # heading itself where it does not, so the cost is never left with
+        # nowhere to sit.
+        broker_account = invoice.broker or gl_account(GL_BROKERS_GROUP_PATH, user=user)
+        entries.append((broker_account.code, zero, brokerage,
+                        f"Brokerage payable on {invoice.invoice_num}"))
+
+    withholding = (invoice.withholding_amount or zero).quantize(TWO_DP)
+    if withholding:
+        entries.append((gl_account(GL_WITHHOLDING_PAYABLE_PATH, user=user).code, zero, withholding,
+                        f"Tax withheld from {supplier.name} on {reference}"))
+
+    entries.append((supplier_account.code, zero, payable - withholding,
                     f"Payable to {supplier.name} on {reference}"))
 
     return _post_voucher(

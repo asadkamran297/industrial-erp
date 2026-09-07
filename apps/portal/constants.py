@@ -53,6 +53,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
                        match_paths=("/inventory/purchase-orders/",)),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
+        NavigationItem("Pending Orders", permission="inventory.purchase_report.index", url_name="inventory:report_pending_orders"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
     )),
     NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(

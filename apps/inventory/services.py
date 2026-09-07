@@ -42,10 +42,17 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from apps.core.constants import CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES
+from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES
 
 TWO_DP = Decimal("0.01")
 FOUR_DP = Decimal("0.0001")
+# Wheat is bought by the mound, and a mound is forty kilos.
+MUND_KG = Decimal("40")
+# What the weight-quoted charges are quoted against.
+BROKERAGE_KG = Decimal(BROKERAGE_WEIGHT_UNIT_KG)
+WITHHOLDING_KG = Decimal(WITHHOLDING_WEIGHT_UNIT_KG)
+
+from apps.products import services as product_services
 
 from .models import (
     ItemLedger,
@@ -174,6 +181,28 @@ def finalize_manual_transaction(*, transaction_id, user):
     return len(rows)
 
 
+def weighted_cost(*, old_quantity, old_price, in_quantity, in_price):
+    """What the pile costs per unit once this delivery is mixed into it.
+
+    Stock is one pool per item, so a delivery does not replace the cost of what
+    is already on the floor -- it averages into it. Overwriting instead, which
+    is what this used to do, re-prices every existing unit at the newest rate:
+    one small drum bought dear would restate the cost of the whole tank, and
+    every later cost of sales off that stock would be wrong.
+
+    Falls back to the incoming price where there is nothing to average against
+    -- an empty bin, or a bin whose cost was never set -- because the only
+    figure known about the stock at that moment is what was just paid for it.
+    """
+    old_quantity = old_quantity or Decimal("0")
+    old_price = old_price or Decimal("0")
+    new_quantity = old_quantity + in_quantity
+    if old_quantity <= 0 or old_price <= 0 or new_quantity <= 0:
+        return Decimal(in_price).quantize(TWO_DP)
+    total_value = (old_quantity * old_price) + (in_quantity * in_price)
+    return (total_value / new_quantity).quantize(TWO_DP)
+
+
 def _fits(quantity, rate):
     """A converted quantity and rate, cut to what the columns actually hold.
 
@@ -228,7 +257,8 @@ def next_purchase_order_number():
 @transaction.atomic
 def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, expected_date=None,
                           discount_amount=Decimal("0"), tax_amount=Decimal("0"),
-                          remarks="", status=STATUS_SUBMITTED, extra_data=None, user):
+                          remarks="", status=STATUS_SUBMITTED, godown=None, broker=None,
+                          extra_data=None, user):
     """An order raised on a supplier: goods asked for, none of them here yet.
 
     Same entry shape as ``create_purchase_invoice`` so both purchase screens read
@@ -241,7 +271,10 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
     if not supplier:
         raise ValidationError("Pick a supplier.")
 
-    clean_lines = [line for line in lines if line.get("inventory_item") and line.get("quantity")]
+    clean_lines = [
+        line for line in lines
+        if (line.get("inventory_item") or line.get("product")) and line.get("quantity")
+    ]
     if not clean_lines:
         raise ValidationError("Add at least one item with a quantity.")
 
@@ -252,6 +285,8 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
         quot_num=quot_num or "",
         quot_date=quot_date or None,
         expected_date=expected_date or None,
+        godown=godown,
+        broker=broker,
         # Every document says what it is for. Where nobody wrote a narration
         # the obvious one is written for them, so a printed order is never
         # blank where the reader expects a sentence.
@@ -271,18 +306,26 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
         rate = Decimal(line.get("rate") or 0)
         if quantity <= 0:
             raise ValidationError("Every line needs a quantity greater than zero.")
+        product = line.get("product")
+        if product is not None:
+            # A product is ordered in its own unit and has no second unit to be
+            # restated from, so nothing is converted here.
+            amount = (quantity * rate).quantize(Decimal("0.01"))
+            goods_total += amount
+            prepared.append((None, product, quantity, rate, amount, line.get("descr")))
+            continue
         item = line["inventory_item"]
         quantity, rate = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=rate)
         amount = (quantity * rate).quantize(Decimal("0.01"))
         goods_total += amount
-        prepared.append((item, quantity, rate, amount, line.get("descr")))
+        prepared.append((item, None, quantity, rate, amount, line.get("descr")))
 
     discount = Decimal(discount_amount or 0).quantize(Decimal("0.01"))
     if discount > goods_total:
         raise ValidationError("Discount cannot be more than the order total.")
 
     spread = Decimal("0.00")
-    for seq, (item, quantity, rate, amount, descr) in enumerate(prepared, start=1):
+    for seq, (item, product, quantity, rate, amount, descr) in enumerate(prepared, start=1):
         if seq == len(prepared):
             # The last line carries whatever rounding the split left over, so
             # the discounts on the lines add back to the one that was typed.
@@ -296,12 +339,13 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
             purchase_num=order.purchase_num,
             purchase_date=order.purchase_date,
             inventory_item=item,
+            product=product,
             quantity=quantity,
             rate=rate,
             unit_rate=rate,
-            uom=item.uom,
+            uom=item.uom if item else None,
             discount_amount=share,
-            descr=(descr or item.item_name)[:255],
+            descr=(descr or (product.name if product else item.item_name))[:255],
             created_by=user,
             updated_by=user,
         )
@@ -394,6 +438,8 @@ def create_sales_order(*, customer, order_date=None, lines, expected_date=None,
         customer=customer,
         order_date=order_date or timezone.localdate(),
         expected_date=expected_date or None,
+        godown=godown,
+        broker=broker,
         customer_ref=(customer_ref or "").strip(),
         status=status,
         remarks=remarks or "",
@@ -959,7 +1005,7 @@ def open_order_lines(*, supplier=None, purchase_order=None):
     """
     rows = (
         PurchaseOrderItem.objects
-        .select_related("purchase_order__supplier", "inventory_item", "uom")
+        .select_related("purchase_order__supplier", "inventory_item", "product", "uom")
         .filter(purchase_order__status__in=INV_ORDER_OPEN_STATUSES)
     )
     if supplier is not None:
@@ -1034,11 +1080,102 @@ def _refresh_order_invoiced_status(order, *, user=None):
     return order
 
 
+WEIGHT_FIELDS = ("party_weight", "mill_weight", "selected_weight", "katla", "khoot",
+                 "moisture", "sack_weight_deduction")
+
+
+def _prepare_product_line(line, product, order_item=None):
+    """One wheat or bardana line, priced the way the mill prices it.
+
+    Wheat arrives as weights and a rate per mound: the paid weight is the
+    selected weight less katla, khoot, moisture and sack allowance, and that
+    weight is both what is paid for and what reaches the product ledger.
+    Bardana arrives as a plain count and a price, like anything else.
+
+    Returns the prepared row and what it comes to, so the caller adds up the
+    invoice the same way for every kind of line.
+    """
+    weights = {
+        field: (Decimal(str(line[field])) if line.get(field) is not None else None)
+        for field in WEIGHT_FIELDS
+    }
+    rate_per_mund = line.get("rate_per_mund")
+    ownership = (line.get("bardana_ownership") or "").strip()
+    if ownership and ownership not in dict(INV_BARDANA_OWNERSHIP_CHOICES):
+        raise ValidationError(f"{product.name}: say whose sacks these are.")
+    weights["bardana_ownership"] = ownership
+    weights["bag_weight"] = (
+        Decimal(str(line["bag_weight"])) if line.get("bag_weight") is not None else None
+    )
+
+    if rate_per_mund is not None and weights["selected_weight"] is not None:
+        rate_per_mund = Decimal(str(rate_per_mund))
+        if rate_per_mund <= 0:
+            raise ValidationError(f"{product.name}: a rate per mund is needed to price the load.")
+        deductions = sum(
+            (weights[field] or Decimal("0.000"))
+            for field in ("katla", "khoot", "moisture", "sack_weight_deduction")
+        )
+        credit_weight = weights["selected_weight"] - deductions
+        if credit_weight <= 0:
+            raise ValidationError(
+                f"{product.name}: the deductions come to more than the weight received. "
+                "Check the katla, khoot, moisture and sack figures."
+            )
+        quantity = credit_weight
+        rate = (rate_per_mund / MUND_KG).quantize(TWO_DP)
+        amount = (credit_weight / MUND_KG * rate_per_mund).quantize(TWO_DP)
+        weights["credit_weight"] = credit_weight
+        weights["rate_per_mund"] = rate_per_mund
+    elif ownership in INV_BARDANA_NOT_PURCHASED:
+        # The party's sacks, or ones going back empty. They are counted in --
+        # the mill is holding them and grinding has to see them -- but nothing
+        # is owed for them, so they carry no price and add nothing to the bill.
+        quantity = Decimal(line.get("quantity") or 0)
+        if quantity <= 0:
+            raise ValidationError(f"{product.name}: enter how many sacks came in.")
+        rate = Decimal("0.00")
+        amount = Decimal("0.00")
+        weights["credit_weight"] = None
+        weights["rate_per_mund"] = None
+    else:
+        quantity = Decimal(line.get("quantity") or 0)
+        rate = Decimal(line.get("rate") or 0)
+        if quantity <= 0:
+            raise ValidationError(f"{product.name}: enter how much arrived.")
+        if rate <= 0:
+            raise ValidationError(
+                f"{product.name}: enter a price - the system will not guess what was agreed."
+            )
+        amount = (quantity * rate).quantize(TWO_DP)
+        weights["credit_weight"] = None
+        weights["rate_per_mund"] = None
+
+    return {
+        "item": None,
+        "product": product,
+        # An order line where the wheat was ordered ahead, none where it came
+        # to the gate on the day. Both are ordinary, and the invoice is the
+        # same document either way.
+        "order_item": order_item,
+        "quantity": quantity,
+        "rate": rate,
+        "uom": None,
+        "tax_perc": Decimal("0"),
+        "discount_amount": Decimal("0.00"),
+        "amount": amount,
+        "descr": (line.get("descr") or product.name)[:255],
+        "weights": weights,
+    }, amount
+
+
 @transaction.atomic
 def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_date=None,
                             invoice_date=None, due_date=None, lines,
                             discount_amount=Decimal("0"), freight_amount=Decimal("0"),
                             tax_amount=None, paid_amount=Decimal("0"), remarks="",
+                            godown=None, vehicle_no="", broker=None,
+                            brokerage_rate_per_100kg=Decimal("0"), withholding_rate_per_40kg=Decimal("0"),
                             extra_data=None, user):
     """Enter a supplier's invoice. The one financial document on this side.
 
@@ -1074,9 +1211,14 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             f"entered as {existing.invoice_num}."
         )
 
+    # A line names a stores item or a product, never both. A wheat line brings
+    # its quantity as a weight rather than a count, so it is kept even where
+    # ``quantity`` was never typed -- the weight fields are what it was written
+    # with, and the paid weight is worked out from them below.
     clean = [
         line for line in lines
-        if line.get("inventory_item") and Decimal(line.get("quantity") or 0) > 0
+        if (line.get("inventory_item") or line.get("product"))
+        and (Decimal(line.get("quantity") or 0) > 0 or line.get("selected_weight") is not None)
     ]
     if not clean:
         raise ValidationError("Add at least one line with a quantity.")
@@ -1085,7 +1227,44 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
     prepared, goods_total, tax_from_lines = [], Decimal("0.00"), Decimal("0.00")
     touched_orders = {}
+    over_invoiced = []
     for line in clean:
+        product = line.get("product")
+        if product is not None:
+            order_item = line.get("order_item")
+            if order_item is not None:
+                order_item = PurchaseOrderItem.objects.select_for_update().select_related(
+                    "purchase_order", "product"
+                ).get(pk=order_item.pk)
+                order = order_item.purchase_order
+                if order.supplier_id != supplier.pk:
+                    raise ValidationError(f"{order.purchase_num} was raised on a different supplier.")
+                if order.status in (STATUS_DRAFT, STATUS_CANCELLED):
+                    raise ValidationError("An order can only be invoiced once it has been submitted.")
+                if order_item.product_id != product.pk:
+                    raise ValidationError(
+                        f"{order.purchase_num} line {order_item.seq_num} is for "
+                        f"{order_item.descr}, not {product.name}."
+                    )
+                touched_orders[order.pk] = order
+            prepared_row, line_amount = _prepare_product_line(line, product, order_item=order_item)
+            # Over-receipt on a product line is reported the same way it is on
+            # a stores line: taken in, never silent.
+            if order_item is not None:
+                excess = prepared_row["quantity"] - order_item.qty_pending
+                if excess > FOUR_DP:
+                    over_invoiced.append({
+                        "order_num": order_item.purchase_order.purchase_num,
+                        "seq_num": order_item.seq_num,
+                        "item": order_item.descr,
+                        "ordered_balance": order_item.qty_pending,
+                        "invoiced": prepared_row["quantity"],
+                        "excess": excess,
+                    })
+            goods_total += line_amount
+            prepared.append(prepared_row)
+            continue
+
         item = line["inventory_item"]
         quantity = Decimal(line["quantity"])
         rate = Decimal(line.get("rate") or 0)
@@ -1110,12 +1289,21 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                 raise ValidationError(f"{order.purchase_num} was raised on a different supplier.")
             if order.status in (STATUS_DRAFT, STATUS_CANCELLED):
                 raise ValidationError("An order can only be invoiced once it has been submitted.")
-            if quantity > order_item.qty_pending + FOUR_DP:
-                raise ValidationError(
-                    f"{order.purchase_num} line {order_item.seq_num} has only "
-                    f"{order_item.qty_pending} left to invoice; this invoice is asking for "
-                    f"{quantity}. You cannot be invoiced past what was ordered."
-                )
+            # Over-receipt is allowed. A supplier sending a little more than
+            # ordered is ordinary in this trade, and a truck already tipped at
+            # the gate cannot be sent back by a validation rule. The excess is
+            # recorded on the return value so the screen can say it out loud
+            # rather than the difference being discovered in a report later.
+            excess = quantity - order_item.qty_pending
+            if excess > FOUR_DP:
+                over_invoiced.append({
+                    "order_num": order.purchase_num,
+                    "seq_num": order_item.seq_num,
+                    "item": order_item.descr,
+                    "ordered_balance": order_item.qty_pending,
+                    "invoiced": quantity,
+                    "excess": excess,
+                })
             touched_orders[order.pk] = order
 
         line_discount = Decimal(line.get("discount_amount") or 0).quantize(TWO_DP)
@@ -1125,6 +1313,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         tax_from_lines += (quantity * rate * tax_perc / 100).quantize(TWO_DP)
         prepared.append({
             "item": item,
+            "product": None,
             "order_item": order_item,
             "quantity": quantity,
             "rate": rate,
@@ -1133,6 +1322,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             "discount_amount": line_discount,
             "amount": amount,
             "descr": (line.get("descr") or item.item_name)[:255],
+            "weights": {},
         })
 
     freight = Decimal(freight_amount or 0).quantize(TWO_DP)
@@ -1147,9 +1337,28 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     )
     total = (goods_total + freight - discount + tax_total).quantize(TWO_DP)
 
+    # Brokerage and withholding are quoted against weight, so they are worked
+    # out off the credit weight this invoice bought. No wheat on the invoice
+    # means no weight to charge against, and both come to nothing.
+    weight = sum(
+        (row["weights"].get("credit_weight") or Decimal("0.000") for row in prepared),
+        Decimal("0.000"),
+    )
+    brokerage_rate = Decimal(brokerage_rate_per_100kg or 0).quantize(TWO_DP)
+    withholding_rate = Decimal(withholding_rate_per_40kg or 0).quantize(TWO_DP)
+    if (brokerage_rate or withholding_rate) and weight <= 0:
+        raise ValidationError(
+            "Brokerage and withholding are charged on weight, and this invoice has none. "
+            "Enter the wheat line first, or leave the rates blank."
+        )
+    brokerage = (weight / BROKERAGE_KG * brokerage_rate).quantize(TWO_DP)
+    withholding = (weight / WITHHOLDING_KG * withholding_rate).quantize(TWO_DP)
+    if withholding > total:
+        raise ValidationError("Withholding cannot be more than the invoice is worth.")
+
     paid = Decimal(paid_amount or 0).quantize(TWO_DP)
-    if paid > total:
-        raise ValidationError("Paid cannot be more than the invoice total.")
+    if paid > total - withholding:
+        raise ValidationError("Paid cannot be more than the supplier is owed.")
 
     # One order behind the invoice is recorded on it; several are recorded on
     # the lines, because the header has one column and cannot hold two answers.
@@ -1162,12 +1371,21 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         supplier_invoice_date=supplier_invoice_date or None,
         invoice_date=invoice_date,
         due_date=due_date or None,
+        godown=godown,
+        # Plates are read off a truck and typed however the clerk types them;
+        # stored one way so two entries of the same lorry match.
+        vehicle_no=(vehicle_no or "").strip().upper(),
+        broker=broker,
         goods_amount=goods_total,
         discount_amount=discount,
         freight_amount=freight,
         tax_amount=tax_total,
         total_amount=total,
         paid_amount=paid,
+        brokerage_rate_per_100kg=brokerage_rate,
+        brokerage_amount=brokerage,
+        withholding_rate_per_40kg=withholding_rate,
+        withholding_amount=withholding,
         status=STATUS_POSTED,
         posted_at=timezone.now(),
         posted_by=user,
@@ -1184,6 +1402,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             invoice=invoice,
             purchase_order_item=row["order_item"],
             inventory_item=row["item"],
+            product=row["product"],
             seq_num=seq,
             descr=row["descr"],
             quantity=row["quantity"],
@@ -1195,6 +1414,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             amount=row["amount"],
             created_by=user,
             updated_by=user,
+            **row["weights"],
         )
 
         order_item = row["order_item"]
@@ -1203,6 +1423,20 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             order_item.retail_price = row["rate"]
             order_item.updated_by = user
             order_item.save()
+
+        # Wheat and bardana go to the product ledger, which is where grinding
+        # reads them from. They never touch inventory stock: two ledgers holding
+        # the same sack is how a mill ends up with two answers to how much wheat
+        # it has.
+        if row["product"] is not None:
+            if row["product"].keeps_stock:
+                product_services.post_movement(
+                    row["product"], row["quantity"], PRD_LEDGER_PURCHASE,
+                    entry_date=invoice.invoice_date, reference=invoice.invoice_num,
+                    rate=row["rate"], remarks=remarks or row["descr"],
+                    godown=invoice.godown, user=user,
+                )
+            continue
 
         # A service is not stocked, so there is nothing to take in and nothing
         # for the item ledger to say about it.
@@ -1216,7 +1450,10 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             row["rate"] if stock.current_quantity <= 0 and stock.current_price <= 0
             else stock.current_price
         )
-        stock.current_price = row["rate"]
+        stock.current_price = weighted_cost(
+            old_quantity=old_quantity, old_price=old_price,
+            in_quantity=row["quantity"], in_price=row["rate"],
+        )
         stock.current_quantity = stock.current_quantity + row["quantity"]
         stock.updated_by = user
         stock.save()
@@ -1239,6 +1476,10 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     if voucher is not None:
         invoice.journal_ref = voucher.voucher_no
         invoice.save(update_fields=["journal_ref", "updated_at"])
+
+    # Hung on the returned invoice rather than raised: the purchase is good and
+    # posted, and what the caller does with the excess is to tell the operator.
+    invoice.over_invoiced = over_invoiced
 
     if paid > 0:
         from apps.finance.services import post_supplier_payment_to_gl
