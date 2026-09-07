@@ -1,0 +1,54 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% include "components/table/board_theme.html" %}
+<section class="space-y-4">
+  {% if can_add %}
+    {% include "components/ui/page_header.html" with title=title action_label="Add Conversion" action_url=create_url %}
+  {% else %}
+    {% include "components/ui/page_header.html" with title=title %}
+  {% endif %}
+  {% include "components/table/search_filters.html" with search_placeholder="Voucher no, product..." %}
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="po-table w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Voucher No</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Consumed</th>
+            <th class="px-4 py-3 text-right">Qty</th>
+            <th class="px-4 py-3 text-right">Output Kg</th>
+            <th class="px-4 py-3">Godown</th>
+            <th class="px-4 py-3">Prepared By</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in rows %}
+            <tr>
+              <td class="px-4 py-2 font-mono text-xs font-semibold"><a class="text-[var(--primary-color)]" href="{% url 'production:conversion_detail' row.pk %}">{{ row.voucher_no }}</a></td>
+              <td class="px-4 py-2">{{ row.date|date:"d/m/Y" }}</td>
+              <td class="px-4 py-2">{{ row.source_product.name }}</td>
+              <td class="px-4 py-2 text-right">{{ row.source_quantity|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ row.total_output_kg|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2">{{ row.godown.name }}</td>
+              <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{% firstof row.prepared_by.get_full_name row.prepared_by.username "—" %}</td>
+              <td class="px-4 py-2">
+                <div class="flex justify-end gap-2">
+                  <a class="toolbar-btn !min-h-8 px-3" href="{% url 'production:conversion_detail' row.pk %}">View</a>
+                  {% if can_edit %}<a class="toolbar-btn !min-h-8 px-3" href="{% url 'production:conversion_update' row.pk %}">Edit</a>{% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No conversions found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

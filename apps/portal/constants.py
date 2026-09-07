@@ -81,7 +81,19 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Opening Balance", permission="products.opening_balances.index", url_name="products:opening_balance"),
         NavigationItem("Rate Update", permission="products.rates.index", url_name="products:rate_update"),
     )),
-    NavigationItem("Production", permission="operations.index", section=SECTION_OPERATIONS, icon="P"),
+    NavigationItem("Production", permission=None, section=SECTION_OPERATIONS, icon="P", children=(
+        NavigationItem("Grinding", permission="production.grinding.index", url_name="production:grinding_list",
+                       match_paths=("/production/grinding/",)),
+        NavigationItem("Products Conversion", permission="production.conversions.index",
+                       url_name="production:conversion_list"),
+        NavigationItem("Daily Grinding", permission="production.reports.index",
+                       url_name="production:report_daily_grinding"),
+        NavigationItem("Yield Trend", permission="production.reports.index",
+                       url_name="production:report_yield_trend"),
+        NavigationItem("Production Summary", permission="production.reports.index",
+                       url_name="production:report_production_summary"),
+        NavigationItem("Godowns", permission="godowns.godowns.index", url_name="godowns:godown_list"),
+    )),
 
     # ── Accounts ────────────────────────────────────────────────────────
     # Entry, then what you read, then what you set up, then the one

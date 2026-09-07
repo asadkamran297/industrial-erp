@@ -687,3 +687,36 @@ PRD_LEDGER_SOURCE_CHOICES: Final[StatusChoices] = (
     (PRD_LEDGER_PACKING_OUT, "Packing Consumption"),
     (PRD_LEDGER_ADJUSTMENT, "Stock Adjustment"),
 )
+
+
+# ---------------------------------------------------------------------------
+# Godowns
+# ---------------------------------------------------------------------------
+GODOWN_STATUS_CHOICES: Final[StatusChoices] = (
+    (STATUS_ACTIVE, "Active"),
+    (STATUS_INACTIVE, "Inactive"),
+)
+
+GODOWN_TYPE_MILL: Final = "mill"
+GODOWN_TYPE_STORE: Final = "store"
+GODOWN_TYPE_SILO: Final = "silo"
+
+GODOWN_TYPE_CHOICES: Final[StatusChoices] = (
+    (GODOWN_TYPE_MILL, "Mill"),
+    (GODOWN_TYPE_STORE, "Store"),
+    (GODOWN_TYPE_SILO, "Silo"),
+)
+
+
+# ---------------------------------------------------------------------------
+# Production: grinding and conversion
+# ---------------------------------------------------------------------------
+# The mill's own document prefixes. Grinding is "wheat grinding", which is what
+# the floor already calls the voucher, so WG is what they will search for.
+PRODUCTION_GRINDING_PREFIX: Final = "WG"
+PRODUCTION_CONVERSION_PREFIX: Final = "PC"
+
+# Loose output is packed in nothing, but a line still points at a packing row
+# rather than at null, so grinding has one code path instead of two. This is
+# the name that row carries in the product master.
+PRODUCTION_OPEN_STOCK_PACK_NAME: Final = "Open Stock without Bardana"

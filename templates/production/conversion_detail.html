@@ -1,0 +1,53 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% include "components/table/board_theme.html" %}
+<div class="flex items-start gap-3">
+  {% include "components/ui/back_button.html" %}
+  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=conversion.voucher_no %}</div>
+</div>
+
+<div class="mt-4 flex flex-wrap gap-2">
+  {% if can_edit %}<a class="toolbar-btn" href="{% url 'production:conversion_update' conversion.pk %}">Edit</a>{% endif %}
+  {% if can_delete %}
+    <form method="post" action="{% url 'production:conversion_delete' conversion.pk %}" onsubmit="return confirm('Reverse the stock and remove {{ conversion.voucher_no }}?');">
+      {% csrf_token %}<button class="toolbar-btn text-rose-600" type="submit">Delete</button>
+    </form>
+  {% endif %}
+</div>
+
+<section class="mt-6 space-y-6">
+  <div class="grid gap-4 rounded-lg border border-slate-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-800 dark:bg-slate-900">
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Date</p><p class="font-semibold">{{ conversion.date|date:"d/m/Y" }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Godown</p><p class="font-semibold">{{ conversion.godown.name }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Consumed</p><p class="font-semibold">{{ conversion.source_product }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Consumed Qty</p><p class="font-semibold">{{ conversion.source_quantity|floatformat:0|intcomma }} ({{ conversion.source_weight|floatformat:0|intcomma }} kg)</p></div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="po-table w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr><th class="px-4 py-3">#</th><th class="px-4 py-3">Product</th><th class="px-4 py-3 text-right">Qty</th><th class="px-4 py-3 text-right">Unit Wt</th><th class="px-4 py-3 text-right">Total Kg</th><th class="px-4 py-3">Pack Product</th><th class="px-4 py-3 text-right">Pack Qty</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for line in conversion.outputs.all %}
+            <tr>
+              <td class="px-4 py-2 text-slate-500">{{ line.line_number }}</td>
+              <td class="px-4 py-2 font-medium">{{ line.product }}</td>
+              <td class="px-4 py-2 text-right">{{ line.quantity|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ line.unit_weight|floatformat:2 }}</td>
+              <td class="px-4 py-2 text-right font-semibold">{{ line.total_weight|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2">{{ line.pack_product|default:"Open Stock without Bardana" }}</td>
+              <td class="px-4 py-2 text-right">{{ line.pack_qty|floatformat:0|intcomma }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
+          <tr><td class="px-4 py-3" colspan="4">Total Output</td><td class="px-4 py-3 text-right">{{ conversion.total_output_kg|floatformat:0|intcomma }} kg</td><td colspan="2"></td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

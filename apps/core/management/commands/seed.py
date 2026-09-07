@@ -12,6 +12,8 @@ from apps.inventory.seeders.suppliers import seed_suppliers
 from apps.organizations.seeders.organizations import seed_organizations
 from apps.products.seeders.account_links import seed_account_links
 from apps.products.seeders.products import seed_products
+from apps.godowns.seeders.godowns import seed_godowns
+from apps.production.seeders.grinding import seed_grinding
 
 
 SEEDERS = {
@@ -23,10 +25,12 @@ SEEDERS = {
     ],
     "organizations": [("organizations", seed_organizations)],
     "products": [("product tree", seed_products), ("product account links", seed_account_links)],
+    "godowns": [("godowns", seed_godowns)],
+    "production": [("sample grinding run", seed_grinding)],
     "inventory": [("units of measure", seed_uoms), ("inventory classes", seed_inventory_classes), ("suppliers", seed_suppliers), ("items", seed_items), ("customers", seed_customers)],
 }
 
-DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory", "products"]
+DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory", "products", "godowns", "production"]
 
 
 class Command(BaseCommand):

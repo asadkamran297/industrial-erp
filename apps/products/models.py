@@ -73,6 +73,11 @@ class ProductNode(BaseModel):
     fix_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     actual_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     color = models.CharField(max_length=40, blank=True)
+    # What this wheat is expected to yield, so the grinding screen can show the
+    # variance while the operator is still able to correct the entry. Held on
+    # the wheat item because two wheats ground on the same mill yield
+    # differently, which is the whole reason the figure is worth keeping.
+    standard_yield_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
 
     class Meta:
         db_table = "prod_nodes"
@@ -378,6 +383,27 @@ class ProductLedger(BaseModel):
     quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     rate = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     remarks = models.CharField(max_length=240, blank=True)
+    # Where the movement happened. Nullable because the rows written before
+    # godowns existed have no answer, and inventing one would be a lie the
+    # stock report would then repeat.
+    godown = models.ForeignKey(
+        "godowns.Godown",
+        null=True,
+        blank=True,
+        related_name="product_ledger_entries",
+        on_delete=models.PROTECT,
+    )
+    # The sack this stock actually arrived in, recorded on the receipt rather
+    # than re-derived at grinding. Government wheat turns up in jute government
+    # sacks under a private poly wheat item, so the item master is the wrong
+    # place to ask; grinding reads this and falls back to the master link.
+    bardana_item = models.ForeignKey(
+        ProductNode,
+        null=True,
+        blank=True,
+        related_name="received_as_bardana_entries",
+        on_delete=models.PROTECT,
+    )
 
     class Meta:
         db_table = "prod_ledgers"
@@ -387,6 +413,9 @@ class ProductLedger(BaseModel):
             models.Index(fields=["product", "-entry_date"], name="prod_ledger_prod_date_idx"),
             models.Index(fields=["source", "-entry_date"], name="prod_ledger_src_date_idx"),
             models.Index(fields=["reference"], name="prod_ledger_reference_idx"),
+            # "what sack did this wheat last arrive in", grinding's default.
+            models.Index(fields=["product", "bardana_item", "-entry_date"], name="prod_ledger_bardana_idx"),
+            models.Index(fields=["godown", "-entry_date"], name="prod_ledger_godown_date_idx"),
         ]
 
     def __str__(self) -> str:

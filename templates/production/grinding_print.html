@@ -1,0 +1,72 @@
+{% extends "layouts/print_base.html" %}
+{% load humanize %}
+{% block title %}Grinding {{ voucher.voucher_no }}{% endblock %}
+
+{% block print_content %}
+<h2 class="doc-title">Grinding Voucher</h2>
+
+<table class="meta-table">
+  <tr>
+    <td><b>Voucher No:</b> {{ voucher.voucher_no }}</td>
+    <td><b>Date:</b> {{ voucher.date|date:"d/m/Y" }}</td>
+    <td><b>Production:</b> {{ voucher.production_from|time:"H:i" }} – {{ voucher.production_to|time:"H:i" }}</td>
+  </tr>
+  <tr>
+    <td><b>Godown:</b> {{ voucher.godown.name }}</td>
+    <td><b>Issue Area:</b> {{ voucher.issue_area|default:"—" }}</td>
+    <td><b>Prepared By:</b> {% firstof voucher.prepared_by.get_full_name voucher.prepared_by.username "—" %}</td>
+  </tr>
+</table>
+
+<h3>Consumed</h3>
+<table class="data-table">
+  <thead><tr><th>Item</th><th class="num">Quantity</th><th>Unit</th></tr></thead>
+  <tbody>
+    <tr><td>{{ voucher.wheat_item }}</td><td class="num">{{ voucher.disposal_wheat|floatformat:0|intcomma }}</td><td>Kg</td></tr>
+    {% if voucher.bag_item %}
+      <tr><td>{{ voucher.bag_item }}</td><td class="num">{{ voucher.disposal_bag_qty|floatformat:0|intcomma }}</td><td>Pcs</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<h3>Produced</h3>
+<table class="data-table">
+  <thead>
+    <tr><th>#</th><th>Product</th><th class="num">Qty</th><th class="num">Unit Wt</th><th class="num">Total Kg</th><th>Pack Product</th><th class="num">Pack Qty</th></tr>
+  </thead>
+  <tbody>
+    {% for line in voucher.outputs.all %}
+      <tr>
+        <td>{{ line.line_number }}</td>
+        <td>{{ line.product }}</td>
+        <td class="num">{{ line.quantity|floatformat:0|intcomma }}</td>
+        <td class="num">{{ line.unit_weight|floatformat:2 }}</td>
+        <td class="num">{{ line.total_weight|floatformat:0|intcomma }}</td>
+        <td>{{ line.pack_product|default:"Open Stock without Bardana" }}</td>
+        <td class="num">{{ line.pack_qty|floatformat:0|intcomma }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="4"><b>Total</b></td><td class="num"><b>{{ voucher.total_output_kg|floatformat:0|intcomma }}</b></td><td colspan="2"></td></tr>
+  </tfoot>
+</table>
+
+<h3>Yield</h3>
+<table class="data-table">
+  <thead><tr><th class="num">Disposal Kg</th><th class="num">Output Kg</th><th class="num">Yield %</th><th class="num">Shortage Kg</th><th class="num">Shortage %</th><th class="num">Standard %</th><th class="num">Variance</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="num">{{ voucher.disposal_wheat|floatformat:0|intcomma }}</td>
+      <td class="num">{{ voucher.total_output_kg|floatformat:0|intcomma }}</td>
+      <td class="num">{{ voucher.yield_percent|floatformat:2 }}</td>
+      <td class="num">{{ voucher.shortage_kg|floatformat:0|intcomma }}</td>
+      <td class="num">{{ voucher.shortage_percent|floatformat:2 }}</td>
+      <td class="num">{{ voucher.standard_yield_percent|floatformat:2 }}</td>
+      <td class="num">{{ voucher.yield_variance|floatformat:2 }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{% if voucher.description %}<p><b>Description:</b> {{ voucher.description }}</p>{% endif %}
+{% endblock %}

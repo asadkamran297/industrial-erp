@@ -154,7 +154,8 @@ def set_rate(product: ProductNode, rate, effective_date=None, user=None):
 
 
 @transaction.atomic
-def post_movement(product: ProductNode, quantity, source: str, entry_date=None, reference="", rate=0, remarks="", user=None):
+def post_movement(product: ProductNode, quantity, source: str, entry_date=None, reference="", rate=0,
+                  remarks="", godown=None, bardana_item=None, user=None):
     """The one door into the ledger. Signed quantity: in positive, out negative.
 
     Every other module posts stock through this, so the rule that a service or
@@ -171,6 +172,8 @@ def post_movement(product: ProductNode, quantity, source: str, entry_date=None, 
         quantity=Decimal(quantity),
         rate=Decimal(rate or 0),
         remarks=remarks,
+        godown=godown,
+        bardana_item=bardana_item,
     )
     _stamp(entry, user)
     entry.save()

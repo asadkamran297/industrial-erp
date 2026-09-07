@@ -1,0 +1,75 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% include "components/table/board_theme.html" %}
+<div class="flex items-start gap-3">
+  {% include "components/ui/back_button.html" with back_url=cancel_url %}
+  <div class="min-w-0 flex-1">
+    {% include "components/ui/page_header.html" with title=voucher.voucher_no action_label="Print" action_url=print_url action_icon="" %}
+  </div>
+</div>
+
+<div class="mt-4 flex flex-wrap gap-2">
+  <a class="toolbar-btn" href="{% url 'production:grinding_print' voucher.pk %}" target="_blank">Print</a>
+  {% if can_edit %}<a class="toolbar-btn" href="{% url 'production:grinding_update' voucher.pk %}">Edit</a>{% endif %}
+  {% if can_delete %}
+    <form method="post" action="{% url 'production:grinding_delete' voucher.pk %}" onsubmit="return confirm('Reverse the stock and remove {{ voucher.voucher_no }}?');">
+      {% csrf_token %}<button class="toolbar-btn text-rose-600" type="submit">Delete</button>
+    </form>
+  {% endif %}
+</div>
+
+<section class="mt-6 space-y-6">
+  <div class="grid gap-4 rounded-lg border border-slate-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-4 dark:border-slate-800 dark:bg-slate-900">
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Date</p><p class="font-semibold">{{ voucher.date|date:"d/m/Y" }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Production</p><p class="font-semibold">{{ voucher.production_from|time:"H:i" }} – {{ voucher.production_to|time:"H:i" }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Godown</p><p class="font-semibold">{{ voucher.godown.name }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Issue Area</p><p class="font-semibold">{{ voucher.issue_area|default:"—" }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Wheat Item</p><p class="font-semibold">{{ voucher.wheat_item }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Disposal Wheat</p><p class="font-semibold">{{ voucher.disposal_wheat|floatformat:0|intcomma }} kg</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Bag Released</p><p class="font-semibold">{{ voucher.bag_item|default:"—" }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Bag Qty</p><p class="font-semibold">{{ voucher.disposal_bag_qty|floatformat:0|intcomma }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Prepared By</p><p class="font-semibold">{% firstof voucher.prepared_by.get_full_name voucher.prepared_by.username "—" %}</p></div>
+    {% if voucher.description %}<div class="sm:col-span-2 lg:col-span-3"><p class="text-xs uppercase tracking-wide text-slate-500">Description</p><p>{{ voucher.description }}</p></div>{% endif %}
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="po-table w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">#</th>
+            <th class="px-4 py-3">Product</th>
+            <th class="px-4 py-3 text-right">Quantity</th>
+            <th class="px-4 py-3 text-right">Unit Wt</th>
+            <th class="px-4 py-3 text-right">Total Kg</th>
+            <th class="px-4 py-3">Pack Product</th>
+            <th class="px-4 py-3 text-right">Pack Qty</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for line in voucher.outputs.all %}
+            <tr>
+              <td class="px-4 py-2 text-slate-500">{{ line.line_number }}</td>
+              <td class="px-4 py-2 font-medium">{{ line.product }}</td>
+              <td class="px-4 py-2 text-right">{{ line.quantity|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ line.unit_weight|floatformat:2 }}</td>
+              <td class="px-4 py-2 text-right font-semibold">{{ line.total_weight|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2">{{ line.pack_product|default:"Open Stock without Bardana" }}</td>
+              <td class="px-4 py-2 text-right">{{ line.pack_qty|floatformat:0|intcomma }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid gap-4 rounded-lg border border-slate-200 bg-white p-6 sm:grid-cols-2 lg:grid-cols-5 dark:border-slate-800 dark:bg-slate-900">
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Total Output</p><p class="text-lg font-bold">{{ voucher.total_output_kg|floatformat:0|intcomma }} kg</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Yield %</p><p class="text-lg font-bold {% if voucher.is_below_standard %}text-rose-600{% endif %}">{{ voucher.yield_percent|floatformat:2 }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage</p><p class="text-lg font-bold">{{ voucher.shortage_kg|floatformat:0|intcomma }} kg</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage %</p><p class="text-lg font-bold">{{ voucher.shortage_percent|floatformat:2 }}</p></div>
+    <div><p class="text-xs uppercase tracking-wide text-slate-500">Standard / Variance</p><p class="text-lg font-bold">{{ voucher.standard_yield_percent|floatformat:2 }} / {{ voucher.yield_variance|floatformat:2 }}</p></div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,268 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<div class="flex items-start gap-3">
+  {% include "components/ui/back_button.html" with back_url=cancel_url %}
+  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=title %}</div>
+</div>
+
+{% if line_errors %}
+  <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40">
+    {% for error in line_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" id="grinding-form" class="mt-6 space-y-6">
+  {% csrf_token %}
+
+  {# ── Header ──────────────────────────────────────────────────────────── #}
+  <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm font-semibold text-slate-500">Voucher No</p>
+      <p class="font-mono text-lg font-bold">{{ voucher_no }}</p>
+    </div>
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-rose-600">{{ error }}</p>{% endfor %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {% for field in form %}
+        <div {% if field.name == "description" %}class="sm:col-span-2 lg:col-span-3"{% endif %}>
+          <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.name == "wheat_item" %}<p class="mt-1 text-xs text-slate-500" id="wheat-stock"></p>{% endif %}
+          {% if field.name == "bag_item" %}<p class="mt-1 text-xs text-slate-500" id="bag-hint"></p>{% endif %}
+          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── Output grid ─────────────────────────────────────────────────────── #}
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+      <p class="text-sm font-semibold">Output</p>
+      <button type="button" id="add-line" class="toolbar-btn !min-h-9 px-4">+ Add Line</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm" id="line-table">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-3 py-3" style="min-width:16rem;">Product</th>
+            <th class="px-3 py-3 text-right" style="width:8rem;">Quantity</th>
+            <th class="px-3 py-3 text-right" style="width:7rem;">Unit Wt</th>
+            <th class="px-3 py-3 text-right" style="width:9rem;">Total Kg</th>
+            <th class="px-3 py-3" style="min-width:14rem;">Pack Product</th>
+            <th class="px-3 py-3 text-right" style="width:8rem;">Pack Qty</th>
+            <th class="px-3 py-3" style="width:3rem;"></th>
+          </tr>
+        </thead>
+        <tbody id="line-body" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
+          <tr>
+            <td class="px-3 py-3">Totals</td>
+            <td class="px-3 py-3 text-right" id="total-bags">0</td>
+            <td class="px-3 py-3"></td>
+            <td class="px-3 py-3 text-right" id="total-kg">0</td>
+            <td class="px-3 py-3"></td>
+            <td class="px-3 py-3 text-right" id="total-packs">0</td>
+            <td class="px-3 py-3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {# Yield is read while the lines are still being typed; seeing it after the #}
+    {# save is too late to correct the entry.                                    #}
+    <div class="grid gap-4 border-t border-slate-200 px-6 py-5 sm:grid-cols-2 lg:grid-cols-5 dark:border-slate-800">
+      <div><p class="text-xs uppercase tracking-wide text-slate-500">Disposal Wheat</p><p class="text-lg font-bold" id="sum-wheat">0</p></div>
+      <div><p class="text-xs uppercase tracking-wide text-slate-500">Total Output Kg</p><p class="text-lg font-bold" id="sum-output">0</p></div>
+      <div><p class="text-xs uppercase tracking-wide text-slate-500">Yield %</p><p class="text-lg font-bold" id="sum-yield">0.00</p></div>
+      <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage Kg</p><p class="text-lg font-bold" id="sum-short">0</p></div>
+      <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage %</p><p class="text-lg font-bold" id="sum-short-pct">0.00</p></div>
+    </div>
+    <p class="px-6 pb-5 text-xs" id="variance-note"></p>
+  </div>
+
+  <div class="flex justify-end gap-3">
+    <a href="{{ cancel_url }}" class="toolbar-btn">Cancel</a>
+    <button class="btn-primary" type="submit">Save Voucher</button>
+  </div>
+</form>
+
+{# The row the grid clones. Kept in the document rather than built in a string #}
+{# so the markup lives with the rest of the table.                              #}
+<template id="line-template">
+  <tr class="line-row">
+    <td class="px-3 py-2">
+      <select name="line_product" class="form-select line-product"></select>
+      <p class="mt-1 text-xs text-slate-500 line-stock"></p>
+    </td>
+    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_quantity" class="form-input text-right line-qty" value=""></td>
+    <td class="px-3 py-2 text-right line-unit-weight">0</td>
+    <td class="px-3 py-2 text-right font-semibold line-total">0</td>
+    <td class="px-3 py-2"><select name="line_pack_product" class="form-select line-pack"></select></td>
+    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_pack_qty" class="form-input text-right line-pack-qty" value=""></td>
+    <td class="px-3 py-2 text-right"><button type="button" class="toolbar-btn !min-h-8 px-2 line-remove" title="Remove">&times;</button></td>
+  </tr>
+</template>
+
+<script id="product-options" type="application/json">{{ product_options|safe }}</script>
+<script id="wheat-options" type="application/json">{{ wheat_options|safe }}</script>
+<script id="pack-stock" type="application/json">{{ pack_stock|safe }}</script>
+<script id="existing-lines" type="application/json">[{% for row in line_rows %}{"product":"{{ row.product_id }}","quantity":"{{ row.quantity }}","pack_product":"{{ row.pack_product_id }}","pack_qty":"{{ row.pack_qty }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script>
+(function () {
+  const readJSON = (id) => JSON.parse(document.getElementById(id).textContent || "[]");
+  let products = readJSON("product-options");
+  let wheats = readJSON("wheat-options");
+  let packStock = readJSON("pack-stock");
+  const packOptions = [{% for item in pack_options %}{id: "{{ item.id }}", name: "{{ item.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}];
+
+  const body = document.getElementById("line-body");
+  const tpl = document.getElementById("line-template");
+  const wheatField = document.getElementById("id_wheat_item");
+  const bagField = document.getElementById("id_bag_item");
+  const dateField = document.getElementById("id_date");
+  const godownField = document.getElementById("id_godown");
+  const wheatQty = document.getElementById("id_disposal_wheat");
+
+  const num = (value) => {
+    const parsed = parseFloat(String(value).replace(/,/g, ""));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+  const fmt = (value, dp) => value.toLocaleString(undefined, {minimumFractionDigits: dp, maximumFractionDigits: dp});
+  const byId = (list, id) => list.find((row) => String(row.id) === String(id));
+
+  function fillSelect(select, list, selected, blank) {
+    select.innerHTML = "";
+    const empty = new Option(blank, "");
+    select.add(empty);
+    list.forEach((row) => {
+      const option = new Option(row.name, row.id);
+      select.add(option);
+    });
+    select.value = selected || "";
+  }
+
+  function refreshRow(row) {
+    const product = byId(products, row.querySelector(".line-product").value);
+    const unitWeight = product ? num(product.unit_weight) : 0;
+    const quantity = num(row.querySelector(".line-qty").value);
+    row.querySelector(".line-unit-weight").textContent = fmt(unitWeight, 3);
+    row.querySelector(".line-total").textContent = fmt(quantity * unitWeight, 2);
+    row.querySelector(".line-stock").textContent = product ? "Stock: " + fmt(num(product.stock), 2) : "";
+
+    const packSelect = row.querySelector(".line-pack");
+    const packQty = row.querySelector(".line-pack-qty");
+    // A pack product that consumes nothing -- loose output -- keeps its zero.
+    if (!packSelect.value) { packQty.value = "0"; packQty.readOnly = true; }
+    else { packQty.readOnly = false; if (packQty.value === "" || packQty.value === "0") packQty.value = quantity || ""; }
+  }
+
+  function totals() {
+    let bags = 0, kg = 0, packs = 0;
+    body.querySelectorAll(".line-row").forEach((row) => {
+      const product = byId(products, row.querySelector(".line-product").value);
+      const quantity = num(row.querySelector(".line-qty").value);
+      bags += quantity;
+      kg += quantity * (product ? num(product.unit_weight) : 0);
+      packs += num(row.querySelector(".line-pack-qty").value);
+    });
+    document.getElementById("total-bags").textContent = fmt(bags, 0);
+    document.getElementById("total-kg").textContent = fmt(kg, 2);
+    document.getElementById("total-packs").textContent = fmt(packs, 0);
+
+    const wheat = num(wheatQty ? wheatQty.value : 0);
+    const shortage = wheat - kg;
+    const yieldPct = wheat > 0 ? (kg / wheat) * 100 : 0;
+    const shortPct = wheat > 0 ? (shortage / wheat) * 100 : 0;
+    document.getElementById("sum-wheat").textContent = fmt(wheat, 2);
+    document.getElementById("sum-output").textContent = fmt(kg, 2);
+    document.getElementById("sum-yield").textContent = wheat > 0 ? fmt(yieldPct, 2) : "—";
+    document.getElementById("sum-short").textContent = fmt(shortage, 2);
+    document.getElementById("sum-short-pct").textContent = wheat > 0 ? fmt(shortPct, 2) : "—";
+
+    const wheatRow = wheatField ? byId(wheats, wheatField.value) : null;
+    const standard = wheatRow ? num(wheatRow.standard_yield) : 0;
+    const note = document.getElementById("variance-note");
+    if (standard > 0 && wheat > 0) {
+      const variance = yieldPct - standard;
+      note.textContent = "Standard " + fmt(standard, 2) + "% · variance " + (variance >= 0 ? "+" : "") + fmt(variance, 2) + "%";
+      note.className = "px-6 pb-5 text-xs font-semibold " + (variance < 0 ? "text-rose-600" : "text-emerald-600");
+    } else {
+      note.textContent = "";
+    }
+  }
+
+  function addRow(data) {
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    const productSelect = row.querySelector(".line-product");
+    const packSelect = row.querySelector(".line-pack");
+    fillSelect(productSelect, products, data && data.product, "Select product...");
+    fillSelect(packSelect, packOptions, data && data.pack_product, "Open Stock without Bardana");
+    row.querySelector(".line-qty").value = data && data.quantity ? data.quantity : "";
+    row.querySelector(".line-pack-qty").value = data && data.pack_qty !== undefined ? data.pack_qty : "";
+
+    productSelect.addEventListener("change", () => {
+      const product = byId(products, productSelect.value);
+      // The product's own bag is the default, and stays overridable: the line
+      // keeps whatever the operator picked.
+      if (product && product.pack_product) packSelect.value = String(product.pack_product);
+      const qty = row.querySelector(".line-qty");
+      const packQty = row.querySelector(".line-pack-qty");
+      if (packSelect.value && num(packQty.value) === 0) packQty.value = qty.value;
+      refreshRow(row); totals();
+    });
+    ["input", "change"].forEach((event) => {
+      row.querySelector(".line-qty").addEventListener(event, () => {
+        const packQty = row.querySelector(".line-pack-qty");
+        if (packSelect.value && !packQty.dataset.touched) packQty.value = row.querySelector(".line-qty").value;
+        refreshRow(row); totals();
+      });
+      packSelect.addEventListener(event, () => { refreshRow(row); totals(); });
+      row.querySelector(".line-pack-qty").addEventListener(event, (e) => { e.target.dataset.touched = "1"; totals(); });
+    });
+    row.querySelector(".line-remove").addEventListener("click", () => { row.remove(); totals(); });
+
+    body.appendChild(row);
+    refreshRow(row);
+    return row;
+  }
+
+  function applyWheat() {
+    if (!wheatField) return;
+    const wheat = byId(wheats, wheatField.value);
+    document.getElementById("wheat-stock").textContent = wheat ? "Stock on this date: " + fmt(num(wheat.stock), 2) + " kg" : "";
+    const hint = document.getElementById("bag-hint");
+    if (wheat && wheat.bag_item && bagField && !bagField.value) {
+      // Defaulted from what this wheat was actually received in, not from the
+      // item master, and left editable.
+      bagField.value = String(wheat.bag_item);
+    }
+    if (hint) hint.textContent = wheat && wheat.bag_item_name ? "Received in: " + wheat.bag_item_name : "";
+    totals();
+  }
+
+  // A back-dated voucher must show the stock that existed on its own date.
+  function reloadStock() {
+    const params = new URLSearchParams({date: dateField ? dateField.value : "", godown: godownField ? godownField.value : ""});
+    fetch("{% url 'production:grinding_options' %}?" + params.toString(), {headers: {"X-Requested-With": "XMLHttpRequest"}})
+      .then((response) => response.json())
+      .then((payload) => {
+        products = payload.products; wheats = payload.wheat; packStock = payload.pack_stock;
+        body.querySelectorAll(".line-row").forEach((row) => refreshRow(row));
+        applyWheat();
+      })
+      .catch(() => {});
+  }
+
+  document.getElementById("add-line").addEventListener("click", () => addRow());
+  if (wheatField) wheatField.addEventListener("change", applyWheat);
+  if (wheatQty) ["input", "change"].forEach((event) => wheatQty.addEventListener(event, totals));
+  if (dateField) dateField.addEventListener("change", reloadStock);
+  if (godownField) godownField.addEventListener("change", reloadStock);
+
+  const existing = readJSON("existing-lines");
+  if (existing.length) existing.forEach(addRow); else addRow();
+  applyWheat();
+  totals();
+})();
+</script>
+{% endblock %}

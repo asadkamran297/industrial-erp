@@ -1,0 +1,158 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<div class="flex items-start gap-3">
+  {% include "components/ui/back_button.html" with back_url=cancel_url %}
+  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=title %}</div>
+</div>
+
+{% if line_errors %}
+  <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40">
+    {% for error in line_errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" class="mt-6 space-y-6">
+  {% csrf_token %}
+  <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm font-semibold text-slate-500">Voucher No</p>
+      <p class="font-mono text-lg font-bold">{{ voucher_no }}</p>
+    </div>
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-rose-600">{{ error }}</p>{% endfor %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {% for field in form %}
+        <div {% if field.name == "description" %}class="sm:col-span-2 lg:col-span-3"{% endif %}>
+          <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+      <p class="text-sm font-semibold">Produced</p>
+      <button type="button" id="add-line" class="toolbar-btn !min-h-9 px-4">+ Add Line</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-3 py-3" style="min-width:16rem;">Product</th>
+            <th class="px-3 py-3 text-right" style="width:8rem;">Quantity</th>
+            <th class="px-3 py-3 text-right" style="width:7rem;">Unit Wt</th>
+            <th class="px-3 py-3 text-right" style="width:9rem;">Total Kg</th>
+            <th class="px-3 py-3" style="min-width:14rem;">Pack Product</th>
+            <th class="px-3 py-3 text-right" style="width:8rem;">Pack Qty</th>
+            <th class="px-3 py-3" style="width:3rem;"></th>
+          </tr>
+        </thead>
+        <tbody id="line-body" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
+          <tr>
+            <td class="px-3 py-3">Totals</td>
+            <td class="px-3 py-3 text-right" id="total-qty">0</td>
+            <td class="px-3 py-3"></td>
+            <td class="px-3 py-3 text-right" id="total-kg">0</td>
+            <td class="px-3 py-3" colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="flex justify-end gap-3">
+    <a href="{{ cancel_url }}" class="toolbar-btn">Cancel</a>
+    <button class="btn-primary" type="submit">Save Conversion</button>
+  </div>
+</form>
+
+<template id="line-template">
+  <tr class="line-row">
+    <td class="px-3 py-2"><select name="line_product" class="form-select line-product"></select></td>
+    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_quantity" class="form-input text-right line-qty"></td>
+    <td class="px-3 py-2 text-right line-unit-weight">0</td>
+    <td class="px-3 py-2 text-right font-semibold line-total">0</td>
+    <td class="px-3 py-2"><select name="line_pack_product" class="form-select line-pack"></select></td>
+    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_pack_qty" class="form-input text-right line-pack-qty"></td>
+    <td class="px-3 py-2 text-right"><button type="button" class="toolbar-btn !min-h-8 px-2 line-remove">&times;</button></td>
+  </tr>
+</template>
+
+<script id="product-options" type="application/json">{{ product_options|safe }}</script>
+<script id="existing-lines" type="application/json">[{% for row in line_rows %}{"product":"{{ row.product_id }}","quantity":"{{ row.quantity }}","pack_product":"{{ row.pack_product_id }}","pack_qty":"{{ row.pack_qty }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script>
+(function () {
+  const products = JSON.parse(document.getElementById("product-options").textContent || "[]");
+  const packOptions = [{% for item in pack_options %}{id: "{{ item.id }}", name: "{{ item.name|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}];
+  const body = document.getElementById("line-body");
+  const tpl = document.getElementById("line-template");
+  const num = (value) => { const parsed = parseFloat(String(value).replace(/,/g, "")); return isNaN(parsed) ? 0 : parsed; };
+  const fmt = (value, dp) => value.toLocaleString(undefined, {minimumFractionDigits: dp, maximumFractionDigits: dp});
+  const byId = (list, id) => list.find((row) => String(row.id) === String(id));
+
+  function fillSelect(select, list, selected, blank) {
+    select.innerHTML = "";
+    select.add(new Option(blank, ""));
+    list.forEach((row) => select.add(new Option(row.name, row.id)));
+    select.value = selected || "";
+  }
+
+  function refreshRow(row) {
+    const product = byId(products, row.querySelector(".line-product").value);
+    const unitWeight = product ? num(product.unit_weight) : 0;
+    const quantity = num(row.querySelector(".line-qty").value);
+    row.querySelector(".line-unit-weight").textContent = fmt(unitWeight, 3);
+    row.querySelector(".line-total").textContent = fmt(quantity * unitWeight, 2);
+    const packQty = row.querySelector(".line-pack-qty");
+    if (!row.querySelector(".line-pack").value) { packQty.value = "0"; packQty.readOnly = true; }
+    else packQty.readOnly = false;
+  }
+
+  function totals() {
+    let qty = 0, kg = 0;
+    body.querySelectorAll(".line-row").forEach((row) => {
+      const product = byId(products, row.querySelector(".line-product").value);
+      const quantity = num(row.querySelector(".line-qty").value);
+      qty += quantity;
+      kg += quantity * (product ? num(product.unit_weight) : 0);
+    });
+    document.getElementById("total-qty").textContent = fmt(qty, 0);
+    document.getElementById("total-kg").textContent = fmt(kg, 2);
+  }
+
+  function addRow(data) {
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    const productSelect = row.querySelector(".line-product");
+    const packSelect = row.querySelector(".line-pack");
+    fillSelect(productSelect, products, data && data.product, "Select product...");
+    fillSelect(packSelect, packOptions, data && data.pack_product, "Open Stock without Bardana");
+    row.querySelector(".line-qty").value = data && data.quantity ? data.quantity : "";
+    row.querySelector(".line-pack-qty").value = data && data.pack_qty !== undefined ? data.pack_qty : "";
+
+    productSelect.addEventListener("change", () => {
+      const product = byId(products, productSelect.value);
+      if (product && product.pack_product) packSelect.value = String(product.pack_product);
+      refreshRow(row); totals();
+    });
+    ["input", "change"].forEach((event) => {
+      row.querySelector(".line-qty").addEventListener(event, () => {
+        const packQty = row.querySelector(".line-pack-qty");
+        if (packSelect.value && !packQty.dataset.touched) packQty.value = row.querySelector(".line-qty").value;
+        refreshRow(row); totals();
+      });
+      packSelect.addEventListener(event, () => { refreshRow(row); totals(); });
+      row.querySelector(".line-pack-qty").addEventListener(event, (e) => { e.target.dataset.touched = "1"; });
+    });
+    row.querySelector(".line-remove").addEventListener("click", () => { row.remove(); totals(); });
+    body.appendChild(row);
+    refreshRow(row);
+  }
+
+  document.getElementById("add-line").addEventListener("click", () => addRow());
+  const existing = JSON.parse(document.getElementById("existing-lines").textContent || "[]");
+  if (existing.length) existing.forEach(addRow); else addRow();
+  totals();
+})();
+</script>
+{% endblock %}

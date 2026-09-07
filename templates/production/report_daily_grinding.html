@@ -1,0 +1,57 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% include "components/table/board_theme.html" %}
+<section class="space-y-4">
+  {% include "components/ui/page_header.html" with title=title %}
+  {% include "production/_report_filters.html" with show_wheat=1 %}
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="po-table w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Voucher No</th>
+            <th class="px-4 py-3">Wheat Item</th>
+            <th class="px-4 py-3 text-right">Disposal Kg</th>
+            <th class="px-4 py-3 text-right">Bags</th>
+            <th class="px-4 py-3 text-right">Output Kg</th>
+            <th class="px-4 py-3 text-right">Yield %</th>
+            <th class="px-4 py-3">Issue Area</th>
+            <th class="px-4 py-3">Prepared By</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in rows %}
+            <tr>
+              <td class="px-4 py-2">{{ row.date|date:"d/m/Y" }}</td>
+              <td class="px-4 py-2 font-mono text-xs"><a class="text-[var(--primary-color)]" href="{% url 'production:grinding_detail' row.pk %}">{{ row.voucher_no }}</a></td>
+              <td class="px-4 py-2">{{ row.wheat_item.name }}</td>
+              <td class="px-4 py-2 text-right">{{ row.disposal_wheat|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ row.disposal_bag_qty|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ row.total_output_kg|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right font-semibold {% if row.is_below_standard %}text-rose-600{% endif %}">{{ row.yield_percent|floatformat:2 }}</td>
+              <td class="px-4 py-2">{{ row.issue_area|default:"—" }}</td>
+              <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{% firstof row.prepared_by.get_full_name row.prepared_by.username "—" %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Nothing ground in this period.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
+          <tr>
+            <td class="px-4 py-3" colspan="3">Total</td>
+            <td class="px-4 py-3 text-right">{{ totals.disposal_wheat|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3 text-right">{{ totals.disposal_bags|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3 text-right">{{ totals.output_kg|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3" colspan="3"></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

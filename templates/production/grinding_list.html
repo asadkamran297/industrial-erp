@@ -1,0 +1,82 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% include "components/table/board_theme.html" %}
+<section class="space-y-4">
+  {% if can_add %}
+    {% include "components/ui/page_header.html" with title=title action_label="Add Grinding" action_url=create_url %}
+  {% else %}
+    {% include "components/ui/page_header.html" with title=title %}
+  {% endif %}
+  {% include "components/table/search_filters.html" with search_placeholder="Voucher no, wheat, issue area..." %}
+
+  <div class="flex flex-wrap gap-2">
+    <a class="toolbar-btn" href="{% url 'production:conversion_list' %}">Products Conversion</a>
+    <a class="toolbar-btn" href="{% url 'production:report_daily_grinding' %}">Daily Grinding</a>
+    <a class="toolbar-btn" href="{% url 'production:report_yield_trend' %}">Yield Trend</a>
+    <a class="toolbar-btn" href="{% url 'production:report_production_summary' %}">Production Summary</a>
+  </div>
+
+  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="overflow-x-auto">
+      <table class="po-table w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+          <tr>
+            <th class="px-4 py-3">Voucher No</th>
+            <th class="px-4 py-3">Date</th>
+            <th class="px-4 py-3">Wheat Item</th>
+            <th class="px-4 py-3 text-right">Disposal (Kg)</th>
+            <th class="px-4 py-3 text-right">Bags</th>
+            <th class="px-4 py-3 text-right">Output (Kg)</th>
+            <th class="px-4 py-3 text-right">Yield %</th>
+            <th class="px-4 py-3">Production Time</th>
+            <th class="px-4 py-3">Prepared By</th>
+            <th class="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+          {% for row in rows %}
+            <tr>
+              <td class="px-4 py-2 font-mono text-xs font-semibold">
+                <a class="text-[var(--primary-color)]" href="{% url 'production:grinding_detail' row.pk %}">{{ row.voucher_no }}</a>
+              </td>
+              <td class="px-4 py-2">{{ row.date|date:"d/m/Y" }}</td>
+              <td class="px-4 py-2">{{ row.wheat_item.name }}</td>
+              <td class="px-4 py-2 text-right">{{ row.disposal_wheat|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ row.disposal_bag_qty|floatformat:0|intcomma }}</td>
+              <td class="px-4 py-2 text-right">{{ row.total_output_kg|floatformat:0|intcomma }}</td>
+              {# A run below its wheat's standard is the whole reason this screen is read. #}
+              <td class="px-4 py-2 text-right font-semibold {% if row.is_below_standard %}text-rose-600{% endif %}">
+                {{ row.yield_percent|floatformat:2 }}
+                {% if row.is_below_standard %}<span class="ml-1 text-xs">▼ {{ row.yield_variance|floatformat:2 }}</span>{% endif %}
+              </td>
+              <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{{ row.production_from|time:"H:i" }}–{{ row.production_to|time:"H:i" }}</td>
+              <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{% firstof row.prepared_by.get_full_name row.prepared_by.username "—" %}</td>
+              <td class="px-4 py-2">
+                <div class="flex justify-end gap-2">
+                  <a class="toolbar-btn !min-h-8 px-3" href="{% url 'production:grinding_detail' row.pk %}">View</a>
+                  {% if can_edit %}<a class="toolbar-btn !min-h-8 px-3" href="{% url 'production:grinding_update' row.pk %}">Edit</a>{% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No grinding vouchers found.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
+          <tr>
+            <td class="px-4 py-3" colspan="3">Totals (filtered)</td>
+            <td class="px-4 py-3 text-right">{{ totals.disposal_wheat|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3 text-right">{{ totals.disposal_bags|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3 text-right">{{ totals.output_kg|floatformat:0|intcomma }}</td>
+            <td class="px-4 py-3" colspan="4"></td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+  {% include "components/table/pagination.html" %}
+</section>
+{% endblock %}

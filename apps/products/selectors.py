@@ -7,6 +7,7 @@ from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
     PRD_BUYABLE_SPECS,
+    PRODUCTION_OPEN_STOCK_PACK_NAME,
     PRD_LEVEL_ITEM,
     PRD_LEVEL_SUB_GROUP,
     PRD_PACKABLE_SPECS,
@@ -155,3 +156,61 @@ def current_rate_map() -> dict[int, Decimal]:
         row.product_id: row.rate
         for row in ProductRate.objects.filter(is_current=True).order_by("product_id", "-effective_date")
     }
+
+
+def stock_as_of(product: ProductNode, on_date=None, godown=None) -> Decimal:
+    """What was on hand at the close of ``on_date``.
+
+    A grinding voucher is often written days later, and the operator needs the
+    stock that existed then, not the stock that exists now.
+    """
+    entries = ProductLedger.objects.filter(product=product)
+    if on_date is not None:
+        entries = entries.filter(entry_date__lte=on_date)
+    if godown is not None:
+        entries = entries.filter(godown=godown)
+    return entries.aggregate(total=stock_expression_flat())["total"]
+
+
+def stock_expression_flat():
+    """The signed sum, addressed straight at the ledger rather than across a FK."""
+    return Coalesce(Sum("quantity"), Value(Decimal("0")), output_field=QUANTITY_FIELD)
+
+
+def stock_map_as_of(on_date=None, godown=None) -> dict[int, Decimal]:
+    """``{product_id: stock}`` for every stocked item in one query.
+
+    The entry screen needs a stock figure beside every option in three
+    dropdowns; one grouped query beats one query per row.
+    """
+    entries = ProductLedger.objects.all()
+    if on_date is not None:
+        entries = entries.filter(entry_date__lte=on_date)
+    if godown is not None:
+        entries = entries.filter(godown=godown)
+    rows = entries.values("product_id").annotate(total=stock_expression_flat())
+    return {row["product_id"]: row["total"] for row in rows}
+
+
+def received_bardana_item(wheat_item: ProductNode, on_date=None):
+    """The sack this wheat was last actually received in.
+
+    Falls back to the master link, and to nothing, so the caller always has one
+    call to make rather than three.
+    """
+    entries = ProductLedger.objects.filter(product=wheat_item, bardana_item__isnull=False)
+    if on_date is not None:
+        entries = entries.filter(entry_date__lte=on_date)
+    latest = entries.order_by("-entry_date", "-id").values_list("bardana_item_id", flat=True).first()
+    if latest:
+        return ProductNode.objects.filter(pk=latest).first()
+    link = getattr(wheat_item, "raw_bardana_link", None)
+    return link.bardana_item if link else None
+
+
+def open_stock_packing_item():
+    """The "packed in nothing" row loose output points at."""
+    return ProductNode.objects.filter(
+        specification=PRD_SPEC_FINISH_PACKING,
+        name__iexact=PRODUCTION_OPEN_STOCK_PACK_NAME,
+    ).first()
