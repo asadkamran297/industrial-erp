@@ -35,8 +35,9 @@
       <table class="ref-table">
         <tr><td class="lbl">Return #</td><td><b>{{ pr.return_num }}</b></td></tr>
         <tr><td class="lbl">Return Date</td><td>{{ pr.return_date }}</td></tr>
-        <tr><td class="lbl">Against PO</td><td>{{ pr.purchase_order.purchase_num }}</td></tr>
-        <tr><td class="lbl">PO Date</td><td>{{ pr.purchase_order.purchase_date }}</td></tr>
+        <tr><td class="lbl">Against Invoice</td><td>{{ pr.purchase_invoice.invoice_num }}</td></tr>
+        <tr><td class="lbl">Invoice Date</td><td>{{ pr.purchase_invoice.invoice_date }}</td></tr>{% if pr.purchase_order %}
+        <tr><td class="lbl">Order</td><td>{{ pr.purchase_order.purchase_num }}</td></tr>{% endif %}
         <tr><td class="lbl">Transaction ID</td><td>{{ pr.transaction_id }}</td></tr>
       </table>
     </div>

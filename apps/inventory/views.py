@@ -28,7 +28,7 @@ from apps.finance.services import account_balances, account_ledger, create_custo
 from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
-from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
+from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
@@ -692,7 +692,7 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
         # the panels are open by default, so every row's figures are needed.
         purchases = {
             row["supplier_id"]: row
-            for row in PurchaseMaster.objects.filter(supplier__in=suppliers)
+            for row in PurchaseInvoice.objects.filter(supplier__in=suppliers, status=STATUS_POSTED)
             .values("supplier_id")
             .annotate(total=Sum("total_amount"), count=Count("id"))
         }
@@ -756,7 +756,8 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
         all_suppliers = self.get_queryset()
         context["supplier_count"] = all_suppliers.count()
         context["purchased_total"] = (
-            PurchaseMaster.objects.filter(supplier__in=all_suppliers).aggregate(total=Sum("total_amount"))["total"] or zero
+            PurchaseInvoice.objects.filter(supplier__in=all_suppliers, status=STATUS_POSTED)
+            .aggregate(total=Sum("total_amount"))["total"] or zero
         )
         all_codes = ChartOfAccount.objects.filter(
             title__in=all_suppliers.values_list("name", flat=True), is_group=False
@@ -778,14 +779,14 @@ class SupplierDetailView(PagePermissionRequiredMixin, DetailView):
         supplier = self.object
         zero = Decimal("0.00")
 
-        bought = PurchaseMaster.objects.filter(supplier=supplier).aggregate(total=Sum("total_amount"), count=Count("id"))
+        bought = PurchaseInvoice.objects.filter(supplier=supplier, status=STATUS_POSTED).aggregate(total=Sum("total_amount"), count=Count("id"))
         sent_back = PurchaseReturnMaster.objects.filter(supplier=supplier).aggregate(total=Sum("returned_amount"), count=Count("id"))
         context["purchase_total"] = bought["total"] or zero
         context["purchase_count"] = bought["count"] or 0
         context["return_total"] = sent_back["total"] or zero
         context["return_count"] = sent_back["count"] or 0
         context["order_count"] = PurchaseOrder.objects.filter(supplier=supplier).count()
-        context["recent_receipts"] = PurchaseMaster.objects.filter(supplier=supplier).order_by("-id")[:10]
+        context["recent_invoices"] = PurchaseInvoice.objects.filter(supplier=supplier, status=STATUS_POSTED).order_by("-invoice_date", "-id")[:10]
 
         # The supplier's payable account is named after them, the same way the
         # posting created it, so the ledger here is the ledger the books hold.
@@ -4013,8 +4014,8 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
     page = "inventory.purchase_returns"
     template_name = "inventory/purchase_return_list.html"
     context_object_name = "returns"
-    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_order", "supplier").order_by("-return_date", "-id")
-    search_fields = ("return_num", "transaction_id", "purchase_order__purchase_num")
+    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_invoice", "purchase_order", "supplier").order_by("-return_date", "-id")
+    search_fields = ("return_num", "transaction_id", "purchase_invoice__invoice_num", "purchase_order__purchase_num")
     filter_fields = {"supplier": "supplier_id"}
     date_filters = [{"field": "return_date", "label": "Return date"}]
 
@@ -4024,54 +4025,57 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        all_orders = PurchaseOrder.objects.select_related("supplier").prefetch_related("items__inventory_item", "items__uom").filter(
-            status__in=[STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED]
-        ).order_by("-purchase_date", "-id")
-        returnable_pks = []
-        for o in all_orders:
-            for item in o.items.all():
-                if (item.qty_invoiced or Decimal("0")) <= 0:
-                    continue
-                already = PurchaseReturnDetail.objects.filter(
-                    purchase_return_master__purchase_order=o,
-                    purchase_return_master__posted=YES,
-                    inventory_item=item.inventory_item,
-                ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
-                if item.qty_invoiced > already:
-                    returnable_pks.append(o.pk)
-                    break
-        orders = all_orders.filter(pk__in=returnable_pks)
-        pos_json = [
-            {"id": o.pk, "purchase_num": o.purchase_num, "supplier": o.supplier.name, "date": str(o.purchase_date)}
-            for o in orders
-        ]
+        # The pickable documents are posted invoices, not orders: the invoice is
+        # what brought the goods in, and a spot purchase has no order at all.
+        zero = Decimal("0")
+        invoices = list(
+            PurchaseInvoice.objects.filter(status=STATUS_POSTED)
+            .select_related("supplier", "purchase_order")
+            .prefetch_related("items__inventory_item", "items__uom")
+            .order_by("-invoice_date", "-id")[:200]
+        )
+        # One query for every quantity already sent back, rather than one per
+        # line: this screen is the gate clerk's, and it opens on a slow link.
+        returned = {
+            (row["purchase_return_master__purchase_invoice_id"], row["inventory_item_id"]): row["qty"]
+            for row in PurchaseReturnDetail.objects.filter(
+                purchase_return_master__posted=YES,
+                purchase_return_master__purchase_invoice__in=invoices,
+            ).values("purchase_return_master__purchase_invoice_id", "inventory_item_id").annotate(qty=Sum("quantity"))
+        }
+
+        invoice_json = []
         items_json = {}
-        for o in orders:
+        for invoice in invoices:
             rows = []
-            for i in o.items.all():
-                if (i.qty_invoiced or Decimal("0")) <= 0:
-                    continue
-                already = PurchaseReturnDetail.objects.filter(
-                    purchase_return_master__purchase_order=o,
-                    purchase_return_master__posted=YES,
-                    inventory_item=i.inventory_item,
-                ).aggregate(t=Sum("quantity"))["t"] or Decimal("0")
-                returnable = i.qty_invoiced - already
+            for line in invoice.items.all():
+                already = returned.get((invoice.pk, line.inventory_item_id)) or zero
+                returnable = (line.quantity or zero) - already
                 if returnable <= 0:
                     continue
                 rows.append({
-                    "poi_pk": i.pk,
-                    "inventory_item_pk": i.inventory_item_id,
-                    "item_name": i.descr,
-                    "item_code": i.inventory_item.code,
+                    "line_pk": line.pk,
+                    "inventory_item_pk": line.inventory_item_id,
+                    "item_name": line.descr or line.inventory_item.item_name,
+                    "item_code": line.inventory_item.code,
                     "recv_qty": float(returnable),
-                    "rate": float(i.rate),
-                    "total": float(returnable * i.rate),
-                    "uom": uom_title(i),
+                    "rate": float(line.rate),
+                    "total": float(returnable * line.rate),
+                    "uom": uom_title(line),
                 })
-            items_json[str(o.pk)] = rows
-        context["po_json"] = pos_json
-        context["po_items_json"] = items_json
+            if not rows:
+                continue
+            invoice_json.append({
+                "id": invoice.pk,
+                "invoice_num": invoice.invoice_num,
+                "po_num": invoice.purchase_order.purchase_num if invoice.purchase_order_id else "",
+                "supplier": invoice.supplier.name,
+                "date": str(invoice.invoice_date),
+            })
+            items_json[str(invoice.pk)] = rows
+
+        context["invoice_json"] = invoice_json
+        context["invoice_items_json"] = items_json
         context["today"] = timezone.localdate()
         return context
 
@@ -4080,40 +4084,36 @@ class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
     page = "inventory.purchase_returns"
     action = "add"
     def post(self, request):
-        po_pk = request.POST.get("purchase_order")
-        order = get_object_or_404(PurchaseOrder, pk=po_pk)
-        purchase_master = order.purchase_masters.first()
-        if not purchase_master:
-            messages.error(request, "No purchase master found for this PO.")
-            return redirect("inventory:purchase_return_list")
-        poi_pks = request.POST.getlist("poi_pk")
+        invoice_pk = request.POST.get("purchase_invoice")
+        invoice = get_object_or_404(PurchaseInvoice, pk=invoice_pk, status=STATUS_POSTED)
+        line_pks = request.POST.getlist("line_pk")
         return_qtys = request.POST.getlist("return_qty")
-        if not poi_pks:
-            messages.error(request, "No items selected.")
+        if not line_pks:
+            messages.error(request, "Tick at least one line and enter the quantity going back.")
             return redirect("inventory:purchase_return_list")
         try:
             with transaction.atomic():
                 pr = PurchaseReturnMaster(
                     transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster),
-                    purchase_master=purchase_master,
+                    purchase_invoice=invoice,
                     return_date=timezone.localdate(),
                     created_by=request.user,
                     updated_by=request.user,
                 )
                 pr.save()
-                for poi_pk, qty_raw in zip(poi_pks, return_qtys):
+                for line_pk, qty_raw in zip(line_pks, return_qtys):
                     try:
                         qty = Decimal(qty_raw)
                     except Exception:
                         continue
                     if qty <= 0:
                         continue
-                    poi = get_object_or_404(PurchaseOrderItem, pk=poi_pk)
+                    line = get_object_or_404(PurchaseInvoiceLine, pk=line_pk, invoice=invoice)
                     PurchaseReturnDetail.objects.create(
                         purchase_return_master=pr,
-                        inventory_item=poi.inventory_item,
+                        inventory_item=line.inventory_item,
                         quantity=qty,
-                        rate=poi.rate,
+                        rate=line.rate,
                         created_by=request.user,
                         updated_by=request.user,
                     )
@@ -4121,7 +4121,7 @@ class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
         except ValidationError as exc:
             messages.error(request, exc)
             return redirect("inventory:purchase_return_list")
-        return redirect(f"{reverse_lazy('inventory:purchase_return_receipt', kwargs={'pk': pr.pk})}?po={po_pk}")
+        return redirect(f"{reverse_lazy('inventory:purchase_return_receipt', kwargs={'pk': pr.pk})}?invoice={invoice_pk}")
 
 
 class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):

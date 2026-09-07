@@ -46,7 +46,7 @@
       <div>
         <p class="stat-label">Purchased</p>
         <p class="stat-value">{{ purchase_total|amount }}</p>
-        <p class="mt-0.5 text-xs text-slate-500">{{ purchase_count }} receipt{{ purchase_count|pluralize }} · {{ order_count }} order{{ order_count|pluralize }}</p>
+        <p class="mt-0.5 text-xs text-slate-500">{{ purchase_count }} invoice{{ purchase_count|pluralize }} · {{ order_count }} order{{ order_count|pluralize }}</p>
       </div>
     </div>
     <div class="stat-tile">
@@ -108,13 +108,13 @@
   </div>
 
   <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <p class="border-b border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">Recent Receipts</p>
+    <p class="border-b border-slate-200 px-4 py-3 text-sm font-semibold dark:border-slate-800">Recent Purchase Invoices</p>
     <div class="divide-y divide-slate-100 dark:divide-slate-800">
-      {% for receipt in recent_receipts %}
-      <div class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-        <span class="min-w-0 truncate">{{ receipt.transaction_id }}</span>
-        <span class="shrink-0 font-semibold tabular-nums">{{ receipt.total_amount|amount }}</span>
-      </div>
+      {% for invoice in recent_invoices %}
+      <a href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}" class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+        <span class="min-w-0 truncate">{{ invoice.invoice_num }} · {{ invoice.invoice_date }}</span>
+        <span class="shrink-0 font-semibold tabular-nums">{{ invoice.total_amount|amount }}</span>
+      </a>
       {% empty %}
       <p class="px-4 py-8 text-center text-slate-500">Nothing bought from this supplier yet.</p>
       {% endfor %}

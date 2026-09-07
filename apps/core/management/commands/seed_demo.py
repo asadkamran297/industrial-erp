@@ -20,7 +20,7 @@ from apps.hr.seeders.demo_employees import seed_demo_employees
 from apps.inventory.seeders.demo_customers import seed_demo_customers
 from apps.inventory.seeders.demo_transactions import (
     seed_demo_direct_purchases,
-    seed_demo_purchase_bills,
+    seed_demo_purchase_invoices,
     seed_demo_purchase_orders,
     seed_demo_sales,
 )
@@ -58,7 +58,7 @@ class Command(BaseCommand):
             ("customers", lambda: seed_demo_customers(count)),
             ("employees, salaries and payroll", lambda: seed_demo_employees(count)),
             ("purchase orders", lambda: seed_demo_purchase_orders(count, user=user)),
-            ("invoices against orders", lambda: seed_demo_purchase_bills(count, user=user)),
+            ("invoices against orders", lambda: seed_demo_purchase_invoices(count, user=user)),
             ("direct invoices", lambda: seed_demo_direct_purchases(count, user=user)),
             ("sales", lambda: seed_demo_sales(count, user=user)),
             ("vouchers", lambda: seed_demo_vouchers(count, user=user)),

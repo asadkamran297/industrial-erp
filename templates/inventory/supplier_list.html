@@ -97,7 +97,7 @@
                   <p class="kpi-label">Dealings</p>
                   <dl class="mt-2 space-y-1 text-sm">
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Purchase orders</dt><dd class="font-semibold tabular-nums">{{ supplier.order_count }}</dd></div>
-                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Receipts</dt><dd class="font-semibold tabular-nums">{{ supplier.purchase_count }}</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-slate-500">Purchase invoices</dt><dd class="font-semibold tabular-nums">{{ supplier.purchase_count }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Purchased</dt><dd class="font-semibold tabular-nums">{{ supplier.purchase_total|amount }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Returned</dt><dd class="font-semibold tabular-nums">{{ supplier.return_total|amount }} <span class="text-xs text-slate-400">({{ supplier.return_count }})</span></dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-slate-500">Opening balance</dt><dd class="font-semibold tabular-nums">{{ supplier.opening_balance|amount }}{% if supplier.opening_balance_date %} <span class="text-xs text-slate-400">as of {{ supplier.opening_balance_date|dmy }}</span>{% endif %}</dd></div>

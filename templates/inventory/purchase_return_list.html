@@ -1,14 +1,14 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{{ po_json|json_script:"prt-pos" }}
-{{ po_items_json|json_script:"prt-items" }}
+{{ invoice_json|json_script:"prt-invoices" }}
+{{ invoice_items_json|json_script:"prt-items" }}
 
 <section class="space-y-4" x-data="purchaseReturn()">
 
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Returns</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Select a received PO to process a return.</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Select a posted purchase invoice to send goods back.</p>
     </div>
   </div>
 
@@ -19,11 +19,11 @@
 
       <div class="mb-3 grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Purchase Order *</label>
-          <select name="purchase_order" class="form-select w-full" x-model="poId" @change="loadItems()" required>
-            <option value="">— Select PO —</option>
-            {% for p in po_json %}
-            <option value="{{ p.id }}">{{ p.purchase_num }} — {{ p.supplier }} ({{ p.date }})</option>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Purchase Invoice *</label>
+          <select name="purchase_invoice" class="form-select w-full" x-model="invoiceId" @change="loadItems()" required>
+            <option value="">— Select invoice —</option>
+            {% for p in invoice_json %}
+            <option value="{{ p.id }}">{{ p.invoice_num }} — {{ p.supplier }} ({{ p.date }}){% if p.po_num %} · {{ p.po_num }}{% endif %}</option>
             {% endfor %}
           </select>
         </div>
@@ -33,14 +33,14 @@
         </div>
       </div>
 
-      <div x-show="!poId" class="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-        Select a PO above to load its received items.
+      <div x-show="!invoiceId" class="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+        Select an invoice above to load what it brought in.
       </div>
-      <div x-show="poId && !items.length" x-cloak class="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800">
-        No received items found for this PO.
+      <div x-show="invoiceId && !items.length" x-cloak class="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800">
+        Nothing left to return on this invoice.
       </div>
 
-      <div x-show="poId && items.length" x-cloak>
+      <div x-show="invoiceId && items.length" x-cloak>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
@@ -56,7 +56,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-              <template x-for="(it, i) in items" :key="it.poi_pk">
+              <template x-for="(it, i) in items" :key="it.line_pk">
                 <tr :class="selected[i] ? 'bg-rose-50 dark:bg-rose-900/10' : ''">
                   <td class="px-3 py-2 font-medium" x-text="it.item_name"></td>
                   <td class="px-3 py-2 text-xs text-slate-500" x-text="it.item_code"></td>
@@ -106,7 +106,7 @@
         <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
           <tr>
             <th class="px-4 py-3">Return #</th>
-            <th class="px-4 py-3">PO #</th>
+            <th class="px-4 py-3">Invoice #</th>
             <th class="px-4 py-3">Supplier</th>
             <th class="px-4 py-3">Date</th>
             <th class="px-4 py-3 text-right">Amount</th>
@@ -117,7 +117,7 @@
           {% for row in returns %}
           <tr>
             <td class="px-4 py-3 font-medium">{{ row.return_num }}</td>
-            <td class="px-4 py-3">{{ row.purchase_order.purchase_num }}</td>
+            <td class="px-4 py-3">{{ row.purchase_invoice.invoice_num }}</td>
             <td class="px-4 py-3">{{ row.supplier.name }}</td>
             <td class="px-4 py-3">{{ row.return_date|dmy }}</td>
             <td class="px-4 py-3 text-right">{{ row.returned_amount|amount }}</td>
@@ -143,14 +143,14 @@
 function purchaseReturn() {
   var allItems = JSON.parse(document.getElementById("prt-items").textContent);
   return {
-    poId: new URLSearchParams(location.search).get("po") || "",
+    invoiceId: new URLSearchParams(location.search).get("invoice") || "",
     items: [],
     selected: [],
     returnQtys: [],
-    init() { if (this.poId) this.loadItems(); },
+    init() { if (this.invoiceId) this.loadItems(); },
     loadItems() {
-      if (!this.poId) { this.items = []; this.selected = []; this.returnQtys = []; return; }
-      this.items = allItems[String(this.poId)] || [];
+      if (!this.invoiceId) { this.items = []; this.selected = []; this.returnQtys = []; return; }
+      this.items = allItems[String(this.invoiceId)] || [];
       this.selected = this.items.map(() => false);
       this.returnQtys = this.items.map(it => it.recv_qty);
     },
@@ -167,7 +167,7 @@ function purchaseReturn() {
       this.items.forEach((it, i) => {
         if (!this.selected[i] || !(Number(this.returnQtys[i]) > 0)) return;
         container.innerHTML +=
-          "<input type='hidden' name='poi_pk' value='" + it.poi_pk + "'>" +
+          "<input type='hidden' name='line_pk' value='" + it.line_pk + "'>" +
           "<input type='hidden' name='return_qty' value='" + Number(this.returnQtys[i]) + "'>";
       });
       if (!container.innerHTML) return;

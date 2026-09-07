@@ -444,7 +444,7 @@ class POSReturnDetailForm(StyledModelForm):
 class PurchaseReturnMasterForm(StyledModelForm):
     class Meta:
         model = PurchaseReturnMaster
-        fields = ("purchase_master", "return_date", "adjusted_amount", "status", "remarks")
+        fields = ("purchase_invoice", "return_date", "adjusted_amount", "status", "remarks")
         widgets = {"return_date": forms.DateInput(attrs={"type": "date"})}
 
 

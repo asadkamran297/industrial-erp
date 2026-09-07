@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
-from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseMaster
+from .models import Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
 from .services import create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
@@ -69,8 +69,8 @@ class InventoryFlowTests(TestCase):
         self.item.stock.refresh_from_db()
         self.assertEqual(self.item.stock.current_quantity, Decimal("9.0000"))
 
-        purchase_master = PurchaseMaster.objects.get(purchase_order=po)
-        purchase_return = PurchaseReturnMaster.objects.create(transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster), purchase_master=purchase_master, return_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
+        invoice = PurchaseInvoice.objects.get(purchase_order=po)
+        purchase_return = PurchaseReturnMaster.objects.create(transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster), purchase_invoice=invoice, return_date=timezone.localdate(), created_by=self.user, updated_by=self.user)
         PurchaseReturnDetail.objects.create(purchase_return_master=purchase_return, inventory_item=self.item, quantity=Decimal("1.0000"), rate=Decimal("120.00"), created_by=self.user, updated_by=self.user)
         post_purchase_return(purchase_return=purchase_return, user=self.user)
         self.item.stock.refresh_from_db()

@@ -23,7 +23,7 @@ from apps.inventory.services import (
 )
 
 PO_MARKER = "DEMO-Q-%03d"
-BILL_MARKER = "DEMO-INV-%03d"
+INVOICE_MARKER = "DEMO-INV-%03d"
 DIRECT_PURCHASE_MARKER = "DEMO-PINV-%03d"
 SALE_MARKER = "DEMO-SALE-%03d"
 
@@ -85,7 +85,7 @@ def seed_demo_purchase_orders(count: int = 50, *, user=None) -> int:
     return created_count
 
 
-def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
+def seed_demo_purchase_invoices(count: int = 50, *, user=None) -> int:
     """Invoice the submitted orders. This is what brings stock in and books the debt."""
     today = timezone.localdate()
     created_count = 0
@@ -97,7 +97,7 @@ def seed_demo_purchase_bills(count: int = 50, *, user=None) -> int:
     )
 
     for index, order in enumerate(orders[:count], start=1):
-        invoice_num = BILL_MARKER % index
+        invoice_num = INVOICE_MARKER % index
         if PurchaseInvoice.all_objects.filter(supplier=order.supplier, supplier_invoice_num=invoice_num).exists():
             continue
 

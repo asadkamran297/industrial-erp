@@ -57,8 +57,6 @@ from .models import (
     POSDetail,
     POSMaster,
     POSReturnMaster,
-    PurchaseMaster,
-    PurchaseMasterReturn,
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseReturnMaster,
@@ -687,24 +685,21 @@ def post_sale_return(*, sale_return, user):
 
 @transaction.atomic
 def post_purchase_return(*, purchase_return, user):
-    purchase_return = PurchaseReturnMaster.objects.select_for_update().select_related("purchase_master", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
+    # ``of`` matters: the order is nullable now, so select_related makes it an
+    # outer join, and Postgres refuses to lock the nullable side of one.
+    purchase_return = PurchaseReturnMaster.objects.select_for_update(of=("self",)).select_related("purchase_invoice", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
     if purchase_return.posted == YES:
         raise ValidationError("Posted purchase return cannot be changed.")
+    invoice = purchase_return.purchase_invoice
     total = Decimal("0.00")
     for item in purchase_return.items.all():
-        # What may go back is what was invoiced, because the invoice is what
-        # brought it in. Read off the order lines when the return is against an
-        # order, and off the invoices themselves when it is not.
-        received_qty = purchase_return.purchase_order.items.filter(
+        # What may go back is what this invoice brought in, and nothing else.
+        # The order is not consulted: it is a commitment, it moves no goods, and
+        # a spot purchase has none at all.
+        received_qty = invoice.items.filter(
             inventory_item=item.inventory_item
-        ).aggregate(total=Sum("qty_invoiced"))["total"] or Decimal("0.0000")
-        if not received_qty:
-            received_qty = PurchaseInvoiceLine.objects.filter(
-                invoice__purchase_order=purchase_return.purchase_order,
-                invoice__status=STATUS_POSTED,
-                inventory_item=item.inventory_item,
-            ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.0000")
-        already_returned = PurchaseReturnMaster.objects.exclude(pk=purchase_return.pk).filter(purchase_order=purchase_return.purchase_order, posted=YES, items__inventory_item=item.inventory_item).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
+        ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.0000")
+        already_returned = PurchaseReturnMaster.objects.exclude(pk=purchase_return.pk).filter(purchase_invoice=invoice, posted=YES, items__inventory_item=item.inventory_item).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
         allowed = received_qty - already_returned
         if item.quantity > allowed:
             raise ValidationError(f"Return quantity exceeds received quantity for {item.item_name}.")
@@ -717,17 +712,12 @@ def post_purchase_return(*, purchase_return, user):
         stock.updated_by = user
         stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
         create_ledger_entry(stock=stock, inventory_item=item.inventory_item, transaction_id=purchase_return.transaction_id, transaction_no=purchase_return.return_num, transaction_type=LEDGER_PURCHASE_RETURN, transaction_date=purchase_return.return_date, ref_table="inv_purchase_return_details", ref_id=item.pk, ref_no=purchase_return.return_num, quantity=item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=purchase_return.remarks, user=user)
-        PurchaseMasterReturn.objects.create(purchase_master=purchase_return.purchase_master, inv_purchase_master_transaction_id=purchase_return.purchase_master.transaction_id, inventory_item=item.inventory_item, inv_inventory_item_name=item.item_name, quantity=item.quantity, rate=item.rate, total_price=item.total_price, created_by=user, updated_by=user)
         total += item.total_price
     purchase_return.returned_amount = total
     purchase_return.status = STATUS_POSTED
     purchase_return.posted = YES
     purchase_return.updated_by = user
     purchase_return.save()
-    purchase_master = purchase_return.purchase_master
-    purchase_master.return_amount = (purchase_master.return_amount or Decimal("0.00")) + total
-    purchase_master.updated_by = user
-    purchase_master.save(update_fields=["return_amount", "updated_by", "updated_at"])
 
     # Goods go back to the supplier, so the stock asset and the debt both fall.
     from apps.finance.services import post_purchase_return_to_gl  # lazy: finance imports inventory
@@ -1189,22 +1179,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
     transaction_id = generate_transaction_id("PINV", PurchaseInvoice)
 
-    # A purchase return is raised against a PurchaseMaster, so one is written
-    # here for the same reason the bill used to write it: without it the
-    # invoice would be the one kind of purchase that cannot be sent back.
-    purchase_master = None
-    if header_order is not None:
-        purchase_master, _made = PurchaseMaster.objects.get_or_create(
-            purchase_order=header_order,
-            defaults={
-                "transaction_id": generate_transaction_id("PUR", PurchaseMaster),
-                "supplier": supplier,
-                "inv_purchase_order_inv_num": supplier_invoice_num,
-                "created_by": user,
-                "updated_by": user,
-            },
-        )
-
     for seq, row in enumerate(prepared, start=1):
         PurchaseInvoiceLine.objects.create(
             invoice=invoice,
@@ -1256,12 +1230,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             old_price=old_price, current_price=stock.current_price,
             remarks=remarks or row["descr"], user=user,
         )
-
-    if purchase_master is not None:
-        purchase_master.inv_purchase_order_inv_num = supplier_invoice_num
-        purchase_master.total_amount = (purchase_master.total_amount or Decimal("0.00")) + goods_total
-        purchase_master.updated_by = user
-        purchase_master.save()
 
     # Every order this invoice touched moves along, however many there were.
     for order in touched_orders.values():

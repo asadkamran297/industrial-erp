@@ -638,7 +638,30 @@ class PurchaseInvoiceLine(BaseModel):
         super().save(*args, **kwargs)
 
 
-class PurchaseMaster(BaseModel):
+class LegacyReadOnly:
+    """A table kept for its history and closed to new writing.
+
+    The rows are still readable — a report that reads them keeps working — but
+    nothing in the running system may add to them or change them, so the table
+    can only ever shrink in relevance rather than grow a second life.
+    """
+
+    def save(self, *args, **kwargs):
+        raise RuntimeError(f"{type(self).__name__} is legacy and read-only.")
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError(f"{type(self).__name__} is legacy and read-only.")
+
+
+class LegacyPurchaseMaster(LegacyReadOnly, BaseModel):
+    """The old headless purchase row, written by the bill and then the invoice.
+
+    It never had a screen and never touched stock or the ledger. Its only jobs
+    were to give a purchase return something to hang off and to feed the
+    supplier "amount bought" figures — both of which now read the purchase
+    invoice directly. Retained because it carries pre-cutover history.
+    """
+
     transaction_id = models.CharField(max_length=60, unique=True)
     inv_purchase_order_inv_num = models.CharField(max_length=80, blank=True)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
@@ -648,13 +671,13 @@ class PurchaseMaster(BaseModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
 
     class Meta:
-        db_table = "inv_purchase_master"
+        db_table = "legacy_inv_purchase_master"
         ordering = ["-id"]
         indexes = [models.Index(fields=["transaction_id"])]
 
 
-class PurchaseMasterReturn(BaseModel):
-    purchase_master = models.ForeignKey(PurchaseMaster, related_name="return_rows", on_delete=models.CASCADE, db_column="inv_purchase_master_id")
+class LegacyPurchaseMasterReturn(LegacyReadOnly, BaseModel):
+    purchase_master = models.ForeignKey(LegacyPurchaseMaster, related_name="return_rows", on_delete=models.CASCADE, db_column="inv_purchase_master_id")
     inv_purchase_master_transaction_id = models.CharField(max_length=60)
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     inv_inventory_item_name = models.CharField(max_length=180)
@@ -663,7 +686,7 @@ class PurchaseMasterReturn(BaseModel):
     total_price = models.DecimalField(max_digits=18, decimal_places=2)
 
     class Meta:
-        db_table = "inv_purchase_master_returns"
+        db_table = "legacy_inv_purchase_master_returns"
 
 
 class Stock(BaseModel):
@@ -1101,8 +1124,13 @@ class PurchaseReturnMaster(BaseModel):
     transaction_id = models.CharField(max_length=60, unique=True)
     return_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     return_num = models.CharField(max_length=40, unique=True, blank=True)
-    purchase_master = models.ForeignKey(PurchaseMaster, related_name="purchase_returns", on_delete=models.PROTECT, db_column="inv_purchase_master_id")
-    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, db_column="inv_purchase_order_id")
+    # Goods go back against the document that brought them in, which is the
+    # invoice. The order is carried alongside for reporting and is null for a
+    # spot purchase, which had no order and used to be impossible to return.
+    purchase_invoice = models.ForeignKey("PurchaseInvoice", related_name="returns", on_delete=models.PROTECT,
+                                         db_column="inv_purchase_invoice_id")
+    purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.PROTECT,
+                                       db_column="inv_purchase_order_id")
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
     return_date = models.DateField(default=timezone.localdate)
     total_purchase_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
@@ -1127,9 +1155,9 @@ class PurchaseReturnMaster(BaseModel):
             last = PurchaseReturnMaster.all_objects.order_by("-return_seq_num").values_list("return_seq_num", flat=True).first() or 0
             self.return_seq_num = last + 1
         self.return_num = f"PR-{self.return_seq_num}"
-        self.purchase_order = self.purchase_master.purchase_order
-        self.supplier = self.purchase_master.supplier
-        self.total_purchase_amount = self.purchase_master.total_amount
+        self.purchase_order = self.purchase_invoice.purchase_order
+        self.supplier = self.purchase_invoice.supplier
+        self.total_purchase_amount = self.purchase_invoice.total_amount
         self.full_clean()
         super().save(*args, **kwargs)
 

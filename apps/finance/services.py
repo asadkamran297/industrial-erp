@@ -824,65 +824,6 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     )
 
 
-def post_purchase_bill_to_gl(*, bill, user=None):
-    """Book a supplier's invoice against a purchase order.
-
-        Dr Inventory                    the goods, at the rate billed
-        Dr Input Sales Tax              tax the supplier charged, recoverable
-        Dr/Cr Purchase Price Variance   freight charged, less any discount allowed
-            Cr Supplier payable             what is now actually owed
-
-    The bill is the point the goods enter. No receipt is raised between the
-    order and the invoice, so the asset and the debt to the supplier arise on
-    the same document and at the same moment.
-
-    Freight and discount are on the bill as a whole rather than on any one line,
-    and are not spread back across the units: the stock carries the agreed price
-    of the goods, and the difference goes to the profit and loss account in the
-    period the bill was entered.
-    """
-    zero = Decimal("0.00")
-    supplier = bill.supplier
-    if not supplier:
-        raise ValidationError("A supplier is required to post a purchase bill to the general ledger.")
-
-    stock_value = (bill.cleared_amount or zero).quantize(TWO_DP)
-    tax = (bill.tax_amount or zero).quantize(TWO_DP)
-    payable = (bill.total_amount or zero).quantize(TWO_DP)
-    variance = (bill.variance_amount or zero).quantize(TWO_DP)
-
-    supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
-
-    entries = [(inventory.code, stock_value, zero, f"Stock taken in on {bill.bill_num}")]
-    if tax:
-        entries.append((gl_account(GL_INPUT_TAX_PATH, user=user).code, tax, zero,
-                        f"Input sales tax on {bill.supplier_invoice_num}"))
-    if variance:
-        variance_account = gl_account(GL_PURCHASE_VARIANCE_PATH, user=user)
-        # Freight the supplier charged is a cost; a discount they allowed is a
-        # credit back. Both sides of the same account, never two accounts.
-        if variance > zero:
-            entries.append((variance_account.code, variance, zero,
-                            f"Freight and charges on {bill.bill_num}"))
-        else:
-            entries.append((variance_account.code, zero, -variance,
-                            f"Discount allowed on {bill.bill_num}"))
-    entries.append((supplier_account.code, zero, payable,
-                    f"Payable to {supplier.name} on {bill.supplier_invoice_num}"))
-
-    return _post_voucher(
-        source_ref=f"inv_purchase_bills:{bill.pk}",
-        voucher_type=VOUCHER_TYPE_PURCHASE,
-        voucher_date=bill.bill_date,
-        settlement_mode=SETTLEMENT_CREDIT,
-        account_no=supplier_account.code,
-        remarks=f"Auto-posted from purchase bill {bill.bill_num} ({bill.supplier_invoice_num})",
-        entries=entries,
-        user=user,
-    )
-
-
 def reverse_gl_posting(*, source_ref, reversal_ref, voucher_date, remarks, user=None):
     """Mirror an existing voucher: every debit becomes a credit and vice versa.
 
@@ -962,7 +903,7 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
     """
     zero = Decimal("0.00")
     returned = (purchase_return.returned_amount or zero).quantize(TWO_DP)
-    supplier = getattr(purchase_return.purchase_master, "supplier", None) or getattr(purchase_return.purchase_order, "supplier", None)
+    supplier = purchase_return.supplier or getattr(purchase_return.purchase_invoice, "supplier", None)
     if not supplier:
         raise ValidationError("A supplier is required to post a purchase return to the general ledger.")
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
