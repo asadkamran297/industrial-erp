@@ -46,7 +46,9 @@ assert name == '$DEMO_DB', 'refusing to seed %s' % name
 
 "$VENV/bin/python" manage.py migrate --no-input
 "$VENV/bin/python" manage.py seed
-"$VENV/bin/python" manage.py seed_demo
+# seed_demo stamps its documents with a user, so the superuser has to exist
+# before it runs, not after.
 "$VENV/bin/python" manage.py ensure_superuser
+"$VENV/bin/python" manage.py seed_demo
 
 echo "Demo database $DEMO_DB is ready."
