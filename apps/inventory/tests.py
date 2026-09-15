@@ -10,7 +10,7 @@ from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
 from .models import ItemLedger, Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
-from .services import create_purchase_order, create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
+from .services import create_purchase_return, purchase_return_lines, reverse_purchase_return, create_purchase_order, create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
 class InventoryFlowTests(TestCase):
@@ -409,6 +409,104 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(totals["debit"], totals["credit"])
         self.assertEqual(totals["credit"], invoice.total_amount)
         self.assertEqual(invoice.journal_ref, voucher.voucher_no)
+
+
+class PurchaseReturnTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(username="returns", password="pass12345")
+        city = City.objects.create(title="Multan", code="MUX", status=STATUS_ACTIVE)
+        uom = UOM.objects.create(title="Piece", code="PCS", status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
+        item_class = InventoryClass.objects.create(title="Spares", class_code="SP", status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
+        self.item = InventoryItem.objects.create(item_name="Bearing", uom=uom, item_class=item_class, price=Decimal("60.00"), created_by=self.user, updated_by=self.user)
+        self.supplier = Supplier.objects.create(name="Return Traders", code="RTR1", city=city, status=STATUS_ACTIVE, created_by=self.user, updated_by=self.user)
+        self.invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="RT-INV-1",
+            lines=[{"inventory_item": self.item, "quantity": Decimal("10.0000"), "rate": Decimal("50.00")}],
+            user=self.user,
+        )
+        self.line = self.invoice.items.get()
+
+    def stock(self):
+        self.item.stock.refresh_from_db()
+        return self.item.stock.current_quantity
+
+    def test_over_return_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("11"))], user=self.user)
+        create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("6"))], post=True, user=self.user)
+        with self.assertRaises(ValidationError):
+            create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("5"))], post=True, user=self.user)
+        self.assertEqual(self.stock(), Decimal("4.0000"))
+
+    def test_post_writes_item_ledger_and_balanced_voucher(self):
+        from django.db.models import Sum
+        from apps.core.constants import LEDGER_PURCHASE_RETURN
+        from apps.finance.models import AccountVoucher
+
+        purchase_return = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("4"))], post=True, user=self.user)
+        self.assertEqual(purchase_return.status, "posted")
+        self.assertEqual(purchase_return.returned_amount, Decimal("200.00"))
+        self.assertEqual(self.stock(), Decimal("6.0000"))
+        self.assertEqual(ItemLedger.objects.filter(transaction_type=LEDGER_PURCHASE_RETURN, ref_no=purchase_return.return_num).count(), 1)
+        voucher = AccountVoucher.objects.get(source_ref=f"inv_purchase_return_masters:{purchase_return.pk}")
+        totals = voucher.lines.aggregate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+        self.assertEqual(totals["debit"], Decimal("200.00"))
+        self.assertEqual(totals["debit"], totals["credit"])
+
+    def test_reverse_restores_stock_and_mirrors_voucher(self):
+        from apps.core.constants import LEDGER_REVERSAL
+        from apps.finance.models import AccountVoucher
+
+        purchase_return = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("4"))], post=True, user=self.user)
+        reverse_purchase_return(purchase_return=purchase_return, reason="entered_in_error", user=self.user)
+        purchase_return.refresh_from_db()
+        self.assertEqual(purchase_return.status, "reversed")
+        self.assertEqual(self.stock(), Decimal("10.0000"))
+        self.assertTrue(ItemLedger.objects.filter(transaction_type=LEDGER_REVERSAL, ref_table="inv_purchase_return_masters", ref_id=purchase_return.pk).exists())
+        self.assertTrue(AccountVoucher.objects.filter(source_ref=f"inv_purchase_return_masters_reversal:{purchase_return.pk}").exists())
+        self.assertTrue(PurchaseReturnMaster.objects.filter(pk=purchase_return.pk).exists())
+        self.assertEqual(purchase_return_lines(self.invoice)[0].qty_returnable, Decimal("10.0000"))
+        with self.assertRaises(ValidationError):
+            reverse_purchase_return(purchase_return=purchase_return, reason="entered_in_error", user=self.user)
+
+    def test_drafts_take_unique_numbers_and_move_no_stock_until_posted(self):
+        first = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("1"))], user=self.user)
+        second = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("1"))], user=self.user)
+        self.assertTrue(first.return_num.startswith("PR-"))
+        self.assertNotEqual(first.return_num, second.return_num)
+        self.assertEqual(second.return_seq_num, first.return_seq_num + 1)
+        self.assertEqual(self.stock(), Decimal("10.0000"))
+        post_purchase_return(purchase_return=first, user=self.user)
+        self.assertEqual(self.stock(), Decimal("9.0000"))
+        with self.assertRaises(ValidationError):
+            post_purchase_return(purchase_return=first, user=self.user)
+
+    def test_screens_render(self):
+        purchase_return = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("2"))], post=True, user=self.user)
+        self.client.force_login(self.user)
+        for url in (
+            reverse("inventory:purchase_return_list"),
+            reverse("inventory:purchase_return_list") + "?tab=draft",
+            reverse("inventory:purchase_return_create"),
+            reverse("inventory:purchase_return_detail", args=[purchase_return.pk]),
+            reverse("inventory:purchase_return_export") + "?format=csv",
+        ):
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+        options = self.client.get(reverse("inventory:purchase_return_options"), {"supplier": self.supplier.pk}).json()
+        self.assertEqual(options["invoices"][0]["lines"], 1)
+        lines = self.client.get(reverse("inventory:purchase_return_options"), {"invoice": self.invoice.pk}).json()["lines"]
+        self.assertEqual(Decimal(lines[0]["returnable"]), Decimal("8.0000"))
+
+    def test_form_posts_a_return(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("inventory:purchase_return_create"), {
+            "supplier": self.supplier.pk, "purchase_invoice": self.invoice.pk,
+            "return_date": timezone.localdate().isoformat(), "remarks": "",
+            "line_id": [self.line.pk], "return_qty": ["3"], "action": "post",
+        })
+        purchase_return = PurchaseReturnMaster.objects.get(purchase_invoice=self.invoice)
+        self.assertRedirects(response, reverse("inventory:purchase_return_detail", args=[purchase_return.pk]))
+        self.assertEqual(self.stock(), Decimal("7.0000"))
 
 
 class WheatPurchaseScreenTests(TestCase):

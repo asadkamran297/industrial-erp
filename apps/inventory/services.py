@@ -42,7 +42,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES
+from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
 
 TWO_DP = Decimal("0.01")
 FOUR_DP = Decimal("0.0001")
@@ -64,6 +64,7 @@ from .models import (
     POSReturnMaster,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseReturnDetail,
     PurchaseReturnMaster,
     Stock,
     UOMConversion,
@@ -704,46 +705,193 @@ def post_sale_return(*, sale_return, user):
     return sale_return
 
 
+def next_purchase_return_number():
+    last = (
+        PurchaseReturnMaster.all_objects.exclude(return_seq_num__isnull=True)
+        .order_by("-return_seq_num").values_list("return_seq_num", flat=True).first() or 0
+    )
+    return f"{INV_PURCHASE_RETURN_PREFIX}-{last + 1}"
+
+
+def _allocate_purchase_return_number(purchase_return):
+    if purchase_return.return_seq_num:
+        return
+    latest = (
+        PurchaseReturnMaster.all_objects.select_for_update()
+        .exclude(return_seq_num__isnull=True).order_by("-return_seq_num").only("return_seq_num").first()
+    )
+    purchase_return.return_seq_num = (latest.return_seq_num if latest else 0) + 1
+    purchase_return.return_num = f"{INV_PURCHASE_RETURN_PREFIX}-{purchase_return.return_seq_num}"
+
+
+def purchase_return_lines(invoice, *, exclude_return_id=None):
+    zero = Decimal("0.0000")
+    lines = list(
+        invoice.items.select_related("inventory_item", "uom")
+        .filter(inventory_item__isnull=False, inventory_item__item_kind=INVENTORY_KIND_PRODUCT)
+        .order_by("seq_num")
+    )
+    done = PurchaseReturnDetail.objects.filter(
+        purchase_return_master__purchase_invoice=invoice,
+        purchase_return_master__status=STATUS_POSTED,
+    )
+    if exclude_return_id:
+        done = done.exclude(purchase_return_master_id=exclude_return_id)
+    by_line, loose = {}, {}
+    for row in done.values("invoice_line_id", "inventory_item_id").annotate(qty=Sum("quantity")):
+        if row["invoice_line_id"]:
+            by_line[row["invoice_line_id"]] = by_line.get(row["invoice_line_id"], zero) + row["qty"]
+        else:
+            loose[row["inventory_item_id"]] = loose.get(row["inventory_item_id"], zero) + row["qty"]
+    for line in lines:
+        returned = by_line.get(line.pk, zero)
+        spare = loose.get(line.inventory_item_id, zero)
+        if spare > 0:
+            take = min(spare, max(zero, line.quantity - returned))
+            returned += take
+            loose[line.inventory_item_id] = spare - take
+        line.qty_returned = returned
+        line.qty_returnable = max(zero, line.quantity - returned)
+    return lines
+
+
+@transaction.atomic
+def create_purchase_return(*, invoice, lines, return_date=None, remarks="", post=False, user):
+    invoice = PurchaseInvoice.objects.select_for_update().get(pk=invoice.pk)
+    if invoice.status != STATUS_POSTED:
+        raise ValidationError("Only a posted invoice can be returned against.")
+    available = {line.pk: line for line in purchase_return_lines(invoice)}
+    picked = []
+    for line_id, raw_qty in lines:
+        line = available.get(int(line_id))
+        if line is None:
+            raise ValidationError("A line on this return is not on the invoice.")
+        qty = Decimal(raw_qty).quantize(FOUR_DP)
+        if qty <= 0:
+            continue
+        if qty > line.qty_returnable:
+            raise ValidationError(f"{line.descr}: only {line.qty_returnable.normalize()} left to return.")
+        picked.append((line, qty))
+    if not picked:
+        raise ValidationError("Enter a return quantity on at least one line.")
+
+    purchase_return = PurchaseReturnMaster(
+        transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster),
+        purchase_invoice=invoice,
+        return_date=return_date or timezone.localdate(),
+        remarks=remarks,
+        status=STATUS_DRAFT,
+        created_by=user,
+        updated_by=user,
+    )
+    _allocate_purchase_return_number(purchase_return)
+    purchase_return.save()
+    total = Decimal("0.00")
+    for line, qty in picked:
+        detail = PurchaseReturnDetail.objects.create(
+            purchase_return_master=purchase_return, invoice_line=line, inventory_item=line.inventory_item,
+            uom=line.uom, quantity=qty, rate=line.rate, status=STATUS_DRAFT, created_by=user, updated_by=user,
+        )
+        total += detail.total_price
+    purchase_return.returned_amount = total.quantize(TWO_DP)
+    purchase_return.save()
+    if post:
+        return post_purchase_return(purchase_return=purchase_return, user=user)
+    return purchase_return
+
+
 @transaction.atomic
 def post_purchase_return(*, purchase_return, user):
-    # of=('self',): nullable FK makes an outer join; Postgres won't lock it.
-    purchase_return = PurchaseReturnMaster.objects.select_for_update(**lock_of("self")).select_related("purchase_invoice", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
-    if purchase_return.posted == YES:
+    purchase_return = PurchaseReturnMaster.objects.select_for_update(**lock_of("self")).select_related("purchase_invoice", "purchase_order").get(pk=purchase_return.pk)
+    if purchase_return.posted == YES or purchase_return.status not in INV_RETURN_DRAFT_STATUSES:
         raise ValidationError("Posted purchase return cannot be changed.")
-    invoice = purchase_return.purchase_invoice
-    if not invoice.items.filter(inventory_item__isnull=False).exists():
+    invoice = PurchaseInvoice.objects.select_for_update().get(pk=purchase_return.purchase_invoice_id)
+    if invoice.status != STATUS_POSTED:
+        raise ValidationError(f"{invoice.invoice_num} is not posted, so nothing on it can be returned.")
+    details = list(purchase_return.items.select_related("inventory_item", "invoice_line").all())
+    if not details:
+        raise ValidationError("A purchase return needs at least one line.")
+    returnable = purchase_return_lines(invoice, exclude_return_id=purchase_return.pk)
+    if not returnable:
         raise ValidationError(
             f"{invoice.invoice_num} bought wheat or bardana only. Send those back "
             "through the product ledger, not on a purchase return."
         )
+    by_line = {line.pk: line.qty_returnable for line in returnable}
+    by_item = {}
+    for line in returnable:
+        by_item[line.inventory_item_id] = by_item.get(line.inventory_item_id, Decimal("0")) + line.qty_returnable
+    for detail in details:
+        if detail.invoice_line_id:
+            left = by_line.get(detail.invoice_line_id)
+            if left is None or detail.quantity > left:
+                raise ValidationError(f"Return quantity exceeds what is left to return for {detail.item_name}.")
+            by_line[detail.invoice_line_id] = left - detail.quantity
+        left = by_item.get(detail.inventory_item_id, Decimal("0"))
+        if detail.quantity > left:
+            raise ValidationError(f"Return quantity exceeds received quantity for {detail.item_name}.")
+        by_item[detail.inventory_item_id] = left - detail.quantity
+
+    _allocate_purchase_return_number(purchase_return)
     total = Decimal("0.00")
-    for item in purchase_return.items.all():
-        received_qty = invoice.items.filter(
-            inventory_item=item.inventory_item
-        ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.0000")
-        already_returned = PurchaseReturnMaster.objects.exclude(pk=purchase_return.pk).filter(purchase_invoice=invoice, posted=YES, items__inventory_item=item.inventory_item).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
-        allowed = received_qty - already_returned
-        if item.quantity > allowed:
-            raise ValidationError(f"Return quantity exceeds received quantity for {item.item_name}.")
-        stock = Stock.objects.select_for_update().get(inventory_item=item.inventory_item)
-        if item.quantity > stock.current_quantity:
-            raise ValidationError(f"Insufficient stock for purchase return of {item.item_name}.")
+    for detail in details:
+        stock = Stock.objects.select_for_update().get(inventory_item=detail.inventory_item)
+        if detail.quantity > stock.current_quantity:
+            raise ValidationError(f"Insufficient stock for purchase return of {detail.item_name}.")
         old_quantity = stock.current_quantity
         old_price = stock.current_price
-        stock.current_quantity -= item.quantity
+        stock.current_quantity -= detail.quantity
         stock.updated_by = user
         stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
-        create_ledger_entry(stock=stock, inventory_item=item.inventory_item, transaction_id=purchase_return.transaction_id, transaction_no=purchase_return.return_num, transaction_type=LEDGER_PURCHASE_RETURN, transaction_date=purchase_return.return_date, ref_table="inv_purchase_return_details", ref_id=item.pk, ref_no=purchase_return.return_num, quantity=item.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=purchase_return.remarks, user=user)
-        total += item.total_price
-    purchase_return.returned_amount = total
+        create_ledger_entry(stock=stock, inventory_item=detail.inventory_item, transaction_id=purchase_return.transaction_id, transaction_no=purchase_return.return_num, transaction_type=LEDGER_PURCHASE_RETURN, transaction_date=purchase_return.return_date, ref_table="inv_purchase_return_details", ref_id=detail.pk, ref_no=purchase_return.return_num, quantity=detail.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=purchase_return.remarks, user=user)
+        detail.status = STATUS_POSTED
+        detail.updated_by = user
+        detail.save()
+        total += detail.total_price
+    purchase_return.returned_amount = total.quantize(TWO_DP)
     purchase_return.status = STATUS_POSTED
     purchase_return.posted = YES
+    purchase_return.posted_at = timezone.now()
     purchase_return.updated_by = user
     purchase_return.save()
 
-    from apps.finance.services import post_purchase_return_to_gl  # lazy: finance imports inventory
+    from apps.finance.services import post_purchase_return_to_gl
 
     post_purchase_return_to_gl(purchase_return=purchase_return, user=user)
+    return purchase_return
+
+
+@transaction.atomic
+def reverse_purchase_return(*, purchase_return, reason, user):
+    from apps.finance.services import reverse_gl_posting
+
+    purchase_return = PurchaseReturnMaster.objects.select_for_update(**lock_of("self")).select_related("purchase_invoice", "purchase_order").get(pk=purchase_return.pk)
+    if purchase_return.status != STATUS_POSTED:
+        raise ValidationError("Only a posted purchase return can be reversed.")
+    if reason not in dict(INV_REVERSAL_REASONS):
+        raise ValidationError("Pick a reason for the reversal.")
+    transaction_id = generate_transaction_id("PRTR", PurchaseReturnMaster)
+    today = timezone.localdate()
+    for detail in purchase_return.items.select_related("inventory_item").all():
+        stock = Stock.objects.select_for_update().get(inventory_item=detail.inventory_item)
+        old_quantity = stock.current_quantity
+        old_price = stock.current_price
+        stock.current_quantity += detail.quantity
+        stock.updated_by = user
+        stock.save(update_fields=["current_quantity", "updated_by", "updated_at"])
+        create_ledger_entry(stock=stock, inventory_item=detail.inventory_item, transaction_id=transaction_id, transaction_no=purchase_return.return_num, transaction_type=LEDGER_REVERSAL, transaction_date=today, ref_table="inv_purchase_return_masters", ref_id=purchase_return.pk, ref_no=purchase_return.return_num, quantity=detail.quantity, old_quantity=old_quantity, new_quantity=stock.current_quantity, old_price=old_price, current_price=stock.current_price, remarks=f"Reversal of {purchase_return.return_num}", user=user)
+    purchase_return.status = STATUS_REVERSED
+    purchase_return.reverse_reason = reason
+    purchase_return.reversed_on = today
+    purchase_return.updated_by = user
+    purchase_return.save()
+    reverse_gl_posting(
+        source_ref=f"inv_purchase_return_masters:{purchase_return.pk}",
+        reversal_ref=f"inv_purchase_return_masters_reversal:{purchase_return.pk}",
+        voucher_date=today,
+        remarks=f"Reversal of purchase return {purchase_return.return_num}",
+        user=user,
+    )
     return purchase_return
 
 

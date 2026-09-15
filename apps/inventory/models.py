@@ -1177,7 +1177,7 @@ class POSReturnDetail(BaseModel):
 class PurchaseReturnMaster(BaseModel):
     transaction_id = models.CharField(max_length=60, unique=True)
     return_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
-    return_num = models.CharField(max_length=40, unique=True, blank=True)
+    return_num = models.CharField(max_length=40, unique=True, blank=True, null=True)
     purchase_invoice = models.ForeignKey("PurchaseInvoice", related_name="returns", on_delete=models.PROTECT,
                                          db_column="inv_purchase_invoice_id")
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.PROTECT,
@@ -1187,8 +1187,11 @@ class PurchaseReturnMaster(BaseModel):
     total_purchase_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     adjusted_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     returned_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_CREATED)
+    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_DRAFT)
     posted = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
+    posted_at = models.DateTimeField(null=True, blank=True)
+    reverse_reason = models.CharField(max_length=40, blank=True)
+    reversed_on = models.DateField(null=True, blank=True)
     remarks = models.TextField(blank=True)
 
     class Meta:
@@ -1196,16 +1199,15 @@ class PurchaseReturnMaster(BaseModel):
         ordering = ["-return_date", "-id"]
         indexes = [
             models.Index(fields=["transaction_id"]),
-            models.Index(fields=["return_num"]),
             models.Index(fields=["return_date"]),
             models.Index(fields=["status", "-return_date"]),
+            models.Index(fields=["supplier", "-return_date"], name="inv_pr_supplier_date_idx"),
+            models.Index(fields=["purchase_invoice", "-return_date"], name="inv_pr_invoice_date_idx"),
         ]
 
     def save(self, *args, **kwargs):
-        if not self.return_seq_num:
-            last = PurchaseReturnMaster.all_objects.order_by("-return_seq_num").values_list("return_seq_num", flat=True).first() or 0
-            self.return_seq_num = last + 1
-        self.return_num = f"PR-{self.return_seq_num}"
+        if not self.return_num:
+            self.return_num = None
         self.purchase_order = self.purchase_invoice.purchase_order
         self.supplier = self.purchase_invoice.supplier
         self.total_purchase_amount = self.purchase_invoice.total_amount
@@ -1215,13 +1217,16 @@ class PurchaseReturnMaster(BaseModel):
 
 class PurchaseReturnDetail(BaseModel):
     purchase_return_master = models.ForeignKey(PurchaseReturnMaster, related_name="items", on_delete=models.CASCADE, db_column="inv_purchase_return_master_id")
+    invoice_line = models.ForeignKey(PurchaseInvoiceLine, null=True, blank=True, related_name="return_lines",
+                                     on_delete=models.PROTECT, db_column="inv_purchase_invoice_item_id")
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)
+    uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
     total_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_CREATED)
+    status = models.CharField(max_length=20, choices=INV_RETURN_STATUS_CHOICES, default=STATUS_DRAFT)
 
     class Meta:
         db_table = "inv_purchase_return_details"

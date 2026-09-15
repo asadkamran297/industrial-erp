@@ -275,6 +275,31 @@ SALE_COLUMNS = ColumnSet("inventory.sale_invoices", (
 ))
 
 
+RETURN_TAB_ALL = "all"
+RETURN_TAB_DRAFT = "draft"
+RETURN_TAB_POSTED = "posted"
+RETURN_TAB_REVERSED = "reversed"
+
+RETURN_TABS = (
+    (RETURN_TAB_ALL, "All"),
+    (RETURN_TAB_DRAFT, "Draft"),
+    (RETURN_TAB_POSTED, "Posted"),
+    (RETURN_TAB_REVERSED, "Reversed"),
+)
+
+RETURN_COLUMNS = ColumnSet("inventory.purchase_returns", (
+    Column("return_num", "Return #", locked=True, export=lambda o: o.return_num or ""),
+    Column("return_date", "Date", export=lambda o: o.return_date),
+    Column("supplier", "Supplier", export=lambda o: o.supplier.name),
+    Column("invoice", "Invoice #", export=lambda o: o.purchase_invoice.invoice_num),
+    Column("order", "PO #", export=lambda o: o.purchase_order.purchase_num if o.purchase_order_id else ""),
+    Column("lines", "Items", export=lambda o: o.line_count or 0),
+    Column("quantity", "Qty", export=lambda o: o.qty_total or 0),
+    Column("status", "Status", export=lambda o: o.get_status_display()),
+    Column("value", "Amount", locked=True, export=lambda o: o.returned_amount),
+))
+
+
 def linked_documents(order):
     """Everything raised off this order, as one row of links.
 

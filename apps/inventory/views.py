@@ -20,7 +20,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
+from apps.core.constants import INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.models import SystemSetting
 from apps.core.table_export import TableExportView
@@ -31,10 +31,10 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
+from .purchase_board import RETURN_COLUMNS, RETURN_TAB_ALL, RETURN_TAB_DRAFT, RETURN_TAB_POSTED, RETURN_TAB_REVERSED, RETURN_TABS, COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
-from .services import close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
+from .services import create_purchase_return, next_purchase_return_number, purchase_return_lines, reverse_purchase_return, close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
 
 User = get_user_model()
 
@@ -4064,116 +4064,292 @@ class POSReturnPostView(InventoryManageMixin, View):
         return redirect("inventory:pos_return_detail", pk=pk)
 
 
-class PurchaseReturnListView(InventoryListMixin, ListView):
+class PurchaseReturnListView(SortableListMixin, InventoryListMixin, ListView):
     page = "inventory.purchase_returns"
     template_name = "inventory/purchase_return_list.html"
     context_object_name = "returns"
-    queryset = PurchaseReturnMaster.objects.filter(posted=YES).select_related("purchase_invoice", "purchase_order", "supplier").order_by("-return_date", "-id")
-    search_fields = ("return_num", "transaction_id", "purchase_invoice__invoice_num", "purchase_order__purchase_num")
-    filter_fields = {"supplier": "supplier_id"}
+    paginate_by = 25
+    queryset = (
+        PurchaseReturnMaster.objects
+        .select_related("purchase_invoice", "purchase_order", "supplier")
+        .order_by("-return_date", "-id")
+    )
+    search_fields = ("return_num", "supplier__name", "purchase_invoice__invoice_num",
+                     "purchase_invoice__supplier_invoice_num", "purchase_order__purchase_num", "remarks")
+    filter_fields = {"supplier": "supplier_id", "godown": "purchase_invoice__godown_id"}
     date_filters = [{"field": "return_date", "label": "Return date"}]
+    sort_fields = {
+        "return_num": "return_seq_num",
+        "return_date": ("return_date", "id"),
+        "supplier": "supplier__name",
+        "invoice": "purchase_invoice__seq_num",
+        "order": "purchase_order__seq_num",
+        "status": "status",
+        "value": ("returned_amount", "id"),
+    }
+    default_sort = "return_date"
+    default_sort_dir = "desc"
+
+    PER_PAGE_OPTIONS = (10, 25, 50, 100)
+    TAB_FILTERS = {
+        RETURN_TAB_DRAFT: {"status__in": INV_RETURN_DRAFT_STATUSES},
+        RETURN_TAB_POSTED: {"status": STATUS_POSTED},
+        RETURN_TAB_REVERSED: {"status": STATUS_REVERSED},
+    }
+
+    def current_tab(self):
+        tab = self.request.GET.get("tab", RETURN_TAB_ALL)
+        return tab if tab in dict(RETURN_TABS) else RETURN_TAB_ALL
+
+    def get_paginate_by(self, queryset):
+        raw = (self.request.GET.get("per_page") or "").strip()
+        if raw.isdigit() and int(raw) in self.PER_PAGE_OPTIONS:
+            return int(raw)
+        return self.paginate_by
+
+    def filtered_queryset(self):
+        return super().get_queryset()
+
+    def get_queryset(self):
+        queryset = self.filtered_queryset()
+        rule = self.TAB_FILTERS.get(self.current_tab())
+        if rule:
+            queryset = queryset.filter(**rule)
+        return queryset.prefetch_related("items__inventory_item", "items__uom")
 
     def get_filter_specs(self):
-        supplier_choices = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name"))
-        return [{"name": "supplier", "label": "All suppliers", "choices": supplier_choices, "value": self.request.GET.get("supplier", "")}]
+        supplier_choices = list(
+            Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
+        )
+        return [
+            {"name": "supplier", "label": "All suppliers", "short_label": "Supplier",
+             "choices": supplier_choices, "value": self.request.GET.get("supplier", "")},
+            {"name": "godown", "label": "All godowns", "short_label": "Godown",
+             "choices": list(godown_options().values_list("id", "name")),
+             "value": self.request.GET.get("godown", "")},
+        ]
+
+    def tiles(self):
+        base = self.filtered_queryset().order_by()
+        zero = Decimal("0.00")
+
+        def figures(queryset):
+            row = queryset.aggregate(count=Count("id"), value=Sum("returned_amount"))
+            return row["count"] or 0, row["value"] or zero
+
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        all_count, all_value = figures(base)
+        draft_count, draft_value = figures(base.filter(status__in=INV_RETURN_DRAFT_STATUSES))
+        posted_count, posted_value = figures(base.filter(status=STATUS_POSTED))
+        reversed_count, reversed_value = figures(base.filter(status=STATUS_REVERSED))
+        month_count, month_value = figures(base.filter(status=STATUS_POSTED, return_date__range=(month_start, month_end)))
+        return {
+            "all_count": all_count, "all_value": all_value,
+            "draft_count": draft_count, "draft_value": draft_value,
+            "posted_count": posted_count, "posted_value": posted_value,
+            "reversed_count": reversed_count, "reversed_value": reversed_value,
+            "month_count": month_count, "month_value": month_value,
+            "month_from": month_start.isoformat(), "month_to": month_end.isoformat(),
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        zero = Decimal("0")
-        invoices = list(
-            PurchaseInvoice.objects.filter(status=STATUS_POSTED)
-            .select_related("supplier", "purchase_order")
-            .prefetch_related("items__inventory_item", "items__uom")
-            .order_by("-invoice_date", "-id")[:200]
-        )
-        returned = {
-            (row["purchase_return_master__purchase_invoice_id"], row["inventory_item_id"]): row["qty"]
-            for row in PurchaseReturnDetail.objects.filter(
-                purchase_return_master__posted=YES,
-                purchase_return_master__purchase_invoice__in=invoices,
-            ).values("purchase_return_master__purchase_invoice_id", "inventory_item_id").annotate(qty=Sum("quantity"))
+        carried = self.request.GET.copy()
+        for key in ("tab", "page"):
+            carried.pop(key, None)
+        context["base_query"] = carried.urlencode()
+        current = self.current_tab()
+        tiles = self.tiles()
+        counts = {
+            RETURN_TAB_ALL: tiles["all_count"], RETURN_TAB_DRAFT: tiles["draft_count"],
+            RETURN_TAB_POSTED: tiles["posted_count"], RETURN_TAB_REVERSED: tiles["reversed_count"],
         }
-
-        invoice_json = []
-        items_json = {}
-        for invoice in invoices:
-            rows = []
-            for line in invoice.items.all():
-                if not line.inventory_item_id:
-                    continue
-                already = returned.get((invoice.pk, line.inventory_item_id)) or zero
-                returnable = (line.quantity or zero) - already
-                if returnable <= 0:
-                    continue
-                rows.append({
-                    "line_pk": line.pk,
-                    "inventory_item_pk": line.inventory_item_id,
-                    "item_name": line.descr or line.inventory_item.item_name,
-                    "item_code": line.inventory_item.code,
-                    "recv_qty": float(returnable),
-                    "rate": float(line.rate),
-                    "total": float(returnable * line.rate),
-                    "uom": uom_title(line),
-                })
-            if not rows:
-                continue
-            invoice_json.append({
-                "id": invoice.pk,
-                "invoice_num": invoice.invoice_num,
-                "po_num": invoice.purchase_order.purchase_num if invoice.purchase_order_id else "",
-                "supplier": invoice.supplier.name,
-                "date": str(invoice.invoice_date),
-            })
-            items_json[str(invoice.pk)] = rows
-
-        context["invoice_json"] = invoice_json
-        context["invoice_items_json"] = items_json
-        context["today"] = timezone.localdate()
+        context["tabs"] = [
+            {"key": key, "label": label, "on": key == current, "count": counts[key]}
+            for key, label in RETURN_TABS
+        ]
+        context["current_tab"] = current
+        context["tiles"] = tiles
+        context["per_page"] = self.get_paginate_by(None)
+        context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
+        context["filters_active"] = any(
+            (self.request.GET.get(key) or "").strip()
+            for key in ("q", "supplier", "godown", "date_from", "date_to", "tab")
+        )
+        columns = RETURN_COLUMNS.visible(self.request.session)
+        context["columns"] = columns
+        context["row_span"] = len(columns) + 2
+        context["foot_span"] = len(columns) - sum(1 for key in ("lines", "quantity", "status") if key in columns)
+        context["column_menu"] = RETURN_COLUMNS.menu(self.request.session)
+        context["columns_url"] = reverse_lazy("inventory:purchase_return_columns")
+        context["export_url"] = reverse_lazy("inventory:purchase_return_export")
+        context["reversal_reasons"] = INV_REVERSAL_REASONS
+        context["draft_statuses"] = INV_RETURN_DRAFT_STATUSES
+        page_qty = Decimal("0")
+        page_total = Decimal("0.00")
+        for row in context["returns"]:
+            lines = list(row.items.all())
+            row.line_count = len(lines)
+            row.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+            page_qty += row.qty_total
+            page_total += row.returned_amount or Decimal("0.00")
+        context["page_qty"] = page_qty
+        context["page_total"] = page_total
         return context
 
 
-class PurchaseReturnQuickCreateView(InventoryManageMixin, View):
+class PurchaseReturnExportView(InventoryListMixin, TableExportView):
+    page = "inventory.purchase_returns"
+    columns = RETURN_COLUMNS
+    filename = "purchase-returns"
+    title = "Purchase Returns"
+
+    def get_rows(self):
+        listing = PurchaseReturnListView(request=self.request, kwargs={}, args=())
+        rows = list(listing.get_queryset())
+        for row in rows:
+            lines = list(row.items.all())
+            row.line_count = len(lines)
+            row.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+        return rows
+
+
+class PurchaseReturnColumnsView(InventoryListMixin, View):
+    page = "inventory.purchase_returns"
+
+    def post(self, request, *args, **kwargs):
+        RETURN_COLUMNS.choose(request.session, request.POST.getlist("columns"))
+        carried = request.POST.get("back", "")
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
+            if key in ("q", "tab", "supplier", "godown", "date_from", "date_to", "per_page", "page")
+        ])
+        target = reverse_lazy("inventory:purchase_return_list")
+        return redirect(f"{target}?{query}" if query else str(target))
+
+
+class PurchaseReturnOptionsView(InventoryListMixin, View):
+    page = "inventory.purchase_returns"
+
+    def get(self, request, *args, **kwargs):
+        invoice_id = (request.GET.get("invoice") or "").strip()
+        if invoice_id.isdigit():
+            invoice = get_object_or_404(
+                PurchaseInvoice.objects.select_related("supplier", "purchase_order"), pk=invoice_id, status=STATUS_POSTED
+            )
+            lines = purchase_return_lines(invoice)
+            return JsonResponse({
+                "invoice": {
+                    "id": invoice.pk, "number": invoice.invoice_num, "date": invoice.invoice_date.strftime("%d-%m-%Y"),
+                    "supplier": invoice.supplier_id,
+                    "order": invoice.purchase_order.purchase_num if invoice.purchase_order_id else "",
+                },
+                "lines": [
+                    {
+                        "id": line.pk, "item": line.descr or line.inventory_item.item_name,
+                        "code": line.inventory_item.code, "unit": uom_title(line),
+                        "invoiced": str(line.quantity), "returned": str(line.qty_returned),
+                        "returnable": str(line.qty_returnable), "rate": str(line.rate),
+                    }
+                    for line in lines
+                ],
+            })
+
+        supplier_id = (request.GET.get("supplier") or "").strip()
+        if not supplier_id.isdigit():
+            return JsonResponse({"invoices": []})
+        invoices = list(
+            PurchaseInvoice.objects.filter(supplier_id=supplier_id, status=STATUS_POSTED)
+            .select_related("purchase_order").order_by("-invoice_date", "-id")[:100]
+        )
+        rows = []
+        for invoice in invoices:
+            lines = purchase_return_lines(invoice)
+            returnable = sum((line.qty_returnable for line in lines), Decimal("0"))
+            rows.append({
+                "id": invoice.pk, "number": invoice.invoice_num,
+                "supplier_ref": invoice.supplier_invoice_num,
+                "date": invoice.invoice_date.strftime("%d-%m-%Y"),
+                "order": invoice.purchase_order.purchase_num if invoice.purchase_order_id else "",
+                "total": str(invoice.total_amount),
+                "lines": len([line for line in lines if line.qty_returnable > 0]),
+                "mill_only": not lines,
+                "disabled": returnable <= 0,
+            })
+        return JsonResponse({"invoices": rows})
+
+
+class PurchaseReturnCreateView(InventoryManageMixin, View):
     page = "inventory.purchase_returns"
     action = "add"
-    def post(self, request):
-        invoice_pk = request.POST.get("purchase_invoice")
-        invoice = get_object_or_404(PurchaseInvoice, pk=invoice_pk, status=STATUS_POSTED)
-        line_pks = request.POST.getlist("line_pk")
-        return_qtys = request.POST.getlist("return_qty")
-        if not line_pks:
-            messages.error(request, "Tick at least one line and enter the quantity going back.")
-            return redirect("inventory:purchase_return_list")
+    template_name = "inventory/purchase_return_form.html"
+
+    def _render(self, request, posted, posted_lines=None, status=200):
+        return render(request, self.template_name, {
+            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "next_number": next_purchase_return_number(),
+            "today": timezone.localdate(),
+            "posted": posted,
+            "posted_lines": posted_lines or {},
+            "options_url": reverse("inventory:purchase_return_options"),
+            "list_url": reverse("inventory:purchase_return_list"),
+            "can_post": user_has_permission(request.user, f"{self.page}.edit"),
+        }, status=status)
+
+    def get(self, request, *args, **kwargs):
+        posted = {}
+        invoice_id = (request.GET.get("invoice") or "").strip()
+        if invoice_id.isdigit():
+            invoice = PurchaseInvoice.objects.filter(pk=invoice_id, status=STATUS_POSTED).first()
+            if invoice:
+                posted = {"supplier": str(invoice.supplier_id), "purchase_invoice": str(invoice.pk)}
+        return self._render(request, posted)
+
+    def post(self, request, *args, **kwargs):
+        posted = request.POST
+        posted_lines = {}
+        lines = []
+        for line_id, raw in zip(posted.getlist("line_id"), posted.getlist("return_qty")):
+            if not line_id.isdigit() or not (raw or "").strip():
+                continue
+            posted_lines[line_id] = raw
+            try:
+                lines.append((int(line_id), decimal_of(raw)))
+            except InvalidOperation:
+                messages.error(request, "A return quantity is not a number.")
+                return self._render(request, posted, posted_lines, status=400)
+
+        invoice = PurchaseInvoice.objects.filter(pk=(posted.get("purchase_invoice") or "0").strip() or 0).first()
+        if invoice is None:
+            messages.error(request, "Pick the purchase invoice the goods came in on.")
+            return self._render(request, posted, posted_lines, status=400)
+        if str(invoice.supplier_id) != (posted.get("supplier") or "").strip():
+            messages.error(request, "That invoice is not from the supplier picked.")
+            return self._render(request, posted, posted_lines, status=400)
+
+        post_now = posted.get("action") == "post"
+        if post_now and not user_has_permission(request.user, f"{self.page}.edit"):
+            messages.error(request, "You can save this return as a draft, but not post it.")
+            return self._render(request, posted, posted_lines, status=403)
+
         try:
-            with transaction.atomic():
-                pr = PurchaseReturnMaster(
-                    transaction_id=generate_transaction_id("PRT", PurchaseReturnMaster),
-                    purchase_invoice=invoice,
-                    return_date=timezone.localdate(),
-                    created_by=request.user,
-                    updated_by=request.user,
-                )
-                pr.save()
-                for line_pk, qty_raw in zip(line_pks, return_qtys):
-                    try:
-                        qty = Decimal(qty_raw)
-                    except Exception:
-                        continue
-                    if qty <= 0:
-                        continue
-                    line = get_object_or_404(PurchaseInvoiceLine, pk=line_pk, invoice=invoice)
-                    PurchaseReturnDetail.objects.create(
-                        purchase_return_master=pr,
-                        inventory_item=line.inventory_item,
-                        quantity=qty,
-                        rate=line.rate,
-                        created_by=request.user,
-                        updated_by=request.user,
-                    )
-                post_purchase_return(purchase_return=pr, user=request.user)
-        except ValidationError as exc:
-            messages.error(request, exc)
-            return redirect("inventory:purchase_return_list")
-        return redirect(f"{reverse_lazy('inventory:purchase_return_receipt', kwargs={'pk': pr.pk})}?invoice={invoice_pk}")
+            purchase_return = create_purchase_return(
+                invoice=invoice,
+                lines=lines,
+                return_date=parse_date(posted.get("return_date") or "") or timezone.localdate(),
+                remarks=(posted.get("remarks") or "").strip(),
+                post=post_now,
+                user=request.user,
+            )
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+            return self._render(request, posted, posted_lines, status=400)
+
+        state = "posted" if post_now else "saved as draft"
+        messages.success(request, f"{purchase_return.return_num} {state}.")
+        return redirect("inventory:purchase_return_detail", pk=purchase_return.pk)
 
 
 class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
@@ -4189,23 +4365,8 @@ class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailVie
         context["total_qty"] = sum(i.quantity for i in items)
         context["total_return"] = self.object.returned_amount
         context["amount_in_words"] = amount_in_words(self.object.returned_amount)
-        context["print_back_url"] = f"{reverse_lazy('inventory:purchase_return_list')}?po={self.request.GET.get('po', '')}"
+        context["print_back_url"] = reverse_lazy("inventory:purchase_return_detail", kwargs={"pk": self.object.pk})
         return context
-
-
-class PurchaseReturnCreateView(InventoryManageMixin, CreateView):
-    page = "inventory.purchase_returns"
-    model = PurchaseReturnMaster
-    form_class = PurchaseReturnMasterForm
-    template_name = "inventory/simple_form.html"
-    success_url = reverse_lazy("inventory:purchase_return_list")
-    success_message = "Purchase return saved."
-    extra_context = {"title": "Purchase Return"}
-
-    def form_valid(self, form):
-        if not form.instance.transaction_id:
-            form.instance.transaction_id = generate_transaction_id("PRT", PurchaseReturnMaster)
-        return super().form_valid(form)
 
 
 class PurchaseReturnDetailView(InventoryListMixin, DetailView):
@@ -4213,47 +4374,71 @@ class PurchaseReturnDetailView(InventoryListMixin, DetailView):
     model = PurchaseReturnMaster
     template_name = "inventory/purchase_return_detail.html"
     context_object_name = "purchase_return"
+    queryset = (
+        PurchaseReturnMaster.objects
+        .select_related("purchase_invoice", "purchase_invoice__godown", "purchase_order", "supplier", "created_by")
+        .prefetch_related("items__inventory_item", "items__uom")
+    )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["item_form"] = PurchaseReturnDetailForm()
+        record = self.object
+        lines = list(record.items.all())
+        context["lines"] = lines
+        context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+        context["goods_total"] = sum((line.total_price or Decimal("0.00") for line in lines), Decimal("0.00"))
+        context["is_draft"] = record.status in INV_RETURN_DRAFT_STATUSES and record.posted != YES
+        context["is_posted"] = record.status == STATUS_POSTED
+        context["reversal_reasons"] = INV_REVERSAL_REASONS
+        context["reverse_reason_label"] = dict(INV_REVERSAL_REASONS).get(record.reverse_reason, "")
+        context["list_url"] = reverse_lazy("inventory:purchase_return_list")
+        links = [{
+            "kind": "Purchase Invoice",
+            "label": record.purchase_invoice.invoice_num,
+            "url": reverse("inventory:purchase_invoice_detail", args=[record.purchase_invoice_id]),
+            "dead": record.purchase_invoice.status == STATUS_REVERSED,
+        }]
+        if record.purchase_order_id:
+            links.append({
+                "kind": "Purchase Order",
+                "label": record.purchase_order.purchase_num,
+                "url": reverse("inventory:purchase_order_detail", args=[record.purchase_order_id]),
+                "dead": False,
+            })
+        context["linked_documents"] = links
         return context
-
-
-class PurchaseReturnItemCreateView(InventoryManageMixin, View):
-    page = "inventory.purchase_returns"
-    action = "add"
-    def post(self, request, pk):
-        record = get_object_or_404(PurchaseReturnMaster, pk=pk)
-        if record.posted == YES:
-            messages.error(request, "Posted purchase return cannot be updated.")
-            return redirect("inventory:purchase_return_detail", pk=pk)
-        form = PurchaseReturnDetailForm(request.POST)
-        if form.is_valid():
-            item = form.save(commit=False)
-            item.purchase_return_master = record
-            item.created_by = request.user
-            item.updated_by = request.user
-            item.save()
-            messages.success(request, "Purchase return item saved.")
-        else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
-        return redirect("inventory:purchase_return_detail", pk=pk)
 
 
 class PurchaseReturnPostView(InventoryManageMixin, View):
     page = "inventory.purchase_returns"
     action = "edit"
+
     def post(self, request, pk):
         record = get_object_or_404(PurchaseReturnMaster, pk=pk)
         try:
-            post_purchase_return(purchase_return=record, user=request.user)
-            messages.success(request, "Purchase return posted and stock updated.")
-        except ValidationError as exc:
-            messages.error(request, exc)
-        return redirect("inventory:purchase_return_detail", pk=pk)
+            record = post_purchase_return(purchase_return=record, user=request.user)
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+        else:
+            messages.success(request, f"{record.return_num} posted.")
+        return redirect(request.POST.get("next") or reverse("inventory:purchase_return_detail", args=[pk]))
+
+
+class PurchaseReturnReverseView(InventoryManageMixin, View):
+    page = "inventory.purchase_returns"
+    action = "edit"
+
+    def post(self, request, pk):
+        record = get_object_or_404(PurchaseReturnMaster, pk=pk)
+        try:
+            reverse_purchase_return(
+                purchase_return=record, reason=(request.POST.get("reason") or "").strip(), user=request.user,
+            )
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+        else:
+            messages.success(request, f"{record.return_num} reversed.")
+        return redirect(request.POST.get("next") or reverse("inventory:purchase_return_detail", args=[pk]))
 
 
 def balance_of_grn_clearing():

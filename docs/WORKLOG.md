@@ -5,6 +5,35 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-09-15
+
+### Local
+
+- Purchase Orders board opens on the "All" tab by default.
+- Purchase Returns rebuilt:
+  - Board at `/inventory/purchase-returns/`: tiles, tabs, filters, column menu, export, row actions.
+  - New form at `/inventory/purchase-returns/new/`: supplier → invoice picker → returnable lines, Save Draft / Save & Post.
+  - Detail page with Post / Reverse.
+- Services:
+  - `create_purchase_return`, `purchase_return_lines`, `reverse_purchase_return`.
+  - `PR-` number allocated in services under a lock, no longer in `save()`.
+  - Posting re-validates per invoice line; reversal mirrors the ItemLedger and GL entries.
+- Migration `inventory.0055_purchase_return_rebuild`:
+  - line → invoice line FK, unit, posted_at, reversal fields, nullable `return_num`
+  - indexes `(supplier, -return_date)` and `(purchase_invoice, -return_date)`
+- Retired the old quick-create and add-item views; their URL names redirect.
+
+### Live
+
+- Nothing deployed.
+
+### Open
+
+- Adjusted amount on purchase returns is not captured; the net equals the gross.
+- Wheat/bardana returns are still not supported (product ledger).
+
+---
+
 ## 2026-09-01
 
 ### Local

@@ -1,1 +1,149 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-6">{% include "components/ui/page_header.html" with title=purchase_return.return_num subtitle=purchase_return.purchase_invoice.invoice_num %}{% if purchase_return.posted != 'Y' %}<form method="post" action="{% url 'inventory:purchase_return_item_create' purchase_return.pk %}" class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{% for field in item_form %}<div><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Return Item</button></div></div></form>{% endif %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Item</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Rate</th><th class="px-4 py-3">Total</th></tr></thead><tbody>{% for item in purchase_return.items.all %}<tr><td class="px-4 py-3">{{ item.item_name }}</td><td class="px-4 py-3">{{ item.quantity|qty }}</td><td class="px-4 py-3">{{ item.rate|amount }}</td><td class="px-4 py-3">{{ item.total_price|amount }}</td></tr>{% empty %}<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No purchase return items found.</td></tr>{% endfor %}</tbody></table></div>{% if purchase_return.posted != 'Y' %}<form method="post" action="{% url 'inventory:purchase_return_post' purchase_return.pk %}">{% csrf_token %}<button class="inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white">Post Purchase Return</button></form>{% endif %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% load core_extras %}
+{% block content %}
+{% include "inventory/_purchase_theme.html" %}
+
+<style>
+  .prd-chain { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+  .prd-link { display: inline-flex; align-items: baseline; gap: .375rem; border: 1px solid #e2e8f0; border-radius: .5rem; background: #fff; padding: .375rem .625rem; font-size: .75rem; }
+  .dark .prd-link { border-color: #334155; background: #0f172a; }
+  .prd-link-kind { color: #64748b; }
+  .dark .prd-link-kind { color: #94a3b8; }
+  .prd-link-num { font-weight: 700; color: var(--primary-color); }
+  .prd-link--dead .prd-link-num { color: #94a3b8; text-decoration: line-through; }
+  .dark .prd-link--dead .prd-link-num { color: #64748b; }
+  .prd-meta { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+  .prd-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; }
+  .prd-sums { min-width: 15rem; margin-left: auto; }
+  .prd-dialog { width: min(26rem, calc(100vw - 2rem)); border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff; color: #0f172a; padding: 0; }
+  .dark .prd-dialog { border-color: #334155; background: #0f172a; color: #e2e8f0; }
+  .prd-dialog::backdrop { background: rgba(15, 23, 42, .45); }
+</style>
+
+<section class="space-y-5">
+  <div class="pur-head-row pur-noprint">
+    <div class="flex items-start gap-3">
+      {% include "components/ui/back_button.html" with back_url=list_url %}
+      <h1 class="pur-title title-accent">Purchase Return</h1>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if purchase_return.return_num and not is_draft %}
+      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_return_receipt' purchase_return.pk %}" target="_blank">Print</a>
+      {% endif %}
+      {% if can_edit and is_draft %}
+      <form method="post" action="{% url 'inventory:purchase_return_post' purchase_return.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="pur-btn pur-btn--primary">Post</button>
+      </form>
+      {% endif %}
+      {% if can_edit and is_posted %}
+      <button type="button" class="pur-btn pur-btn--danger" onclick="document.getElementById('prd-reverse').showModal()">Reverse</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="prd-chain">
+    {% for link in linked_documents %}
+    <a class="prd-link{% if link.dead %} prd-link--dead{% endif %}" href="{{ link.url }}">
+      <span class="prd-link-kind">{{ link.kind }}</span>
+      <span class="prd-link-num">{{ link.label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="pur-card">
+    <div class="pur-card-body prd-meta">
+      <div><p class="pur-label">Return No</p><p class="pur-strong">{{ purchase_return.return_num|default:"—" }}</p></div>
+      <div><p class="pur-label">Return Date</p><p>{{ purchase_return.return_date|dmy }}</p></div>
+      <div><p class="pur-label">Supplier</p><p class="pur-strong">{{ purchase_return.supplier.name }}</p></div>
+      <div><p class="pur-label">Purchase Invoice</p><p>{{ purchase_return.purchase_invoice.invoice_num }}{% if purchase_return.purchase_invoice.supplier_invoice_num %}<span class="pur-sub">{{ purchase_return.purchase_invoice.supplier_invoice_num }}</span>{% endif %}</p></div>
+      {% if purchase_return.purchase_invoice.godown %}<div><p class="pur-label">Godown</p><p>{{ purchase_return.purchase_invoice.godown.name }}</p></div>{% endif %}
+      <div>
+        <p class="pur-label">Status</p>
+        {% if is_posted %}<span class="pur-pill pur-pill--done">Posted</span>
+        {% elif purchase_return.status == "reversed" %}<span class="pur-pill pur-pill--dead">Reversed</span>
+        {% elif is_draft %}<span class="pur-pill pur-pill--wait">Draft</span>
+        {% else %}<span class="pur-pill pur-pill--dead">{{ purchase_return.get_status_display }}</span>{% endif %}
+      </div>
+      {% if purchase_return.status == "reversed" %}
+      <div><p class="pur-label">Reversed</p><p>{{ purchase_return.reversed_on|dmy }} &middot; {{ reverse_reason_label }}</p></div>
+      {% endif %}
+      <div><p class="pur-label">Entered By</p><p>{{ purchase_return.created_by.get_full_name|default:purchase_return.created_by.username|default:"—" }}</p></div>
+    </div>
+  </div>
+
+  <div class="pur-card">
+    <div class="pur-card-body pur-card-body--flush overflow-x-auto">
+      <table class="pur-table">
+        <thead>
+          <tr>
+            <th style="width: 2.5rem;">#</th>
+            <th>Item</th>
+            <th class="pur-num">Qty</th>
+            <th>Unit</th>
+            <th class="pur-num">Rate</th>
+            <th class="pur-num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in lines %}
+          <tr>
+            <td class="pur-muted">{{ forloop.counter }}</td>
+            <td><span class="pur-strong">{{ line.item_name }}</span><span class="pur-sub">{{ line.item_code }}</span></td>
+            <td class="pur-num">{{ line.quantity|qty }}</td>
+            <td>{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}</td>
+            <td class="pur-num">{{ line.rate|amount }}</td>
+            <td class="pur-num pur-strong">{{ line.total_price|amount }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6"><div class="pur-empty">—</div></td></tr>
+          {% endfor %}
+        </tbody>
+        {% if lines %}
+        <tfoot>
+          <tr>
+            <td colspan="2" class="pur-strong">Total</td>
+            <td class="pur-num pur-strong">{{ qty_total|qty }}</td>
+            <td colspan="2"></td>
+            <td class="pur-num pur-strong">{{ goods_total|amount }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <div class="pur-card">
+    <div class="pur-card-body prd-foot">
+      <div>
+        <p class="pur-label">Remarks</p>
+        <p>{{ purchase_return.remarks|default:"—"|linebreaksbr }}</p>
+      </div>
+      <div class="prd-sums">
+        <div class="pur-kv"><span>Invoice total</span><b>{{ purchase_return.total_purchase_amount|amount }}</b></div>
+        <div class="pur-kv pur-kv--total"><span>Returned</span><b>{{ purchase_return.returned_amount|amount }}</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if can_edit and is_posted %}
+<dialog id="prd-reverse" class="prd-dialog">
+  <form method="post" action="{% url 'inventory:purchase_return_reverse' purchase_return.pk %}" class="pur-card-body space-y-4">
+    {% csrf_token %}
+    <p class="pur-strong">Reverse {{ purchase_return.return_num }}</p>
+    <div>
+      <label class="pur-label" for="reverse-reason">Reason</label>
+      <select id="reverse-reason" name="reason" class="form-select w-full" required>
+        <option value=""></option>
+        {% for value, label in reversal_reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="flex justify-end gap-2">
+      <button type="button" class="pur-btn pur-btn--ghost" onclick="this.closest('dialog').close()">Cancel</button>
+      <button type="submit" class="pur-btn pur-btn--danger">Reverse</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
