@@ -2291,8 +2291,8 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
     def current_tab(self):
-        tab = self.request.GET.get("tab", TAB_LIVE)
-        return tab if tab in dict(TABS) else TAB_LIVE
+        tab = self.request.GET.get("tab", TAB_ALL)
+        return tab if tab in dict(TABS) else TAB_ALL
 
     def get_paginate_by(self, queryset):
         raw = (self.request.GET.get("per_page") or "").strip()

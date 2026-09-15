@@ -34,11 +34,10 @@ TAB_CLOSED = "closed"
 
 TAB_UNBILLED = "unbilled"
 TAB_LIVE = "live"
-TAB_LIVE = "live"
 
 TABS = (
-    (TAB_LIVE, "Still expected"),
     (TAB_ALL, "All"),
+    (TAB_LIVE, "Still expected"),
     (TAB_PENDING, "Awaiting approval"),
     (TAB_OPEN, "Awaiting invoice"),
     (TAB_PARTIAL, "Partly invoiced"),
