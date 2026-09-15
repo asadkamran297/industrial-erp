@@ -36,7 +36,6 @@ class Page:
 
 
 _STATIC_PAGES: tuple[Page, ...] = (
-    # Workspace
     Page("dashboard", "Dashboard", "Workspace", LIST_ONLY),
     Page("operations", "Production", "Operations", LIST_ONLY),
     Page("reports", "Reports", "Analytics", LIST_ONLY),
@@ -44,7 +43,6 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("reports.account_ledger", "Account Ledger", "Reports", LIST_ONLY),
     Page("settings", "System Settings", "Setup", LIST_ONLY),
     Page("help", "Help Desk", "Support", LIST_ONLY),
-    # Inventory
     Page("inventory.classes", "Item Categories", "Inventory", MASTER_NO_DELETE),
     Page("inventory.uoms", "UOMs", "Inventory", MASTER_NO_DELETE),
     Page("inventory.uom_conversions", "UOM Conversions", "Inventory", MASTER_NO_DELETE),
@@ -59,20 +57,16 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("inventory.pos_returns", "POS Returns", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),
     Page("inventory.purchase_returns", "Purchase Returns", "Inventory", (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)),
     Page("inventory.purchase_report", "Purchase Report", "Inventory", READ_ONLY),
-    # Products (flour mill product tree)
     Page("products.products", "Products", "Products", MASTER_NO_DELETE),
     Page("products.account_links", "Account Linking", "Products", MASTER_NO_DELETE),
     Page("products.raw_bardana", "Raw Bardana Linking", "Products", MASTER_NO_DELETE),
     Page("products.finish_bardana", "Finish Bardana Linking", "Products", MASTER_NO_DELETE),
     Page("products.opening_balances", "Product Opening Balance", "Products", MASTER_NO_DELETE),
     Page("products.rates", "Product Rate Update", "Products", MASTER_NO_DELETE),
-    # Godowns
     Page("godowns.godowns", "Godowns", "Godowns", MASTER_NO_DELETE),
-    # Production
     Page("production.grinding", "Grinding", "Production", CRUD),
     Page("production.conversions", "Products Conversion", "Production", CRUD),
     Page("production.reports", "Production Reports", "Production", READ_ONLY),
-    # Finance
     Page("finance.fiscal_years", "Fiscal Years", "Finance", MASTER_NO_DELETE),
     Page("finance.accounts", "Chart of Accounts", "Finance", MASTER_NO_DELETE),
     Page("finance.chart_of_accounts", "Chart of Accounts Tree", "Finance", MASTER),
@@ -84,11 +78,9 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("finance.cash_flow", "Cash Flow", "Finance", LIST_ONLY),
     Page("finance.period_close", "Period Close", "Finance", (ACTION_INDEX, ACTION_ADD)),
     Page("finance.inventory_valuation", "Inventory Valuation", "Finance", (ACTION_INDEX, ACTION_ADD)),
-    # Workforce
     Page("hr.employees", "Employees", "Workforce", CRUD),
     Page("payroll.salary_items", "Salary Items", "Workforce", MASTER),
     Page("payroll.runs", "Payroll Runs", "Workforce", MASTER),
-    # Setup
     Page("organizations.organizations", "Organizations", "Setup", MASTER),
     Page("organizations.branches", "Branches", "Setup", MASTER),
     Page("access_control.roles", "Roles", "Setup", MASTER),

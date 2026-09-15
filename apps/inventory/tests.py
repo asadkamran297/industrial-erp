@@ -87,8 +87,6 @@ class InventoryFlowTests(TestCase):
             descr=self.item.item_name, created_by=self.user, updated_by=self.user,
         )
 
-        # An order starts as a draft: nobody has committed to it yet, and
-        # nothing may be invoiced against it until somebody has.
         self.assertEqual(po.status, STATUS_DRAFT)
         po.status = STATUS_SUBMITTED
         po.save(update_fields=["status"])
@@ -113,7 +111,6 @@ class InventoryFlowTests(TestCase):
         )
         po.refresh_from_db()
         po_item.refresh_from_db()
-        # Auto-closed by the invoice that finished it, not by anybody saying so.
         self.assertEqual(po.status, STATUS_FULLY_INVOICED)
         self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
 
@@ -146,7 +143,6 @@ class InventoryFlowTests(TestCase):
         excess = invoice.over_invoiced[0]
         self.assertEqual(excess["excess"], Decimal("1.0000"))
         self.assertEqual(excess["ordered_balance"], Decimal("5.0000"))
-        # Nothing is left owing on a line that was over-delivered.
         self.assertEqual(po_item.qty_pending, Decimal("0.0000"))
 
     def test_receiving_stock_averages_the_cost_it_does_not_replace_it(self):
@@ -204,9 +200,6 @@ class InventoryFlowTests(TestCase):
         self.assertTrue(line.is_product_line)
         self.assertIsNone(line.inventory_item_id)
 
-        # A commitment this size is over the buyer's own limit, so it lands as
-        # a draft. Released here directly: who may approve is its own rule with
-        # its own test, and what is under test here is the draw-down.
         if order.status == STATUS_DRAFT:
             order.status = STATUS_SUBMITTED
             order.save(update_fields=["status"])
@@ -232,7 +225,6 @@ class InventoryFlowTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(line.qty_invoiced, Decimal("40180.0000"))
         self.assertEqual(order.status, STATUS_FULLY_INVOICED)
-        # 180 over the 25,020 that was left. Taken in, and reported.
         self.assertEqual(second.over_invoiced[0]["excess"], Decimal("180.0000"))
 
     def test_party_bardana_is_counted_in_but_not_bought(self):
@@ -273,7 +265,6 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(mill_line.amount, Decimal("27000.00"))
         self.assertEqual(party_line.amount, Decimal("0.00"))
         self.assertEqual(invoice.goods_amount, Decimal("27000.00"))
-        # Both are held, so both are counted.
         self.assertEqual(
             ProductLedger.objects.filter(product=bag).aggregate(q=Sum("quantity"))["q"],
             Decimal("350.000"),
@@ -311,7 +302,6 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(invoice.total_amount, Decimal("2000000.00"))
         self.assertEqual(invoice.supplier_payable_amount, Decimal("1997000.00"))
 
-        # The voucher must balance with the two extra legs on it.
         from apps.finance.models import AccountVoucher, AccountVoucherLine
 
         voucher = AccountVoucher.objects.get(source_ref=f"inv_purchase_invoices:{invoice.pk}")
@@ -377,7 +367,6 @@ class InventoryFlowTests(TestCase):
 
         moved = ProductLedger.objects.filter(product=wheat).aggregate(q=Sum("quantity"))["q"]
         self.assertEqual(moved, Decimal("9900.000"))
-        # The stores ledger knows nothing about it.
         self.assertFalse(ItemLedger.objects.filter(ref_no=invoice.invoice_num).exists())
 
     def test_same_supplier_invoice_number_is_refused_twice(self):
@@ -419,7 +408,6 @@ class InventoryFlowTests(TestCase):
         totals = voucher.lines.aggregate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
         self.assertEqual(totals["debit"], totals["credit"])
         self.assertEqual(totals["credit"], invoice.total_amount)
-        # The invoice names the voucher it posted, so it reads on its own.
         self.assertEqual(invoice.journal_ref, voucher.voucher_no)
 
 
@@ -491,8 +479,6 @@ class WheatPurchaseScreenTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(reverse("inventory:wheat_purchase_create"))
         self.assertEqual(response.status_code, 200)
-        # The three the supplier argues about, and the marker that says which
-        # boxes the system owns.
         self.assertContains(response, 'id="credit_weight"')
         self.assertContains(response, 'id="total_bill"')
         self.assertContains(response, "wp-f--calc")
@@ -509,13 +495,11 @@ class WheatPurchaseScreenTests(TestCase):
         wheat_line = invoice.items.get(product=self.wheat)
         self.assertEqual(wheat_line.credit_weight, Decimal("74567.000"))
         self.assertEqual(wheat_line.amount, Decimal("9003965.25"))
-        # Both weighments are kept as taken, not only as the net.
         self.assertEqual(wheat_line.party_load_weight, Decimal("74567.000"))
         self.assertEqual(wheat_line.mill_tare_weight, Decimal("0.000"))
 
         self.assertEqual(invoice.withholding_amount, Decimal("1118.50"))
         self.assertEqual(invoice.brokerage_amount, Decimal("7456.70"))
-        # Freight the mill paid stays off the bill and is recovered instead.
         self.assertEqual(invoice.total_amount, Decimal("9003965.25"))
         self.assertEqual(invoice.supplier_payable_amount, Decimal("8544340.05"))
 

@@ -23,14 +23,10 @@ from apps.inventory.models import (
     Stock,
 )
 
-# item_code -> (unit cost, selling price)
 MARKET_PRICES: dict[str, tuple[Decimal, Decimal]] = {
-    # Laptops. Entry, mid and high spec rather than three identical rows, so the
-    # test data reads like a real product line.
     "ELC-0001": (Decimal("78000.00"), Decimal("89000.00")),
     "EL2-0001": (Decimal("135000.00"), Decimal("155000.00")),
     "EL3-0001": (Decimal("210000.00"), Decimal("240000.00")),
-    # A 24" LED set retails around 30,000; cost was above its own sale price.
     "E01-26": (Decimal("26000.00"), Decimal("30000.00")),
 }
 
@@ -73,8 +69,6 @@ class Command(BaseCommand):
                 continue
 
             if stock:
-                # last_price keeps the previous cost, which is what the ledger
-                # reports as the prior valuation.
                 stock.last_price = old_cost
                 stock.current_price = cost
                 stock.save(update_fields=["last_price", "current_price", "updated_at"])
@@ -82,9 +76,6 @@ class Command(BaseCommand):
                 item.price = price
                 item.save(update_fields=["price", "updated_at"])
 
-            # The purchase trail carries its own copy of the price. Left alone,
-            # the bad figure keeps driving the purchase report and the
-            # dashboard trend even after stock has been corrected.
             if item:
                 PurchaseOrderItem.all_objects.filter(inventory_item=item).update(
                     rate=cost, retail_price=cost

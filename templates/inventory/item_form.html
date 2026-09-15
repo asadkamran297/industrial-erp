@@ -1,6 +1,5 @@
 {% extends embed_layout|default:"layouts/portal.html" %}
 {% block content %}
-{# Plain CSS, not utilities: the compiled Tailwind bundle is prebuilt and would need a rebuild for new classes. #}
 <style>
   .field-label {
     display: block;
@@ -130,7 +129,6 @@
 <section>
   <form method="post" id="item-form" class="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
-    {# ── Header: title + Product/Service switch ─────────────────────────── #}
     <div class="flex flex-wrap items-center gap-4 border-b border-slate-100 px-6 py-4 dark:border-slate-800">
       {% include "components/ui/back_button.html" %}
       <div>
@@ -138,7 +136,6 @@
         <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{% if object %}Update the item master record.{% else %}Create a product you stock, or a service you sell.{% endif %}</p>
       </div>
 
-      {# Segmented switch: one control, so the choice reads as a single setting. #}
       <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
       <div class="kind-switch flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/60" role="radiogroup" aria-label="Item kind">
         <label class="kind-pill cursor-pointer rounded-md px-4 py-1.5 text-sm font-semibold text-slate-500 transition dark:text-slate-400">
@@ -160,9 +157,6 @@
       <div class="mx-6 mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    {# ── Identity row ───────────────────────────────────────────────────── #}
-    {# Inline grid: the compiled Tailwind bundle carries no 4-column utility, so #}
-    {# the columns are declared here rather than needing a CSS rebuild. #}
     <div class="px-6 pb-6 pt-5" style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem 1.25rem; align-items:start;">
       <div style="min-width:0;">
         <label class="field-label" for="{{ form.item_name.id_for_label }}">Item Name <span class="text-rose-500">*</span></label>
@@ -177,24 +171,18 @@
         </datalist>
         {% for error in form.category.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
-      {# Both units live behind one button so the row stays a single line; the #}
-      {# selects themselves stay in the form and post normally. #}
       <div style="min-width:0;">
         <label class="field-label">Unit</label>
-        {# Reads as a field, not a button: it opens a picker but sits in the input row. #}
         <button type="button" id="unit-open" class="form-input unit-trigger flex items-center justify-between gap-2 text-left">
           <span id="unit-summary" class="truncate">Select unit…</span>
           <svg class="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
         </button>
-        {# The rate the item is on, once the dialog has been through. #}
         <p id="unit-rate-hint" class="hidden"><span class="rate-chip"></span></p>
         {% for error in form.uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
         {% for error in form.secondary_uom.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
         {% for error in form.new_conversion_factor.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
       </div>
       <div style="min-width:0;">
-        {# The label sits in the border and the action sits in the field, so the #}
-        {# code and the button that fills it read as one control. #}
         <div class="notch-field{% if not object %} notch-field--action{% endif %}">
           <label class="notch-label" for="{{ form.code.id_for_label }}">Item Code</label>
           {{ form.code }}
@@ -207,9 +195,7 @@
       </div>
     </div>
 
-    {# ── Select Unit dialog ─────────────────────────────────────────────── #}
     <div id="unit-modal" class="fixed inset-0 hidden items-center justify-center bg-slate-900/40 p-4" style="z-index:60;">
-      {# No overflow-hidden: the unit pickers open an absolutely-positioned panel that would otherwise be clipped by this box. #}
       <div class="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-slate-900">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-700">
           <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Select Unit</p>
@@ -226,8 +212,6 @@
           </div>
         </div>
 
-        {# The rates already on file between the two units, plus a blank row for #}
-        {# one that is not on file yet. Only shown once both units are picked. #}
         <div id="rate-box" class="hidden px-5 pt-5" style="min-height:10rem;">
           <p class="field-label">Conversion Rates</p>
           <div class="sr-only" aria-hidden="true">{{ form.conversion }}</div>
@@ -251,9 +235,7 @@
       </div>
     </div>
 
-    {# ── Tabs ───────────────────────────────────────────────────────────── #}
     <div class="border-y border-slate-200 bg-slate-50/60 px-6 dark:border-slate-800 dark:bg-slate-800/30">
-      {# Inline gap: the compiled bundle carries no gap-7 utility. #}
       <nav class="flex" role="tablist" style="display:flex; gap:1.75rem;">
         <button type="button" class="tab-btn border-b-2 border-transparent pb-3 pt-3 text-sm font-semibold text-slate-400 transition hover:text-slate-600" data-tab="pricing" role="tab">Pricing</button>
         <button type="button" class="tab-btn border-b-2 border-transparent pb-3 pt-3 text-sm font-semibold text-slate-400 transition hover:text-slate-600" data-tab="stock" role="tab">Stock</button>
@@ -263,8 +245,6 @@
 
     <div class="space-y-5 px-6 py-6">
 
-      {# ── Pricing ──────────────────────────────────────────────────────── #}
-      {# One card, two figures: the prices belong side by side, not stacked in empty boxes. #}
       <div class="tab-panel" data-panel="pricing">
         <div class="section-card">
           <p class="section-title">Pricing</p>
@@ -285,7 +265,6 @@
         </div>
       </div>
 
-      {# ── Stock ────────────────────────────────────────────────────────── #}
       <div class="tab-panel hidden space-y-5" data-panel="stock">
         {% if form.opening_stock_allowed %}
         <div id="opening-stock-box" class="section-card">
@@ -327,7 +306,6 @@
         {% endif %}
       </div>
 
-      {# ── Other: the remaining model fields, kept off the first screen ─── #}
       <div class="tab-panel hidden" data-panel="other">
         <div class="section-card grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {% for field in form %}{% if field.name in other_fields %}
@@ -342,7 +320,6 @@
 
     </div>
 
-    {# ── Footer ─────────────────────────────────────────────────────────── #}
     <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-4 dark:border-slate-800 dark:bg-slate-800/30">
       {% if embed %}
       <button type="button" onclick="window.parent.postMessage({ type: 'embed:cancel' }, window.location.origin);" class="toolbar-btn h-10 px-5">Cancel</button>

@@ -246,9 +246,6 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {# Everything the register offers on this order's row, offered here as #}
-      {# well: the page an order is opened on should not be the one place    #}
-      {# its next step is missing.                                           #}
       <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
 
       {% if order.unbilled_value and can_edit %}
@@ -275,8 +272,6 @@
       {% endif %}
 
       {% if can_edit_lines %}
-      {# Correcting a raised order changes what a supplier was told, so it is #}
-      {# asked about rather than simply switched on by a stray click.         #}
       <button type="button" class="pur-btn pur-btn--danger" x-show="!editing"
               @click="askEdit = true" title="Correct the quantities and prices on this order">Edit PO</button>
       {% endif %}
@@ -286,9 +281,6 @@
               title="The balance is not coming">Close PO</button>
       {% endif %}
 
-      {# Cancelling is done from here, in a dialog, rather than from a panel #}
-      {# further down the page: it is something done to the order, and the   #}
-      {# reason is asked for at the moment the decision is taken.            #}
       {% if can_approve and can_cancel %}
       <button type="button" class="pur-btn pur-btn--danger" @click="cancelling = true">Cancel order</button>
       {% endif %}
@@ -316,8 +308,6 @@
       <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" class="pur-modal-card" @click.stop>
         {% csrf_token %}
         <h2 class="pur-modal-title" id="cancel-title">Cancel {{ order.purchase_num }}</h2>
-        {# Not a delete: the number stays in the sequence, because a gap in a #}
-        {# numbered series is the first thing an auditor asks about.          #}
         <p class="pur-help" style="margin-top: .25rem;">The order is abandoned. The number stays in the sequence.</p>
         <div class="mt-4">
           <label class="pur-label" for="{{ cancel_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
@@ -341,9 +331,6 @@
       <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-modal-card" @click.stop>
         {% csrf_token %}
         <h2 class="pur-modal-title" id="close-title">Close {{ order.purchase_num }}</h2>
-        {# The balance stops counting as goods on order, which is the figure the #}
-        {# next reorder decision is made on. Nothing is posted -- an order never #}
-        {# had an entry -- and the order re-opens if the goods do turn up.       #}
         <p class="pur-help" style="margin-top: .25rem;">
           Writes off the outstanding <b>{{ outstanding_qty|qty }} units</b> as never arriving.
         </p>
@@ -364,7 +351,6 @@
     {% endif %}
   </div>
 
-  {# ── How this order ended, if it ended early ─────────────────────────── #}
   {% if is_closed_early %}
   <div class="pur-note {% if order.status == 'cancelled' %}pur-note--bad{% else %}pur-note--warn{% endif %}">
     <span class="pur-note-icon" aria-hidden="true">
@@ -394,7 +380,6 @@
   </div>
   {% endif %}
 
-  {# ── Where this order got to: the documents raised off it ───────────── #}
   {% if linked_documents %}
   <div class="pur-card">
     <div class="pur-card-head">
@@ -404,8 +389,6 @@
     <div class="pur-card-body">
       <div class="pur-links">
         {% for link in linked_documents %}
-        {# A reversed document is greyed rather than dropped: it happened, and #}
-        {# the entry that cancels it is next to it on the same row.           #}
         <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
            {% if link.new_tab %}target="_blank"{% endif %}
            title="{{ link.kind }} {{ link.label }}{% if link.dead %} — reversed{% endif %}">
@@ -418,18 +401,12 @@
   </div>
   {% endif %}
 
-  {# ── The document ────────────────────────────────────────────────────── #}
-  {# Read as the paper it stands for: who it is from, who it is to, what was #}
-  {# ordered, what it comes to. What has since arrived against it is a       #}
-  {# separate story and is told in its own panel below.                      #}
   <div class="pur-doc-sheet">
     <div class="pur-doc-top">
       <div>
         <p class="pur-doc-org">{{ system_setting.company_name }}</p>
         {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
       </div>
-      {# Kind, number, date and where the order stands: everything that names #}
-      {# the document, in the corner a document is named in.                   #}
       <div class="pur-doc-stamp">
         <p class="pur-doc-kind">Purchase Order</p>
         <p class="pur-doc-no">{{ order.purchase_num }}</p>
@@ -437,14 +414,10 @@
       </div>
     </div>
 
-    {# Who it is on and where it stands, side by side: the two things read #}
-    {# together, so they sit on one line rather than one under the other.  #}
     <div class="pur-doc-parties">
       <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ order.supplier.name }}</span>
         {% if order.godown %}<span class="pur-doc-cap ml-4">Godown:</span> {{ order.godown.code }} — {{ order.godown.name }}{% endif %}
         {% if order.broker %}<span class="pur-doc-cap ml-4">Broker:</span> {{ order.broker.title }}{% endif %}</p>
-      {# The same pill the register draws, in the same words: one order shown #}
-      {# on two screens must not appear to be in two different states.        #}
       <p class="pur-doc-right">
         <span class="pur-doc-cap">Status:</span>
         {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
@@ -473,18 +446,12 @@
         </thead>
         <tbody>
           {% for item in order.items.all %}
-          {# The line is corrected where it is read. Quantity, rate and    #}
-          {# discount are what a line says; the item is not editable,      #}
-          {# because ordering something else is a different order.         #}
           <tr>
             <td class="pur-muted">{{ item.seq_num }}</td>
             <td>
               <span class="pur-strong">{{ item.descr }}</span>
               <span class="pur-sub">{{ item.inventory_item.item_code }}{% if item.closed %} &middot; balance given up on{% endif %}</span>
             </td>
-            {# A figure until the order is put into edit, a box while it is. #}
-            {# Every box belongs to the one form below the table, keyed by    #}
-            {# line, so the whole page of corrections is saved in a pass.     #}
             <td class="pur-num">
               {% if can_edit_lines %}
               <span x-show="!editing">{{ item.quantity|qty }}</span>
@@ -532,8 +499,6 @@
     </div>
 
     {% if can_edit_lines %}
-    {# The form itself carries nothing: the boxes in the table above join it #}
-    {# by name, which keeps the cells table cells rather than form wrappers. #}
     <form method="post" id="order-lines" action="{% url 'inventory:purchase_order_lines_update' order.pk %}"
           class="pur-lines-save" x-show="editing" x-cloak>{% csrf_token %}
       <button type="button" class="pur-btn pur-btn--ghost" @click="editing = false">Cancel</button>
@@ -553,11 +518,6 @@
     </div>
   </div>
 
-  {# ── Goods received against it ───────────────────────────────────────── #}
-  {# Grouped by the note the goods came in on, because that is the document  #}
-  {# that exists: a delivery arrived, several lines came in under it. The    #}
-  {# note reads as the row and its items as the account behind it, the same  #}
-  {# way an order opens out on the register. Every note starts open.         #}
   {% if receipt_notes %}
   <div class="pur-card" x-data="{ open: [] }">
     <div class="pur-card-head">
@@ -599,8 +559,6 @@
             <td class="pur-num pur-strong">{{ note.value|amount }}</td>
           </tr>
 
-          {# What came in under it, stepped in and drawn quieter, so the notes #}
-          {# still read as the list and the items read as detail on one.       #}
           <tr class="pur-lines-row" x-show="open.includes({{ forloop.counter0 }})" x-cloak>
             <td colspan="8" class="pur-lines-cell">
               <table class="pur-lines">
@@ -619,9 +577,6 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {# The order line as it stands, and what this note took   #}
-                  {# against it: "received" is this delivery, "balance" is  #}
-                  {# what the line is still owed after every delivery.      #}
                   {% for receipt in note.lines %}
                   <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
                     <td class="pur-muted">{{ receipt.line.seq_num }}</td>
@@ -654,10 +609,6 @@
   </div>
   {% endif %}
 
-  {# ── What has been invoiced against this order ─────────────────────────── #}
-  {# The question every reader of an order asks second: how much of it has    #}
-  {# actually turned up, and when. Answered here rather than by opening each  #}
-  {# invoice in turn.                                                          #}
   {% if order_invoices %}
   <div class="pur-doc mt-6">
     <p class="pur-doc-cap px-1 pb-2">Invoices against this order</p>

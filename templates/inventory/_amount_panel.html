@@ -1,11 +1,3 @@
-{% comment %}
-The amount panel: the document's total in figures and in words, in the colour
-picked for the site. Shared by every entry screen that has one, so the three
-forms cannot drift apart.
-
-The panel starts dimmed and is lit by ``writeAmount`` on the page, which
-toggles ``is-empty`` on the aside.
-{% endcomment %}
 <style>
   /* The amount panel, in the colour picked for the site. */
   .pur-words {
@@ -83,9 +75,6 @@ toggles ``is-empty`` on the aside.
   .pur-words.is-empty .pur-words-num, .pur-words.is-empty .pur-words-text { opacity: .45; }
 </style>
 
-      {# The figure the document is for. Carried in the site's own colour, the #}
-      {# one the buttons are in, so the panel reads as the total and not as    #}
-      {# another grey box beside the boxes it is the sum of.                   #}
       <aside class="pur-words is-empty p-4">
         <p class="pur-words-cap">Amount</p>
         <div class="pur-words-figure">

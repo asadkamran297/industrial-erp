@@ -38,7 +38,6 @@ def short_amount(value):
     for size, suffix in ((Decimal("10000000"), " Cr"), (Decimal("100000"), " Lac")):
         if number >= size:
             scaled = (number / size).quantize(Decimal("0.01"))
-            # 3.00 Cr says nothing 3 Cr does not, so the zeros come off.
             text = f"{scaled:f}".rstrip("0").rstrip(".")
             return f"{sign}{text}{suffix}"
     return f"{sign}{format_amount(number)}"

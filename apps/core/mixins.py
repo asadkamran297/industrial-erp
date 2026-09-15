@@ -53,9 +53,7 @@ class PagePermissionRequiredMixin(PortalPermissionRequiredMixin):
     action: str | None = None
 
     def _infer_action(self) -> str:
-        # Order matters: update views commonly subclass create views
-        # (``class FooUpdateView(FooCreateView, UpdateView)``), so check the more
-        # specific verbs first.
+        # Check update before create: update views subclass create views.
         if isinstance(self, DeleteView):
             return ACTION_DELETE
         if isinstance(self, UpdateView):
@@ -85,10 +83,6 @@ class PagePermissionRequiredMixin(PortalPermissionRequiredMixin):
             context.setdefault("can_add", user_has_permission(user, f"{page}.add"))
             context.setdefault("can_edit", user_has_permission(user, f"{page}.edit"))
             context.setdefault("can_delete", user_has_permission(user, f"{page}.delete"))
-            # Committing money and unwinding a posted entry. Separate flags
-            # because they are separate rights: the person who raises a
-            # document is not, by that fact alone, the one who signs it off or
-            # takes it back. Pages that grant neither simply never read them.
             context.setdefault("can_approve", user_has_permission(user, f"{page}.approve"))
             context.setdefault("can_reverse_perm", user_has_permission(user, f"{page}.reverse"))
         return context
@@ -98,10 +92,6 @@ class SearchFilterPaginationMixin:
     paginate_by = 10
     search_fields: tuple[str, ...] = ()
     filter_fields: dict[str, str] = {}
-    # Generic from/to date-range filters. Each entry:
-    #   {"field": <model field>, "label": <str>,
-    #    "from_param": <GET key>, "to_param": <GET key>}
-    # from_param/to_param default to "date_from"/"date_to" when omitted.
     date_filters: list[dict] = []
 
     def _date_filter_specs(self) -> list[dict]:
@@ -202,8 +192,6 @@ class SortableListMixin:
         if not target:
             return queryset
         fields = target if isinstance(target, (list, tuple)) else (target,)
-        # A field declared with its own "-" keeps that meaning as the ascending
-        # sense of the column ("Added" ascending means newest first).
         if direction == "desc":
             fields = [field[1:] if field.startswith("-") else f"-{field}" for field in fields]
         return queryset.order_by(*fields)
@@ -228,8 +216,6 @@ class SortableListMixin:
             {
                 "sort_key": key,
                 "sort_dir": direction,
-                # Everything except sort/dir/page, so a sort link keeps the
-                # search and filters the user already set.
                 "sort_base_query": f"{base}&" if base else "",
             }
         )

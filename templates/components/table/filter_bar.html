@@ -1,27 +1,3 @@
-{% comment %}
-One-row filter bar: tabs, dropdown filters, a date range, search, and the
-trailing controls a list screen needs. Everything is optional, so a screen
-takes only the parts it has.
-
-    {% include "components/table/filter_bar.html" with table_id="order-table" %}
-
-Reads from context (all optional):
-  tabs, current_tab      the "Show" dropdown; omitted when there are no tabs
-  filter_specs           [{name, label, choices, value}] -> one dropdown each
-  date_filters_enabled   the date range control (posts date_from / date_to)
-  filters_active         whether the clear button is offered
-  reset_url              where clearing goes (default: the current path)
-  search_placeholder     default "Search..."
-  export_url             the export menu; omitted when unset
-  column_menu            the columns section of the settings menu
-  per_page, per_page_options
-  columns_action         URL the column form posts to
-  base_query             current query string without tab/page
-  table_id               the table the Copy option reads (default "order-table")
-
-The bar must never sit inside an overflow container: its menus and the date
-panel are absolutely positioned and a scrolling ancestor would clip them.
-{% endcomment %}
 <style>
   .po-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; padding: .75rem 1rem; }
   @media (max-width: 1024px) { .po-bar { flex-wrap: wrap; } }
@@ -225,7 +201,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
 </style>
 
 <div class="po-bar">
-  {# ── Filters: one form, so changing any of them keeps the rest ──────────── #}
   <form method="get" class="po-filter-row">
     <input type="hidden" name="q" value="{{ request.GET.q }}">
     {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
@@ -293,7 +268,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
     {% endif %}
   </form>
 
-  {# ── Settings: columns and page size ───────────────────────────────────── #}
   {% if column_menu or per_page_options %}
   <div class="settings-menu settings-menu--lead" x-data="{ open: false }"
        @keydown.escape.window="open = false" @click.outside="open = false">
@@ -304,9 +278,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
       </svg>
     </button>
     <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
-      {# firstof, not a default filter: a filter argument that the screen does #}
-      {# not set raises rather than falling back, so a list with no column     #}
-      {# menu at all would take the whole bar down with it.                    #}
       {% firstof columns_action columns_url "" as post_to %}
       {% if column_menu and post_to %}
       <form method="post" action="{{ post_to }}">{% csrf_token %}
@@ -340,7 +311,6 @@ panel are absolutely positioned and a scrolling ancestor would clip them.
   </div>
   {% endif %}
 
-  {# ── Search: its own form, so it keeps whatever the filters are set to ──── #}
   <form method="get" class="po-search">
     {% if current_tab %}<input type="hidden" name="tab" value="{{ current_tab }}">{% endif %}
     {% for spec in filter_specs %}<input type="hidden" name="{{ spec.name }}" value="{{ spec.value }}">{% endfor %}

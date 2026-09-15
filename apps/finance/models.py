@@ -185,8 +185,6 @@ class ChartOfAccount(BaseModel):
     account_type = models.CharField(max_length=20, choices=FIN_COA_ACCOUNT_TYPE_CHOICES)
     is_group = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
-    # Balance carried in before the first voucher, signed on the account's own
-    # natural side (debit-positive for assets/expenses, credit-positive for the rest).
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
@@ -197,7 +195,6 @@ class ChartOfAccount(BaseModel):
     def __str__(self) -> str:
         return self.title
 
-    # Segmented account-code mask: LL-LL-LLL-LLLL (one segment per level).
     CODE_SEGMENT_WIDTHS = (2, 2, 3, 4)
     CODE_SEPARATOR = "-"
     MAX_LEVELS = len(CODE_SEGMENT_WIDTHS)
@@ -258,7 +255,6 @@ class ChartOfAccount(BaseModel):
         return changed
 
     def clean(self):
-        # A node cannot be its own ancestor (guards drag-drop reparenting).
         ancestor = self.parent
         while ancestor is not None:
             if ancestor.pk == self.pk:
@@ -274,8 +270,6 @@ class ChartOfAccount(BaseModel):
 
 class AccountVoucher(BaseModel):
     voucher_no = models.CharField(max_length=80, unique=True, blank=True)
-    # Blank on a journal, which is only its lines; clean() still demands one on
-    # every type that is headed by a money account.
     account_no = models.CharField(max_length=80, blank=True)
     voucher_date = models.DateField(default=timezone.localdate)
     voucher_type = models.CharField(max_length=2, choices=FIN_VOUCHER_TYPE_CHOICES)
@@ -292,8 +286,6 @@ class AccountVoucher(BaseModel):
     cheque_date = models.DateField(null=True, blank=True)
     wallet_operator = models.CharField(max_length=80, blank=True)
     transaction_ref = models.CharField(max_length=80, blank=True)
-    # Scan of the slip the bank gave for the transfer/cheque. Only bank-side
-    # money has such a document, so cash vouchers never carry one.
     payment_receipt = models.FileField(upload_to="finance/payment_receipts/%Y/%m/", blank=True)
     status = models.CharField(max_length=20, choices=FIN_VOUCHER_STATUS_CHOICES, default=STATUS_CREATED)
     posted = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
@@ -302,20 +294,14 @@ class AccountVoucher(BaseModel):
     credit_card_payment = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
     credit_card_no = models.CharField(max_length=40, blank=True)
     credit_card_expiry = models.CharField(max_length=10, blank=True)
-    # Source document that generated this voucher, e.g. "inv_pos_masters:41".
-    # Blank for vouchers keyed in by hand; unique per source so a re-post cannot
-    # double-book the same sale.
     source_ref = models.CharField(max_length=80, blank=True, db_index=True)
 
     class Meta:
         db_table = "fin_account_voucher"
         ordering = ["-voucher_date", "-id"]
         indexes = [
-            # Account ledger and trial balance: one account over a date range.
             models.Index(fields=["account_no", "-voucher_date"]),
-            # Register screens are per voucher type, newest first.
             models.Index(fields=["voucher_type", "-voucher_date"]),
-            # Posting run picks up everything still unposted.
             models.Index(fields=["posted", "-voucher_date"]),
             models.Index(fields=["status"]),
         ]
@@ -354,15 +340,12 @@ class AccountVoucher(BaseModel):
         else:
             self.settlement_mode = ""
 
-        # The header account's allowed roles depend on the voucher type and, for
-        # Sales/Purchase, on the settlement mode. Journal/Contra accept any role.
         allowed_roles = FIN_SETTLEMENT_HEADER_ROLES.get(self.voucher_type, {}).get(
             self.settlement_mode, FIN_VOUCHER_HEADER_ROLES.get(self.voucher_type)
         )
         self.account_no = (self.account_no or "").strip()
         headerless = self.voucher_type in VOUCHER_HEADERLESS_TYPES
         if headerless:
-            # Nothing heads a journal: the grid carries both sides of it.
             self.account_no = ""
             self.payment_method = None
         role = None if headerless else self._account_role(self.account_no)
@@ -374,8 +357,6 @@ class AccountVoucher(BaseModel):
             wanted = ", ".join(FIN_ACCOUNT_ROLE_LABELS[name] for name in allowed_roles)
             errors["account_no"] = f"This voucher needs a {wanted} account."
 
-        # A cash sale/purchase still names its counterparty; a credit one is already
-        # posted against it, so the extra party field must stay empty.
         self.party_account_no = (self.party_account_no or "").strip()
         party_roles = FIN_VOUCHER_PARTY_ROLES.get(self.voucher_type) if self.settlement_mode == SETTLEMENT_CASH else None
         if not party_roles:
@@ -386,13 +367,9 @@ class AccountVoucher(BaseModel):
             wanted = ", ".join(FIN_ACCOUNT_ROLE_LABELS[name] for name in party_roles)
             errors["party_account_no"] = f"Choose a {wanted} account."
 
-        # Credit vouchers move no money, so they carry no payment method at all.
-        # Same for a cash-account header: cash needs no cheque/bank/wallet details.
         if self.settlement_mode == SETTLEMENT_CREDIT or role == "cash":
             self.payment_method = None
 
-        # Payment method drives which extra fields apply; the rest are cleared so a
-        # method switch never leaves a stale cheque no or transfer reference behind.
         method_title = (self.payment_method.title if self.payment_method else "").strip().lower()
         required_fields = FIN_PAYMENT_METHOD_FIELDS.get(method_title, ())
         for name in FIN_PAYMENT_CONDITIONAL_FIELDS:
@@ -431,12 +408,8 @@ class AccountVoucher(BaseModel):
             self.full_clean()
             return super().save(*args, **kwargs)
 
-        # Numbering is max-of-this-type + 1, so two simultaneous saves can
-        # derive the same number. voucher_no is unique, so the loser hits the
-        # constraint; re-derive and retry rather than surfacing an error.
+        # Concurrent saves can derive the same number; retry on unique clash.
         self.full_clean(exclude=["voucher_no"])
-        # The header account decides which book the voucher belongs to, so the
-        # number matches what the form previewed for the same account.
         money_mode = money_mode_for_account(self.account_no)
         for _attempt in range(5):
             self.voucher_no = next_voucher_number(self.voucher_type, money_mode)
@@ -496,7 +469,6 @@ class AccountVoucherLine(BaseModel):
         ordering = ["voucher", "line_number"]
         unique_together = ("voucher", "line_number")
         indexes = [
-            # Account statements are built from the lines, not the headers.
             models.Index(fields=["account_no", "-voucher_date"]),
             models.Index(fields=["voucher_no"]),
         ]

@@ -22,9 +22,6 @@ def seed_organizations() -> int:
     mul = _city("MUL", "Multan", lhe)
     pew = _city("PEW", "Peshawar", lhe)
 
-    # ══════════════════════════════════════════════════════════════
-    # GROUP HOLDING COMPANY
-    # ══════════════════════════════════════════════════════════════
     group, created = Organization.objects.update_or_create(
         code="IEMG",
         defaults={
@@ -41,7 +38,6 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ── Sub-org 1: Steel & Metals Division ───────────────────────
     steel_div, created = Organization.objects.update_or_create(
         code="IEMG-STL",
         defaults={
@@ -57,7 +53,6 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ── Sub-org 2: Chemical & Polymer Division ────────────────────
     chem_div, created = Organization.objects.update_or_create(
         code="IEMG-CHM",
         defaults={
@@ -73,7 +68,6 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ── Sub-org 3: Textile Division ───────────────────────────────
     textile_div, created = Organization.objects.update_or_create(
         code="IEMG-TEX",
         defaults={
@@ -89,7 +83,6 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ── Sub-org 4: Trading & Distribution ────────────────────────
     trading_div, created = Organization.objects.update_or_create(
         code="IEMG-TRD",
         defaults={
@@ -105,9 +98,6 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ══════════════════════════════════════════════════════════════
-    # ORIGINAL NTC GROUP (kept from previous seed)
-    # ══════════════════════════════════════════════════════════════
     main_org, created = Organization.objects.update_or_create(
         code="MAIN",
         defaults={
@@ -152,11 +142,7 @@ def seed_organizations() -> int:
     )
     created_count += int(created)
 
-    # ══════════════════════════════════════════════════════════════
-    # BRANCHES
-    # ══════════════════════════════════════════════════════════════
     branches = [
-        # ── IEMG Group Branches ───────────────────────────────────
         {
             "code": "IEMG-HO",
             "defaults": {
@@ -194,7 +180,6 @@ def seed_organizations() -> int:
                 "status": STATUS_ACTIVE,
             },
         },
-        # ── Steel Division Branches ───────────────────────────────
         {
             "code": "IEMG-STL-LHE",
             "defaults": {
@@ -219,7 +204,6 @@ def seed_organizations() -> int:
                 "status": STATUS_ACTIVE,
             },
         },
-        # ── Chemical Division Branches ────────────────────────────
         {
             "code": "IEMG-CHM-KHI",
             "defaults": {
@@ -244,7 +228,6 @@ def seed_organizations() -> int:
                 "status": STATUS_ACTIVE,
             },
         },
-        # ── Textile Division Branches ─────────────────────────────
         {
             "code": "IEMG-TEX-FSD",
             "defaults": {
@@ -269,7 +252,6 @@ def seed_organizations() -> int:
                 "status": STATUS_ACTIVE,
             },
         },
-        # ── Trading Division Branches ─────────────────────────────
         {
             "code": "IEMG-TRD-ISB",
             "defaults": {
@@ -294,7 +276,6 @@ def seed_organizations() -> int:
                 "status": STATUS_ACTIVE,
             },
         },
-        # ── NTC Branches ──────────────────────────────────────────
         {
             "code": "HO-LHE",
             "defaults": {

@@ -52,7 +52,6 @@ def seed_demo_purchase_orders(count: int = 50, *, user=None) -> int:
             continue
 
         supplier = suppliers[(index - 1) % len(suppliers)]
-        # Two or three lines per order so the detail screen is not a single row.
         lines = []
         for offset in range((index % 3) + 1):
             item = items[(index + offset) % len(items)]
@@ -62,11 +61,7 @@ def seed_demo_purchase_orders(count: int = 50, *, user=None) -> int:
                 "rate": _rate_for(item, index + offset),
             })
 
-        # Every tenth order stays a draft so the approval queue is not empty;
-        # the rest go through the approval service rather than being written
-        # straight to the approved state.
         awaiting_approval = index % 10 == 0
-        # create_purchase_order returns (order, net_amount).
         order, _net = create_purchase_order(
             supplier=supplier,
             quot_num=quot_num,
@@ -106,8 +101,6 @@ def seed_demo_purchase_invoices(count: int = 50, *, user=None) -> int:
             pending = order_item.qty_pending
             if pending <= 0:
                 continue
-            # Most bills arrive complete; every fourth is short so the partially
-            # billed state is represented too.
             quantity = pending if index % 4 else (pending / 2).quantize(Decimal("0.0001"))
             if quantity <= 0:
                 continue
@@ -156,8 +149,6 @@ def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
         if PurchaseInvoice.all_objects.filter(supplier_invoice_num=bill_number).exists():
             continue
 
-        # Offset into the item list so these do not buy the same rows the
-        # ordered purchases did, and the stock spread stays wide.
         supplier = suppliers[(index + 2) % len(suppliers)]
         lines = []
         goods_total = Decimal("0.00")
@@ -168,8 +159,6 @@ def seed_demo_direct_purchases(count: int = 50, *, user=None) -> int:
             goods_total += (quantity * rate).quantize(Decimal("0.01"))
             lines.append({"inventory_item": item, "quantity": quantity, "rate": rate})
 
-        # Every third invoice is settled in full, the rest part-paid, so the
-        # supplier ledger carries both states.
         paid = goods_total if index % 3 == 0 else (goods_total / 2).quantize(Decimal("0.01"))
 
         create_purchase_invoice(
@@ -203,7 +192,6 @@ def seed_demo_sales(count: int = 50, *, user=None) -> int:
         if POSMaster.all_objects.filter(remarks=marker).exists():
             continue
 
-        # Read stock fresh each time: earlier sales in this loop consumed some.
         in_stock = list(
             Stock.objects.filter(current_quantity__gt=1)
             .select_related("inventory_item")
@@ -219,9 +207,7 @@ def seed_demo_sales(count: int = 50, *, user=None) -> int:
             continue
 
         item = stock.inventory_item
-        # Sell at the item's list price, or a margin over cost when it has none.
         price = item.price or (stock.current_price * Decimal("1.2"))
-        # create_direct_sale returns (sale, net_amount); the sale is posted inside.
         create_direct_sale(
             customer=customers[(index - 1) % len(customers)],
             sale_date=today,

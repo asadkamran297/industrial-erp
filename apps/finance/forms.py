@@ -77,7 +77,6 @@ class AccountConfigurationForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
 class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
     class Meta:
         model = AccountVoucher
-        # Order drives the on-screen layout: money account first, then its remarks.
         fields = (
             "voucher_date",
             "voucher_type",
@@ -123,15 +122,9 @@ class AccountVoucherForm(AutoSelectSingleChoiceMixin, forms.ModelForm):
         self.fields["cheque_no"].label = "Cheque No"
         self.fields["cheque_date"].label = "Cheque Date"
         self.fields["wallet_operator"].label = "Operator Name"
-        # Both are relabelled per voucher type in the template; required-ness is
-        # enforced in AccountVoucher.clean, which knows the type and settlement mode.
         self.fields["settlement_mode"].required = False
         self.fields["party_account_no"].required = False
-        # A Journal carries no header account; AccountVoucher.clean, which knows
-        # the type, still demands one everywhere else.
         self.fields["account_no"].required = False
-        # Bank and the transaction reference are recorded when known; a cash-side
-        # entry or a cheque handed over in person has neither.
         self.fields["bank_name"].required = False
         self.fields["transaction_ref"].required = False
         self.fields["payment_receipt"].required = False

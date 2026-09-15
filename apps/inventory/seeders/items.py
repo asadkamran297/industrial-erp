@@ -4,9 +4,7 @@ from apps.core.constants import STATUS_ACTIVE
 from apps.inventory.models import InventoryClass, InventoryItem, UOM
 
 
-# (item_name, class_code, uom_code, price)
 ITEMS = [
-    # ── Electronics ──────────────────────────────────────────────
     ("Samsung 65\" 4K Smart LED TV", "IT-HW", "EA", 185000),
     ("LG 55\" OLED TV", "IT-HW", "EA", 220000),
     ("Haier 1.5 Ton Inverter AC", "FA-MCH", "EA", 95000),
@@ -32,7 +30,6 @@ ITEMS = [
     ("Dawlance 9 Cu.Ft Refrigerator", "FA-MCH", "EA", 52000),
     ("Haier Washing Machine 8Kg", "FA-MCH", "EA", 48000),
     ("PEL Microwave Oven 25L", "FA-MCH", "EA", 18000),
-    # ── Kiryana / Grocery Store ───────────────────────────────────
     ("Basmati Rice Premium 5Kg", "FB-DRY", "PK", 1200),
     ("Super Kernel Rice 5Kg", "FB-DRY", "PK", 950),
     ("Sela Rice 25Kg", "FB-DRY", "BAG", 4200),
@@ -79,7 +76,6 @@ ITEMS = [
     ("Crest Toothpaste 130g", "CS-CLN", "EA", 210),
     ("Gillette Fusion Razor", "CS-CLN", "EA", 450),
     ("Always Ultra Thin Pads 8pcs", "CS-MED", "PK", 150),
-    # ── Wheat / Flour / Grain Market ──────────────────────────────
     ("FAUJI Wheat Flour 10Kg", "FB-DRY", "BAG", 1100),
     ("Sunridge Wheat Flour 10Kg", "FB-DRY", "BAG", 1050),
     ("Bake Parlor Maida 1Kg", "FB-DRY", "PK", 115),
@@ -115,7 +111,6 @@ ITEMS = [
     ("Rock Salt (Lahori Namak) 1Kg", "FB-DRY", "KG", 45),
     ("Desi Ghee 1Kg", "FB-FRS", "KG", 1850),
     ("Vanaspati Ghee 1Kg", "FB-FRS", "PK", 550),
-    # ── MRO / Industrial ─────────────────────────────────────────
     ("Castrol Engine Oil 4L 20W50", "CS-FUL", "BTL", 3200),
     ("Shell Rimula Engine Oil 5L", "CS-FUL", "BTL", 4800),
     ("Total Quartz Motor Oil 4L", "CS-FUL", "BTL", 3500),
@@ -147,7 +142,6 @@ ITEMS = [
     ("Plywood Sheet 4x8 12mm", "CC-FIN", "EA", 2800),
     ("Gypsum Board 4x8", "CC-FIN", "EA", 1200),
     ("Ceramic Floor Tile 60x60", "CC-FIN", "EA", 280),
-    # ── Office Supplies ───────────────────────────────────────────
     ("A4 Paper 80GSM Ream 500", "CS-OFF", "PK", 850),
     ("Ball Point Pen Box 50pcs", "CS-OFF", "BX", 380),
     ("Stapler Heavy Duty", "CS-OFF", "EA", 450),

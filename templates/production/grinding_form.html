@@ -14,7 +14,6 @@
 <form method="post" id="grinding-form" class="mt-6 space-y-6">
   {% csrf_token %}
 
-  {# ── Header ──────────────────────────────────────────────────────────── #}
   <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
       <p class="text-sm font-semibold text-slate-500">Voucher No</p>
@@ -34,7 +33,6 @@
     </div>
   </div>
 
-  {# ── Output grid ─────────────────────────────────────────────────────── #}
   <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
       <p class="text-sm font-semibold">Output</p>
@@ -68,8 +66,6 @@
       </table>
     </div>
 
-    {# Yield is read while the lines are still being typed; seeing it after the #}
-    {# save is too late to correct the entry.                                    #}
     <div class="grid gap-4 border-t border-slate-200 px-6 py-5 sm:grid-cols-2 lg:grid-cols-5 dark:border-slate-800">
       <div><p class="text-xs uppercase tracking-wide text-slate-500">Disposal Wheat</p><p class="text-lg font-bold" id="sum-wheat">0</p></div>
       <div><p class="text-xs uppercase tracking-wide text-slate-500">Total Output Kg</p><p class="text-lg font-bold" id="sum-output">0</p></div>
@@ -86,8 +82,6 @@
   </div>
 </form>
 
-{# The row the grid clones. Kept in the document rather than built in a string #}
-{# so the markup lives with the rest of the table.                              #}
 <template id="line-template">
   <tr class="line-row">
     <td class="px-3 py-2">

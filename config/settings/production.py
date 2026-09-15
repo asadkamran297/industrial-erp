@@ -21,13 +21,11 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
 ]
 
-# Render injects the external hostname at runtime.
 RENDER_EXTERNAL_HOSTNAME = config("RENDER_EXTERNAL_HOSTNAME", default="")  # noqa: F405
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
     CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
-# Custom domains (cPanel and friends) come from the environment.
 for host in config("ALLOWED_HOSTS", default="", cast=Csv()):  # noqa: F405
     if host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(host)
@@ -37,8 +35,6 @@ for host in config("ALLOWED_HOSTS", default="", cast=Csv()):  # noqa: F405
 
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
-# Platforms that terminate TLS in front of the app (Railway, Render) must
-# leave this off; hosts serving TLS directly turn it on in the environment.
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=False)  # noqa: F405
 SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=31536000, cast=int)  # noqa: F405
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

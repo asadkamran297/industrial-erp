@@ -26,10 +26,7 @@ from apps.core.constants import (
 from apps.finance.models import AccountConfiguration, AccountVoucher, AccountVoucherLine, FiscalYear
 from apps.finance.services import gl_account
 
-# Codes carry the prefix AccountConfiguration.clean() demands for each type:
-# A for assets, L for liabilities, R for revenue, E for expenses.
 ACCOUNTS = [
-    # account_no, code, title, type, ledger, nature, statement, posts to
     ("1000", "A-CASH", "Cash in Hand", ACCOUNT_TYPE_ASSET, ACCOUNT_LEDGER_GENERAL, ACCOUNT_NATURE_DEBIT, BALANCE_INCOME_BALANCE_SHEET, None),
     ("1100", "A-BANK", "Bank Accounts", ACCOUNT_TYPE_ASSET, ACCOUNT_LEDGER_GENERAL, ACCOUNT_NATURE_DEBIT, BALANCE_INCOME_BALANCE_SHEET, None),
     ("4000", "R-SALES", "Sales Revenue", ACCOUNT_TYPE_REVENUE, ACCOUNT_LEDGER_GENERAL, ACCOUNT_NATURE_CREDIT, BALANCE_INCOME_INCOME_STATEMENT, None),
@@ -95,30 +92,20 @@ def seed_demo_vouchers(count: int = 50, *, user=None) -> int:
     today = timezone.localdate()
     payment_method = PaymentMethod.objects.filter(code="BANK_TRANSFER").first() or PaymentMethod.objects.order_by("pk").first()
 
-    # A voucher heads on a leaf of the chart of accounts, not on the account
-    # configuration master, so these come from the chart and are created there
-    # if the chart has not been built by hand yet.
     cash = gl_account(GL_CASH_PATH, user=user)
     sales = gl_account(GL_SALES_REVENUE_PATH, user=user)
     expense = gl_account(GL_COGS_PATH, user=user)
 
     for index in range(1, count + 1):
-        # Alternating so the register carries both sides of the cash book.
         is_payment = index % 2 == 0
         voucher_type = VOUCHER_TYPE_PAYMENT if is_payment else VOUCHER_TYPE_RECEIPT
         amount = (Decimal(25000) + Decimal(index) * Decimal("3750")).quantize(Decimal("0.01"))
         narration = NARRATIONS[(index - 1) % len(NARRATIONS)]
 
-        # Shaped the way the posting services write a voucher: the money account
-        # heads it, the header carries the voucher total on both sides, and the
-        # lines carry the entry itself and balance between them.
         counter_account = expense if is_payment else sales
         money_debit = Decimal("0.00") if is_payment else amount
         money_credit = amount if is_payment else Decimal("0.00")
 
-        # all_objects, not objects: a demo voucher soft-deleted from the screens
-        # is invisible to ActiveManager but still holds the unique voucher_no,
-        # so looking it up through the default manager re-inserts and blows up.
         voucher, created = AccountVoucher.all_objects.update_or_create(
             voucher_no=f"{'E' if is_payment else 'R'}-DEMO-{index:03d}",
             defaults={

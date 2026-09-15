@@ -3,7 +3,6 @@
 {% url "hr:employee_create" as create_url %}
 
 <div class="space-y-6">
-  {# ── Header ── #}
   <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Team Directory</h1>
@@ -17,10 +16,8 @@
     {% endif %}
   </div>
 
-  {# ── Search ── #}
   {% include "components/table/search_filters.html" with search_placeholder="Search..." %}
 
-  {# ── Grid / Table ── #}
   <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <table class="w-full text-left text-sm">
       <thead>
@@ -36,7 +33,6 @@
       <tbody class="divide-y divide-slate-50 dark:divide-slate-800/60">
         {% for emp in employees %}
         <tr class="group transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
-          {# Avatar + Name #}
           <td class="px-5 py-4">
             <a href="{% url 'hr:employee_detail' emp.pk %}" class="flex items-center gap-3">
               {% if emp.avatar %}
@@ -54,24 +50,20 @@
             </a>
           </td>
 
-          {# Dept / Role #}
           <td class="px-5 py-4 hidden sm:table-cell">
             <p class="font-medium text-slate-700 dark:text-slate-200">{{ emp.department|default:"—" }}</p>
             <p class="text-xs text-slate-400">{{ emp.designation|default:"" }}</p>
           </td>
 
-          {# Contact #}
           <td class="px-5 py-4 hidden md:table-cell text-slate-600 dark:text-slate-300">
             <p>{{ emp.contact|default:"—" }}</p>
             <p class="text-xs text-slate-400">{{ emp.email|default:"" }}</p>
           </td>
 
-          {# Joined #}
           <td class="px-5 py-4 hidden lg:table-cell text-slate-500 dark:text-slate-400 text-sm">
             {{ emp.doj|dmy|default:emp.joining_date|dmy|default:"—" }}
           </td>
 
-          {# Status badge #}
           <td class="px-5 py-4">
             {% if emp.status == 'active' %}
               <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:ring-emerald-800">
@@ -86,7 +78,6 @@
             {% endif %}
           </td>
 
-          {# Actions #}
           <td class="px-5 py-4">
             <div class="flex items-center justify-end gap-1">
               <a href="{% url 'hr:employee_detail' emp.pk %}"

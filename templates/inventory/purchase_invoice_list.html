@@ -5,7 +5,6 @@
 
 <div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
 
-{# ── Head ──────────────────────────────────────────────────────────────── #}
 <div class="flex flex-wrap items-start justify-between gap-4">
   <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Purchase Invoices</h1>
@@ -13,8 +12,6 @@
 
   <div class="flex flex-wrap items-center gap-2">
     {% if can_add %}
-    {# The gate's own slip, offered beside the stores invoice: wheat is entered
-       on its own screen because it is weighed rather than counted. #}
     {% url 'inventory:wheat_purchase_create' as wheat_url %}
     {% include "components/ui/button.html" with label="Wheat Purchase" href=wheat_url variant="secondary" icon="+" only %}
     {% url 'inventory:purchase_invoice_create' as add_url %}
@@ -23,7 +20,6 @@
   </div>
 </div>
 
-{# ── Tiles: counted over everything the filters allow, not just this page ── #}
 <div class="po-tiles mt-5">
   <a class="po-tile po-tile--committed{% if not state and not request.GET.date_from %} is-on{% endif %}"
      href="?{{ tile_query }}" title="Every purchase invoice under the filters set">
@@ -74,8 +70,6 @@
     </div>
   </a>
 
-  {# The goods are in and the books are made the moment an invoice is       #}
-  {# entered, so the only thing one can still be waiting on is the money.    #}
   <a class="po-tile po-tile--payable{% if state == 'posted' %} is-on{% endif %}"
      href="?{{ tile_query }}&amp;state=posted" title="Only the invoices still standing">
     <span class="po-tile-icon" aria-hidden="true">
@@ -96,7 +90,6 @@
   </a>
 </div>
 
-{# ── Board ─────────────────────────────────────────────────────────────── #}
 <section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
   {% include "components/table/filter_bar.html" with table_id="invoice-table" date_filters_enabled=True search_placeholder="Search..." export_url=export_url %}
 
@@ -121,8 +114,6 @@
         {% for invoice in invoices %}
         <tr>
           <td class="print-hide po-expand-cell">
-            {# The lines behind the row's figures, opened where the row is #}
-            {# rather than on a screen of their own. #}
             <button type="button" class="po-expand" @click="toggleRow({{ invoice.pk }})"
                     :aria-expanded="isRowOpen({{ invoice.pk }}) ? 'true' : 'false'"
                     aria-label="Show the items on this invoice" title="Show the items on this invoice">
@@ -131,7 +122,6 @@
           </td>
           <td>
             <a class="po-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a>
-            {# The supplier's own number on the paper it was entered from. #}
             {% if invoice.supplier_invoice_num %}<span class="po-sub">{{ invoice.supplier_invoice_num }}</span>{% endif %}
           </td>
           <td class="whitespace-nowrap">{{ invoice.invoice_date|dmy }}</td>
@@ -169,7 +159,6 @@
           </td>
         </tr>
 
-        {# ── The invoice's own lines, opened from the + on the row ────────── #}
         <tr class="po-lines-row print-hide" x-show="isRowOpen({{ invoice.pk }})" x-cloak>
           <td colspan="11" class="po-lines-cell print-hide">
             {% with line_list=invoice.items.all %}

@@ -41,9 +41,6 @@ def _dec(value) -> Decimal:
     return Decimal(str(value))
 
 
-# ---------------------------------------------------------------------------
-# Yield
-# ---------------------------------------------------------------------------
 def compute_yield(disposal_wheat, output_lines) -> dict:
     """The four figures the screen shows live and the voucher stores.
 
@@ -65,8 +62,6 @@ def compute_yield(disposal_wheat, output_lines) -> dict:
         yield_percent = total_output / disposal_wheat * Decimal("100")
         shortage_percent = shortage / disposal_wheat * Decimal("100")
     else:
-        # No wheat consumed is not a divide-by-zero to report; it is a voucher
-        # that has not been filled in yet, and the screen shows dashes.
         yield_percent = shortage_percent = ZERO
 
     return {
@@ -77,9 +72,6 @@ def compute_yield(disposal_wheat, output_lines) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Ledger
-# ---------------------------------------------------------------------------
 def clear_stock(reference: str, sources) -> int:
     """Remove every ledger row a document wrote. Hard delete, not soft.
 
@@ -129,9 +121,6 @@ def post_grinding_stock(voucher: GrindingVoucher, user=None) -> list[ProductLedg
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Grinding voucher
-# ---------------------------------------------------------------------------
 @transaction.atomic
 def save_grinding_voucher(voucher: GrindingVoucher, lines: list[dict], user=None) -> GrindingVoucher:
     """Save header, replace lines, repost stock. One transaction.
@@ -154,9 +143,6 @@ def save_grinding_voucher(voucher: GrindingVoucher, lines: list[dict], user=None
     _stamp(voucher, user)
     voucher.save()
 
-    # Lines are rewritten wholesale: matching posted rows against stored rows
-    # would need an identity the grid does not carry, and a wrong match silently
-    # moves stock between two products.
     GrindingOutput.all_objects.filter(voucher=voucher).delete()
     for index, line in enumerate(lines, start=1):
         output = GrindingOutput(
@@ -186,9 +172,6 @@ def delete_grinding_voucher(voucher: GrindingVoucher, user=None) -> None:
     voucher.soft_delete(user)
 
 
-# ---------------------------------------------------------------------------
-# Product conversion
-# ---------------------------------------------------------------------------
 CONVERSION_SOURCES = (PRD_LEDGER_PRODUCTION_OUT, PRD_LEDGER_PRODUCTION_IN, PRD_LEDGER_PACKING_OUT)
 
 

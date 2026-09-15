@@ -57,35 +57,24 @@ class ProductNode(BaseModel):
     )
     level = models.PositiveSmallIntegerField(choices=PRD_LEVEL_CHOICES)
     code_segment = models.CharField(max_length=3, validators=[SEGMENT_VALIDATOR])
-    # Denormalised so the list screen can sort, search and group by code without
-    # walking to the root for every row. Rebuilt on every save.
     complete_code = models.CharField(max_length=12, db_index=True)
     name = models.CharField(max_length=180)
     status = models.CharField(max_length=20, choices=PRD_STATUS_CHOICES, default=STATUS_ACTIVE)
 
-    # -- Item-only fields. Blank on a heading, which has none of them. -------
     starting_date = models.DateField(null=True, blank=True)
     specification = models.CharField(max_length=20, choices=PRD_SPECIFICATION_CHOICES, blank=True)
     quick_code = models.CharField(max_length=20, blank=True)
     unit = models.CharField(max_length=10, choices=PRD_UNIT_CHOICES, blank=True)
-    # Kilograms in one unit. 1 for kg, 40 for a mound, the bag size for a piece.
     unit_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     fix_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     actual_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     color = models.CharField(max_length=40, blank=True)
-    # What this wheat is expected to yield, so the grinding screen can show the
-    # variance while the operator is still able to correct the entry. Held on
-    # the wheat item because two wheats ground on the same mill yield
-    # differently, which is the whole reason the figure is worth keeping.
     standard_yield_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
 
     class Meta:
         db_table = "prod_nodes"
         ordering = ["complete_code"]
         constraints = [
-            # A segment is unique among its siblings, which is what makes the
-            # assembled complete_code unique without a second uniqueness rule
-            # that could disagree with this one.
             models.UniqueConstraint(
                 fields=["parent", "code_segment"],
                 condition=models.Q(deleted_at__isnull=True),
@@ -98,11 +87,8 @@ class ProductNode(BaseModel):
             ),
         ]
         indexes = [
-            # The list screen: filtered by status, read in code order.
             models.Index(fields=["status", "complete_code"], name="prod_node_status_code_idx"),
-            # "every item under this sub-group", the tree render's inner loop.
             models.Index(fields=["parent", "code_segment"], name="prod_node_parent_seg_idx"),
-            # The pickers on purchase, sale and packing screens filter on this.
             models.Index(fields=["specification", "status"], name="prod_node_spec_status_idx"),
             models.Index(fields=["quick_code"], name="prod_node_quick_code_idx"),
         ]
@@ -110,7 +96,6 @@ class ProductNode(BaseModel):
     def __str__(self) -> str:
         return f"{self.complete_code} {self.name}"
 
-    # -- Code assembly -------------------------------------------------------
     def build_complete_code(self) -> str:
         """``01``, ``01-01``, ``01-01-002`` -- as deep as the node itself goes."""
         segments = []
@@ -136,7 +121,6 @@ class ProductNode(BaseModel):
     def is_heading(self) -> bool:
         return self.level != PRD_LEVEL_ITEM
 
-    # -- Specification rules -------------------------------------------------
     def _rule(self, name: str) -> bool:
         return PRD_SPEC_RULES.get(self.specification, {}).get(name, False)
 
@@ -174,8 +158,6 @@ class ProductNode(BaseModel):
 
     def clean(self):
         super().clean()
-        # Derived here as well as in save(), because full_clean() checks the
-        # field before save() would have filled it in.
         if self.parent_id and not self.level:
             self.level = self.parent.level + 1
         self.complete_code = self.build_complete_code()
@@ -197,8 +179,6 @@ class ProductNode(BaseModel):
         self.level = self.level or PRD_LEVEL_GROUP
         self.complete_code = self.build_complete_code()
         super().save(*args, **kwargs)
-        # A renumbered segment moves every code beneath it, so descendants are
-        # rewritten rather than left holding a code that no longer exists.
         if self.level < PRD_LEVEL_ITEM:
             for child in self.children.all():
                 if child.build_complete_code() != child.complete_code:
@@ -352,8 +332,6 @@ class ProductRate(BaseModel):
         db_table = "prod_rates"
         ordering = ["-effective_date", "-id"]
         indexes = [
-            # "the rate history of this product, newest first" -- the only way
-            # this table is ever read.
             models.Index(fields=["product", "-effective_date"], name="prod_rate_prod_date_idx"),
             models.Index(fields=["product", "is_current"], name="prod_rate_current_idx"),
         ]
@@ -378,14 +356,10 @@ class ProductLedger(BaseModel):
     )
     entry_date = models.DateField()
     source = models.CharField(max_length=30, choices=PRD_LEDGER_SOURCE_CHOICES)
-    # Free-form pointer at the document that caused this: "PI-0012", "GRD-88".
     reference = models.CharField(max_length=60, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     rate = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     remarks = models.CharField(max_length=240, blank=True)
-    # Where the movement happened. Nullable because the rows written before
-    # godowns existed have no answer, and inventing one would be a lie the
-    # stock report would then repeat.
     godown = models.ForeignKey(
         "godowns.Godown",
         null=True,
@@ -393,10 +367,6 @@ class ProductLedger(BaseModel):
         related_name="product_ledger_entries",
         on_delete=models.PROTECT,
     )
-    # The sack this stock actually arrived in, recorded on the receipt rather
-    # than re-derived at grinding. Government wheat turns up in jute government
-    # sacks under a private poly wheat item, so the item master is the wrong
-    # place to ask; grinding reads this and falls back to the master link.
     bardana_item = models.ForeignKey(
         ProductNode,
         null=True,
@@ -409,11 +379,9 @@ class ProductLedger(BaseModel):
         db_table = "prod_ledgers"
         ordering = ["-entry_date", "-id"]
         indexes = [
-            # Per-product history, and the running balance built from it.
             models.Index(fields=["product", "-entry_date"], name="prod_ledger_prod_date_idx"),
             models.Index(fields=["source", "-entry_date"], name="prod_ledger_src_date_idx"),
             models.Index(fields=["reference"], name="prod_ledger_reference_idx"),
-            # "what sack did this wheat last arrive in", grinding's default.
             models.Index(fields=["product", "bardana_item", "-entry_date"], name="prod_ledger_bardana_idx"),
             models.Index(fields=["godown", "-entry_date"], name="prod_ledger_godown_date_idx"),
         ]

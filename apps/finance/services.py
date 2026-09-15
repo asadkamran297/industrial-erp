@@ -53,10 +53,8 @@ TWO_DP = Decimal("0.01")
 
 MONEY_GROUP_TITLES = ("Cash", "Bank")
 
-# Accounts that grow on the debit side; everything else grows on the credit side.
 DEBIT_NATURE_TYPES = (ACCOUNT_TYPE_ASSET, ACCOUNT_TYPE_EXPENSE)
 
-# The two P&L root types vs. the three balance-sheet root types.
 INCOME_STATEMENT_TYPES = (ACCOUNT_TYPE_REVENUE, ACCOUNT_TYPE_EXPENSE)
 BALANCE_SHEET_TYPES = (ACCOUNT_TYPE_ASSET, ACCOUNT_TYPE_LIABILITY, ACCOUNT_TYPE_CAPITAL)
 
@@ -263,8 +261,6 @@ def _balance_forest(account_types):
 
     zero = Decimal("0.00")
     balances = account_balances()
-    # Debits equal to credits leave no movement figure behind, so activity is
-    # read from the lines themselves: an account that was used stays on the sheet.
     posted_codes = set(AccountVoucherLine.objects.values_list("account_no", flat=True).distinct())
     nodes = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, account_type__in=account_types).order_by("sort_order", "id"))
     children_map: dict[int | None, list] = {}
@@ -278,9 +274,6 @@ def _balance_forest(account_types):
             amount = sum((child["amount"] for child in children), zero)
         else:
             amount = own.get("closing", zero)
-        # An account that moved is part of the story even when it nets to zero:
-        # a bank run down to nil still belongs on the sheet. Only accounts that
-        # were never touched are pruned.
         touched = node.code in posted_codes or bool(own.get("opening"))
         if not amount and not children and not touched:
             return None
@@ -291,10 +284,7 @@ def _balance_forest(account_types):
             "amount": amount,
             "depth": depth,
             "children": children,
-            # Only a postable leaf holds entries, so only it opens a ledger.
             "is_leaf": not children,
-            # Level 3 and deeper collapse behind a disclosure; the top two levels
-            # are the statement's own headings and always stay open.
             "collapsible": bool(children) and depth >= 3,
         }
 
@@ -323,8 +313,6 @@ def balance_sheet():
     assets = _balance_forest([ACCOUNT_TYPE_ASSET])
     liabilities = _balance_forest([ACCOUNT_TYPE_LIABILITY])
     capital = _balance_forest([ACCOUNT_TYPE_CAPITAL])
-    # The Inventory line is a control account backed by the stock records, so
-    # it links through to the reconciliation that proves the two agree.
     _attach_link(assets, gl_account(GL_INVENTORY_PATH).code, "finance:inventory_valuation")
     net_profit = income_statement()["net_profit"]
     total_assets = sum((node["amount"] for node in assets), zero)
@@ -372,7 +360,6 @@ def _cash_flow_section(counterpart_type, code, current_codes):
         return CASH_FLOW_FINANCING
     if code in current_codes:
         return CASH_FLOW_OPERATING
-    # Non-current: borrowings are financing, everything else is investing.
     if counterpart_type == ACCOUNT_TYPE_LIABILITY:
         return CASH_FLOW_FINANCING
     return CASH_FLOW_INVESTING
@@ -399,8 +386,6 @@ def cash_flow_statement():
     opening = sum((balances.get(code, {}).get("opening", zero) for code in money_codes), zero)
     closing = sum((balances.get(code, {}).get("closing", zero) for code in money_codes), zero)
 
-    # Group the lines by voucher so each cash leg can be attributed to whatever
-    # the rest of that voucher was about.
     lines = AccountVoucherLine.objects.values("voucher_id", "account_no", "debit_amount", "credit_amount")
     by_voucher: dict[int, list] = {}
     for line in lines:
@@ -415,8 +400,6 @@ def cash_flow_statement():
         if not cash_in:
             continue
         others = [ln for ln in voucher_lines if ln["account_no"] not in money_codes]
-        # Split the cash movement across the non-cash legs in proportion to
-        # their size, so a mixed voucher lands in more than one activity.
         weights = [abs((ln["debit_amount"] or zero) - (ln["credit_amount"] or zero)) for ln in others]
         total_weight = sum(weights, zero)
         if not total_weight:
@@ -446,14 +429,11 @@ def cash_flow_statement():
         "opening": opening,
         "net_movement": net_movement,
         "closing": closing,
-        # Opening + movement must equal closing; a gap means cash moved through
-        # a voucher this attribution could not explain, and is surfaced not hidden.
         "reconciles": (opening + net_movement) == closing,
         "difference": closing - (opening + net_movement),
     }
 
 
-# account_type of each chart-of-accounts root, for auto-created GL account paths.
 _ROOT_TYPES = {
     "ASSETS": ACCOUNT_TYPE_ASSET,
     "LIABILITIES": ACCOUNT_TYPE_LIABILITY,
@@ -545,9 +525,6 @@ def supplier_payable_balances():
         .annotate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
     }
 
-    # The account is matched to the supplier by name, which is how it was
-    # created. A supplier renamed since keeps the account it was opened with,
-    # so its balance falls back to what the master carries.
     balances = {}
     for supplier_id, name, opening in Supplier.objects.values_list("id", "name", "opening_balance"):
         code = accounts.get(name)
@@ -651,8 +628,6 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
     cogs = gl_account(GL_COGS_PATH, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
-    # A fully collected sale settles in cash and names the customer separately;
-    # anything left outstanding is a credit sale headed by the customer ledger.
     on_credit = receivable > 0
     return _post_voucher(
         source_ref=f"inv_pos_masters:{sale.pk}",
@@ -812,25 +787,15 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     tax = (invoice.tax_amount or zero).quantize(TWO_DP)
     payable = (invoice.total_amount or zero).quantize(TWO_DP)
 
-    # The discount comes off the goods rather than being posted on its own:
-    # what the stock cost is what was paid for it, not the list price with an
-    # allowance parked elsewhere.
     stock_value = (goods - discount).quantize(TWO_DP)
 
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
     inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
-    # The supplier's own number where they gave one, ours where they did not:
-    # a narration reading "on " with nothing after it tells the next reader
-    # less than the invoice number they can actually look up.
     reference = invoice.supplier_invoice_num or invoice.invoice_num
 
     entries = [(inventory.code, stock_value, zero, f"Stock taken in on {invoice.invoice_num}")]
     if freight and invoice.freight_paid_by_mill:
-        # The mill paid the truck at the gate, for the supplier's account. Cash
-        # left the mill and the supplier owes that much less -- it is not a
-        # carriage cost of the mill's own, so it never reaches the freight
-        # expense.
         entries.append((supplier_account.code, freight, zero,
                         f"Freight paid for {supplier.name} on {invoice.invoice_num}"))
         entries.append((gl_account(GL_CASH_PATH, user=user).code, zero, freight,
@@ -843,17 +808,12 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
                         f"Input sales tax on {reference}"))
     brokerage = (invoice.brokerage_amount or zero).quantize(TWO_DP)
     if brokerage and invoice.brokerage_borne_by_supplier:
-        # The seller's own broker. The mill pays him and takes it off the
-        # seller, so it never becomes a cost of the mill's.
         entries.append((supplier_account.code, brokerage, zero,
                         f"Brokerage recovered from {supplier.name} on {invoice.invoice_num}"))
     elif brokerage:
         entries.append((gl_account(GL_BROKERAGE_PATH, user=user).code, brokerage, zero,
                         f"Brokerage on {invoice.invoice_num}"))
     if brokerage:
-        # Owed to the named broker where the invoice names one, and to the
-        # heading itself where it does not, so the cost is never left with
-        # nowhere to sit.
         broker_account = invoice.broker or gl_account(GL_BROKERS_GROUP_PATH, user=user)
         entries.append((broker_account.code, zero, brokerage,
                         f"Brokerage payable on {invoice.invoice_num}"))
@@ -1008,8 +968,6 @@ def inventory_valuation():
     account = gl_account(GL_INVENTORY_PATH)
     ledger_value = (account_balances().get(account.code) or {}).get("closing", zero)
 
-    # A single mispriced item can dominate the total, so surface the largest
-    # holdings — that is where a data-entry slip shows up.
     largest = sorted(rows, key=lambda row: -row["value"])[:5]
 
     return {
@@ -1116,13 +1074,10 @@ def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
     retained = gl_account(GL_RETAINED_EARNINGS_PATH, user=user)
     entries, result = [], zero
     for account in accounts:
-        # Signed on the account's own natural side: positive revenue is a
-        # credit balance, positive expense a debit one.
         amount = (balances.get(account.code) or {}).get("closing", zero)
         if not amount:
             continue
         debit, credit = signed_to_dr_cr(amount, account.account_type)
-        # Post the opposite side to bring the account back to nil.
         entries.append((account.code, credit, debit, f"Closing {account.title}"))
         result += amount if account.account_type == ACCOUNT_TYPE_REVENUE else -amount
 
@@ -1144,9 +1099,6 @@ def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
     )
 
 
-# A voucher's real-world name, when the source document says more than the
-# voucher type does. A sale return is a credit note; a purchase return a debit
-# note — neither has its own voucher type, both are journals underneath.
 _SOURCE_KINDS = (
     ("inv_pos_return_masters:", "Credit Note"),
     ("inv_purchase_return_masters:", "Debit Note"),
@@ -1279,8 +1231,6 @@ def daybook(day, *, voucher_type=""):
                 cash_out += line_credit
             lines.append({
                 "account_no": line.account_no,
-                # An account missing from the chart is named as such rather
-                # than shown as a bare code with no explanation.
                 "title": titles.get(line.account_no, "— not in chart of accounts —"),
                 "known": line.account_no in titles,
                 "debit": line_debit,
@@ -1330,7 +1280,6 @@ def ledger_integrity():
     zero = Decimal("0.00")
     known = {code for code in ChartOfAccount.objects.values_list("code", flat=True) if code}
 
-    # Postings whose account is not in the chart of accounts.
     orphan_rows = (
         AccountVoucherLine.objects.exclude(account_no__in=known)
         .values("account_no")
@@ -1344,7 +1293,6 @@ def ledger_integrity():
     orphan_debit = sum((row["debit"] for row in orphans), zero)
     orphan_credit = sum((row["credit"] for row in orphans), zero)
 
-    # Vouchers whose own lines do not balance.
     unbalanced = []
     for voucher in AccountVoucher.objects.prefetch_related("lines").order_by("voucher_date", "id"):
         lines = list(voucher.lines.all())
@@ -1357,7 +1305,6 @@ def ledger_integrity():
                 "voucher": voucher, "debit": debit, "credit": credit, "difference": debit - credit,
             })
 
-    # Opening balances are entered by hand and must themselves be a double entry.
     opening_debit = opening_credit = zero
     for account in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True):
         debit, credit = signed_to_dr_cr(account.opening_balance or zero, account.account_type)
@@ -1468,8 +1415,6 @@ def sync_supplier_opening_balance(*, supplier, user=None):
     account = ChartOfAccount.objects.filter(title=supplier.name, is_group=False).first()
     if account is None:
         if not amount:
-            # No balance and no account yet: nothing to open. The account is
-            # created on the supplier's first posting instead.
             return None
         account = create_supplier_payable_account(supplier=supplier, user=user)
     if account.opening_balance != amount:

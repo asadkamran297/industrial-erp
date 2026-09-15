@@ -12,12 +12,7 @@ class NavigationItem:
     section: str = "main"
     icon: str = ""
     children: tuple["NavigationItem", ...] = ()
-    # Query string appended to the resolved href, e.g. "type=EV". Items that
-    # differ only by query are matched on the query too, never on path alone.
     query: str = ""
-    # Paths this item lights up for besides its own href. For a menu entry
-    # whose screens do not all sit under the address it links to: the entry
-    # points at one page, but the whole branch belongs to it.
     match_paths: tuple[str, ...] = ()
 
 
@@ -30,24 +25,11 @@ SECTION_SETUP = "Setup"
 SECTION_SUPPORT = "Support"
 
 
-# Grouped by the job someone is doing, not by which Django app owns the page.
-# "Day to Day" is work that happens every shift; "Accounts" is the books;
-# "Setup" is configured once and rarely touched again. A page that is entered
-# daily must never sit next to one that is configured once a year.
 NAV_ITEMS: tuple[NavigationItem, ...] = (
     NavigationItem("Dashboard", permission="dashboard.index", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
 
-    # ── Day to Day ──────────────────────────────────────────────────────
-    # One group per direction goods move: in from suppliers, out to
-    # customers, and what is sitting on the shelf in between.
     NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
-        # Entering a purchase is the work; the orders board is a place to read
-        # what is still owed, so it sits under the invoice rather than above it.
         NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
-        # The board lives at its own address; raising, reading and printing an
-        # order all sit under /inventory/purchase-orders/, which is the address
-        # that now sends anybody typing it to the invoice form. The menu entry
-        # answers for that branch all the same.
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index",
                        url_name="inventory:purchase_order_board",
                        match_paths=("/inventory/purchase-orders/",)),
@@ -58,8 +40,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     )),
     NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(
         NavigationItem("Sale Invoices", permission="inventory.pos_sales.index", url_name="inventory:sale_invoice_list"),
-        # Same shape as the purchase side: entering the invoice is the work,
-        # the orders board is where what is still promised is read.
         NavigationItem("Sales Orders", permission="inventory.pos_sales.index",
                        url_name="inventory:sales_order_list",
                        match_paths=("/inventory/sales-orders/",)),
@@ -96,11 +76,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Godowns", permission="godowns.godowns.index", url_name="godowns:godown_list"),
     )),
 
-    # ── Accounts ────────────────────────────────────────────────────────
-    # Entry, then what you read, then what you set up, then the one
-    # deliberate act that ends a period.
-    # One entry per voucher type: the type is chosen here rather than on the
-    # form, so the entry screen opens already set for the voucher being written.
     NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=tuple(
         NavigationItem(
             label,
@@ -118,8 +93,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Inventory Valuation", permission="finance.inventory_valuation.index", url_name="finance:inventory_valuation"),
     )),
     NavigationItem("Accounting Setup", permission=None, section=SECTION_FINANCE, icon="A", children=(
-        # The tree is the chart people actually use; the flat list is the
-        # older account master, named apart so the two stop being confused.
         NavigationItem("Chart of Accounts", permission="finance.chart_of_accounts.index", url_name="finance:chart_of_accounts"),
         NavigationItem("Account Master", permission="finance.accounts.index", url_name="finance:account_configuration_list"),
         NavigationItem("Opening Balances", permission="finance.opening_balances.index", url_name="finance:opening_balances"),
@@ -127,24 +100,17 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     )),
     NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close", section=SECTION_FINANCE, icon="L"),
 
-    # ── Reports ─────────────────────────────────────────────────────────
-    # Cross-module registers. The daybook is the book of original entry, so
-    # it leads: it is the one place the whole day can be read at once.
     NavigationItem("Reports", permission=None, section=SECTION_REPORTS, icon="R", children=(
         NavigationItem("Daybook", permission="reports.daybook.index", url_name="finance:daybook"),
         NavigationItem("Account Ledger", permission="reports.account_ledger.index", url_name="finance:account_ledger"),
     )),
 
-    # ── People ──────────────────────────────────────────────────────────
     NavigationItem("Employees", permission="hr.employees.index", url_name="hr:employee_list", section=SECTION_WORKFORCE, icon="E"),
     NavigationItem("Payroll", permission=None, section=SECTION_WORKFORCE, icon="Y", children=(
         NavigationItem("Payroll Runs", permission="payroll.runs.index", url_name="payroll:payroll_list"),
         NavigationItem("Salary Items", permission="payroll.salary_items.index", url_name="payroll:employee_salary_list"),
     )),
 
-    # ── Setup ───────────────────────────────────────────────────────────
-    # Everything configured once. Item classes and UOMs live here rather
-    # than under Stock: they are defined at setup, not touched on a shift.
     NavigationItem("Master Data", permission=None, section=SECTION_SETUP, icon="M", children=(
         NavigationItem("Item Categories", permission="inventory.classes.index", url_name="inventory:class_list"),
         NavigationItem("Units of Measure", permission="inventory.uoms.index", url_name="inventory:uom_list"),

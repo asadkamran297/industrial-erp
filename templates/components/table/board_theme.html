@@ -1,25 +1,3 @@
-{% comment %}
-The list-screen board: tiles across the top, a ruled table under them, icon
-actions at the end of each row.
-
-    {% include "components/table/board_theme.html" %}
-
-Written as plain CSS rather than utility classes because the compiled Tailwind
-bundle is prebuilt: a screen that needs a rule nobody has used before would
-otherwise need a rebuild to show it. Held in one place so the screens that use
-it cannot drift apart — a purchase order, a sale and a voucher are read one
-after the other, and a register that changed shape between them would make the
-reader work out afresh where to look.
-
-Class map:
-  po-tiles / po-tile / po-tile--<tone>   the figures across the top
-  po-table                               the register itself
-  po-num / po-sub / po-right / po-muted  cells
-  po-expand + po-lines-*                 a row opened out to its own lines
-  po-pill--<state>                       what a row is waiting on
-  po-row-actions / po-icon-btn           what can be done to a row
-  po-foot                                the page total
-{% endcomment %}
 <style>
   /* ── Tiles ────────────────────────────────────────────────────────────── */
   /* Each tile carries a colour for what it is waiting on, so the row is read

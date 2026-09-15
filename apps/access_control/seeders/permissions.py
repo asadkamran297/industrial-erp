@@ -2,9 +2,6 @@ from apps.access_control.models import Permission
 from apps.access_control.pages import iter_page_permissions
 from apps.core.constants import STATUS_ACTIVE
 
-# Coarse module-level codes replaced by page-level codes. Pruned on reseed so the
-# switch to page-level access control is clean. User-created custom permissions
-# (any code outside this list) are left untouched.
 LEGACY_CODES = [
     "dashboard.view",
     "operations.view",

@@ -22,7 +22,6 @@ LAST_NAMES = [
 ]
 DEPARTMENT_CODES = ["PROD", "FIN", "HR", "IT", "STORE", "QA"]
 DESIGNATION_CODES = ["MANAGER", "OFFICER", "SUPERVISOR", "OPERATOR", "ACCOUNTANT"]
-# Rotated so the payroll register shows a realistic spread rather than one figure.
 SALARY_STEPS = [Decimal("95000"), Decimal("145000"), Decimal("160000"), Decimal("185000"), Decimal("260000")]
 
 
@@ -97,7 +96,6 @@ def seed_demo_employees(count: int = 50) -> int:
                 "total_allowances": allowance_amount,
                 "total_deductions": deduction_amount,
                 "net_salary": salary + allowance_amount - deduction_amount,
-                # A third sit unapproved so the approval screen has something to do.
                 "status": STATUS_PENDING if index % 3 == 0 else STATUS_APPROVED,
                 "generated_at": timezone.now(),
             },

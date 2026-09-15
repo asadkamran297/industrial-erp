@@ -50,7 +50,6 @@ class ProductTreeTests(TestCase):
         self.assertEqual(item.display_code, "01-01-001")
 
     def test_heading_code_is_padded_and_not_postable(self):
-        # Each missing level is padded to its own width: GG-SS-III.
         self.assertEqual(self.group.display_code, "01-00-000")
         self.assertEqual(self.sub.display_code, "01-01-000")
         self.assertFalse(self.group.is_postable)

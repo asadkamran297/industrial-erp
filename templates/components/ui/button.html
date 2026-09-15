@@ -1,27 +1,3 @@
-{% comment %}
-Generic button. Renders an <a> when `href` is given, a <button> otherwise.
-
-    {% include "components/ui/button.html" with label="Save" variant="primary" only %}
-    {% include "components/ui/button.html" with label="Cancel" href=list_url variant="ghost" only %}
-    {% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" only %}
-    {% include "components/ui/button.html" with icon="&#128438;" title="Print" only_icon=True only %}
-
-Always pass `only`. Without it the page's own `title`, `label` or `href`
-variables leak in and land on the button.
-
-Options
-  label      text on the button (omit for an icon-only button)
-  href       makes it a link; without it the button submits its form
-  variant    primary | secondary | ghost | danger   (default: secondary)
-  size       sm | lg                                 (default: standard)
-  icon       leading glyph or entity
-  only_icon  square icon button; `title` then carries the wording
-  type       button type when it is not a link       (default: submit)
-  name/value posted with the form, e.g. which button was pressed
-  title      tooltip / accessible name
-  extra      extra classes
-  disabled   disables the button
-{% endcomment %}
 {% spaceless %}
 {% if href %}
 <a href="{{ href }}"

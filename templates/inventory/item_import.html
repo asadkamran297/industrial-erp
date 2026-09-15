@@ -15,7 +15,6 @@
   <form method="post" enctype="multipart/form-data" id="import-form">{% csrf_token %}
     <div class="grid gap-5 lg:grid-cols-2">
 
-      {# ── Left: what the file must look like ─────────────────────────── #}
       <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Steps to Import</h2>
 
@@ -62,7 +61,6 @@
         </p>
       </div>
 
-      {# ── Right: the drop zone ───────────────────────────────────────── #}
       <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <p class="text-center text-base font-semibold text-slate-700 dark:text-slate-200">Upload your <strong>.xlsx</strong> or <strong>.csv</strong> file</p>
 
@@ -74,7 +72,6 @@
           <p class="mt-4 text-lg text-slate-500 dark:text-slate-400">Drag &amp; Drop file here</p>
           <p class="mt-1 text-sm text-slate-400">or</p>
 
-          {# The real input stays in the form and is driven by the button below. #}
           <div class="sr-only" aria-hidden="true">{{ form.file }}</div>
           <button type="button" id="pick-file" class="mt-4 inline-flex h-11 items-center gap-2 rounded-full bg-[var(--primary-color)] px-6 text-sm font-semibold text-white hover:opacity-90">
             <span class="text-base leading-none">&#8679;</span> Upload File

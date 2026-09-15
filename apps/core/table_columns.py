@@ -29,8 +29,6 @@ class Column:
     label: str
     locked: bool = False
     default: bool = True
-    # What this column writes into a spreadsheet cell. A column with none is
-    # shown but never exported -- an action button has nothing to say in a file.
     export: Optional[Callable] = None
 
 
@@ -50,8 +48,6 @@ class ColumnSet:
         stored = session.get(self.session_key)
         if not isinstance(stored, list):
             return set(self.default_on)
-        # Only declared keys get through, so the session cannot name a column
-        # the screen does not have.
         return {key for key in stored if key in self.keys} | self.locked
 
     def choose(self, session, keys):
@@ -84,6 +80,4 @@ class ColumnSet:
         """
         return len(self.visible(session) - self.locked_without_cells) + extra
 
-    # Locked keys that stand for a cell the table draws itself rather than from
-    # the column list. Subclasses set this where a screen needs it.
     locked_without_cells: set = frozenset()

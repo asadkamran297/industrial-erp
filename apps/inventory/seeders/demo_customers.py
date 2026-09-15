@@ -34,9 +34,6 @@ def seed_demo_customers(count: int = 50) -> int:
         code = f"CUST{index:03d}"
         name = f"{FIRST_NAMES[(index - 1) % len(FIRST_NAMES)]} {LAST_NAMES[(index - 1) % len(LAST_NAMES)]}"
         city_name = CITIES[(index - 1) % len(CITIES)]
-        # Keyed on the email, not the code: the first sale to a customer creates
-        # their receivable in the chart of accounts and rewrites customer_code
-        # to that chart code, so the code is not a stable key to reseed against.
         customer, created = Customer.objects.get_or_create(
             customer_email=f"{code.lower()}@example.test",
             defaults={

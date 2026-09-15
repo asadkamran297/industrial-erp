@@ -5,7 +5,6 @@
 
 <div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
 
-{# ── Head ──────────────────────────────────────────────────────────────── #}
 <div class="flex flex-wrap items-start justify-between gap-4">
   <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Sales Orders</h1>
@@ -18,7 +17,6 @@
   </div>
 </div>
 
-{# ── Board ─────────────────────────────────────────────────────────────── #}
 <section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
   {% include "components/table/filter_bar.html" with table_id="so-table" date_filters_enabled=True search_placeholder="Search..." %}
 
@@ -41,7 +39,6 @@
         {% for order in orders %}
         <tr>
           <td class="print-hide po-expand-cell">
-            {# The lines behind the row's figures, opened where the row is. #}
             <button type="button" class="po-expand" @click="toggleRow({{ order.pk }})"
                     :aria-expanded="isRowOpen({{ order.pk }}) ? 'true' : 'false'"
                     aria-label="Show the items on this order" title="Show the items on this order">
@@ -63,8 +60,6 @@
           </td>
           <td class="po-right text-slate-500">{{ order.line_count }}</td>
           <td class="po-right">{{ order.qty_total|qty }}</td>
-          {# What the order is actually still waiting on -- the only figure on #}
-          {# the row that says whether anything is left to do about it.        #}
           <td class="po-right">{{ order.qty_still_due|qty }}</td>
           <td class="po-right font-semibold">{{ order.value_total|amount }}</td>
         </tr>

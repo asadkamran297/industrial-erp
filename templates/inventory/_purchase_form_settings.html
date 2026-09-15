@@ -1,7 +1,3 @@
-{# The menu on a purchase form: which boxes it shows, and the ones this site   #}
-{# added for itself. Every change is a plain POST that comes straight back      #}
-{# here, so the menu never holds a half-applied state of its own.               #}
-{# Shared by the order and the invoice; the caller supplies ``settings_url``.   #}
 <style>
   .form-settings { position: relative; }
   .form-settings-panel {
@@ -82,9 +78,6 @@
   </button>
 
   <div class="form-settings-panel" x-show="open" x-cloak x-transition.opacity>
-    {# ── Which boxes the form shows ─────────────────────────────────────── #}
-    {# Its own form, posted on Apply: ticking six boxes should be one trip, #}
-    {# not six. #}
     <form method="post" action="{{ settings_url }}">{% csrf_token %}
       <input type="hidden" name="step" value="fields">
       <p class="fs-heading">Show on this form</p>
@@ -106,15 +99,12 @@
       </div>
     </form>
 
-    {# ── The site's own fields ──────────────────────────────────────────── #}
     <p class="fs-heading">Additional Fields</p>
     {% for field in layout.extra %}
     <div class="fs-chip">
       <span>
         <strong>{{ field.label }}</strong>{% if field.required %} <span class="text-rose-500">*</span>{% endif %}
       </span>
-      {# Removing takes the box off the form; what earlier orders recorded #}
-      {# under it stays on those orders. #}
       <form method="post" action="{{ settings_url }}">{% csrf_token %}
         <input type="hidden" name="step" value="remove">
         <input type="hidden" name="code" value="{{ field.code }}">
@@ -125,8 +115,6 @@
 
     <form method="post" action="{{ settings_url }}" class="fs-add">{% csrf_token %}
       <input type="hidden" name="step" value="add">
-      {# Only the label is asked for. What the value is filed under is worked #}
-      {# out from it, because a storage key is not the operator's business.    #}
       <input type="text" name="label" class="form-input h-8" placeholder="Field name, e.g. LC No" required>
       <select name="type" class="form-select h-8" x-model="kind">
         {% for value, label in extra_field_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}

@@ -46,9 +46,7 @@ from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNI
 
 TWO_DP = Decimal("0.01")
 FOUR_DP = Decimal("0.0001")
-# Wheat is bought by the mound, and a mound is forty kilos.
 MUND_KG = Decimal("40")
-# What the weight-quoted charges are quoted against.
 BROKERAGE_KG = Decimal(BROKERAGE_WEIGHT_UNIT_KG)
 WITHHOLDING_KG = Decimal(WITHHOLDING_WEIGHT_UNIT_KG)
 
@@ -243,13 +241,11 @@ def to_base_unit(*, item, uom, quantity, rate):
     if not uom or not base or uom.pk == base.pk:
         return quantity, rate
 
-    # 1 base = factor picked  ->  the picked unit is the smaller of the two.
     down = UOMConversion.objects.filter(uom_from=base, uom_to=uom, status=STATUS_ACTIVE).first()
     if down and down.conversion_factor:
         factor = Decimal(down.conversion_factor)
         return _fits(quantity / factor, rate * factor)
 
-    # 1 picked = factor base  ->  the picked unit is the larger of the two.
     up = UOMConversion.objects.filter(uom_from=uom, uom_to=base, status=STATUS_ACTIVE).first()
     if up and up.conversion_factor:
         factor = Decimal(up.conversion_factor)
@@ -300,18 +296,12 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
         expected_date=expected_date or None,
         godown=godown,
         broker=broker,
-        # Every document says what it is for. Where nobody wrote a narration
-        # the obvious one is written for them, so a printed order is never
-        # blank where the reader expects a sentence.
         descr=(remarks or "").strip() or f"Purchase order to {supplier.name}",
-        # Whatever the site added to its own form; nothing here reads it.
         extra_data=extra_data or {},
         created_by=user,
         updated_by=user,
     )
 
-    # One discount typed at the foot is spread over the lines by their share of
-    # the goods, so the order's own lines still add up to what was agreed.
     goods_total = Decimal("0.00")
     prepared = []
     for line in clean_lines:
@@ -321,8 +311,6 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
             raise ValidationError("Every line needs a quantity greater than zero.")
         product = line.get("product")
         if product is not None:
-            # A product is ordered in its own unit and has no second unit to be
-            # restated from, so nothing is converted here.
             amount = (quantity * rate).quantize(Decimal("0.01"))
             goods_total += amount
             prepared.append((None, product, quantity, rate, amount, line.get("descr")))
@@ -340,8 +328,6 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
     spread = Decimal("0.00")
     for seq, (item, product, quantity, rate, amount, descr) in enumerate(prepared, start=1):
         if seq == len(prepared):
-            # The last line carries whatever rounding the split left over, so
-            # the discounts on the lines add back to the one that was typed.
             share = discount - spread
         else:
             share = (discount * amount / goods_total).quantize(Decimal("0.01")) if goods_total else Decimal("0.00")
@@ -365,12 +351,6 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
 
     net_amount = (goods_total - discount + Decimal(tax_amount or 0)).quantize(Decimal("0.01"))
 
-    # The approval limit bites here, not on the button. Whoever raised the
-    # order does not get to decide whether it needed signing off, so an order
-    # asked for as raised drops back to draft when it is worth more than the
-    # buyer may commit -- and stays there until someone with the right releases
-    # it. Setting the status straight to raised in a form post is exactly the
-    # gap this closes.
     committed = (goods_total - discount).quantize(Decimal("0.01"))
     if order.status == STATUS_SUBMITTED:
         if needs_approval(committed) and not user_can_approve(user):
@@ -391,9 +371,6 @@ def next_sale_invoice_number():
 
 
 @transaction.atomic
-# ── The sales order ─────────────────────────────────────────────────────────
-# The mirror of the purchase side, written the same way on purpose: an order
-# states intent and moves nothing, the invoice is the event.
 
 
 def next_sales_order_number():
@@ -550,8 +527,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     if not clean_lines:
         raise ValidationError("Add at least one item with a quantity.")
 
-    # Lines pulled off a sales order carry it; typed lines do not. What is
-    # invoiced against an order line is bounded by what is still open on it.
     touched_orders = {}
     for line in clean_lines:
         order_item = line.get("order_item")
@@ -590,8 +565,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
             raise ValidationError("Every line needs a quantity greater than zero.")
 
         item = line["inventory_item"]
-        # A line may be written in a second unit the item is handled in; stock
-        # and the books are kept in its own unit either way.
         quantity, price = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=price)
         POSDetail.objects.create(
             pos_master=sale,
@@ -603,8 +576,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
             updated_by=user,
         )
 
-    # The bill-level discount and tax ride on the first line, because the totals
-    # are derived from the lines when the sale is posted.
     first = sale.items.first()
     first.discount_amount = Decimal(discount_amount or 0).quantize(Decimal("0.01"))
     first.tax_amount = Decimal(tax_amount or 0).quantize(Decimal("0.01"))
@@ -618,8 +589,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     if paid > net_amount:
         raise ValidationError("Paid cannot be more than the invoice total.")
 
-    # Set before posting: the posting reads it to split the sale between cash
-    # collected and what the customer still owes.
     sale.total_paid = paid
     sale.pay_mode = "cash"
     sale.updated_by = user
@@ -627,7 +596,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
 
     sale = post_sale(sale=sale, user=user)
 
-    # The order lines this sale drew down, and the orders they belong to.
     for line in clean_lines:
         order_item = line.get("_locked_order_item")
         if order_item is None:
@@ -642,7 +610,6 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     for order in touched_orders.values():
         _refresh_sales_order_status(order, user=user)
 
-    # The voucher this sale posted, named on the invoice so it reads on its own.
     from apps.finance.models import AccountVoucher
 
     voucher = AccountVoucher.objects.filter(source_ref=f"inv_pos_masters:{sale.pk}").first()
@@ -690,9 +657,6 @@ def post_sale(*, sale, user):
     sale.updated_by = user
     sale.save()
 
-    # Posting the sale is also the accounting event: recognise revenue and match
-    # the cost of the stock just issued. Same transaction, so stock and ledger
-    # can never disagree.
     from apps.finance.services import post_sale_to_gl  # lazy: finance imports inventory
 
     post_sale_to_gl(sale=sale, cost_of_goods=cost_total, user=user)
@@ -727,8 +691,6 @@ def post_sale_return(*, sale_return, user):
     sale_return.updated_by = user
     sale_return.save()
 
-    # Mirror of the sale's entry: reverse the revenue and put the cost back
-    # into stock, in the same transaction so ledger and stock cannot diverge.
     from apps.finance.services import post_sale_return_to_gl  # lazy: finance imports inventory
 
     post_sale_return_to_gl(sale_return=sale_return, cost_of_goods=cost_total, user=user)
@@ -744,15 +706,11 @@ def post_sale_return(*, sale_return, user):
 
 @transaction.atomic
 def post_purchase_return(*, purchase_return, user):
-    # ``of`` matters: the order is nullable now, so select_related makes it an
-    # outer join, and Postgres refuses to lock the nullable side of one.
+    # of=('self',): nullable FK makes an outer join; Postgres won't lock it.
     purchase_return = PurchaseReturnMaster.objects.select_for_update(**lock_of("self")).select_related("purchase_invoice", "purchase_order").prefetch_related("items__inventory_item").get(pk=purchase_return.pk)
     if purchase_return.posted == YES:
         raise ValidationError("Posted purchase return cannot be changed.")
     invoice = purchase_return.purchase_invoice
-    # A purchase return moves inventory stock. Wheat and bardana live in the
-    # product ledger and go back through it, so a return raised against an
-    # invoice that bought nothing else has nothing it can send back.
     if not invoice.items.filter(inventory_item__isnull=False).exists():
         raise ValidationError(
             f"{invoice.invoice_num} bought wheat or bardana only. Send those back "
@@ -760,9 +718,6 @@ def post_purchase_return(*, purchase_return, user):
         )
     total = Decimal("0.00")
     for item in purchase_return.items.all():
-        # What may go back is what this invoice brought in, and nothing else.
-        # The order is not consulted: it is a commitment, it moves no goods, and
-        # a spot purchase has none at all.
         received_qty = invoice.items.filter(
             inventory_item=item.inventory_item
         ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.0000")
@@ -786,27 +741,10 @@ def post_purchase_return(*, purchase_return, user):
     purchase_return.updated_by = user
     purchase_return.save()
 
-    # Goods go back to the supplier, so the stock asset and the debt both fall.
     from apps.finance.services import post_purchase_return_to_gl  # lazy: finance imports inventory
 
     post_purchase_return_to_gl(purchase_return=purchase_return, user=user)
     return purchase_return
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Purchase order lifecycle
-#
-# An order moves: draft -> raised -> partly received -> fully received. It can
-# also stop early, in one of two ways that are deliberately not the same thing:
-#
-#   Cancelled     nothing ever arrived. The order is abandoned whole.
-#   Closed short  something arrived, the rest never will, and somebody said so.
-#
-# Neither deletes anything. The number stays in the sequence and the reason
-# stays on the record, because an order that vanishes is indistinguishable
-# from one that was never raised, and the difference matters to whoever is
-# reconciling commitments at the end of the month.
-# ══════════════════════════════════════════════════════════════════════════
 
 
 def purchase_order_approval_limit():
@@ -822,9 +760,6 @@ def purchase_order_approval_limit():
     try:
         return Decimal(str(raw if raw is not None else CONF_PO_APPROVAL_LIMIT_DEFAULT))
     except (ArithmeticError, ValueError, TypeError):
-        # A setting somebody typed by hand and got wrong must not stop the
-        # purchase screens working; falling back to the shipped figure keeps
-        # the control on rather than switching it off.
         return Decimal(CONF_PO_APPROVAL_LIMIT_DEFAULT)
 
 
@@ -986,35 +921,11 @@ def reopen_purchase_order(*, order, user):
     order.closed_by = None
     order.short_qty = Decimal("0.0000")
     order.short_value = Decimal("0.00")
-    # Back to whatever its receipts say it is, which may be raised or partly
-    # received — never straight back to draft, because it was approved once.
     order.status = STATUS_SUBMITTED
     order.updated_by = user
     order.save()
     _refresh_order_receipt_status(order, user=user)
     return order
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Correcting a posted receipt — reversal, never deletion
-#
-# A posted goods receipt has moved stock, written an insert-only item ledger
-# row and posted a general-ledger voucher. Deleting it would break the GRN
-# sequence, take the document out of the audit trail, silently restate the
-# weighted-average cost of every later movement of that item, and put the books
-# out of step with anything already filed on them. It is also how theft is
-# hidden: take the goods, delete the receipt.
-#
-# So a receipt is withdrawn by posting its mirror image. Both stay visible and
-# the pair nets to nothing, which is what actually happened: an entry was made
-# and then taken back.
-# ══════════════════════════════════════════════════════════════════════════
-
-
-# ── The purchase invoice ────────────────────────────────────────────────────
-# One entry point for both routes in. Whether an order was raised first only
-# decides where the lines are copied from; what happens to the books after
-# that is identical, so it is written once.
 
 
 def open_order_lines(*, supplier=None, purchase_order=None):
@@ -1150,9 +1061,6 @@ def _prepare_product_line(line, product, order_item=None):
         weights["credit_weight"] = credit_weight
         weights["rate_per_mund"] = rate_per_mund
     elif ownership in INV_BARDANA_NOT_PURCHASED:
-        # The party's sacks, or ones going back empty. They are counted in --
-        # the mill is holding them and grinding has to see them -- but nothing
-        # is owed for them, so they carry no price and add nothing to the bill.
         quantity = Decimal(line.get("quantity") or 0)
         if quantity <= 0:
             raise ValidationError(f"{product.name}: enter how many sacks came in.")
@@ -1167,9 +1075,6 @@ def _prepare_product_line(line, product, order_item=None):
             raise ValidationError(f"{product.name}: enter how much arrived.")
         if rate < 0:
             raise ValidationError(f"{product.name}: a price cannot be negative.")
-        # A price of zero is a real answer on sacks, unlike on a stores line:
-        # bardana the mill keeps very often arrives with the load at no charge.
-        # It is still counted in, because grinding has to see it.
         amount = (quantity * rate).quantize(TWO_DP)
         weights["credit_weight"] = None
         weights["rate_per_mund"] = None
@@ -1177,9 +1082,6 @@ def _prepare_product_line(line, product, order_item=None):
     return {
         "item": None,
         "product": product,
-        # An order line where the wheat was ordered ahead, none where it came
-        # to the gate on the day. Both are ordinary, and the invoice is the
-        # same document either way.
         "order_item": order_item,
         "quantity": quantity,
         "rate": rate,
@@ -1222,9 +1124,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
     if not supplier:
         raise ValidationError("Pick the supplier this invoice is from.")
-    # Optional. The duplicate guard is the reason to ask for it, so it runs
-    # only when there is something to check; an invoice entered without one is
-    # simply an invoice nobody can catch a second copy of.
     supplier_invoice_num = (supplier_invoice_num or "").strip()
     existing = duplicate_supplier_invoice_number(
         supplier=supplier, supplier_invoice_num=supplier_invoice_num
@@ -1235,10 +1134,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             f"entered as {existing.invoice_num}."
         )
 
-    # A line names a stores item or a product, never both. A wheat line brings
-    # its quantity as a weight rather than a count, so it is kept even where
-    # ``quantity`` was never typed -- the weight fields are what it was written
-    # with, and the paid weight is worked out from them below.
     clean = [
         line for line in lines
         if (line.get("inventory_item") or line.get("product"))
@@ -1257,9 +1152,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         if product is not None:
             order_item = line.get("order_item")
             if order_item is not None:
-                # ``of`` matters: an order line names a stores item or a
-                # product, so both FKs are nullable and select_related makes
-                # outer joins -- and Postgres will not lock the nullable side.
+                # of=('self',): nullable FK makes an outer join; Postgres won't lock it.
                 order_item = PurchaseOrderItem.objects.select_for_update(**lock_of("self")).select_related(
                     "purchase_order", "product"
                 ).get(pk=order_item.pk)
@@ -1275,8 +1168,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                     )
                 touched_orders[order.pk] = order
             prepared_row, line_amount = _prepare_product_line(line, product, order_item=order_item)
-            # Over-receipt on a product line is reported the same way it is on
-            # a stores line: taken in, never silent.
             if order_item is not None:
                 excess = prepared_row["quantity"] - order_item.qty_pending
                 if excess > FOUR_DP:
@@ -1300,8 +1191,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                 "Every line needs a rate - the system will not guess what was agreed."
             )
 
-        # A line written in a second unit the item is handled in is restated in
-        # the item's own unit; the books are kept in that unit either way.
         quantity, rate = to_base_unit(
             item=item, uom=line.get("uom"), quantity=quantity, rate=rate
         )
@@ -1316,11 +1205,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                 raise ValidationError(f"{order.purchase_num} was raised on a different supplier.")
             if order.status in (STATUS_DRAFT, STATUS_CANCELLED):
                 raise ValidationError("An order can only be invoiced once it has been submitted.")
-            # Over-receipt is allowed. A supplier sending a little more than
-            # ordered is ordinary in this trade, and a truck already tipped at
-            # the gate cannot be sent back by a validation rule. The excess is
-            # recorded on the return value so the screen can say it out loud
-            # rather than the difference being discovered in a report later.
             excess = quantity - order_item.qty_pending
             if excess > FOUR_DP:
                 over_invoiced.append({
@@ -1357,20 +1241,12 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     if discount > goods_total + freight:
         raise ValidationError("A discount cannot be more than the goods on the invoice.")
 
-    # Tax is stated either off the face of the invoice as one figure, which is
-    # how most supplier invoices in this trade are written, or per line.
     tax_total = (
         Decimal(tax_amount or 0).quantize(TWO_DP) if tax_amount is not None else tax_from_lines
     )
-    # Freight the mill paid at the gate is not part of what the supplier is
-    # owed -- it is money already handed over on his behalf -- so it stays off
-    # the bill and is recovered from him in the posting instead.
     total = (goods_total + (Decimal("0.00") if freight_paid_by_mill else freight)
              - discount + tax_total).quantize(TWO_DP)
 
-    # Brokerage and withholding are quoted against weight, so they are worked
-    # out off the credit weight this invoice bought. No wheat on the invoice
-    # means no weight to charge against, and both come to nothing.
     weight = sum(
         (row["weights"].get("credit_weight") or Decimal("0.000") for row in prepared),
         Decimal("0.000"),
@@ -1391,8 +1267,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     if paid > total - withholding:
         raise ValidationError("Paid cannot be more than the supplier is owed.")
 
-    # One order behind the invoice is recorded on it; several are recorded on
-    # the lines, because the header has one column and cannot hold two answers.
     header_order = list(touched_orders.values())[0] if len(touched_orders) == 1 else None
 
     invoice = PurchaseInvoice.objects.create(
@@ -1403,8 +1277,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         invoice_date=invoice_date,
         due_date=due_date or None,
         godown=godown,
-        # Plates are read off a truck and typed however the clerk types them;
-        # stored one way so two entries of the same lorry match.
         vehicle_no=(vehicle_no or "").strip().upper(),
         broker=broker,
         goods_amount=goods_total,
@@ -1457,10 +1329,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             order_item.updated_by = user
             order_item.save()
 
-        # Wheat and bardana go to the product ledger, which is where grinding
-        # reads them from. They never touch inventory stock: two ledgers holding
-        # the same sack is how a mill ends up with two answers to how much wheat
-        # it has.
         if row["product"] is not None:
             if row["product"].keeps_stock:
                 product_services.post_movement(
@@ -1471,8 +1339,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
                 )
             continue
 
-        # A service is not stocked, so there is nothing to take in and nothing
-        # for the item ledger to say about it.
         if row["item"].item_kind != INVENTORY_KIND_PRODUCT:
             continue
 
@@ -1501,7 +1367,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             remarks=remarks or row["descr"], user=user,
         )
 
-    # Every order this invoice touched moves along, however many there were.
     for order in touched_orders.values():
         _refresh_order_invoiced_status(order, user=user)
 
@@ -1510,8 +1375,6 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         invoice.journal_ref = voucher.voucher_no
         invoice.save(update_fields=["journal_ref", "updated_at"])
 
-    # Hung on the returned invoice rather than raised: the purchase is good and
-    # posted, and what the caller does with the excess is to tell the operator.
     invoice.over_invoiced = over_invoiced
 
     if paid > 0:
@@ -1616,9 +1479,6 @@ def reverse_purchase_invoice(*, invoice, reason, user):
         remarks=f"Reversal of purchase invoice {invoice.invoice_num}",
         user=user,
     )
-    # Money paid on the invoice was a second posting, and withdrawing the
-    # invoice without withdrawing it would leave the supplier's account showing
-    # a payment against a purchase that no longer exists.
     if invoice.paid_amount:
         reverse_gl_posting(
             source_ref=f"inv_purchase_invoices_paid:{invoice.pk}",

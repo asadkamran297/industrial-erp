@@ -177,7 +177,6 @@
     </div>
   </div>
 
-  {# ── Linked documents ────────────────────────────────────────────────── #}
   {% if linked_documents %}
   <div class="pur-chain">
     <span class="pur-chain-cap">Linked documents</span>
@@ -191,7 +190,6 @@
   </div>
   {% endif %}
 
-  {# ── The document ────────────────────────────────────────────────────── #}
   <div class="pur-doc-sheet">
     <div class="pur-doc-top">
       <div>
@@ -208,7 +206,6 @@
     <div class="pur-doc-parties">
       <div>
         <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ invoice.supplier.name }}</span></p>
-        {# Their number on the paper this was typed from, not ours. #}
         {% if invoice.supplier_invoice_num %}
         <p class="mt-2"><span class="pur-doc-cap">Supplier's invoice no:</span> {{ invoice.supplier_invoice_num }}</p>
         {% endif %}
@@ -224,14 +221,11 @@
         <p class="mt-2"><span class="pur-doc-cap">Entered by:</span>
           {{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</p>
       </div>
-      {# The same words the register uses: one purchase shown on two screens #}
-      {# must not appear to be in two different states.                       #}
       <p class="pur-doc-right">
         <span class="pur-doc-cap">Status:</span>
         {% if invoice.status == "reversed" %}<span class="po-pill po-pill--bill">Reversed</span>
         {% else %}<span class="po-pill po-pill--done">Posted</span>{% endif %}
         {% if invoice.legacy_bill_no %}
-        {# What this purchase was numbered before it became one document. #}
         <span class="po-pill" title="The bill number this purchase carried before purchases became one document">{{ invoice.legacy_bill_no }}</span>
         {% endif %}
       </p>
@@ -258,8 +252,6 @@
               <span class="pur-strong">{{ line.descr }}</span>
               {% if line.inventory_item.item_code %}<span class="pur-sub">{{ line.inventory_item.item_code }}</span>{% endif %}
               {% if line.product %}<span class="pur-sub">{{ line.product.complete_code }}</span>{% endif %}
-              {# What the weighbridge said and what came off it, so the credit #}
-              {# weight beside it can be checked rather than taken on trust.   #}
               {% if line.credit_weight %}
               <span class="pur-sub">Party {{ line.party_weight|qty }} &middot; Mill {{ line.mill_weight|qty }} &middot;
                 Selected {{ line.selected_weight|qty }}
@@ -297,16 +289,12 @@
         <p class="pur-doc-cap">Narration</p>
         <p class="pur-doc-narration">{{ invoice.remarks|default:"&mdash;"|linebreaksbr }}</p>
       </div>
-      {# Read off the invoice header rather than added up again here: the    #}
-      {# header is what posted to the ledger, so it is the figure that is true. #}
       <div class="pur-sums">
         <div><span>Goods</span><b>{{ invoice.goods_amount|amount }}</b></div>
         {% if invoice.discount_amount %}<div><span>Discount</span><b>{{ invoice.discount_amount|amount }}</b></div>{% endif %}
         {% if invoice.freight_amount %}<div><span>Freight</span><b>{{ invoice.freight_amount|amount }}</b></div>{% endif %}
         {% if invoice.tax_amount %}<div><span>Sales tax</span><b>{{ invoice.tax_amount|amount }}</b></div>{% endif %}
         <div class="pur-sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
-        {# Owed to the broker, not to the supplier: shown here because it is #}
-        {# part of what this purchase cost, and it settles on its own.       #}
         {% if invoice.brokerage_amount %}
         <div><span>Brokerage @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg</span><b>{{ invoice.brokerage_amount|amount }}</b></div>
         {% endif %}

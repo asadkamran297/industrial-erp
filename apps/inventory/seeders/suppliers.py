@@ -2,7 +2,6 @@ from apps.core.constants import STATUS_ACTIVE
 from apps.inventory.models import Supplier
 
 SUPPLIERS = [
-    # code, name, city_name, addr1, tel1, email, ntn, sector
     ("SUP001", "Al-Fatah Traders", "Lahore", "23-B Gulberg III, Lahore", "042-35761234", "info@alfatahtraders.com.pk", "1234567-1"),
     ("SUP002", "Pak Steel Industries", "Karachi", "Plot 45 SITE Industrial Area, Karachi", "021-32561890", "sales@paksteel.com.pk", "2345678-2"),
     ("SUP003", "Hafeez & Sons Enterprises", "Faisalabad", "Chowk Azam Road, Faisalabad", "041-26789012", "hafeezandsons@gmail.com", "3456789-3"),

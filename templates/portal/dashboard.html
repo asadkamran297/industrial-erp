@@ -4,7 +4,6 @@
 <div class="viz space-y-5">
 
   {% if not integrity.is_clean %}
-    {# Figures built on unsound books are worse than no figures. #}
     <a href="{% url 'finance:trial_balance' %}"
        class="block rounded-lg border border-rose-300 bg-rose-50 px-4 py-2.5 text-sm text-rose-800 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
       <span class="font-semibold">These figures exclude entries the ledger cannot account for.</span>
@@ -12,7 +11,6 @@
     </a>
   {% endif %}
 
-  {# ── Headline figures ── #}
   <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
     {% for kpi in kpis %}
       <div class="kpi kpi--{{ kpi.key }}{% if kpi.signed and kpi.value < 0 %} is-loss{% endif %}">
@@ -24,7 +22,6 @@
     {% endfor %}
   </section>
 
-  {# ── Sales vs Purchases ── #}
   <section class="panel">
     <div class="panel-head">
       <div>
@@ -38,7 +35,6 @@
     </div>
     <div class="panel-body">
       <div id="trend-chart" class="min-h-[320px]"></div>
-      {# Table view: the same numbers, reachable without reading the chart. #}
       <details class="mt-2">
         <summary class="cursor-pointer text-xs text-slate-500 hover:underline">Show as table</summary>
         <div class="mt-2 overflow-x-auto">
@@ -61,7 +57,6 @@
     </div>
   </section>
 
-  {# ── Ranked detail ── #}
   <section class="grid gap-4 lg:grid-cols-2">
     <div class="panel">
       <div class="panel-head">
@@ -106,7 +101,6 @@
     </div>
   </section>
 
-  {# ── Latest activity ── #}
   <section class="grid gap-4 lg:grid-cols-2">
     <div class="panel">
       <div class="panel-head">
@@ -149,7 +143,6 @@
     </div>
   </section>
 
-  {# ── Operational counts ── #}
   <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
     {% for stat in secondary %}
       <div class="rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800">

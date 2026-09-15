@@ -49,9 +49,6 @@ class GrindingVoucher(BaseModel):
     )
     disposal_wheat = models.DecimalField(max_digits=16, decimal_places=3, default=0)
 
-    # Defaulted from what the wheat was received in, then stored. Re-deriving it
-    # at report time would release the wrong sack whenever government wheat came
-    # in under a private poly item, and the bag balances would drift.
     bag_item = models.ForeignKey(
         "products.ProductNode",
         null=True,
@@ -76,13 +73,10 @@ class GrindingVoucher(BaseModel):
     )
     description = models.TextField(blank=True)
 
-    # -- Yield, computed on save and kept. ----------------------------------
     total_output_kg = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     yield_percent = models.DecimalField(max_digits=8, decimal_places=3, default=0)
     shortage_kg = models.DecimalField(max_digits=16, decimal_places=3, default=0)
     shortage_percent = models.DecimalField(max_digits=8, decimal_places=3, default=0)
-    # Copied off the wheat item at save, so the variance shown on an old voucher
-    # is the variance against the standard that was in force when it was run.
     standard_yield_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
 
     class Meta:
@@ -96,7 +90,6 @@ class GrindingVoucher(BaseModel):
             ),
         ]
         indexes = [
-            # The list screen, newest first, and its three filters.
             models.Index(fields=["-date", "-seq_num"], name="grind_date_seq_idx"),
             models.Index(fields=["wheat_item", "-date"], name="grind_wheat_date_idx"),
             models.Index(fields=["godown", "-date"], name="grind_godown_date_idx"),
@@ -160,8 +153,6 @@ class GrindingOutput(BaseModel):
         on_delete=models.PROTECT,
     )
     quantity = models.DecimalField(max_digits=16, decimal_places=3, default=0)
-    # Snapshot. The master's unit weight is editable, and a later edit must not
-    # move the yield of a run that has already been reported.
     unit_weight = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     pack_product = models.ForeignKey(
         "products.ProductNode",
@@ -170,8 +161,6 @@ class GrindingOutput(BaseModel):
         related_name="grinding_pack_uses",
         on_delete=models.PROTECT,
     )
-    # Normally equals quantity. Zero for loose output, which is weighed out of
-    # the mill into no sack at all.
     pack_qty = models.DecimalField(max_digits=16, decimal_places=3, default=0)
 
     class Meta:
@@ -186,7 +175,6 @@ class GrindingOutput(BaseModel):
         ]
         indexes = [
             models.Index(fields=["voucher", "line_number"], name="grind_out_voucher_line_idx"),
-            # "everything this product was ever produced on", the summary report.
             models.Index(fields=["product", "-id"], name="grind_out_product_idx"),
         ]
 

@@ -22,19 +22,11 @@ STATUS_RETURNED: Final = "returned"
 STATUS_PARTIAL_RETURNED: Final = "partial_returned"
 STATUS_PARTIAL_RECEIVED: Final = "partial_received"
 STATUS_FULLY_RECEIVED: Final = "fully_received"
-# An order nobody expects the rest of any more. Distinct from cancelled, which
-# means nothing arrived at all: a short-closed order was part delivered and the
-# balance was deliberately written off rather than left hanging for ever.
 STATUS_CLOSED_SHORT: Final = "closed_short"
-# A supplier bill, from entered to matched against what actually arrived.
 STATUS_MATCHED: Final = "matched"
 STATUS_REVERSED: Final = "reversed"
-# How far through an order has been invoiced. An order commits nothing to the
-# books, so what moves it along is the invoice against it and nothing else.
 STATUS_PARTIALLY_INVOICED: Final = "partially_invoiced"
 STATUS_FULLY_INVOICED: Final = "fully_invoiced"
-# Finished with, whether it ran out or was stopped. One word, because a reader
-# looking for an order that is no longer running does not know which it was.
 STATUS_CLOSED: Final = "closed"
 
 ALLOWANCE: Final = "allowance"
@@ -97,7 +89,6 @@ FIN_ACCOUNT_LEDGER_CHOICES: Final[StatusChoices] = (
     (ACCOUNT_LEDGER_SUBSIDIARY, "Subsidiary"),
 )
 
-# Chart of Accounts tree: five top-level roots (adds Capital over the 4 posting types).
 FIN_COA_ACCOUNT_TYPE_CHOICES: Final[StatusChoices] = (
     (ACCOUNT_TYPE_ASSET, "Assets"),
     (ACCOUNT_TYPE_LIABILITY, "Liabilities"),
@@ -125,8 +116,6 @@ FIN_VOUCHER_TYPE_CHOICES: Final[StatusChoices] = (
     (VOUCHER_TYPE_PURCHASE, "Purchase"),
 )
 
-# Tally-style voucher shortcuts for the add-voucher picker: (code, label, F-key, prefix)
-# Payment listed first: it is the most common voucher and the default selection.
 FIN_VOUCHER_TYPE_META: Final = (
     (VOUCHER_TYPE_PAYMENT, "Payment", "F5", "E"),
     (VOUCHER_TYPE_RECEIPT, "Receipt", "F6", "R"),
@@ -138,27 +127,17 @@ FIN_VOUCHER_TYPE_META: Final = (
 
 FIN_VOUCHER_PREFIX_MAP: Final[dict[str, str]] = {code: prefix for code, _label, _fkey, prefix in FIN_VOUCHER_TYPE_META}
 
-# Cash and bank vouchers of the same type number in separate books: EC-000001
-# runs alongside EB-000001, so each book reads as its own unbroken sequence.
 FIN_MONEY_MODE_SUFFIX: Final[dict[str, str]] = {"cash": "C", "bank": "B"}
 
-# Voucher types kept off the manual entry screen: Sales is posted from a POS
-# sale, Purchase from a GRN, and Contra is not entered here for now. The types
-# stay valid everywhere else (numbering, lists, posting, reports).
 FIN_VOUCHER_TYPE_HIDDEN: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE, VOUCHER_TYPE_CONTRA)
 
 FIN_VOUCHER_TYPE_PICKER_META: Final = tuple(
     entry for entry in FIN_VOUCHER_TYPE_META if entry[0] not in FIN_VOUCHER_TYPE_HIDDEN
 )
 
-# Account-nature groups: supplier (payable) vs customer (receivable) voucher types.
 VOUCHER_SUPPLIER_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
 VOUCHER_CUSTOMER_TYPES: Final = (VOUCHER_TYPE_RECEIPT, VOUCHER_TYPE_SALES)
 
-# Simple-mode vouchers hide the debit/credit choice: the voucher type fixes both
-# sides. The header account is the money leg (Cash/Bank), every grid line is the
-# reason leg, and each line carries a single positive amount.
-# {voucher_type: (header_side, line_side)}
 VOUCHER_SIMPLE_SIDES: Final[dict[str, tuple[str, str]]] = {
     VOUCHER_TYPE_PAYMENT: ("credit", "debit"),  # money out of Cash/Bank
     VOUCHER_TYPE_RECEIPT: ("debit", "credit"),  # money into Cash/Bank
@@ -166,8 +145,6 @@ VOUCHER_SIMPLE_SIDES: Final[dict[str, tuple[str, str]]] = {
     VOUCHER_TYPE_PURCHASE: ("credit", "debit"),  # Dr expense, Cr money or supplier
 }
 
-# Sales and Purchase settle either on the spot (money account) or on account
-# (customer receivable / supplier payable). The mode picks the header account.
 SETTLEMENT_CASH: Final = "cash"
 SETTLEMENT_CREDIT: Final = "credit"
 
@@ -178,88 +155,40 @@ FIN_SETTLEMENT_MODE_CHOICES: Final[StatusChoices] = (
 
 VOUCHER_SETTLEMENT_TYPES: Final = (VOUCHER_TYPE_SALES, VOUCHER_TYPE_PURCHASE)
 
-# A Journal is only its lines: no money account heads it, so no payment method
-# and no single amount either — the grid carries both sides.
 VOUCHER_HEADERLESS_TYPES: Final = (VOUCHER_TYPE_JOURNAL,)
 
-# Extra voucher header fields each payment method needs, keyed by a lowercased
-# PaymentMethod.title. Methods missing here (Cash, …) collect nothing extra; the
-# listed fields are both shown and required, and everything else is blanked out.
 FIN_PAYMENT_METHOD_FIELDS: Final[dict[str, tuple[str, ...]]] = {
-    # A transfer already moves through the voucher's bank account, so the bank is
-    # known; only the reference the bank gave it is collected.
     "bank transfer": ("transaction_ref",),
     "bank": ("transaction_ref",),
     "cheque": ("bank_name", "cheque_no", "cheque_date"),
     "mobile wallet": ("wallet_operator", "transaction_ref"),
 }
 
-# Every conditional field, in on-screen order — the ones hidden for a method.
 FIN_PAYMENT_CONDITIONAL_FIELDS: Final = ("bank_name", "cheque_no", "cheque_date", "wallet_operator", "transaction_ref")
 
-# Shown for their method but never demanded: the bank reference often reaches the
-# office after the voucher is written.
 FIN_PAYMENT_OPTIONAL_FIELDS: Final = ("transaction_ref",)
 
-# Voucher types that can carry a scanned bank slip, and only while the money
-# side is a bank account — cash across the counter produces no such document.
 FIN_RECEIPT_UPLOAD_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_RECEIPT)
 
-# Chart-of-accounts titles the automatic sales posting needs. Each entry is the
-# (root, sub-heading, leaf) path used to find-or-create the account, so a fresh
-# install posts without any manual chart setup.
 GL_CASH_PATH: Final = ("ASSETS", "Current Assets", "Cash")
 GL_INVENTORY_PATH: Final = ("ASSETS", "Current Assets", "Inventory")
 GL_SALES_TAX_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Sales Tax Payable")
 GL_SALES_REVENUE_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Revenue")
-# Sales discount and sales returns are contra-revenue: debit-balance accounts
-# under REVENUE, so they net against Sales Revenue on the income statement
-# instead of being misreported as expenses.
 GL_SALES_DISCOUNT_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Discount")
 GL_SALES_RETURN_PATH: Final = ("REVENUE", "Direct Revenue", "Sales Returns")
 GL_COGS_PATH: Final = ("EXPENSES", "Direct Expenses", "Cost of Goods Sold")
-# Goods are in the godown long before the supplier's bill turns up. Their value
-# has to sit somewhere in the meantime, and it sits here: a liability that says
-# "received, not yet invoiced". The bill then debits it away and credits the
-# real payable, so the two net to zero. Whatever is left in this account at any
-# moment is exactly the goods received that nobody has billed for -- without it
-# payables are understated and there is no way to say by how much.
 GL_GRN_CLEARING_PATH: Final = ("LIABILITIES", "Current Liabilities", "GRN Clearing")
-# Sales tax paid to a supplier is money the business gets back, so it is an
-# asset until it is set off, not a cost of the goods. Loading it onto stock
-# would overstate both inventory and, later, cost of sales.
 GL_INPUT_TAX_PATH: Final = ("ASSETS", "Current Assets", "Input Sales Tax")
-# Where a supplier bill that disagrees with the goods receipt lands. The stock
-# was already valued when it arrived; re-valuing it now would rewrite the cost
-# of units that may already have been sold, so the difference is taken to the
-# profit and loss account instead.
 GL_PURCHASE_VARIANCE_PATH: Final = ("EXPENSES", "Direct Expenses", "Purchase Price Variance")
-# Carriage a supplier charged on the invoice. A cost in its own right
-# rather than a variance: with no receipt to match the invoice against,
-# there is no second figure for it to be the difference from.
 GL_FREIGHT_PATH: Final = ("EXPENSES", "Direct Expenses", "Freight and Carriage")
-# Brokers are named on the purchase documents and are owed brokerage, so each
-# one is an account under this heading rather than a name typed on a form. The
-# heading holds no balance of its own; the brokers under it do.
 GL_BROKERS_GROUP_PATH: Final = ("LIABILITIES", "Current Liabilities", "Brokers")
-# Brokerage the mill owes on a purchase. A cost of buying, not a cost of the
-# wheat: it is owed to the broker rather than to the supplier, and settles on
-# its own, so it never loads onto the stock value.
 GL_BROKERAGE_PATH: Final = ("EXPENSES", "Direct Expenses", "Brokerage")
-# Tax withheld from the supplier and owed to the revenue instead. It is money
-# the mill holds back rather than money it spends, so it is a liability the day
-# the invoice is entered and stays one until it is deposited.
 GL_WITHHOLDING_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Withholding Tax Payable")
-# Brokerage is quoted per 100 kg and withholding per 40 kg -- one mound. Both
-# are read off the weight actually bought, which is the credit weight.
 BROKERAGE_WEIGHT_UNIT_KG: Final = "100"
 WITHHOLDING_WEIGHT_UNIT_KG: Final = "40"
 GL_BROKERS_GROUP_TITLE: Final = "Brokers"
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
 
-# Counterparts for an inventory reconciliation. A genuine count difference is a
-# trading loss or gain; stock that predates general-ledger posting is not — it
-# is brought on to the books against opening equity so it never touches profit.
 GL_INVENTORY_ADJUSTMENT_PATH: Final = ("EXPENSES", "Direct Expenses", "Inventory Adjustment")
 GL_OPENING_EQUITY_PATH: Final = ("CAPITAL", "Owner's Capital", "Opening Balance Equity")
 
@@ -268,12 +197,9 @@ INVENTORY_ADJUSTMENT_REASONS: Final[dict[str, str]] = {
     "adjustment": "Stock adjustment — count difference, shrinkage or write-down",
 }
 
-# Supplier control account. Both spellings are accepted so an existing
-# hand-built chart is reused instead of gaining a near-duplicate heading.
 GL_PAYABLES_PARENT: Final = ("LIABILITIES", "Current Liabilities")
 GL_PAYABLES_TITLES: Final = ("Payables", "Payable")
 
-# Cash-flow activity buckets, by the account type on the other side of the entry.
 CASH_FLOW_OPERATING: Final = "operating"
 CASH_FLOW_INVESTING: Final = "investing"
 CASH_FLOW_FINANCING: Final = "financing"
@@ -284,10 +210,6 @@ CASH_FLOW_SECTION_LABELS: Final[dict[str, str]] = {
     CASH_FLOW_FINANCING: "Financing activities",
 }
 
-# Business role of a postable account, and the optgroup caption it gets in the
-# voucher pickers. Roles come from the account's place in the chart of accounts,
-# not account_type alone: customer ledgers sit under Receivables, so their
-# account_type is "asset" and cannot be told apart from any other asset.
 FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
     "cash": "Cash",
     "bank": "Bank",
@@ -298,43 +220,33 @@ FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
     "other": "Other Accounts",
 }
 
-# Fallback role by account_type, for accounts outside Cash/Bank/Receivables.
 FIN_ACCOUNT_TYPE_ROLES: Final[dict[str, str]] = {
     ACCOUNT_TYPE_LIABILITY: "supplier",
     ACCOUNT_TYPE_EXPENSE: "expense",
     ACCOUNT_TYPE_REVENUE: "revenue",
 }
 
-# Which account roles each voucher type accepts, per side.
-# Absent voucher type (Journal/Contra) => every role allowed.
 FIN_VOUCHER_HEADER_ROLES: Final[dict[str, tuple[str, ...]]] = {
     VOUCHER_TYPE_PAYMENT: ("cash", "bank"),
     VOUCHER_TYPE_RECEIPT: ("cash", "bank"),
 }
 FIN_VOUCHER_LINE_ROLES: Final[dict[str, tuple[str, ...]]] = {
-    # "customer" included: money is also paid out to a customer — a refund, or
-    # an advance being returned — which lands on the receivable ledger.
     VOUCHER_TYPE_PAYMENT: ("supplier", "expense", "customer"),
     VOUCHER_TYPE_RECEIPT: ("customer", "revenue"),
     VOUCHER_TYPE_SALES: ("revenue",),
     VOUCHER_TYPE_PURCHASE: ("expense", "other"),
 }
 
-# Settlement mode overrides the header roles for Sales and Purchase.
 FIN_SETTLEMENT_HEADER_ROLES: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     VOUCHER_TYPE_SALES: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("customer",)},
     VOUCHER_TYPE_PURCHASE: {SETTLEMENT_CASH: ("cash", "bank"), SETTLEMENT_CREDIT: ("supplier",)},
 }
 
-# On a cash sale/purchase the header is a money account, so the counterparty is
-# recorded separately in party_account_no. On credit it *is* the header account.
 FIN_VOUCHER_PARTY_ROLES: Final[dict[str, tuple[str, ...]]] = {
     VOUCHER_TYPE_SALES: ("customer",),
     VOUCHER_TYPE_PURCHASE: ("supplier",),
 }
 
-# On-screen captions per voucher type. "header_credit" overrides "header" when
-# the voucher settles on credit; keys are read by the voucher form's JS too.
 FIN_VOUCHER_LABELS: Final[dict[str, dict[str, str]]] = {
     VOUCHER_TYPE_PAYMENT: {"header": "Paid From", "line": "Paid To"},
     VOUCHER_TYPE_RECEIPT: {"header": "Received In", "line": "Received From"},
@@ -376,10 +288,6 @@ LEDGER_PURCHASE_RETURN: Final = "PURCHASE_RETURN"
 LEDGER_SALE: Final = "SALE"
 LEDGER_SALE_RETURN: Final = "SALE_RETURN"
 LEDGER_ADJUSTMENT: Final = "ADJUSTMENT"
-# Stock taken back out because the movement that put it in was withdrawn. Kept
-# apart from an adjustment: an adjustment is a count difference the business
-# discovered, a reversal is an entry the business retracted, and reading the
-# item ledger is a great deal easier when the two are not the same word.
 LEDGER_REVERSAL: Final = "REVERSAL"
 CUSTOMER_LEDGER_PURCHASE: Final = "PURCHASE"
 CUSTOMER_LEDGER_CASH_PAYMENT: Final = "CASH_PAYMENT"
@@ -399,9 +307,6 @@ INV_ITEM_TYPE_CHOICES: Final[StatusChoices] = (
     (INVENTORY_TYPE_FIXED_ASSET, "Fixed Asset"),
 )
 
-# What is being sold: something stocked and counted, or labour that never
-# carries a quantity. Separate from INV_ITEM_TYPE_CHOICES, which says how an
-# item is held on the balance sheet.
 INVENTORY_KIND_PRODUCT: Final = "P"
 INVENTORY_KIND_SERVICE: Final = "S"
 
@@ -435,8 +340,6 @@ INV_POS_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_PARTIAL_RETURNED, "Partial Returned"),
 )
 
-# Draft -> Submitted -> Partially Invoiced -> Fully Invoiced -> Closed.
-# Nothing here touches stock or the ledger; the invoice does that.
 INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_DRAFT, "Draft"),
     (STATUS_SUBMITTED, "Submitted"),
@@ -446,15 +349,10 @@ INV_PURCHASE_ORDER_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_CANCELLED, "Cancelled"),
 )
 
-# A sales order runs the same course as a purchase order, so it reads off the
-# same list rather than a parallel one that could drift from it.
 INV_SALES_ORDER_STATUS_CHOICES: Final[StatusChoices] = INV_PURCHASE_ORDER_STATUS_CHOICES
 
-# An order still working its way through: committed, not yet finished.
 INV_ORDER_OPEN_STATUSES: Final = (STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
 
-# The invoice is the only financial document, so it is either standing or it
-# has been withdrawn. There is no matched state left to be in.
 INV_PURCHASE_INVOICE_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_DRAFT, "Draft"),
     (STATUS_POSTED, "Posted"),
@@ -467,9 +365,6 @@ INV_PURCHASE_BILL_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_REVERSED, "Reversed"),
 )
 
-# Why an order was abandoned. A free-text box here fills up with "cancelled" and
-# tells nobody anything six months later, so the reason is picked from a list
-# and the list is short enough that the honest answer is always on it.
 INV_PO_CANCEL_REASONS: Final[StatusChoices] = (
     ("entered_in_error", "Entered in error"),
     ("wrong_supplier", "Raised on the wrong supplier"),
@@ -486,10 +381,6 @@ INV_PO_CLOSE_SHORT_REASONS: Final[StatusChoices] = (
     ("accepted_as_final", "Delivered short and accepted as final"),
 )
 
-# Who owns the sacks that came in on a purchase. The mill keeps custody of all
-# three, so all three move the product ledger; only its own are bought, and only
-# its own are paid for. Party bags belong to the supplier and go back on their
-# next trip; returnable bags are the mill's to send back when they are empty.
 INV_BARDANA_MILL: Final = "mill"
 INV_BARDANA_PARTY: Final = "party"
 INV_BARDANA_RETURNABLE: Final = "returnable"
@@ -498,11 +389,8 @@ INV_BARDANA_OWNERSHIP_CHOICES: Final[StatusChoices] = (
     (INV_BARDANA_PARTY, "Party's"),
     (INV_BARDANA_RETURNABLE, "Returnable"),
 )
-# The two that are somebody else's: held, counted, never bought.
 INV_BARDANA_NOT_PURCHASED: Final = (INV_BARDANA_PARTY, INV_BARDANA_RETURNABLE)
 
-# Why a posted document was reversed. A reversal without one is unusable to
-# whoever reads the books afterwards, which is the whole point of keeping it.
 INV_REVERSAL_REASONS: Final[StatusChoices] = (
     ("entered_in_error", "Entered in error"),
     ("wrong_quantity", "Wrong quantity entered"),
@@ -513,16 +401,9 @@ INV_REVERSAL_REASONS: Final[StatusChoices] = (
     ("cancelled_by_supplier", "Cancelled by the supplier"),
 )
 
-# Above this the order is a commitment somebody senior has to agree to, so it
-# stays a draft until they do. Held as a setting rather than a constant because
-# the figure is a matter of company policy, not of software.
 CONF_PO_APPROVAL_LIMIT_KEY: Final = "inventory.purchase_order.approval_limit"
 CONF_PO_APPROVAL_LIMIT_DEFAULT: Final = "500000.00"
 
-# How far a supplier's bill may drift from the value of the goods that were
-# received against it before the system stops accepting it without a second
-# pair of eyes. Two percent is the usual commercial rounding; beyond that
-# somebody is billing for something that did not arrive.
 INV_BILL_MATCH_TOLERANCE_PERCENT: Final = "2.00"
 
 INV_RETURN_STATUS_CHOICES: Final[StatusChoices] = (
@@ -573,15 +454,11 @@ COMMON_STATUS_LABELS: Final[dict[str, str]] = {
 }
 
 
-# --- Page-level access-control actions ---
 ACTION_INDEX: Final[str] = "index"
 ACTION_VIEW: Final[str] = "view"
 ACTION_ADD: Final[str] = "add"
 ACTION_EDIT: Final[str] = "edit"
 ACTION_DELETE: Final[str] = "delete"
-# Committing money on somebody else's behalf, and unwinding a posted entry.
-# Held apart from "edit" so the person who raises a document is not, by that
-# fact alone, the person who approves it or withdraws it.
 ACTION_APPROVE: Final[str] = "approve"
 ACTION_REVERSE: Final[str] = "reverse"
 
@@ -606,9 +483,6 @@ ACTION_LABELS: Final[dict[str, str]] = {
 }
 
 
-# ── Products (flour mill product tree) ───────────────────────────────────────
-# A product's code is GG-SS-III. Levels are numbered so a comparison reads the
-# same way the code does: 1 is the group, 3 is the postable item.
 PRD_LEVEL_GROUP: Final[int] = 1
 PRD_LEVEL_SUB_GROUP: Final[int] = 2
 PRD_LEVEL_ITEM: Final[int] = 3
@@ -619,7 +493,6 @@ PRD_LEVEL_CHOICES: Final[tuple[tuple[int, str], ...]] = (
     (PRD_LEVEL_ITEM, "Item"),
 )
 
-# Segment widths, in the order the code is written.
 PRD_SEGMENT_WIDTHS: Final[dict[int, int]] = {
     PRD_LEVEL_GROUP: 2,
     PRD_LEVEL_SUB_GROUP: 2,
@@ -644,18 +517,12 @@ PRD_SPECIFICATION_CHOICES: Final[StatusChoices] = (
     (PRD_SPEC_WAGE_ITEM, "Wage Item"),
 )
 
-# What each specification is allowed to do. Held as data rather than as
-# scattered ifs, because purchase, production and packing screens all ask the
-# same four questions of a product and must all get the same answer.
-#   (can_buy, can_produce, can_sell, keeps_stock)
 PRD_SPEC_RULES: Final[dict[str, dict[str, bool]]] = {
     PRD_SPEC_RAW_ITEM: {"can_buy": True, "can_produce": False, "can_sell": True, "keeps_stock": True},
     PRD_SPEC_RAW_PACKING: {"can_buy": True, "can_produce": False, "can_sell": False, "keeps_stock": True},
-    # Never bought: a bag of atta exists because the mill made it.
     PRD_SPEC_FINISH_ITEM: {"can_buy": False, "can_produce": True, "can_sell": True, "keeps_stock": True},
     PRD_SPEC_FINISH_PACKING: {"can_buy": True, "can_produce": False, "can_sell": False, "keeps_stock": True},
     PRD_SPEC_BYPRODUCT: {"can_buy": False, "can_produce": True, "can_sell": True, "keeps_stock": True},
-    # Bought or sold, but nothing to count: no ledger row is ever written.
     PRD_SPEC_SERVICE_ITEM: {"can_buy": True, "can_produce": False, "can_sell": True, "keeps_stock": False},
     PRD_SPEC_WAGE_ITEM: {"can_buy": False, "can_produce": False, "can_sell": False, "keeps_stock": False},
 }
@@ -669,14 +536,11 @@ PRD_STOCKED_SPECS: Final[tuple[str, ...]] = tuple(
 PRD_SELLABLE_SPECS: Final[tuple[str, ...]] = tuple(
     spec for spec, rules in PRD_SPEC_RULES.items() if rules["can_sell"]
 )
-# What comes off the grinding floor and therefore needs a bag chosen for it.
 PRD_PACKABLE_SPECS: Final[tuple[str, ...]] = (PRD_SPEC_FINISH_ITEM, PRD_SPEC_BYPRODUCT)
 
 PRD_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_ACTIVE, "Active"),
-    # Off for now; the code stays reserved and the history stays readable.
     (STATUS_INACTIVE, "Inactive"),
-    # Retired for good. Never reopened, never reused for another product.
     (STATUS_CLOSED, "Closed"),
 )
 
@@ -690,9 +554,6 @@ PRD_UNIT_CHOICES: Final[StatusChoices] = (
     (PRD_UNIT_MOUND, "Mound"),
 )
 
-# Kilograms in one unit, where the unit is fixed by definition. A piece has no
-# fixed weight -- a 10 kg bag and a 50 kg bag are both pieces -- so the product
-# carries its own unit_weight for those.
 PRD_UNIT_BASE_WEIGHT: Final[dict[str, str]] = {
     PRD_UNIT_KG: "1",
     PRD_UNIT_MOUND: "40",
@@ -721,9 +582,6 @@ PRD_LEDGER_SOURCE_CHOICES: Final[StatusChoices] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Godowns
-# ---------------------------------------------------------------------------
 GODOWN_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_ACTIVE, "Active"),
     (STATUS_INACTIVE, "Inactive"),
@@ -740,15 +598,7 @@ GODOWN_TYPE_CHOICES: Final[StatusChoices] = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Production: grinding and conversion
-# ---------------------------------------------------------------------------
-# The mill's own document prefixes. Grinding is "wheat grinding", which is what
-# the floor already calls the voucher, so WG is what they will search for.
 PRODUCTION_GRINDING_PREFIX: Final = "WG"
 PRODUCTION_CONVERSION_PREFIX: Final = "PC"
 
-# Loose output is packed in nothing, but a line still points at a packing row
-# rather than at null, so grinding has one code path instead of two. This is
-# the name that row carries in the product master.
 PRODUCTION_OPEN_STOCK_PACK_NAME: Final = "Open Stock without Bardana"

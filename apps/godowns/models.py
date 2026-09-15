@@ -37,7 +37,6 @@ class Godown(BaseModel):
             ),
         ]
         indexes = [
-            # Every picker on every document reads exactly this.
             models.Index(fields=["status", "code"], name="godown_status_code_idx"),
         ]
 

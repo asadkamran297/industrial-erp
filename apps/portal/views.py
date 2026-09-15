@@ -61,7 +61,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # ── Headline figures, straight from the books ───────────────────
         statement = income_statement()
         balances = account_balances()
         cash_on_hand = sum(
@@ -83,7 +82,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
              "note": "Available balance"},
         ]
 
-        # ── Sales vs Purchases, month by month ──────────────────────────
         months = _recent_months(TREND_MONTHS)
         sales_by_month = {_month_key(m): ZERO for m in months}
         purchases_by_month = dict(sales_by_month)
@@ -97,9 +95,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             if key in sales_by_month:
                 sales_by_month[key] += row["total"] or ZERO
 
-        # Read off the invoice, which is what a purchase now is. A reversed one
-        # is left out: the chart shows what was bought, and a withdrawn invoice
-        # is a purchase that in the end was not.
         for row in (
             PurchaseInvoice.objects
             .filter(invoice_date__gte=months[0], status=STATUS_POSTED)
@@ -109,9 +104,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             if key in purchases_by_month:
                 purchases_by_month[key] += row["total_amount"] or ZERO
 
-        # Drop the empty lead-in. A young ledger otherwise renders as ten flat
-        # months and one spike, which reads as a broken chart rather than a
-        # short history. At least six months are always kept for context.
         first = next(
             (i for i, m in enumerate(months)
              if sales_by_month[_month_key(m)] or purchases_by_month[_month_key(m)]),
@@ -124,7 +116,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             "sales": [float(sales_by_month[_month_key(m)]) for m in months],
             "purchases": [float(purchases_by_month[_month_key(m)]) for m in months],
         }
-        # Same numbers as rows, for the table view under the chart.
         context["trend_rows"] = [
             {
                 "label": m.strftime("%b %Y"),
@@ -134,9 +125,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             for m in months
         ]
 
-        # ── Ranked detail ───────────────────────────────────────────────
-        # Bars are drawn relative to the largest row, so the ranking reads at
-        # a glance without an axis.
         context["top_products"] = _with_share(
             POSDetail.objects.filter(pos_master__status=STATUS_POSTED)
             .values("item_name")
@@ -150,7 +138,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             .order_by("-amount")[:6]
         )
 
-        # ── Latest activity ─────────────────────────────────────────────
         context["recent_sales"] = (
             POSMaster.objects.filter(status=STATUS_POSTED)
             .select_related("customer")
@@ -158,7 +145,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         )
         context["recent_vouchers"] = AccountVoucher.objects.order_by("-voucher_date", "-id")[:5]
 
-        # ── Small operational counts ────────────────────────────────────
         context["secondary"] = [
             {"label": "Active Employees", "value": Employee.objects.filter(status="active").count()},
             {"label": "Payroll Net", "value": Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO,
@@ -167,8 +153,6 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
             {"label": "Sales Recorded", "value": POSMaster.objects.filter(status=STATUS_POSTED).count()},
         ]
 
-        # The dashboard says when the books it reads are unsound rather than
-        # presenting figures that quietly exclude bad entries.
         context["integrity"] = ledger_integrity()
         context["breadcrumbs"] = [("Dashboard", "")]
         return context

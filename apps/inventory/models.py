@@ -56,8 +56,6 @@ class InventoryClass(BaseModel):
     class Meta:
         db_table = "inv_config_classess"
         ordering = ["title"]
-        # Called a category everywhere it is shown; the table name stays as it
-        # was so existing data and migrations are left alone.
         verbose_name = "item category"
         verbose_name_plural = "item categories"
 
@@ -92,10 +90,7 @@ class UOMConversion(BaseModel):
     def clean(self):
         if self.uom_from_id and self.uom_from_id == self.uom_to_id:
             raise ValidationError({"uom_to": "From UOM and To UOM cannot be same."})
-        # One rate per pair. A second row for the same two units would leave
-        # every reader picking between two answers to the same question.
         if self.uom_from_id and self.uom_to_id:
-            # Soft-deleted rows do not count: the pair is free again.
             clash = UOMConversion.objects.filter(uom_from_id=self.uom_from_id, uom_to_id=self.uom_to_id)
             if self.pk:
                 clash = clash.exclude(pk=self.pk)
@@ -108,7 +103,6 @@ class UOMConversion(BaseModel):
 
 class Supplier(BaseModel):
     name = models.CharField(max_length=180)
-    # Assigned by save(); nobody types a supplier code.
     code = models.CharField(max_length=40, unique=True, blank=True)
     web_url = models.URLField(blank=True)
     email = models.EmailField(blank=True)
@@ -124,15 +118,9 @@ class Supplier(BaseModel):
     remarks = models.TextField(blank=True)
     supplier_current_status = models.CharField(max_length=60, blank=True)
 
-    # ── Credit & balance ────────────────────────────────────────────────
-    # What was already owed when the supplier was put on the system, and the
-    # date that figure was true. It is mirrored onto the supplier's payable
-    # account, so the ledger opens from the same number the master carries.
     opening_balance = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     opening_balance_date = models.DateField(null=True, blank=True)
-    # Blank means no limit: a supplier who extends credit without a ceiling.
     credit_limit = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
-    # Days allowed before a bill falls due, counted from the invoice date.
     credit_period_days = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
@@ -170,8 +158,6 @@ class Supplier(BaseModel):
         self.code = (self.code or "").strip().upper()
         if not self.code:
             self.code = self.next_code()
-            # A second save racing this one would take the same number, so the
-            # collision is walked past rather than raised at the user.
             while Supplier.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = self.next_code()
         self.full_clean()
@@ -184,27 +170,16 @@ class Supplier(BaseModel):
 class InventoryItem(BaseModel):
     item_name = models.CharField(max_length=180)
     code = models.CharField(max_length=60, unique=True, blank=True)
-    # Optional: a service, or an item filed before anyone settles how it is
-    # measured, carries no unit. Quantities are still held in the base unit
-    # wherever one is set.
     uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, related_name="items", db_column="inv_config_uom_id")
-    # Optional second unit the item is also handled in — bought by the bag,
-    # issued by the kilo. Quantities are still held in the base unit.
     secondary_uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, related_name="secondary_items", db_column="inv_config_secondary_uom_id")
-    # Optional: an item can be filed before anyone decides which category it
-    # belongs to. Uncategorised items fall back to the generic code prefix.
     item_class = models.ForeignKey(InventoryClass, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_class_id")
     conversion = models.ForeignKey(UOMConversion, null=True, blank=True, on_delete=models.SET_NULL, db_column="conversion_id")
     item_bar_code = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
     imported = models.CharField(max_length=1, choices=INV_IMPORTED_CHOICES, default="L")
     inventory = models.CharField(max_length=1, choices=INV_ITEM_TYPE_CHOICES, default="I")
-    # A service is sold but never stocked, so it carries no quantity and no
-    # opening balance; everything else on the record behaves the same.
     item_kind = models.CharField(max_length=1, choices=INV_ITEM_KIND_CHOICES, default=INVENTORY_KIND_PRODUCT)
     price = models.DecimalField("Sale Price", max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # What the item is expected to cost. A goods receipt still sets the real
-    # landed cost on the stock record; this is the figure quoted before one.
     purchase_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
     class Meta:
@@ -241,8 +216,6 @@ class InventoryItem(BaseModel):
         self.code = (self.code or "").strip().upper()
         if not self.code:
             self.code = self.next_code(self.code_prefix)
-            # A second save racing this one would take the same number, so the
-            # collision is walked past rather than raised at the user.
             while InventoryItem.all_objects.filter(code=self.code).exclude(pk=self.pk).exists():
                 self.code = self.next_code(self.code_prefix)
         self.full_clean()
@@ -268,10 +241,6 @@ class InventoryItem(BaseModel):
 
 class PurchaseOrder(BaseModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
-    # Counted per kind, not across both. Orders and bills are two different
-    # documents with two different numbers on them; sharing one counter left
-    # gaps in each series, and a gap in a numbered series is the first thing an
-    # auditor asks about.
     seq_num = models.PositiveIntegerField(blank=True, null=True)
     purchase_num = models.CharField(max_length=40, unique=True, blank=True)
     descr = models.TextField(blank=True)
@@ -279,47 +248,23 @@ class PurchaseOrder(BaseModel):
     quot_num = models.CharField(max_length=80, blank=True)
     quot_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=INV_PURCHASE_ORDER_STATUS_CHOICES, default=STATUS_DRAFT)
-    # When the goods were promised. Nothing enforces it; it is what makes a
-    # delivery late, which is the only way an order that is quietly not
-    # arriving ever gets noticed.
     expected_date = models.DateField(null=True, blank=True)
-    # Where the goods are expected. Recorded on the document; stock itself is
-    # still one pool per item, so this says where they should arrive rather
-    # than holding a per-godown balance.
     godown = models.ForeignKey("godowns.Godown", null=True, blank=True, related_name="purchase_orders",
                                on_delete=models.PROTECT, db_column="godown_id")
-    # Who arranged the deal. An account rather than a name, because brokerage
-    # is owed to them and has to be able to settle on its own.
     broker = models.ForeignKey("finance.ChartOfAccount", null=True, blank=True, related_name="broker_purchase_orders",
                                on_delete=models.PROTECT, db_column="broker_account_id")
-    # Whatever the site added to the purchase order form for itself, keyed by
-    # the field's code. Held as JSON rather than as columns because the set is
-    # configured by the site and changes without a migration; nothing in the
-    # books reads it, so an order still posts the same with or without it.
     extra_data = models.JSONField(default=dict, blank=True)
 
-    # Who let the money out of the door, and when. An approval limit is only a
-    # control if the name of whoever cleared it is kept beside the order.
     approved_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                     related_name="approved_purchase_orders", db_column="approved_by_id")
     approved_at = models.DateTimeField(null=True, blank=True)
-    # What the order was worth when it was raised, so an approval limit is
-    # measured against the figure that was actually approved rather than
-    # against whatever the lines add up to today.
     approved_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
-    # How an order ended, when it did not end by everything arriving. The
-    # reason is kept because "cancelled" on its own tells the next reader
-    # nothing, and because releasing a commitment is a decision someone made.
     close_reason = models.CharField(max_length=40, blank=True)
-    # What the reason list could not say. A picked reason groups the decision;
-    # this is where the particular one is written down.
     close_remarks = models.TextField(blank=True)
     closed_on = models.DateField(null=True, blank=True)
     closed_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                  related_name="closed_purchase_orders", db_column="closed_by_id")
-    # Quantity and value given up when the balance was closed short. Held on
-    # the order so the register can total it without walking every line.
     short_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     short_value = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
@@ -329,11 +274,8 @@ class PurchaseOrder(BaseModel):
         indexes = [
             models.Index(fields=["purchase_num"]),
             models.Index(fields=["purchase_date"]),
-            # Order lists filter by status and page newest first.
             models.Index(fields=["status", "-purchase_date"]),
-            # Supplier history and the pending-receipt lookup.
             models.Index(fields=["supplier", "-purchase_date"]),
-            # What is on order for one godown, newest first.
             models.Index(fields=["godown", "-purchase_date"], name="inv_po_godown_date_idx"),
         ]
 
@@ -382,8 +324,6 @@ class PurchaseOrder(BaseModel):
                 .values_list("seq_num", flat=True).first() or 0
             )
             self.seq_num = last + 1
-        # One kind of purchase order now: an invoice is its own document with
-        # its own counter, so nothing here has to branch on which it is.
         self.purchase_num = f"PO-{self.seq_num}"
         self.full_clean()
         super().save(*args, **kwargs)
@@ -398,8 +338,6 @@ class PurchaseOrderItem(BaseModel):
     purchase_num = models.CharField(max_length=40)
     purchase_date = models.DateField()
     status = models.CharField(max_length=20, choices=YES_NO_CHOICES, default=YES)
-    # The same two kinds the invoice carries: stores items, and the products
-    # the mill buys by weight. An order commits to either and moves neither.
     inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
                                        on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="purchase_order_lines",
@@ -407,7 +345,6 @@ class PurchaseOrderItem(BaseModel):
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
     unit_rate = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    # Copied off the item, which is allowed to carry none.
     uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
     last_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     curr_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
@@ -417,15 +354,9 @@ class PurchaseOrderItem(BaseModel):
     extra_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     retail_price = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_receive_qty = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    # How much of this line an invoice has been entered against. The invoice is
-    # the only thing that books goods in, so this is what says whether the line
-    # is still owed.
     qty_invoiced = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
     descr = models.CharField(max_length=255)
     remarks = models.CharField(max_length=255, blank=True, default="")
-    # Set when somebody decides the balance on this line is never coming. It
-    # stops the line counting towards what is still on order without pretending
-    # the quantity arrived, which is what writing the receipt up would do.
     closed = models.BooleanField(default=False)
 
     class Meta:
@@ -442,7 +373,6 @@ class PurchaseOrderItem(BaseModel):
             ),
         ]
         indexes = [
-            # What is on order for one product, latest first.
             models.Index(fields=["product", "-id"], name="inv_po_line_product_idx"),
         ]
 
@@ -544,26 +474,15 @@ class PurchaseInvoice(BaseModel):
     """
 
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
-    # Nullable on purpose: this is what "the order is optional" means in the
-    # schema rather than in a comment.
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, related_name="invoices",
                                        on_delete=models.PROTECT, db_column="inv_purchase_order_id")
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     invoice_num = models.CharField(max_length=40, unique=True, blank=True)
-    # The supplier's own number. Optional -- a delivery often arrives before the
-    # paperwork does, and an invoice that cannot be entered until it turns up is
-    # an invoice entered late or not at all. Where it is given it is unique per
-    # supplier, because it is the only thing that catches the same invoice being
-    # entered twice, which is the most common way a supplier is paid twice.
     supplier_invoice_num = models.CharField(max_length=80, blank=True)
     supplier_invoice_date = models.DateField(null=True, blank=True)
     invoice_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(null=True, blank=True)
 
-    # Where the goods were received, which truck brought them, and who
-    # arranged the deal. The vehicle is free text on purpose: it is copied off
-    # a number plate at a gate, at night, and a picker of known vehicles would
-    # simply stop the entry the first time an unknown truck turned up.
     godown = models.ForeignKey("godowns.Godown", null=True, blank=True, related_name="purchase_invoices",
                                on_delete=models.PROTECT, db_column="godown_id")
     vehicle_no = models.CharField(max_length=30, blank=True)
@@ -573,41 +492,22 @@ class PurchaseInvoice(BaseModel):
     goods_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     freight_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
-    # Who actually paid the truck. False is the stores case the module was
-    # built on: the supplier arranged carriage, charged it, and is owed it, so
-    # it is added to the bill. True is the mill's wheat slip: the mill paid the
-    # transporter cash at the gate on the supplier's behalf, so it comes off
-    # what the supplier is owed instead of being added to it.
     freight_paid_by_mill = models.BooleanField(default=False)
-    # Whose brokerage it is. False is the stores case: the mill engaged the
-    # broker, so the brokerage is the mill's own cost of buying. True is the
-    # wheat slip: the seller engaged him, the mill remits it on the seller's
-    # behalf, and it comes off what the seller is credited with.
     brokerage_borne_by_supplier = models.BooleanField(default=False)
     tax_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
-    # -- Charges quoted against weight --------------------------------------
-    # Both are rates the trade quotes per weight rather than per rupee, and both
-    # are worked out off the credit weight -- the weight actually bought. The
-    # rate is kept beside the amount so a printed invoice can be checked back
-    # against what was agreed, rather than only showing the answer.
     brokerage_rate_per_100kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     brokerage_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     withholding_rate_per_40kg = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     withholding_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
     status = models.CharField(max_length=20, choices=INV_PURCHASE_INVOICE_STATUS_CHOICES, default=STATUS_POSTED)
-    # When it hit the books, and which voucher carries it. Kept on the invoice
-    # so the document reads on its own, without a join to the ledger to answer
-    # the first question anybody asks of it.
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                   related_name="posted_purchase_invoices", db_column="posted_by_id")
     journal_ref = models.CharField(max_length=80, blank=True)
-    # The PB- number this purchase carried before it became one document.
-    # Read-only, and blank on everything entered since.
     legacy_bill_no = models.CharField(max_length=40, blank=True)
 
     reversal_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT,
@@ -615,21 +515,12 @@ class PurchaseInvoice(BaseModel):
     reverse_reason = models.CharField(max_length=40, blank=True)
     reversed_on = models.DateField(null=True, blank=True)
     remarks = models.TextField(blank=True)
-    # Whatever the site added to the invoice form for itself, keyed by the
-    # field's code. Held as JSON rather than as columns because the set is
-    # configured by the site and changes without a migration; nothing in the
-    # books reads it, so an invoice posts the same with or without it.
     extra_data = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = "inv_purchase_invoices"
         ordering = ["-invoice_date", "-id"]
-        # One invoice number per supplier. The database says it as well as the
-        # service does, so a double submit cannot slip a duplicate through.
         constraints = [
-            # Blanks are excluded: two invoices whose numbers are both unknown
-            # are not two entries of the same invoice, and a constraint that
-            # said so would stop the second one being entered at all.
             models.UniqueConstraint(
                 fields=["supplier", "supplier_invoice_num"],
                 condition=Q(status=STATUS_POSTED) & ~Q(supplier_invoice_num=""),
@@ -639,14 +530,9 @@ class PurchaseInvoice(BaseModel):
         indexes = [
             models.Index(fields=["invoice_num"]),
             models.Index(fields=["invoice_date"]),
-            # The board filters by state and pages newest first.
             models.Index(fields=["status", "-invoice_date"]),
-            # Supplier history, and what a supplier is owed.
             models.Index(fields=["supplier", "-invoice_date"]),
-            # Walking back from an order to what was invoiced against it.
             models.Index(fields=["purchase_order"]),
-            # What came into one godown, newest first: the filter the list screen
-            # offers and the one a godown incharge reads every morning.
             models.Index(fields=["godown", "-invoice_date"], name="inv_pi_godown_date_idx"),
         ]
 
@@ -662,8 +548,6 @@ class PurchaseInvoice(BaseModel):
         for the same reason: the mill has already parted with the cash.
         """
         payable = (self.total_amount or Decimal("0.00")) - (self.withholding_amount or Decimal("0.00"))
-        # Money the mill handed over for the supplier -- to the truck, to the
-        # broker -- is recovered here rather than being chased separately.
         if self.freight_paid_by_mill:
             payable -= (self.freight_amount or Decimal("0.00"))
         if self.brokerage_borne_by_supplier:
@@ -713,12 +597,6 @@ class PurchaseInvoiceLine(BaseModel):
     purchase_order_item = models.ForeignKey(PurchaseOrderItem, null=True, blank=True,
                                             related_name="invoice_lines", on_delete=models.PROTECT,
                                             db_column="inv_purchase_order_item_id")
-    # A line names one or the other, never both and never neither. The mill
-    # buys two different kinds of thing through the same gate: stores items,
-    # which live in the inventory ledger, and wheat and bardana, which live in
-    # the product ledger that grinding reads. Keeping them apart in the schema
-    # is what stops the two stock worlds drifting into each other; keeping them
-    # on one document is what stops the clerk entering the same truck twice.
     inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
                                        on_delete=models.PROTECT, db_column="inv_inventory_code_id")
     product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="purchase_lines",
@@ -733,14 +611,6 @@ class PurchaseInvoiceLine(BaseModel):
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
-    # -- Wheat weights ------------------------------------------------------
-    # Filled only on a wheat line, and columns rather than JSON because they
-    # decide both the money and the quantity that reaches the ledger: what the
-    # party weighed, what the mill weighed, which of the two was accepted, and
-    # then what comes off it before it is paid for.
-    # Both weighments are kept as they were taken -- loaded and empty -- not
-    # only as the net. The gate slip is the document the supplier argues from,
-    # and a net with no tare behind it cannot be checked against his own ticket.
     party_load_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     party_tare_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     mill_load_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
@@ -752,20 +622,10 @@ class PurchaseInvoiceLine(BaseModel):
     khoot = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     moisture = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
     sack_weight_deduction = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
-    # The paid weight: selected, less every deduction. Stored rather than
-    # derived on read, because it is the quantity that went into the ledger and
-    # it must still read the same if the deduction rules ever change.
     credit_weight = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
-    # Wheat is priced by the mound of 40 kg, not by the kilo.
     rate_per_mund = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
 
-    # -- Bardana ------------------------------------------------------------
-    # Sacks that came in with the load. Whose they are decides whether they are
-    # bought: the mill keeps custody of all of them and counts all of them, but
-    # only its own are paid for. Blank on every line that is not sacks.
     bardana_ownership = models.CharField(max_length=20, choices=INV_BARDANA_OWNERSHIP_CHOICES, blank=True)
-    # What one empty sack weighs, so the sack allowance on the wheat line can be
-    # checked against the sacks that actually came with it.
     bag_weight = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
 
     class Meta:
@@ -773,9 +633,6 @@ class PurchaseInvoiceLine(BaseModel):
         ordering = ["invoice", "seq_num"]
         unique_together = (("invoice", "seq_num"),)
         constraints = [
-            # Exactly one side. The database says it as well as the service, so
-            # a line that belongs to neither stock world cannot be written at
-            # all -- it would post nowhere and be found months later.
             models.CheckConstraint(
                 check=(
                     (Q(inventory_item__isnull=False) & Q(product__isnull=True))
@@ -785,9 +642,7 @@ class PurchaseInvoiceLine(BaseModel):
             ),
         ]
         indexes = [
-            # An item's purchase history, read straight off the lines.
             models.Index(fields=["inventory_item", "-id"]),
-            # The same question asked of a product: what wheat came in, latest first.
             models.Index(fields=["product", "-id"], name="inv_pi_line_product_idx"),
         ]
 
@@ -829,14 +684,9 @@ class PurchaseInvoiceLine(BaseModel):
             self.seq_num = last + 1
         if not self.descr:
             self.descr = self.product.name if self.is_product_line else self.inventory_item.item_name
-        # A wheat line is priced off the weight actually paid for, by the mound;
-        # everything else is quantity times rate. Both end in the same amount
-        # column, so an invoice adds up one way whatever it is buying.
         if self.rate_per_mund is not None and self.selected_weight is not None:
             self.credit_weight = self.computed_credit_weight()
             self.quantity = Decimal(self.credit_weight)
-            # Kept in step so any reader of the line, print included, sees a
-            # per-kilo rate that multiplies out to the amount beside it.
             self.rate = (Decimal(self.rate_per_mund) / self.MUND_KG).quantize(TWO_DP)
             self.amount = (
                 Decimal(self.credit_weight) / self.MUND_KG * Decimal(self.rate_per_mund)
@@ -947,9 +797,7 @@ class ItemLedger(BaseModel):
             models.Index(fields=["transaction_id"]),
             models.Index(fields=["transaction_no"]),
             models.Index(fields=["transaction_date"]),
-            # Stock card: one item over a date range.
             models.Index(fields=["inventory_item", "-transaction_date"]),
-            # Tracing entries back to the document that produced them.
             models.Index(fields=["ref_table", "ref_id"]),
         ]
 
@@ -1005,7 +853,6 @@ class CustomerLedger(BaseModel):
         indexes = [
             models.Index(fields=["transaction_no"]),
             models.Index(fields=["transaction_date"]),
-            # Customer statement over a date range.
             models.Index(fields=["customer", "-transaction_date"]),
         ]
 
@@ -1031,8 +878,6 @@ class SalesOrder(BaseModel):
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     order_num = models.CharField(max_length=40, unique=True, blank=True)
     order_date = models.DateField(default=timezone.localdate)
-    # When the customer was promised it. Nothing enforces it; it is what makes
-    # an order late, which is the only way one quietly going nowhere is noticed.
     expected_date = models.DateField(null=True, blank=True)
     customer_ref = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=20, choices=INV_SALES_ORDER_STATUS_CHOICES, default=STATUS_DRAFT)
@@ -1050,10 +895,7 @@ class SalesOrder(BaseModel):
         indexes = [
             models.Index(fields=["order_num"]),
             models.Index(fields=["order_date"]),
-            # The board filters by state and pages newest first.
             models.Index(fields=["status", "-order_date"]),
-            # A customer's order history, and the open-order lookup the sales
-            # invoice screen makes the moment a customer is picked.
             models.Index(fields=["customer", "-order_date"]),
         ]
 
@@ -1121,8 +963,6 @@ class SalesOrderItem(BaseModel):
     tax_perc = models.DecimalField(max_digits=9, decimal_places=2, default=Decimal("0.00"))
     discount_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     qty_invoiced = models.DecimalField(max_digits=18, decimal_places=4, default=Decimal("0.0000"))
-    # Set when somebody decides the balance on this line is never going out. It
-    # stops the line counting as still owed without pretending it shipped.
     closed = models.BooleanField(default=False)
 
     class Meta:
@@ -1176,12 +1016,8 @@ class POSMaster(BaseModel):
     total_paid = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     balance = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, db_column="inv_customer_id")
-    # Nullable on purpose: the order is optional, exactly as on the purchase
-    # side. A sale with no order behind it is a complete sale, not an exception.
     sales_order = models.ForeignKey(SalesOrder, null=True, blank=True, related_name="invoices",
                                     on_delete=models.PROTECT, db_column="inv_sales_order_id")
-    # When it hit the books and which voucher carries it, so the invoice reads
-    # on its own without a join to the ledger.
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                   related_name="posted_sales_invoices", db_column="posted_by_id")
@@ -1342,9 +1178,6 @@ class PurchaseReturnMaster(BaseModel):
     transaction_id = models.CharField(max_length=60, unique=True)
     return_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     return_num = models.CharField(max_length=40, unique=True, blank=True)
-    # Goods go back against the document that brought them in, which is the
-    # invoice. The order is carried alongside for reporting and is null for a
-    # spot purchase, which had no order and used to be impossible to return.
     purchase_invoice = models.ForeignKey("PurchaseInvoice", related_name="returns", on_delete=models.PROTECT,
                                          db_column="inv_purchase_invoice_id")
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.PROTECT,

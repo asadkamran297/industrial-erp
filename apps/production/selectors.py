@@ -17,9 +17,6 @@ def _sum(expression):
     return Coalesce(Sum(expression), Value(ZERO), output_field=WEIGHT_FIELD)
 
 
-# ---------------------------------------------------------------------------
-# Grinding
-# ---------------------------------------------------------------------------
 def grinding_vouchers() -> QuerySet[GrindingVoucher]:
     return GrindingVoucher.objects.select_related("wheat_item", "bag_item", "godown", "prepared_by")
 
@@ -56,9 +53,6 @@ def conversion_detail(pk) -> ProductConversion | None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Pickers for the entry screen
-# ---------------------------------------------------------------------------
 def wheat_options():
     return product_selectors.wheat_items().order_by("complete_code")
 
@@ -122,13 +116,7 @@ def pack_stock_payload(on_date=None, godown=None) -> dict[str, str]:
     return {str(pk): str(value) for pk, value in stock.items()}
 
 
-# ---------------------------------------------------------------------------
-# Reports
-# ---------------------------------------------------------------------------
 def daily_grinding(date_from=None, date_to=None, wheat_item=None, godown=None):
-    # Not the bag-annotated queryset: its join to the output lines repeats the
-    # header once per line, and anything summed over it counts the wheat as
-    # many times as the run had products.
     queryset = grinding_vouchers()
     if date_from:
         queryset = queryset.filter(date__gte=date_from)
@@ -224,13 +212,9 @@ def production_summary(date_from=None, date_to=None, godown=None):
             "product__complete_code",
             category=F("product__parent__name"),
         )
-        # The aliases cannot be called "quantity" and "unit_weight": an alias
-        # shadows the column of the same name, and the weight expression would
-        # then be multiplying its own aggregate.
+        # Line join multiplies header columns; aggregate headers separately.
         .annotate(
             total_qty=_sum("quantity"),
-            # Weight is multiplied per row and then summed; the snapshot on the
-            # line is what makes this safe to read months later.
             total_weight=Coalesce(
                 Sum(F("quantity") * F("unit_weight"), output_field=WEIGHT_FIELD),
                 Value(ZERO),

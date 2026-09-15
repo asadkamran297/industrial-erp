@@ -29,20 +29,16 @@ from ..models import GrindingVoucher
 VOUCHER_NO = "WG-0062"
 VOUCHER_DATE = date(2026, 8, 31)
 
-# The sample run's products that the base product seed does not carry.
-# (code, name, specification, unit, unit weight, bag code)
 EXTRA_ITEMS = (
     ("02-01-003", "Atta Zafaran 15 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 15, "03-02-003"),
     ("02-01-004", "Atta Diamond 20 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 20, "03-02-004"),
     ("02-04-001", "Fine Diamond 80 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 80, "03-02-008"),
 )
 
-# (product code, quantity, pack code)
 OUTPUT_LINES = (
     ("02-01-003", Decimal("1752"), "03-02-003"),
     ("02-01-004", Decimal("320"), "03-02-004"),
     ("02-03-012", Decimal("1218"), "03-02-007"),
-    # Loose maida: weighed out in kg, into no sack at all.
     ("02-03-013", Decimal("28200"), None),
     ("02-04-001", Decimal("244"), "03-02-008"),
     ("02-06-002", Decimal("104"), "03-02-011"),
@@ -102,8 +98,6 @@ def _open_stock(product: ProductNode, quantity: Decimal, godown: Godown) -> int:
         quantity=quantity,
         remarks="Seeded opening for the sample grinding run",
         godown=godown,
-        # Wheat received in this sack, so grinding defaults to it rather than
-        # re-deriving one from the item master.
         bardana_item=_node(BAG_CODE) if product.complete_code == WHEAT_CODE else None,
     )
     return 1
@@ -115,11 +109,8 @@ def seed_grinding() -> int:
     godown = Godown.objects.filter(code="MG").first() or Godown.objects.first()
     wheat, bag = _node(WHEAT_CODE), _node(BAG_CODE)
     if godown is None or wheat is None or bag is None:
-        # Nothing to grind and nowhere to grind it: the product or godown seed
-        # has not run yet.
         return created
 
-    # The standard the sample run is measured against.
     if not wheat.standard_yield_percent:
         wheat.standard_yield_percent = Decimal("98.00")
         wheat.save(update_fields=["standard_yield_percent", "updated_at"])

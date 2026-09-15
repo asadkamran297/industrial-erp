@@ -262,7 +262,6 @@
 <section class="mt-2">
   <form method="post" id="order-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
-    {# ── Header: who it is for on the left, which bill on the right ───────── #}
     <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-3 pt-4">
       <div class="pur-head order-1 ml-auto flex flex-wrap items-end gap-4 xl:flex-nowrap">
         <div class="w-36">
@@ -273,15 +272,12 @@
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="order_date">Order Date</label>
           <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full" value="{% if posted.order_date %}{{ posted.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}">
         </div>
-        {# When the goods were promised. What makes a delivery late, and the #}
-        {# only way an order quietly not arriving ever gets noticed. #}
         {% if layout.shown.expected_date %}
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="expected_date">Expected</label>
           <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full" value="{{ posted.expected_date|default:'' }}">
         </div>
         {% endif %}
-        {# Where the goods are expected, and who arranged the deal. #}
         {% if layout.shown.godown %}
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="godown">Godown</label>
@@ -304,7 +300,6 @@
           </select>
         </div>
         {% endif %}
-        {# What the supplier quoted, so the order can be checked back against it. #}
         {% if layout.shown.quot_num %}
         <div class="w-40">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="quot_num">Quotation No</label>
@@ -318,8 +313,6 @@
         </div>
         {% endif %}
 
-        {# Whatever this site added to its own form. They sit with the header #}
-        {# boxes because that is what they describe: the order, not a line. #}
         {% for field in layout.extra %}
         <div class="w-44">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="extra__{{ field.code }}">
@@ -339,10 +332,6 @@
         {% endfor %}
       </div>
 
-      {# The label rides the border and the + rides inside, so picking a supplier #}
-      {# and adding one that is not on file read as the one control. #}
-      {# Its own row under the order boxes. The wrapper is what claims the #}
-      {# full width -- a capped box would fit beside them and never wrap.  #}
       <div class="order-2 w-full basis-full">
       <div class="w-full max-w-md">
         <div class="notch-field notch-field--action notch-field--tint">
@@ -361,7 +350,6 @@
 
     </div>
 
-    {# ── Lines ────────────────────────────────────────────────────────────── #}
     <div class="border-y border-slate-200 dark:border-slate-800">
       <div class="pur-grid pur-head{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
         <div>#</div>
@@ -385,10 +373,6 @@
       </div>
     </div>
 
-    {# ── Wheat and bardana ordered ahead ───────────────────────────────── #}
-    {# An order commits to these the same way it commits to anything else:  #}
-    {# a quantity and a rate. The weighbridge, the deductions and whose the #}
-    {# sacks are belong to the invoice, which is where the goods arrive.    #}
     {% if wheat_products or bardana_products %}
     <div class="border-t border-slate-200 px-6 py-5 dark:border-slate-800" id="order-products">
       <div class="mb-3 flex items-center justify-between">
@@ -452,7 +436,6 @@
     </script>
     {% endif %}
 
-    {# ── Money ────────────────────────────────────────────────────────────── #}
     <div class="grid gap-4 px-6 py-4 lg:grid-cols-3">
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
         {% if layout.shown.remarks %}
@@ -474,9 +457,6 @@
         </div>
         {% endif %}
         {% if layout.shown.tax_amount %}
-        {# Tax is agreed as a rate and posted as an amount. The percent box #}
-        {# works out the money off the sub total; the money box stays open  #}
-        {# for the odd figure that is not a clean rate.                     #}
         <div class="pur-total-row">
           <label class="pur-label" for="tax_percent">Tax</label>
           <div class="pur-tax">
@@ -499,22 +479,17 @@
       </div>
       </div>
 
-      {# What the order comes to, spelled out — the figure the operator checks against the paper. #}
       {% if layout.shown.amount_words %}
       {% include "inventory/_amount_panel.html" %}
       {% endif %}
     </div>
 
-    {# ── Footer ───────────────────────────────────────────────────────────── #}
-    {# The actions stay put while the lines grow: on a long order the page #}
-    {# scrolls, and Save must not scroll off the bottom with it.           #}
     <div class="pur-actions flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 dark:border-slate-800">
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">
         {% url 'inventory:purchase_order_board' as cancel_url %}
         {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
         {% include "components/ui/button.html" with label="Save & Print" icon="&#128438;" name="save_and_print" value="1" variant="secondary" only %}
-        {# For a run of orders: saves this one and hands back an empty form. #}
         {% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" variant="secondary" only %}
         {% include "components/ui/button.html" with label="Save Draft" variant="primary" extra="px-8" only %}
       </div>

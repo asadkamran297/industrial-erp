@@ -24,7 +24,6 @@ from apps.core.constants import GL_OPENING_EQUITY_PATH, STATUS_ACTIVE
 from apps.finance.models import AccountVoucher, AccountVoucherLine, ChartOfAccount
 from apps.finance.services import signed_to_dr_cr
 
-# Where the missing opening counterpart belongs.
 OWNER_CAPITAL_TITLE = "Owner's Capital"
 
 
@@ -39,7 +38,6 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         zero = Decimal("0.00")
 
-        # ── 1. vouchers posting to codes that are not in the chart ──────────
         known = {code for code in ChartOfAccount.objects.values_list("code", flat=True) if code}
         orphan_line_ids = set(
             AccountVoucherLine.objects.exclude(account_no__in=known).values_list("id", flat=True)
@@ -53,8 +51,6 @@ class Command(BaseCommand):
         removed = 0
         for voucher in vouchers.order_by("voucher_no"):
             if voucher.posted == "Y":
-                # A posted voucher is history; correcting it needs a reversing
-                # entry, not a deletion. Flag it rather than touch it.
                 self.stdout.write(self.style.WARNING(
                     f"  {voucher.voucher_no}: POSTED — left alone, reverse it manually"
                 ))
@@ -65,10 +61,7 @@ class Command(BaseCommand):
             )
             self.stdout.write(f"  {voucher.voucher_no:<14} {detail}")
             if not dry_run:
-                # Queryset updates, not model.soft_delete(): AccountVoucherLine
-                # .save() runs full_clean(), and these rows fail validation on
-                # the very field being cleaned up — so the model can refuse to
-                # let its own invalid data be removed.
+                # Queryset update: .save() would full_clean() the invalid rows.
                 stamp = timezone.now()
                 AccountVoucherLine.all_objects.filter(voucher=voucher).update(
                     is_active=False, deleted_at=stamp, updated_at=stamp
@@ -80,7 +73,6 @@ class Command(BaseCommand):
         if not removed:
             self.stdout.write("  none")
 
-        # ── 2. opening balances that do not balance ─────────────────────────
         self.stdout.write("")
         self.stdout.write(self.style.MIGRATE_HEADING("Opening balance counterpart"))
         debit = credit = zero
@@ -106,8 +98,6 @@ class Command(BaseCommand):
                     f"  no '{OWNER_CAPITAL_TITLE}' account found — create one and re-run"
                 ))
             else:
-                # Capital is credit-natured, so a positive balance is a credit:
-                # exactly what the surplus of opening debits needs.
                 new_balance = (capital.opening_balance or zero) + difference
                 self.stdout.write(
                     f"  {capital.code} {capital.title}: "

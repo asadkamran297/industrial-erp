@@ -5,7 +5,6 @@
     <h1 class="title-accent text-2xl font-bold">{{ list_title }}</h1>
   </div>
   <div class="flex flex-wrap items-center gap-3">
-    {# Its own form so searching keeps whatever the filter bar is set to. #}
     <form method="get" class="flex items-center gap-2">
       <input type="hidden" name="voucher_type" value="{{ selected_voucher_type }}">
       <input type="hidden" name="period" value="{{ selected_period }}">
@@ -13,20 +12,17 @@
       <input type="hidden" name="date_to" value="{{ period_end }}">
       <input type="hidden" name="money_mode" value="{{ selected_money_mode }}">
       <div class="search-field">
-        {# SVG, not the emoji: crisp at this size and painted in the brand colour. #}
         <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="9" cy="9" r="5.5"></circle><path d="M13.5 13.5 17 17"></path>
         </svg>
         <input type="text" name="q" id="q" value="{{ request.GET.q }}" placeholder="Search..."
                class="search-input {% if request.GET.q %}pl-9{% endif %}">
-        {# Only offered once there is something to clear. #}
         {% if request.GET.q %}
         <a href="?voucher_type={{ selected_voucher_type }}&amp;period={{ selected_period }}&amp;date_from={{ period_start }}&amp;date_to={{ period_end }}&amp;money_mode={{ selected_money_mode }}"
            title="Clear search"
            class="absolute left-2 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">&times;</a>
         {% endif %}
       </div>
-      {# Enter submits; no button needed. #}
     </form>
     {% if can_add and can_add_type %}
     {% url 'finance:account_voucher_create' as voucher_add_url %}
@@ -52,7 +48,6 @@
     <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="date_to">To</label>
     <input type="date" name="date_to" id="date_to" value="{{ period_end }}" class="form-input" onchange="this.form.submit()">
   </div>
-  {# The type is set by the sidebar, so it rides along instead of being re-picked. #}
   <input type="hidden" name="voucher_type" value="{{ selected_voucher_type }}">
   <div>
     <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="money_mode">Cash / Bank</label>
@@ -64,9 +59,7 @@
   </div>
   <input type="hidden" name="q" value="{{ request.GET.q }}">
   <div class="flex-1"></div>
-  {# Filters apply themselves, so only the output actions sit here. #}
   <div class="flex shrink-0 items-center gap-2">
-    {# Icon-only: the tooltip and aria-label carry the wording. #}
     <button type="button" class="toolbar-btn grid h-11 w-11 place-items-center !px-0" title="Print" aria-label="Print"
             onclick="printSection('voucher-table', '{{ list_title|escapejs }}')">
       <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -192,10 +192,7 @@
 <section class="mt-3">
   <form method="post" id="sale-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
-    {# ── Header: who it is for on the left, which bill on the right ───────── #}
     <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
-      {# The label rides the border and the + rides inside, so picking a customer #}
-      {# and adding one that is not on file read as the one control. #}
       <div class="w-full max-w-md">
         <div class="notch-field notch-field--action">
           <label class="notch-label" for="customer">Customer <span class="text-rose-500">*</span></label>
@@ -221,7 +218,6 @@
       </div>
     </div>
 
-    {# ── Lines ────────────────────────────────────────────────────────────── #}
     <div class="border-y border-slate-200 dark:border-slate-800">
       <div class="pur-grid pur-head">
         <div>#</div>
@@ -245,7 +241,6 @@
       </div>
     </div>
 
-    {# ── Money ────────────────────────────────────────────────────────────── #}
     <div class="grid gap-6 px-6 py-6 lg:grid-cols-3">
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
         <div class="sm:col-span-2">
@@ -282,11 +277,9 @@
       </div>
       </div>
 
-      {# What the sale comes to, spelled out — the figure the operator checks against the paper. #}
       {% include "inventory/_amount_panel.html" %}
     </div>
 
-    {# ── Footer ───────────────────────────────────────────────────────────── #}
     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">

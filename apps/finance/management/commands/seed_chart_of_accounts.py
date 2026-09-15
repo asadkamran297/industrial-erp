@@ -9,7 +9,6 @@ from apps.core.constants import (
 )
 from apps.finance.models import ChartOfAccount
 
-# (title, account_type, [children]). Five fixed roots, each with two sub-headings.
 TREE = [
     ("ASSETS", ACCOUNT_TYPE_ASSET, [
         ("Current Assets", None, []),

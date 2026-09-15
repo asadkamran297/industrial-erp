@@ -42,16 +42,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         count = options["count"]
         user = get_user_model().objects.filter(is_superuser=True).order_by("pk").first()
-        # The purchase and sale services run their real permission checks, and
-        # those dereference the user, so a fresh database with no superuser
-        # crashes deep inside a service instead of failing here.
         if user is None:
             raise CommandError(
                 "No superuser found. Run `python manage.py ensure_superuser` first."
             )
 
-        # Order matters: bills need approved orders, and sales need the stock
-        # those bills brought in.
         steps = [
             ("chart of accounts", lambda: seed_demo_accounts()),
             ("fiscal year", lambda: seed_demo_fiscal_year()),

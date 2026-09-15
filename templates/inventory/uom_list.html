@@ -9,7 +9,6 @@
 
   <div class="uom-split">
 
-    {# ── Units ────────────────────────────────────────────────────────────── #}
     <div class="uom-panel">
       <div class="uom-head">
         <div class="flex-1">
@@ -28,11 +27,9 @@
       <div class="uom-scroll" id="uom-rows">{% include "inventory/_uom_rows.html" %}</div>
     </div>
 
-    {# ── Conversions for the selected unit ────────────────────────────────── #}
     <div id="uom-detail">{% include "inventory/_uom_detail.html" %}</div>
   </div>
 
-  {# ── Add Unit ─────────────────────────────────────────────────────────── #}
   {% if can_add %}
   <div class="uom-modal" id="unit-modal">
     <div class="uom-modal-box">
@@ -61,7 +58,6 @@
     </div>
   </div>
 
-  {# ── Add / Edit Conversion: rendered once, reused for both ───────────── #}
   <div class="uom-modal" id="conversion-modal">
     <div class="uom-modal-box">
       <form id="conversion-form">{% csrf_token %}
@@ -108,7 +104,6 @@
   </div>
   {% endif %}
 
-  {# ── Delete confirmation, shared by units and conversions ────────────── #}
   {% if can_delete %}
   <div class="uom-modal" id="delete-modal">
     <div class="uom-modal-box" style="max-width:26rem;">

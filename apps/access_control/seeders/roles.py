@@ -3,10 +3,6 @@ from apps.access_control.pages import all_codes
 from apps.core.constants import STATUS_ACTIVE
 
 
-# Role definitions in the page-level scheme. Entries support:
-#   "*"              -> every permission (wildcard)
-#   "<page>.*"       -> all actions of a page or module prefix (e.g. "inventory.*")
-#   "<page>.<action>"-> a single explicit code
 ROLE_PERMISSION_CODES = {
     "Super Admin": ["*"],
     "Admin": [
@@ -106,7 +102,6 @@ def seed_roles() -> int:
         wanted_codes = _expand(patterns, every_code)
         selected_permissions = [permissions_by_code[code] for code in wanted_codes if code in permissions_by_code]
 
-        # Reset links so stale (coarse) permissions are removed on reseed.
         RolePermission.objects.filter(role=role).delete()
         RolePermission.objects.bulk_create(
             [RolePermission(role=role, permission=permission) for permission in selected_permissions]

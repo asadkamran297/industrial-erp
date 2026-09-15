@@ -94,20 +94,15 @@ class SupplierForm(StyledModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Optional: a supplier is often on the books before their address is.
         self.fields["city"].required = False
         self.fields["city"].empty_label = "-- Select city --"
-        # System-assigned: shown so it can be read, never typed.
         self.fields["code"].required = False
         self.fields["code"].disabled = True
         self.fields["code"].help_text = "Assigned automatically."
         if not self.instance.pk:
             self.initial["code"] = Supplier.next_code()
         self.fields["opening_balance"].required = False
-        # The date only matters once there is a figure to date; clean() ties them.
         self.fields["opening_balance_date"].required = False
-        # A new supplier's balance is almost always "as of today", so today is
-        # offered; an existing record keeps whatever date it was given.
         if not self.instance.pk and not self.initial.get("opening_balance_date"):
             self.initial["opening_balance_date"] = timezone.localdate()
 
@@ -116,7 +111,6 @@ class SupplierForm(StyledModelForm):
         opening = cleaned.get("opening_balance")
         as_of = cleaned.get("opening_balance_date")
         if opening and not as_of:
-            # An opening balance with no date cannot be placed in a period.
             self.add_error("opening_balance_date", "Give the date this balance was true.")
         limit = cleaned.get("credit_limit")
         if limit is not None and limit < 0:
@@ -154,8 +148,6 @@ class InventoryItemForm(StyledModelForm):
         help_text="Left blank, the purchase price is used.",
         widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.01", "min": "0", "placeholder": "0.00"}),
     )
-    # The blank row on the unit dialog. Declared so the value is cleaned and
-    # reported like any other field rather than read raw off the POST.
     new_conversion_factor = forms.DecimalField(
         label="Conversion Rate",
         required=False,
@@ -164,9 +156,6 @@ class InventoryItemForm(StyledModelForm):
         min_value=Decimal("0"),
         widget=forms.NumberInput(attrs={"class": "form-input", "step": "0.0001", "min": "0", "placeholder": "0"}),
     )
-    # Free text rather than a plain dropdown: an existing category is picked
-    # from the list, and a name that is not on it is created on save, so
-    # nobody has to break off and set the category up first.
     category = forms.CharField(
         label="Category",
         required=False,
@@ -254,8 +243,6 @@ class InventoryItemForm(StyledModelForm):
 
     def save(self, commit=True):
         item = super().save(commit=False)
-        # A rate typed on the unit dialog is filed alongside the item, so the
-        # units screen holds it from then on.
         new_conversion = getattr(self, "_new_conversion", None)
         if new_conversion is not None:
             new_conversion.created_by = item.created_by
@@ -293,8 +280,6 @@ class InventoryItemForm(StyledModelForm):
         if cleaned_data.get("secondary_uom") and cleaned_data.get("secondary_uom") == cleaned_data.get("uom"):
             self.add_error("secondary_uom", "Secondary unit must differ from the base unit.")
 
-        # A typed rate needs both units to say anything, and it is only kept
-        # when the operator did not pick one already on file.
         factor = cleaned_data.get("new_conversion_factor")
         self._new_conversion = None
         if factor and not cleaned_data.get("conversion"):
@@ -304,7 +289,6 @@ class InventoryItemForm(StyledModelForm):
             else:
                 existing = UOMConversion.objects.filter(uom_from=base, uom_to=second, conversion_factor=factor).first()
                 if existing:
-                    # Already on file: use it rather than storing it twice.
                     cleaned_data["conversion"] = existing
                 else:
                     self._new_conversion = UOMConversion(uom_from=base, uom_to=second, conversion_factor=factor)
@@ -312,12 +296,7 @@ class InventoryItemForm(StyledModelForm):
         if not quantity:
             return cleaned_data
 
-        # Reported against the form rather than the field: in both cases the
-        # opening boxes are hidden on the re-rendered page, so a field-level
-        # error would be raised into a panel the operator cannot see.
         if self.instance.pk:
-            # Editing must not re-open a stock balance; that is what the Stock
-            # Adjustment screen is for.
             self.add_error(None, "Opening stock can only be set when the item is first created. Use Stock Adjustment instead.")
         elif cleaned_data.get("item_kind") == INVENTORY_KIND_SERVICE:
             self.add_error(None, "A service is not stocked, so it cannot carry an opening quantity.")
@@ -337,8 +316,6 @@ class InventoryItemImportForm(forms.Form):
     """
 
     COLUMNS = ("item_name", "item_class", "uom", "price", "purchase_price", "item_bar_code")
-    # .xls is the old binary format openpyxl cannot read; Excel saves either of
-    # these from "Save As" without any add-in.
     EXTENSIONS = (".csv", ".xlsx")
 
     file = forms.FileField(
@@ -357,8 +334,6 @@ class InventoryItemImportForm(forms.Form):
         upload = self.cleaned_data["file"]
         if not upload.name.lower().endswith(self.EXTENSIONS):
             raise ValidationError("Upload a .xlsx or .csv file. The older .xls format is not supported — re-save it as .xlsx.")
-        # 5 MB is far beyond any hand-kept item list, and stops a stray upload
-        # from being read into memory.
         if upload.size > 5 * 1024 * 1024:
             raise ValidationError("File is larger than 5 MB.")
         return upload
@@ -454,12 +429,6 @@ class PurchaseReturnDetailForm(StyledModelForm):
     class Meta:
         model = PurchaseReturnDetail
         fields = ("inventory_item", "quantity", "rate", "status")
-
-
-# ── Ending an order early, and unwinding a posted one ──────────────────────
-# Each of these is one field: a reason, picked from a list. A free-text box
-# here fills up with "adjustment" and tells the next reader nothing, and the
-# reason is the entire point of keeping the record rather than deleting it.
 
 
 class PurchaseOrderCancelForm(forms.Form):

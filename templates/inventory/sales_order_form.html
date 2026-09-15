@@ -2,9 +2,6 @@
 {% load core_extras %}
 {% block content %}
 
-{# An order commits nothing to the books, so this screen asks for less than #}
-{# the invoice does: no money boxes, no payment, no tax. What was asked for #}
-{# and when it was promised, and nothing else.                              #}
 
 <div class="flex flex-wrap items-start justify-between gap-4">
   <h1 class="title-accent text-2xl font-bold">{{ title }}</h1>
@@ -15,7 +12,6 @@
       class="card-rail mt-5 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
       x-data="salesOrderForm()">{% csrf_token %}
 
-  {# ── The party and the paperwork ─────────────────────────────────────── #}
   <div class="grid gap-4 border-b border-slate-200 p-5 dark:border-slate-800 md:grid-cols-4">
     <div>
       <label class="form-label" for="customer">Customer</label>
@@ -37,8 +33,6 @@
              value="{% if posted.order_date %}{{ posted.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
     </div>
     <div>
-      {# Nothing enforces it. It is what makes an order late, which is the #}
-      {# only way one quietly going nowhere is ever noticed.               #}
       <label class="form-label" for="expected_date">Promised by</label>
       <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full"
              value="{{ posted.expected_date|default:'' }}">
@@ -55,7 +49,6 @@
     </div>
   </div>
 
-  {# ── The goods ───────────────────────────────────────────────────────── #}
   <div class="overflow-x-auto">
     <table class="po-table">
       <thead>
@@ -114,8 +107,6 @@
   </div>
 
   <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 p-5 dark:border-slate-800">
-    {# Parked rather than committed to. A draft shows on the board but is not #}
-    {# offered to the invoice screen, because nobody has agreed to it yet.    #}
     <button type="submit" name="save_draft" value="1" class="pur-btn pur-btn--ghost">Save as draft</button>
     <button type="submit" class="pur-btn pur-btn--primary">Raise order</button>
   </div>

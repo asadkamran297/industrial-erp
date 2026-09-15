@@ -38,9 +38,6 @@ def _parse_date(raw):
     return raw.strip() or None if isinstance(raw, str) else raw
 
 
-# ---------------------------------------------------------------------------
-# Grinding
-# ---------------------------------------------------------------------------
 class GrindingListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, ListView):
     page = GRINDING_PAGE
     model = GrindingVoucher
@@ -224,9 +221,6 @@ class GrindingOptionsView(PagePermissionRequiredMixin, View):
         })
 
 
-# ---------------------------------------------------------------------------
-# Product conversion
-# ---------------------------------------------------------------------------
 class ConversionListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, ListView):
     page = CONVERSION_PAGE
     model = ProductConversion
@@ -370,9 +364,6 @@ class ConversionDeleteView(PagePermissionRequiredMixin, View):
         return redirect("production:conversion_list")
 
 
-# ---------------------------------------------------------------------------
-# Reports
-# ---------------------------------------------------------------------------
 class ReportBase(PagePermissionRequiredMixin, View):
     page = REPORT_PAGE
     action = "index"

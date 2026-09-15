@@ -409,10 +409,7 @@
 <section class="mt-3">
   <form method="post" id="purchase-form" class="card-rail rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}
 
-    {# ── Header: who it is for on the left, which bill on the right ───────── #}
     <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-4 pt-5">
-      {# The label rides the border and the + rides inside, so picking a supplier #}
-      {# and adding one that is not on file read as the one control. #}
       <div class="w-full max-w-md">
         <div class="notch-field notch-field--action">
           <label class="notch-label" for="supplier">Supplier <span class="text-rose-500">*</span></label>
@@ -424,11 +421,7 @@
           </select>
           <button type="button" id="add-supplier" class="notch-action" title="Add a new supplier" aria-label="Add a new supplier">+</button>
         </div>
-        {# What this supplier is owed, off the ledger. Shown as soon as one is #}
-        {# picked, including when the screen opened on one already chosen.     #}
         {% if layout.shown.supplier_balance %}<p id="supplier-balance" class="pur-bal mt-1 hidden"></p>{% endif %}
-        {# The badge is the control: it already names the order, so asking it #}
-        {# to open it costs no second button and no second thing to read.     #}
         <button type="button" id="bill-mode" class="bill-mode"
                 data-url="{% url 'inventory:purchase_order_detail' 0 %}"
                 title="Show what is on this order">
@@ -448,9 +441,6 @@
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="invoice-no-preview">Invoice No</label>
           <input type="text" id="invoice-no-preview" class="form-input h-10 w-full font-bold tabular-nums" value="{{ next_invoice_no }}" readonly>
         </div>
-        {# Their number, not ours. It is the only thing that catches the same #}
-        {# invoice being entered twice, which is how a supplier gets paid     #}
-        {# twice for one delivery.                                            #}
         {% if layout.shown.bill_number %}<div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="bill_number">Supplier&rsquo;s bill no <span class="font-normal normal-case text-slate-400">(optional)</span></label>
           <input type="text" name="bill_number" id="bill_number" class="form-input h-10 w-full"
@@ -462,7 +452,6 @@
           <input type="date" name="due_date" id="due_date" class="form-input h-10 w-full" value="{{ posted.due_date|default:'' }}">
         </div>
         {% endif %}
-        {# Where the goods landed, which truck brought them, who arranged it. #}
         {% if layout.shown.godown %}
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="godown">Godown</label>
@@ -492,7 +481,6 @@
           </select>
         </div>
         {% endif %}
-        {# Whatever this site added to the invoice form for itself. #}
         {% for field in layout.extra %}
         <div class="w-48">
           <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="extra__{{ field.code }}">
@@ -516,7 +504,6 @@
       </div>
     </div>
 
-    {# ── Lines ────────────────────────────────────────────────────────────── #}
     <div class="border-y border-slate-200 dark:border-slate-800">
       <div class="pur-grid pur-head{% if not layout.shown.line_uom %} pur-grid--no-unit{% endif %}">
         <div>#</div>
@@ -540,10 +527,6 @@
       </div>
     </div>
 
-    {# ── Wheat and bardana ──────────────────────────────────────────────── #}
-    {# Their own grids, because the gate enters them differently: wheat off   #}
-    {# the weighbridge and its deductions, sacks by the count and whose they  #}
-    {# are. Same document, same screen, one truck one entry.                  #}
     {% if wheat_products or bardana_products %}
     <div class="border-t border-slate-200 px-6 py-5 dark:border-slate-800" id="mill-lines">
       <div class="mb-3 flex items-center justify-between">
@@ -596,7 +579,6 @@
     </div>
     {% endif %}
 
-    {# ── Money ────────────────────────────────────────────────────────────── #}
     <div class="grid gap-6 px-6 py-6 lg:grid-cols-3">
       <div class="grid content-start gap-4 lg:col-span-2 sm:grid-cols-2">
         {% if layout.shown.remarks %}<div class="sm:col-span-2">
@@ -645,11 +627,9 @@
       </div>
       </div>
 
-      {# What the bill comes to, spelled out — the figure the operator checks against the paper. #}
       {% if layout.shown.amount_words %}{% include "inventory/_amount_panel.html" %}{% endif %}
     </div>
 
-    {# ── Footer ───────────────────────────────────────────────────────────── #}
     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-800">
       <p class="text-sm text-slate-400">Prepared by <span class="font-semibold text-slate-600 dark:text-slate-300">{{ request.user.get_full_name|default:request.user.username }}</span></p>
       <div class="flex gap-3">
@@ -706,9 +686,6 @@
         <tbody id="po-view-lines"></tbody>
       </table>
     </div>
-    {# The order's own page, for anybody who wants the rest of it -- the #}
-    {# approvals, the history, the print copy. Off to one side, because  #}
-    {# leaving mid-invoice is the rarer thing to want.                    #}
     <div class="po-view-foot">
       <span id="po-view-total" class="po-pick-amt"></span>
       <a id="po-view-full" class="pur-btn pur-btn--ghost" target="_blank" rel="noopener" href="#">
@@ -754,7 +731,6 @@
 
 <script id="form-layout" type="application/json">{"unit": {{ layout.shown.line_uom|yesno:"true,false" }}, "stock": {{ layout.shown.line_stock|yesno:"true,false" }}}</script>
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
-{# The grid as it was submitted, put back when the server refuses the invoice. #}
 <script id="posted-lines" type="application/json">{{ posted_lines_json|safe }}</script>
 <script>
 (function () {

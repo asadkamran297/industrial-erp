@@ -1,14 +1,3 @@
-{% comment %}
-A small back button for form screens.
-
-    {% include "components/ui/back_button.html" %}
-    {% include "components/ui/back_button.html" with back_url=list_url %}
-
-Goes back through the browser's own history, which is where the user actually
-came from -- a form is reached from a list, a detail page or a search, and only
-the browser knows which. `back_url` is the fallback for a page opened directly
-(a bookmark, a new tab), where there is nothing to go back to.
-{% endcomment %}
 {% spaceless %}
 <button type="button"
         class="inline-grid h-9 w-9 flex-none place-items-center rounded-lg border border-[var(--primary-color)] bg-white text-sm font-semibold text-[var(--primary-color)] shadow-sm transition hover:bg-[var(--primary-color)] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--primary-color)] dark:bg-slate-900 dark:hover:text-white"

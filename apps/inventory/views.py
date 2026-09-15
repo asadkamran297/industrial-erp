@@ -180,19 +180,16 @@ class InventoryClassListView(BaseSimpleListView):
     model = InventoryClass
     template_name = "inventory/class_list.html"
     queryset = InventoryClass.objects.order_by("title")
-    # A picker in a scrolling panel, not a page of results.
     paginate_by = 100
     search_fields = ("title", "class_code")
     extra_context = {"title": "Item Categories", "active_tab": "category"}
 
-    # The left row that stands for "no category at all".
     UNFILED = "none"
 
     def _is_ajax(self):
         return self.request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
     def get_queryset(self):
-        # The count beside each category is what the left column shows.
         return super().get_queryset().annotate(item_count=Count("inventoryitem", distinct=True))
 
     def get_selected(self):
@@ -252,7 +249,6 @@ class InventoryClassListView(BaseSimpleListView):
         context.setdefault("is_unfiled", True)
         return context
 
-    # ---- AJAX -----------------------------------------------------------
     def get(self, request, *args, **kwargs):
         if not self._is_ajax():
             return super().get(request, *args, **kwargs)
@@ -315,8 +311,6 @@ class InventoryClassListView(BaseSimpleListView):
             return self._refused("That category no longer exists.", 404)
 
         data = request.POST.copy()
-        # The dialog asks for a name only; the code is derived the same way the
-        # item form derives it, so two screens never invent different codes.
         if not data.get("class_code"):
             data["class_code"] = instance.class_code if instance else InventoryItemForm._next_class_code(data.get("title", ""))
         data.setdefault("status", STATUS_ACTIVE)
@@ -338,8 +332,6 @@ class InventoryClassListView(BaseSimpleListView):
         if not category:
             return self._refused("That category no longer exists.", 404)
 
-        # An item is moved out of a category, never deleted with it, so a
-        # category still holding items is refused until it is emptied.
         held = InventoryItem.objects.filter(item_class=category).count()
         if held:
             return self._refused(
@@ -427,8 +419,6 @@ class UOMListView(BaseSimpleListView):
     model = UOM
     template_name = "inventory/uom_list.html"
     queryset = UOM.objects.order_by("title")
-    # The list is a picker in a scrolling panel, not a page of results, so it
-    # holds a full alphabet rather than ten rows.
     paginate_by = 100
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
@@ -455,18 +445,12 @@ class UOMListView(BaseSimpleListView):
 
     def get_conversion_form(self, selected_uom, instance=None, data=None):
         form = UOMConversionForm(data=data, instance=instance)
-        # The base is the unit already open on the left; only the other side is
-        # a choice, and it can never be the same unit.
         form.fields["uom_from"].queryset = UOM.objects.filter(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
         form.fields["uom_to"].queryset = UOM.objects.exclude(pk=selected_uom.pk) if selected_uom else UOM.objects.none()
         if selected_uom and not form.is_bound:
             form.initial.setdefault("uom_from", selected_uom.pk)
         return form
 
-    # ---- AJAX plumbing ---------------------------------------------------
-    # The screen never navigates: it asks for the two panes and swaps them in.
-    # Every handler answers JSON to an AJAX caller; a plain request still gets
-    # the whole page, which is what the first load and a reload go through.
 
     def _is_ajax(self):
         return self.request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -520,8 +504,6 @@ class UOMListView(BaseSimpleListView):
         return redirect("inventory:uom_list")
 
     def _rejected(self, form):
-        # Only the modal that was submitted needs to know, and it is on screen
-        # already, so the errors go back on their own.
         if self._is_ajax():
             return JsonResponse({"ok": False, "errors": self._errors(form)}, status=400)
         for errors in form.errors.values():
@@ -530,7 +512,6 @@ class UOMListView(BaseSimpleListView):
         return self._redirect_to_unit(self.get_selected_uom())
 
     def post(self, request, *args, **kwargs):
-        # The list itself only needs index rights; writing needs add.
         if not user_has_permission(request.user, f"{self.page}.add"):
             return self._forbidden("You cannot change units.")
 
@@ -544,7 +525,6 @@ class UOMListView(BaseSimpleListView):
         return self._save_conversion(request)
 
     def _save_unit(self, request):
-        # A posted id edits that unit; without one this is a new one.
         unit_id = request.POST.get("unit_id")
         instance = UOM.objects.filter(pk=unit_id).first() if unit_id else None
         if unit_id and not instance:
@@ -556,7 +536,6 @@ class UOMListView(BaseSimpleListView):
             unit.created_by = unit.created_by or request.user
             unit.updated_by = request.user
             unit.save()
-            # A unit saved from here becomes the one on show.
             return self._saved(unit, "Unit updated." if instance else "Unit saved.")
         return self._rejected(form)
 
@@ -590,9 +569,6 @@ class UOMListView(BaseSimpleListView):
         if not unit:
             return self._not_found("That unit no longer exists.")
 
-        # Its own conversions are not a reason to stop -- they go with it --
-        # but a conversion that something else uses is, so they are checked in
-        # their own right below.
         blockers = self._usage(unit, ignore=(UOMConversion,))
         own_conversions = UOMConversion.objects.filter(Q(uom_from=unit) | Q(uom_to=unit))
         for conversion in own_conversions:
@@ -636,8 +612,6 @@ class UOMListView(BaseSimpleListView):
         if not selected_uom:
             return self._rejected_message("Select a unit first.")
 
-        # A posted id edits that row; without one this is a new conversion, so
-        # a unit can carry as many as it needs.
         conversion_id = request.POST.get("conversion_id")
         instance = self.get_conversions(selected_uom).filter(pk=conversion_id).first() if conversion_id else None
 
@@ -656,8 +630,6 @@ class UOMListView(BaseSimpleListView):
         context["selected_uom"] = selected_uom
         context["uom_conversions"] = self.get_conversions(selected_uom)
         context["unit_form"] = UOMForm()
-        # The secondary-unit picker is built once and reused for every unit, so
-        # it carries the whole list and hides the base unit in script.
         context["all_units"] = UOM.objects.order_by("title")
         return context
 
@@ -697,7 +669,6 @@ class UOMConversionToggleStatusView(InventoryManageMixin, View):
         record.updated_by = request.user
         record.save(update_fields=["status", "updated_by", "updated_at"])
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            # The units screen refreshes its own panes, so it only needs the word.
             return JsonResponse({"ok": True, "status": record.status, "message": "Conversion activated." if record.status == STATUS_ACTIVE else "Conversion deactivated."})
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:conversion_list"))
 
@@ -722,11 +693,9 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
     page = "inventory.suppliers"
     model = Supplier
     template_name = "inventory/supplier_list.html"
-    # Newest first: a supplier just added is the one being looked for.
     queryset = Supplier.objects.select_related("city").order_by("-id")
     search_fields = ("name", "code", "email", "tel1")
     sort_fields = {"name": "name", "code": "code", "city": "city__title", "status": ("status", "name"), "added": "-id"}
-    # Rolled up per row after the query, so the database cannot order by it.
     python_sort_fields = {"payable": "payable_balance"}
     default_sort = "added"
     filter_fields = {"status": "status"}
@@ -742,8 +711,6 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
             return context
 
         zero = Decimal("0.00")
-        # One query per kind for the whole page rather than per expanded row:
-        # the panels are open by default, so every row's figures are needed.
         purchases = {
             row["supplier_id"]: row
             for row in PurchaseInvoice.objects.filter(supplier__in=suppliers, status=STATUS_POSTED)
@@ -760,16 +727,12 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
             row["supplier_id"]: row["count"]
             for row in PurchaseOrder.objects.filter(supplier__in=suppliers).values("supplier_id").annotate(count=Count("id"))
         }
-        # A supplier's payable account is named after them, so the ledger the
-        # panel links to is found the same way the posting created it.
         payable_codes = dict(
             ChartOfAccount.objects.filter(title__in=[supplier.name for supplier in suppliers])
             .values_list("title", "code")
         )
         balances = account_balances()
 
-        # Every supplier's ledger in one pass: the panels are ledgers, and one
-        # query per open panel would be a query per row.
         entries = {}
         if payable_codes:
             lines = (
@@ -803,10 +766,7 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
             supplier.payable_balance = (balances.get(supplier.payable_code) or {}).get("closing") or zero
             supplier.ledger_rows = ledger_rows(supplier.payable_code) if supplier.payable_code else []
 
-        # The payable column is computed above, so its sort happens here.
         context["records"] = self.sort_rows(suppliers)
-        # The tiles report the whole filtered set, not just the page in front of
-        # you: "10 suppliers" on page 1 of 4 would be a lie.
         all_suppliers = self.get_queryset()
         context["supplier_count"] = all_suppliers.count()
         context["purchased_total"] = (
@@ -842,8 +802,6 @@ class SupplierDetailView(PagePermissionRequiredMixin, DetailView):
         context["order_count"] = PurchaseOrder.objects.filter(supplier=supplier).count()
         context["recent_invoices"] = PurchaseInvoice.objects.filter(supplier=supplier, status=STATUS_POSTED).order_by("-invoice_date", "-id")[:10]
 
-        # The supplier's payable account is named after them, the same way the
-        # posting created it, so the ledger here is the ledger the books hold.
         account = ChartOfAccount.objects.filter(title=supplier.name, is_group=False).first()
         context["payable_code"] = account.code if account else ""
         ledger = account_ledger(account.code) if account else None
@@ -872,7 +830,6 @@ class EmbeddedCreateMixin:
     screen underneath what was created and that screen closes the modal.
     """
 
-    # What the saved record is called in the message the frame posts up.
     embed_message_type = ""
 
     def embed_payload(self, obj):
@@ -884,8 +841,6 @@ class EmbeddedCreateMixin:
     def dispatch(self, request, *args, **kwargs):
         response = super().dispatch(request, *args, **kwargs)
         if self.is_embedded():
-            # The site denies framing outright; these screens are allowed to be
-            # framed by the portal itself, and by nothing else.
             response.xframe_options_exempt = True
             response["X-Frame-Options"] = "SAMEORIGIN"
         return response
@@ -898,7 +853,6 @@ class EmbeddedCreateMixin:
         return context
 
     def embed_saved_response(self):
-        # A redirect here would only reload the form inside the frame.
         return render(self.request, "inventory/_embed_saved.html", {
             "message_type": self.embed_message_type,
             "payload_json": json.dumps(self.embed_payload(self.object)),
@@ -915,8 +869,6 @@ class SupplierCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     embed_message_type = "supplier:saved"
     extra_context = {
         "title": "Supplier",
-        # Name, phone, address and the credit block are placed by hand; the rest
-        # are grouped behind their own tabs so the first screen stays short.
         "registration_fields": ("code", "ntn_number", "sale_tax_num", "web_url"),
         "extra_fields": ("fax", "tel2", "status", "supplier_current_status", "remarks"),
     }
@@ -926,15 +878,12 @@ class SupplierCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # The opening balance belongs in the ledger, not only on the master.
         sync_supplier_opening_balance(supplier=self.object, user=self.request.user)
         if self.is_embedded():
             return self.embed_saved_response()
         return response
 
     def get_success_url(self):
-        # "Save & New" is for entering suppliers in a run: it comes straight back
-        # to an empty form instead of the list.
         if "save_and_new" in self.request.POST:
             return reverse_lazy("inventory:supplier_create")
         return super().get_success_url()
@@ -955,8 +904,6 @@ class ItemStockListMixin(InventoryListMixin):
     model = InventoryItem
     context_object_name = "records"
     queryset = InventoryItem.objects.select_related("uom", "item_class", "stock").order_by("item_name")
-    # The stock row carries its own copy of the code and name, and is what a
-    # search for a stocked item is likely typed against.
     search_fields = ("item_name", "code", "item_bar_code", "stock__item_code", "stock__item_name")
     filter_fields = {"status": "status", "item_class": "item_class_id"}
 
@@ -982,8 +929,6 @@ class ItemStockListMixin(InventoryListMixin):
         for row in rows:
             stock = getattr(row, "stock", None)
             quantity = stock.current_quantity if stock else Decimal("0.0000")
-            # Valued at the current price, the same figure the Inventory control
-            # account is reconciled against.
             price = stock.current_price if stock else row.price
             row.stock_value = (quantity * price).quantize(Decimal("0.01"))
             total_quantity += quantity
@@ -1007,15 +952,11 @@ class ItemListView(ItemStockListMixin, ListView):
     template_name = "inventory/item_list.html"
 
     def get_context_data(self, **kwargs):
-        # Items are the subsidiary ledger behind the balance sheet's Inventory
-        # account, so the page states whether the two currently agree.
         from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
 
         context = super().get_context_data(**kwargs)
         context["title"] = "Services" if context["is_service_tab"] else "Inventory Items"
         context["create_url"] = reverse_lazy("inventory:item_create")
-        # A service holds no stock, so the Inventory control banner belongs only
-        # on the products tab, where the figures it reconciles are shown.
         context["control_account"] = None if context["is_service_tab"] else inventory_control_summary()
         return context
 
@@ -1049,7 +990,6 @@ class ItemExportView(ItemStockListMixin, ListView):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         stamp = timezone.localdate().isoformat()
         response["Content-Disposition"] = f'attachment; filename="inventory-items-{stamp}.csv"'
-        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
         response.write("﻿")
         writer = csv.writer(response)
         writer.writerow(["Item Name", "Code", "Category", "UOM", "Stock Qty", "Current Price", "Last Price", "Stock Value", "Status"])
@@ -1105,8 +1045,7 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
     @staticmethod
     def _read_csv(upload):
         """(header names, row dicts) from a CSV upload."""
-        # utf-8-sig: a CSV saved by Excel carries a BOM, which would otherwise
-        # become part of the first header name.
+        # utf-8-sig strips Excel's BOM.
         text = upload.read().decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
         headers = [(name or "").strip().lower() for name in (reader.fieldnames or [])]
@@ -1118,8 +1057,6 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
         """(header names, row dicts) from the first sheet of an .xlsx upload."""
         from openpyxl import load_workbook
 
-        # data_only: a sheet built with formulas hands over the cached results
-        # rather than "=A1*2". read_only keeps a long sheet off the heap.
         workbook = load_workbook(upload, data_only=True, read_only=True)
         try:
             sheet = workbook.worksheets[0]
@@ -1136,8 +1073,6 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
                     if not name:
                         continue
                     value = values[index] if index < len(values) else None
-                    # A price typed as a number arrives as 100.0; str() of that
-                    # is still what the item form parses, so no rounding here.
                     row[name] = "" if value is None else str(value).strip()
                 rows.append(row)
             return headers, rows
@@ -1156,7 +1091,6 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
             form.add_error("file", "File is not valid UTF-8 text. Re-save it as CSV UTF-8, or upload the .xlsx instead.")
             return self.form_invalid(form)
         except Exception:
-            # Anything openpyxl throws on a corrupt or mislabelled workbook.
             form.add_error("file", "File could not be read. Check it is a real .xlsx workbook or a plain CSV.")
             return self.form_invalid(form)
 
@@ -1178,8 +1112,6 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
                     if not item_class:
                         errors.append(f"Row {line_no}: unknown item class '{row.get('item_class', '')}'.")
                         continue
-                    # A blank unit column is allowed, an unreadable one is not:
-                    # silently dropping a typo would file the item unmeasured.
                     if not uom and (row.get("uom") or "").strip():
                         errors.append(f"Row {line_no}: unknown UOM '{row.get('uom', '')}'.")
                         continue
@@ -1191,16 +1123,12 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
 
                     data = {
                         "item_name": row.get("item_name", ""),
-                        # Left blank on purpose: the model derives the code from
-                        # the class prefix, so imports match hand-added items.
                         "code": existing.code if existing else "",
                         "category": item_class.title,
                         "uom": uom.pk,
                         "item_bar_code": row.get("item_bar_code", ""),
                         "price": row.get("price") or "0",
                         "purchase_price": row.get("purchase_price") or "0",
-                        # Bulk-loaded rows are stocked goods; a service is added
-                        # one at a time from the Add Item screen.
                         "item_kind": INVENTORY_KIND_PRODUCT,
                         "status": STATUS_ACTIVE,
                         "imported": "L",
@@ -1223,8 +1151,6 @@ class ItemImportView(PagePermissionRequiredMixin, FormView):
                         created += 1
 
                 if errors:
-                    # Nothing is kept when any row failed, so the file can be
-                    # corrected and re-uploaded without hunting for duplicates.
                     raise _ImportRowError
         except _ImportRowError:
             context = self.get_context_data(form=form)
@@ -1267,7 +1193,6 @@ class ItemImportSampleView(PagePermissionRequiredMixin, View):
         if request.GET.get("format") == "csv":
             response = HttpResponse(content_type="text/csv; charset=utf-8")
             response["Content-Disposition"] = 'attachment; filename="item-import-sample.csv"'
-            # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
             response.write("﻿")
             writer = csv.writer(response)
             writer.writerow(columns)
@@ -1360,16 +1285,11 @@ class SupplierPurchaseOrderOptionsView(InventoryListMixin, View):
                 "value": Decimal("0.00"),
                 "lines": [],
             })
-            # What is still open on the line, not what was ordered: an order
-            # part billed already offers the balance and nothing more.
             pending = line.qty_pending
             rate = line.rate or Decimal("0.00")
             amount = (pending * rate).quantize(TWO_DP)
             held["quantity"] += pending
             held["value"] += amount
-            # A product line and a stores line are both offered, and each says
-            # which it is: the invoice screen fills a different grid for each,
-            # because the two post to different ledgers.
             held["lines"].append({
                 "order_item_id": line.pk,
                 "kind": "product" if line.is_product_line else "item",
@@ -1422,16 +1342,10 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             "layout": get_layout(FORM_PURCHASE_INVOICE),
             "extra_field_types": EXTRA_FIELD_TYPES,
             "settings_url": reverse_lazy("inventory:purchase_invoice_form_settings"),
-            # This view renders straight to a template, so the permission flags
-            # the list mixin would add are not here; the menu needs the one it
-            # is gated on.
             "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "units": UOM.objects.order_by("title"),
             "godowns": godown_options(),
             "brokers": broker_options(),
-            # The mill's own two kinds of purchase, kept apart from the stores
-            # items because they are weighed rather than counted and they post
-            # to the product ledger rather than to inventory.
             "wheat_products": wheat_product_options(),
             "bardana_products": bardana_product_options(),
             "bardana_ownership_choices": INV_BARDANA_OWNERSHIP_CHOICES,
@@ -1443,8 +1357,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                     "code": item.code,
                     "uom": item.uom_id or "",
                     "rate": float(item.purchase_price or 0),
-                    # What is on the shelf now, so the line can show what this
-                    # bill takes it to. A service is never stocked.
                     "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
                     "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
                     "unit": uom_title(item),
@@ -1453,10 +1365,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 for item in items
             ]),
         }
-        # The lines exactly as they were typed, so a rejected invoice comes back
-        # with its own rows rather than an empty grid. Read off the raw POST
-        # rather than off the cleaned lines: a row the service refused is the
-        # one the operator most needs to see, and cleaning drops it.
         posted = extra.get("posted")
         prefill = extra.pop("prefill_lines", None)
         if prefill is not None:
@@ -1505,16 +1413,11 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 "uom_id": at(uom_ids, index),
                 "order_item_id": at(order_items, index),
             }
-            # A wholly blank row carries nothing worth putting back.
             if any(row.values()):
                 rows.append(row)
         return rows
 
     def get(self, request, *args, **kwargs):
-        # Arrived from an order: the purchase orders board and an order's own
-        # page both link here naming one, so the screen opens on it rather than
-        # asking the operator to pick the supplier and the order back out of a
-        # list they have just come from.
         return render(request, self.template_name, self._context(**self._from_order(request)))
 
     @staticmethod
@@ -1531,9 +1434,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
         if order is None:
             return {}
 
-        # Only what is still open on it. An order already invoiced in full has
-        # nothing to copy, and offering its lines again would walk the operator
-        # into the over-invoice guard rather than telling them up front.
         lines = open_order_lines(purchase_order=order)
         if not lines:
             messages.info(
@@ -1545,8 +1445,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
 
         return {
             "posted": {"supplier": str(order.supplier_id)},
-            # Stores lines only: a wheat or bardana line is filled into its own
-            # grid by the order picker, which knows how those are entered.
             "prefill_lines": [
                 {
                     "item_id": str(line.inventory_item_id),
@@ -1564,9 +1462,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
         supplier_id = (posted.get("supplier") or "").strip()
         supplier = Supplier.objects.filter(pk=supplier_id).first() if supplier_id.isdigit() else None
 
-        # Money boxes are grouped with commas on screen. They are stripped before
-        # the form posts, but a figure that arrives grouped anyway must still be
-        # read as the number it is rather than rejected.
         def decimal_of(raw, default="0"):
             text = (raw or "").strip().replace(",", "") or default
             return Decimal(text)
@@ -1577,13 +1472,11 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             except (InvalidOperation, ValueError):
                 raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
 
-        # The rows arrive as parallel lists, so a blank row simply drops out.
         lines = []
         item_ids = posted.getlist("item_id")
         quantities = posted.getlist("quantity")
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
-        # A row copied off a purchase order carries that order line with it.
         order_item_ids = posted.getlist("row_order_item")
         for index, raw_id in enumerate(item_ids):
             if not (raw_id or "").strip().isdigit():
@@ -1595,28 +1488,18 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 quantity = decimal_of(quantities[index] if index < len(quantities) else "")
                 rate = decimal_of(rates[index] if index < len(rates) else "")
             except (InvalidOperation, ValueError):
-                # A line naming an item is never dropped in silence: the operator
-                # meant to buy it, so the figure gets corrected rather than lost.
                 messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
                 return render(request, self.template_name, self._context(posted=posted))
             if quantity > 0:
-                # The unit the line was written in; the service restates it in
-                # the item's own unit before anything is booked.
                 raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
-        # ── Wheat and bardana ──────────────────────────────────────────────
-        # Their own grids, because they are entered differently: wheat by the
-        # weighbridge and the deductions, sacks by the count and whose they are.
-        # Both end up as product lines on the same invoice.
         def weight_at(name, index):
             values = posted.getlist(name)
             raw = (values[index] if index < len(values) else "").strip().replace(",", "")
             return raw or None
 
-        # A row pulled off an order carries that order line with it, exactly as
-        # a stores row does, so the balance falls on the line it came from.
         def order_line_at(name, index):
             values = posted.getlist(name)
             raw = (values[index] if index < len(values) else "").strip()
@@ -1680,20 +1563,10 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
 
         invoice_date = posted.get("bill_date") or str(timezone.localdate())
 
-        # ── The rule the whole screen turns on ─────────────────────────────
-        # A supplier with open orders is invoiced against one of them. It is
-        # decided here, on the supplier in front of us, rather than by a
-        # setting: the reason to demand an order is that there is one waiting,
-        # and that is a fact about this supplier and this moment.
         picked_order_lines = {
             index: int(pk) for index, pk in enumerate(order_item_ids)
             if (pk or "").strip().isdigit()
         }
-        # A wheat load that arrived at the gate with no order behind it is not
-        # held back because a stores order happens to be open on the same
-        # supplier: the two have nothing to do with each other. It is held back
-        # only where this supplier has an open order for the very thing on the
-        # invoice, which is the case the rule exists for.
         only_products = lines and all(line.get("product") for line in lines)
         open_product_ids = {
             row.product_id for row in open_order_lines(supplier=supplier) if row.product_id
@@ -1709,11 +1582,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             )
             return render(request, self.template_name, self._context(posted=posted))
 
-        # Lines copied off an order carry that order line, so the invoice is
-        # entered against the commitment rather than raising a second one for
-        # goods that were already ordered. Typed lines carry none. Both may sit
-        # on one invoice: what bounds a line is its own order line, and a line
-        # without one was never bounded by anything.
         order_items = {
             item.pk: item
             for item in PurchaseOrderItem.objects.filter(
@@ -1730,8 +1598,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 if not lines[index].get("rate"):
                     lines[index]["rate"] = order_item.rate
 
-        # The site's own fields, read against what it declared rather than off
-        # whatever the request happens to carry.
         layout = get_layout(FORM_PURCHASE_INVOICE)
         extra_values, extra_error = read_extra_values(posted, layout)
         if extra_error:
@@ -1769,9 +1635,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             f"Purchase invoice {invoice.invoice_num} posted for {invoice.total_amount}. "
             f"Stock taken in, payable created.",
         )
-        # More arrived than was ordered. Allowed, and posted -- but never in
-        # silence, because the order it was raised against now reads as
-        # over-delivered and somebody has to know why.
         for row in getattr(invoice, "over_invoiced", []):
             messages.warning(
                 request,
@@ -1822,9 +1685,6 @@ class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     success_url = reverse_lazy("inventory:item_list")
     success_message = "Item saved."
     embed_message_type = "item:saved"
-    # Everything the first screen does not ask for; the Other tab renders these
-    # by name so the layout never silently drops a field the form still posts.
-    # `conversion` is not here: the unit dialog owns it now.
     other_fields = ("item_bar_code", "imported", "inventory", "status")
 
     def get_context_data(self, **kwargs):
@@ -1836,8 +1696,6 @@ class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
         return context
 
     def embed_payload(self, obj):
-        # What a line fills in from a pick: unit, expected cost and the stock
-        # standing behind it, which an opening quantity may already have moved.
         stock = getattr(obj, "stock", None)
         return {
             "id": obj.pk,
@@ -1867,11 +1725,8 @@ class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
         return response
 
     def get_success_url(self):
-        # "Save & New" keeps the operator on a blank form for the next item.
         if "save_and_new" in self.request.POST:
             return reverse_lazy("inventory:item_create")
-        # Otherwise stay on the record just saved, so it can be checked or
-        # corrected without hunting for it in the list.
         return reverse_lazy("inventory:item_update", kwargs={"pk": self.object.pk})
 
 
@@ -1901,9 +1756,6 @@ class LedgerListView(InventoryListMixin, ListView):
 
         sale_ids = [r.ref_id for r in rows if r.ref_table == "inv_pos_details"]
         sale_map = dict(POSDetail.objects.filter(pk__in=sale_ids).values_list("pk", "pos_master_id"))
-        # Goods come in on the invoice. Rows written under the goods-receipt or
-        # the bill flow name documents there is no longer a page for, so they
-        # are left unlinked rather than pointed at a route that does not exist.
         invoice_ids = {r.ref_id for r in rows if r.ref_table == "inv_purchase_invoices"}
         live_invoices = set(
             PurchaseInvoice.objects.filter(pk__in=invoice_ids).values_list("pk", flat=True)
@@ -2200,15 +2052,10 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         .prefetch_related("items__inventory_item", "items__uom")
         .order_by("-invoice_date", "-id")
     )
-    # The vehicle is searchable because at a gate it is often the only thing
-    # anybody remembers about a delivery.
     search_fields = ("invoice_num", "supplier__name", "supplier_invoice_num", "remarks",
                      "legacy_bill_no", "vehicle_no")
     filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
     date_filters = [{"field": "invoice_date", "label": "Invoice date"}]
-    # Only what the database can order by. What each one came to is added up
-    # per row after the query, so its heading stays plain rather than offering
-    # a sort that would quietly lie about the order.
     sort_fields = {
         "invoice_num": "seq_num",
         "invoice_date": ("invoice_date", "id"),
@@ -2240,9 +2087,6 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # Withdrawn invoices are still on the board -- a reversal is part of the
-        # record -- but they are not what somebody scanning for live purchases
-        # wants first, so they are a state you ask for.
         state = (self.request.GET.get("state") or "").strip()
         if state == "reversed":
             queryset = queryset.filter(status=STATUS_REVERSED)
@@ -2281,14 +2125,10 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             if row.invoice_date and (row.invoice_date.year, row.invoice_date.month) == (today.year, today.month):
                 month_count += 1
                 month_value += total
-            # What is still owed on it. This is the only thing a posted invoice
-            # can still be waiting on: the goods are in and the books are made.
             outstanding = row.balance_amount
             if outstanding > Decimal("0.00"):
                 unpaid_count += 1
                 unpaid_value += outstanding
-        # The month each tile would filter to, worked out here so the template
-        # prints a date range rather than assembling one.
         month_start = today.replace(day=1)
         next_month = (month_start + timedelta(days=32)).replace(day=1)
         return {
@@ -2316,24 +2156,17 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             for key in ("q", "supplier", "date_from", "date_to", "state")
         )
         context["state"] = (self.request.GET.get("state") or "").strip()
-        # What the tiles link to keeps whatever the filter bar is set to, so a
-        # tile narrows the list rather than resetting it.
         kept = self.request.GET.copy()
         for key in ("page", "state", "date_from", "date_to"):
             kept.pop(key, None)
         context["tile_query"] = kept.urlencode()
         context["tiles"] = self.tiles()
         context["export_url"] = reverse_lazy("inventory:purchase_invoice_export")
-        # What each one came to, from its own lines, so the figure on screen is
-        # the one the books hold rather than a second total kept in step by hand.
         page_total = Decimal("0.00")
         for invoice in context["invoices"]:
             lines = list(invoice.items.all())
             invoice.line_count = len(lines)
             invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            # total_amount is a column now, not a sum of the lines: it is what
-            # posted to the ledger, freight and tax included, so re-adding the
-            # lines here would quietly show a different figure to the books.
             page_total += invoice.total_amount or Decimal("0.00")
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
@@ -2368,9 +2201,6 @@ class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
         context["goods_total"] = sum((line.amount or Decimal("0.00") for line in lines), Decimal("0.00"))
         context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
 
-        # Which orders this invoice drew on. Usually none or one, but a single
-        # invoice may cover several, so the header's own FK is not the whole
-        # answer and the lines are what is asked.
         orders = {}
         for line in lines:
             order_item = line.purchase_order_item
@@ -2417,8 +2247,6 @@ class PurchaseInvoiceExportView(InventoryListMixin, TableExportView):
     def get_rows(self):
         listing = PurchaseInvoiceListView(request=self.request, kwargs={}, args=())
         rows = list(listing.get_queryset())
-        # The figures the table shows are worked out on the way to the page, so
-        # they are worked out here too rather than exporting blank columns.
         for row in rows:
             lines = list(row.items.all())
             row.line_count = len(lines)
@@ -2443,8 +2271,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     queryset = (
         PurchaseOrder.objects
         .select_related("supplier", "created_by", "godown")
-        # ``items__inventory_item``: the row opens out to its lines, and each
-        # line names the item it was ordered against.
         .prefetch_related("items__uom", "items__inventory_item", "invoices",
                           "items__invoice_lines__invoice")
         .order_by("-purchase_date", "-id")
@@ -2452,10 +2278,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
     filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
     date_filters = [{"field": "purchase_date", "label": "Order date"}]
-    # Only the columns the database can order by. What has arrived and what is
-    # billed are worked out per row after the query, so they cannot be sorted
-    # on without pulling the whole table into memory -- their headings stay
-    # plain rather than offering a sort that would quietly lie about the order.
     sort_fields = {
         "purchase_num": "seq_num",
         "purchase_date": ("purchase_date", "id"),
@@ -2464,16 +2286,11 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         "status": "status",
     }
     default_sort = "purchase_date"
-    # Newest first: the order somebody raised this morning is the one they are
-    # looking for, not the one from last quarter.
     default_sort_dir = "desc"
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
     def current_tab(self):
-        # Opens on the orders still owed. Everything else is one click away,
-        # and "all" stays reachable, but the screen that greets the clerk is
-        # the work rather than the archive.
         tab = self.request.GET.get("tab", TAB_LIVE)
         return tab if tab in dict(TABS) else TAB_LIVE
 
@@ -2494,8 +2311,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
     def get_queryset(self):
         queryset = self.filtered_queryset()
         tab = self.current_tab()
-        # Every tab is a status now: what an order is waiting on is its own
-        # status, because the invoice against it is the only thing that moves it.
         statuses = TAB_STATUSES.get(tab)
         if statuses:
             queryset = queryset.filter(status__in=statuses)
@@ -2517,13 +2332,9 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         orders = list(context["orders"])
         decorate(orders)
         context["orders"] = orders
-        # The rows on show add up to the figure under them, which is what
-        # "Total shown" means -- not the whole filtered set.
         context["page_total"] = sum((order.total_amount for order in orders), Decimal("0.00"))
         context["order_count"] = context["paginator"].count if context.get("paginator") else len(orders)
 
-        # Counted over everything the filters allow, so the tiles hold still as
-        # the tabs are clicked through.
         everything = list(self.filtered_queryset())
         context["tiles"] = summarise(everything)
         def tab_count(key):
@@ -2535,11 +2346,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
             {"key": key, "label": label, "on": key == self.current_tab(), "count": tab_count(key)}
             for key, label in TABS
         ]
-        # Which columns this person chose to look at. A set, so the template
-        # asks `{% if "billed" in columns %}` rather than walking a list per row.
-        # What is actually on each order, for the approval dialog to show. Only
-        # the orders still awaiting approval need it, so the page does not carry
-        # a line list for rows that will never open the dialog.
         context["approval_lines"] = {
             order.pk: [
                 {
@@ -2555,14 +2361,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         }
         context["columns"] = visible_columns(self.request.session)
         context["column_menu"] = column_menu(self.request.session)
-        # Where the total row puts its figure: under PO Value wherever that
-        # column lands, with the label stretched to meet it. "actions" is drawn
-        # as its own trailing cell rather than from the column set, so it is
-        # counted once here and not twice.
         shown = [column.key for column in COLUMNS.columns if column.key in context["columns"]]
-        # The chosen columns, plus the expander at the front and the actions at
-        # the end. Neither is a column somebody picks, so both are counted here
-        # rather than being taken from the column set.
         span = len(shown) + 2
         context["column_span"] = span
         if "value" in shown:
@@ -2571,25 +2370,15 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         else:
             context["foot_lead_span"] = span
             context["foot_tail_span"] = 0
-        # The figure the approval gate is measured against, so the tile that
-        # counts drafts can say why they are drafts rather than leaving it as
-        # something only the person who set it up knows.
         context["approval_limit"] = purchase_order_approval_limit()
-        # The figure the approval gate is measured against, so the tile that
-        # counts drafts can say why they are drafts rather than leaving it as
-        # something only the person who set it up knows.
         context["approval_limit"] = purchase_order_approval_limit()
         context["current_tab"] = self.current_tab()
-        # The current view as a query string with the tab left out, so a tab
-        # link only has to append its own and every other setting survives.
         carried = self.request.GET.copy()
         for key in ("tab", "page"):
             carried.pop(key, None)
         context["base_query"] = carried.urlencode()
         context["per_page"] = self.get_paginate_by(None)
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
-        # Whether anything is narrowing the list right now. Paging and column
-        # choices are not filters, so they do not light the reset up.
         context["export_url"] = reverse_lazy("inventory:purchase_order_export")
         context["columns_url"] = reverse_lazy("inventory:purchase_order_columns")
         context["filters_active"] = any(
@@ -2629,8 +2418,6 @@ class PurchaseOrderColumnsView(InventoryListMixin, View):
 
     def post(self, request, *args, **kwargs):
         set_visible_columns(request.session, request.POST.getlist("columns"))
-        # Back to the view they were on. Built from the posted filters rather
-        # than from the Referer, so nothing off this site can steer the redirect.
         carried = request.POST.get("back", "")
         query = urlencode([
             (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
@@ -2734,8 +2521,6 @@ class PendingOrdersReportView(InventoryListMixin, ListView):
         context = super().get_context_data(**kwargs)
         zero = Decimal("0.00")
 
-        # Grouped by supplier, because the question this answers is "what is
-        # this supplier still to send", not "what orders exist".
         groups, page_value = [], zero
         current = None
         today = timezone.localdate()
@@ -2743,8 +2528,6 @@ class PendingOrdersReportView(InventoryListMixin, ListView):
             order.pending_rows, order.pending_value = self._outstanding(order)
             if not order.pending_rows:
                 continue
-            # Promised by a date that has passed, and not all in. The same
-            # figure the orders board shows, worked out the same way.
             order.days_late = (
                 (today - order.expected_date).days
                 if order.expected_date and order.expected_date < today else 0
@@ -2758,8 +2541,6 @@ class PendingOrdersReportView(InventoryListMixin, ListView):
         context["groups"] = groups
         context["page_value"] = page_value
 
-        # The tiles count the whole filtered set rather than this page: "what is
-        # still to come in" is a question about all of it.
         everything = list(
             self.filtered_queryset().prefetch_related("items")
             if hasattr(self, "filtered_queryset")
@@ -2805,20 +2586,15 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         )
         context = {
             "title": "Purchase Order",
-            # What this site has taken off the form and what it has added.
             "layout": get_layout(),
             "settings_url": reverse_lazy("inventory:purchase_order_form_settings"),
             "extra_field_types": EXTRA_FIELD_TYPES,
-            # A plain View builds its own context, so the permission the menu
-            # is gated on has to be put there by hand.
             "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "next_order_no": next_purchase_order_number(),
             "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
             "units": UOM.objects.order_by("title"),
             "godowns": godown_options(),
             "brokers": broker_options(),
-            # An order may commit to wheat and sacks as well as to stores
-            # items. It still moves nothing either way.
             "wheat_products": wheat_product_options(),
             "bardana_products": bardana_product_options(),
             "today": timezone.localdate(),
@@ -2875,20 +2651,12 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             except (InvalidOperation, ValueError):
                 messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
                 return render(request, self.template_name, self._context(posted=posted))
-            # Order quantities are kept to one decimal place, matching what the
-            # line box accepts, so a figure typed finer somewhere else does not
-            # come back to an operator as a quantity they cannot re-enter.
             quantity = quantity.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             if quantity > 0:
-                # With the unit column off nothing is posted, and the line is
-                # taken as written in the item's own unit.
                 raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
-        # Wheat and bardana ordered ahead. Their own rows, entered as a
-        # quantity and a rate like any commitment: the weighbridge and the
-        # deductions belong to the invoice, which is where the goods arrive.
         product_ids = posted.getlist("order_product")
         product_qtys = posted.getlist("order_product_qty")
         product_rates = posted.getlist("order_product_rate")
@@ -2911,8 +2679,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             if quantity > 0:
                 lines.append({"product": product, "quantity": quantity, "rate": rate})
 
-        # Whatever the site added to the form. A required one that was left
-        # blank stops the save, the same as any other required box.
         extra_values, extra_error = read_extra_values(posted)
         if extra_error:
             messages.error(request, extra_error)
@@ -2932,9 +2698,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 tax_amount=money("tax_amount"),
                 remarks=(posted.get("remarks") or "").strip(),
                 extra_data=extra_values,
-                # Always a draft. Releasing it to the supplier is a separate
-                # act, done from the register, where it goes through the
-                # approval gate and the name and amount are recorded against it.
                 status=STATUS_DRAFT,
                 user=request.user,
             )
@@ -2946,9 +2709,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         messages.success(request, f"Purchase order {order.purchase_num} saved for {net}.")
         if "save_and_print" in posted:
             return redirect("inventory:purchase_order_print", pk=order.pk)
-        # Entering a run of orders is the exception, not the rule, so it is asked
-        # for by its own button; a plain save ends on the register, where the
-        # order that was just posted can be seen among the rest.
         if "save_and_new" in posted:
             return redirect("inventory:purchase_order_create")
         return redirect("inventory:purchase_order_board")
@@ -2976,7 +2736,6 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
         step = request.POST.get("step")
 
         if step == "fields":
-            # The menu posts what stays on; anything not ticked comes off.
             shown = set(request.POST.getlist("shown"))
             set_hidden([field["code"] for field in get_layout(self.form_key)["optional_fields"]
                         if field["code"] not in shown], self.form_key)
@@ -2987,8 +2746,6 @@ class PurchaseOrderFormSettingsView(InventoryManageMixin, View):
                 label=request.POST.get("label"),
                 kind=request.POST.get("type"),
                 required=request.POST.get("required") == "1",
-                # One choice per line is how a list is typed; commas belong
-                # inside a choice, not between them.
                 options=(request.POST.get("options") or "").splitlines(),
                 form=self.form_key,
             )
@@ -3030,8 +2787,6 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
     model = PurchaseOrder
     template_name = "inventory/purchase_order_detail.html"
     context_object_name = "order"
-    # Same relations the register pulls, because the page runs the same
-    # ``decorate`` over this one order to work out what it is waiting on.
     queryset = (
         PurchaseOrder.objects
         .select_related("supplier", "created_by", "approved_by", "closed_by")
@@ -3047,10 +2802,6 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         item_form.fields["inventory_item"].queryset = available_items
         context["item_form"] = item_form
         context["item_uom_map"] = {str(i.pk): {"name": i.item_name, "uom": uom_title(i)} for i in available_items}
-        # How this order may be ended, which depends on whether anything has
-        # arrived against it. Cancel is for an order nothing came against;
-        # close-short gives up the balance of one that was part delivered. The
-        # template is told which applies rather than working it out itself.
         lines = list(self.object.items.all())
         anything_invoiced = any((line.qty_invoiced or Decimal("0")) > 0 for line in lines)
         outstanding = sum((line.qty_pending for line in lines), Decimal("0"))
@@ -3062,9 +2813,6 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         context["close_short_form"] = PurchaseOrderCloseShortForm()
         context["reversal_form"] = ReversalReasonForm()
         context["linked_documents"] = linked_documents(self.object)
-        # Every invoice raised against this order, with its date and what it
-        # took: the question "how much of this has actually turned up, and
-        # when" is answered on the order rather than by opening each invoice.
         invoice_rows = []
         for invoice in self.object.invoices.select_related("supplier").prefetch_related("items").order_by("invoice_date", "id"):
             taken = sum(
@@ -3078,15 +2826,8 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
                 "reversed": invoice.status == STATUS_REVERSED,
             })
         context["order_invoices"] = invoice_rows
-        # What the document is for. The order carries no total of its own --
-        # the lines are the record -- so it is added up for the sheet.
         context["order_total"] = sum((line.total_amount for line in lines), Decimal("0.00"))
-        # What the register would offer on this order's row, offered here too:
-        # the page an order is opened on should not be the one place its next
-        # step is missing.
         decorate([self.object])
-        # A line is open to correction while the order is still going. Once it
-        # is closed or cancelled the figures are history, not a draft.
         context["can_edit_lines"] = (
             context.get("can_edit")
             and self.object.status in (STATUS_DRAFT, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED)
@@ -3183,9 +2924,6 @@ class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
         order = get_object_or_404(PurchaseOrder, pk=pk)
         back = redirect("inventory:purchase_order_detail", pk=order.pk)
 
-        # A line is open to correction until the order is closed one way or
-        # another. Once it is cancelled or closed short there is nothing left
-        # to correct, and a received line is held to what arrived below.
         if order.status not in (STATUS_DRAFT, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED):
             messages.error(request, f"{order.purchase_num} is closed, so its lines can no longer be edited.")
             return back
@@ -3203,8 +2941,6 @@ class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
             if quantity <= 0:
                 messages.error(request, f"{item.descr}: the quantity must be greater than zero.")
                 return back
-            # Ordering less than has already turned up would leave the line
-            # owing a negative balance, which is not a thing that can be true.
             if quantity < (item.qty_invoiced or Decimal("0")):
                 messages.error(
                     request,
@@ -3235,8 +2971,6 @@ class PurchaseOrderLinesUpdateView(InventoryManageMixin, View):
                 item.discount_amount = discount
                 item.updated_by = request.user
                 item.save()
-            # What is owed on the order has moved, so what the order is
-            # waiting on may have moved with it.
             _refresh_order_receipt_status(order, user=request.user)
 
         plural = "" if len(changes) == 1 else "s"
@@ -3259,15 +2993,8 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         grand_total = sum((i.total_amount for i in items), Decimal("0"))
         context["grand_total"] = grand_total
         context["amount_in_words"] = amount_in_words(grand_total)
-        # The header, built from what this order actually carries. A box the
-        # site has switched off its form, or one nobody filled in, prints
-        # nothing at all -- a document full of "N/A" reads as a document that
-        # was not filled in.
         supplier = self.object.supplier
         approver = self.object.approved_by
-        # A box switched off in the form settings is off the document too: the
-        # site said it does not use it, and an order raised before it was
-        # switched off should not be the only one printing it.
         shown = get_layout()["shown"]
         pairs = [
             ("PO No", self.object.purchase_num),
@@ -3289,7 +3016,6 @@ class PurchaseOrderPrintView(PrintContextMixin, InventoryListMixin, DetailView):
         context["supplier_address"] = " ".join(
             part for part in ((supplier.addr1 or ""), (supplier.addr2 or "")) if part
         ).strip() if supplier else ""
-        # Back to the board this document belongs to, with its own row opened.
         context["print_back_url"] = (
             f"{reverse_lazy('inventory:purchase_order_board')}?open={self.object.pk}"
         )
@@ -3328,7 +3054,6 @@ class ManualTransactionView(InventoryManageMixin, View):
         form = ManualTransactionForm(initial={"descr": batch_descr, "qty": 1, "supplier": batch_supplier})
         form.fields["inventory_item"].queryset = items
         form.fields["supplier"].queryset = Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name")
-        # group posted transactions by transaction_id for history table
         from itertools import groupby as _groupby
         posted_qs = ManualTransaction.objects.filter(status=STATUS_POSTED).order_by("transaction_id", "id")
         history = {}
@@ -3537,8 +3262,6 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
     search_fields = ("sale_num", "customer__customer_name", "invoice_num", "remarks")
     filter_fields = {"customer": "customer_id"}
     date_filters = [{"field": "sale_date", "label": "Sale date"}]
-    # Only what the database can order by, so a heading never offers a sort
-    # that would quietly lie about the order.
     sort_fields = {
         "sale_num": "sale_seq_num",
         "sale_date": ("sale_date", "id"),
@@ -3551,8 +3274,6 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
 
     PER_PAGE_OPTIONS = (10, 25, 50, 100)
 
-    # What a sale can be waiting on. Posted-and-settled is the finished state;
-    # everything else is somebody's problem.
     TAB_ALL = "all"
     TAB_DRAFT = "draft"
     TAB_OWING = "owing"
@@ -3646,8 +3367,6 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             lines = list(invoice.items.all())
             invoice.line_count = len(lines)
             invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            # What the sale is waiting on, worked out here so the row prints an
-            # answer rather than the template guessing at one.
             if invoice.posted != YES:
                 invoice.state, invoice.state_label = "draft", "Not posted"
             elif (invoice.balance or Decimal("0.00")) > 0:
@@ -3715,7 +3434,6 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
                     "name": item.item_name,
                     "code": item.code,
                     "uom": item.uom_id or "",
-                    # A sale is priced off the sale price, not what it cost.
                     "rate": float(item.price or 0),
                     "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
                     "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
@@ -3768,11 +3486,6 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "price": price, "uom": uom})
 
-        # A row copied off a sales order carries that order line with it, so the
-        # invoice draws the order down rather than leaving it open for ever.
-        # Unlike the purchase side this is offered rather than demanded: a
-        # customer at the counter buying off the shelf is a real sale even when
-        # an order of theirs is open elsewhere, and refusing it stops the till.
         order_item_ids = posted.getlist("row_order_item")
         picked = {
             item.pk: item
@@ -3844,7 +3557,6 @@ class CustomerSalesOrderOptionsView(InventoryListMixin, View):
                 "value": Decimal("0.00"),
                 "lines": [],
             })
-            # What is still open on the line, not what was ordered.
             pending = line.qty_pending
             rate = line.rate or Decimal("0.00")
             amount = (pending * rate).quantize(TWO_DP)
@@ -3991,8 +3703,6 @@ class SalesOrderCreateView(InventoryManageMixin, View):
                 remarks=(posted.get("remarks") or "").strip(),
                 user=request.user,
             )
-            # Raised and committed to in one go unless it is being parked: an
-            # order nobody has committed to is a draft, and the screen says so.
             if "save_draft" not in posted:
                 submit_sales_order(order=order, user=request.user)
         except ValidationError as error:
@@ -4369,8 +4079,6 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # The pickable documents are posted invoices, not orders: the invoice is
-        # what brought the goods in, and a spot purchase has no order at all.
         zero = Decimal("0")
         invoices = list(
             PurchaseInvoice.objects.filter(status=STATUS_POSTED)
@@ -4378,8 +4086,6 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
             .prefetch_related("items__inventory_item", "items__uom")
             .order_by("-invoice_date", "-id")[:200]
         )
-        # One query for every quantity already sent back, rather than one per
-        # line: this screen is the gate clerk's, and it opens on a slow link.
         returned = {
             (row["purchase_return_master__purchase_invoice_id"], row["inventory_item_id"]): row["qty"]
             for row in PurchaseReturnDetail.objects.filter(
@@ -4393,9 +4099,6 @@ class PurchaseReturnListView(InventoryListMixin, ListView):
         for invoice in invoices:
             rows = []
             for line in invoice.items.all():
-                # A return is written against a stores item. Wheat and bardana
-                # go back through the product ledger, not through this screen,
-                # so they are not offered here rather than offered and failing.
                 if not line.inventory_item_id:
                     continue
                 already = returned.get((invoice.pk, line.inventory_item_id)) or zero
@@ -4553,15 +4256,6 @@ class PurchaseReturnPostView(InventoryManageMixin, View):
         return redirect("inventory:purchase_return_detail", pk=pk)
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Supplier bills
-#
-# The screen is built around the goods receipts, not around the order. What is
-# billable is what actually arrived and nobody has invoiced yet, so that is
-# what the form lists -- and a quantity cannot be typed above it.
-# ══════════════════════════════════════════════════════════════════════════
-
-
 def balance_of_grn_clearing():
     """What the GRN clearing account is holding right now.
 
@@ -4643,8 +4337,6 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
             if qty <= 0:
                 continue
             per_bag = Decimal(str(row.get("ded_per_bag") or "0").replace(",", "") or "0")
-            # The sacks' own weight comes off the wheat, so it is summed here
-            # and carried onto the wheat line rather than left on the bags.
             sack_deduction += qty * per_bag
             bardana_lines.append({
                 "product": product,
@@ -4669,16 +4361,12 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
             "mill_weight": mill_net,
             "selected_weight": weight("selected_weight"),
             "katla": weight("katla"),
-            # The screen calls it impurities, which is what the gate calls it;
-            # the column has carried the trade's name since the module was built.
             "khoot": weight("impurities"),
             "moisture": weight("moisture"),
             "sack_weight_deduction": sack_deduction or None,
             "rate_per_mund": weight("rate_per_mund"),
         }
 
-        # ``picked`` reads a posted form, where every value is a string; this
-        # screen posts JSON, where an id arrives as a number.
         text_payload = {key: ("" if value is None else str(value)) for key, value in payload.items()
                         if not isinstance(value, (list, dict))}
 
@@ -4691,11 +4379,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
                 invoice_date=parse_date(payload.get("voucher_date") or "") or timezone.localdate(),
                 lines=[wheat_line] + bardana_lines,
                 freight_amount=money("freight"),
-                # The gate pays the truck in cash and takes it off the sender's
-                # account. This is the mill's practice, not the stores case.
                 freight_paid_by_mill=True,
-                # The wheat seller engages the broker; the mill remits the
-                # brokerage for him and deducts it off the bill.
                 brokerage_borne_by_supplier=True,
                 remarks=(payload.get("remark") or "").strip(),
                 godown=picked(text_payload, "godown", Godown.objects.filter(status=STATUS_ACTIVE)),
@@ -4703,9 +4387,6 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
                 broker=picked(text_payload, "broker", broker_options()),
                 brokerage_rate_per_100kg=money("brokerage_rate"),
                 withholding_rate_per_40kg=money("withholding_rate"),
-                # The rest of the carrier. Kept beside the purchase rather than
-                # as columns because nothing in the books reads it -- it is what
-                # the mill rings when a load has not arrived.
                 extra_data={
                     key: (payload.get(key) or "").strip()
                     for key in ("transporter", "driver_phone", "builty_no")
@@ -4730,10 +4411,6 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         return {
             "title": "Wheat Purchase",
             "list_url": reverse_lazy("inventory:purchase_invoice_list"),
-            # Advisory, like every other number preview on the purchase side.
-            # The real one is allocated when the entry is saved, so the box is
-            # shown rather than typed into: a wheat slip is a purchase invoice
-            # and carries the same number the bill list will show it under.
             "next_voucher_no": next_purchase_invoice_number(),
             "today": timezone.localdate(),
             "suppliers": suppliers,
@@ -4749,9 +4426,6 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
                     "id": row.pk,
                     "code": row.complete_code,
                     "name": row.name,
-                    # Carried so the screen can guess the sack: govt wheat and
-                    # private wheat arrive in different bardana, and the
-                    # specification is the only thing on the item that says so.
                     "spec": row.specification or "",
                 }
                 for row in wheat

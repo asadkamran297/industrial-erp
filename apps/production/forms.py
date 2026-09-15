@@ -99,8 +99,6 @@ def parse_output_lines(post) -> tuple[list[dict], list[str]]:
         if product is None:
             errors.append(f"Line {index + 1}: product not found.")
             continue
-        # Caught here as well as on the model, so a tampered post says which
-        # line is wrong rather than failing the whole voucher anonymously.
         if product.specification not in PRD_PACKABLE_SPECS:
             errors.append(f"Line {index + 1}: {product.name} is not produced by the mill.")
             continue
@@ -112,8 +110,6 @@ def parse_output_lines(post) -> tuple[list[dict], list[str]]:
         raw_pack = pack_products[index] if index < len(pack_products) else ""
         pack_product = catalogue.get(int(raw_pack)) if raw_pack else None
         raw_pack_qty = pack_quantities[index] if index < len(pack_quantities) else ""
-        # Blank means "same as the output", which is what packing normally is.
-        # Loose output posts a zero, and consumes no sack.
         pack_qty = _decimal(raw_pack_qty) if str(raw_pack_qty).strip() != "" else quantity
         if pack_product is None:
             pack_qty = ZERO

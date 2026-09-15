@@ -21,7 +21,6 @@ from apps.core.constants import (
 )
 from apps.products.models import FinishBardanaLink, ProductNode, RawBardanaLink
 
-# (segment, name)
 GROUPS = (
     ("01", "Raw"),
     ("02", "Finish"),
@@ -30,7 +29,6 @@ GROUPS = (
     ("05", "Wages"),
 )
 
-# (group segment, sub segment, name)
 SUB_GROUPS = (
     ("01", "01", "Wheat Private"),
     ("01", "02", "Wheat Government"),
@@ -45,7 +43,6 @@ SUB_GROUPS = (
     ("03", "02", "Finish Bardana"),
 )
 
-# (complete code, name, specification, unit, unit weight)
 ITEMS = (
     ("01-01-001", "Wheat Pvt - P", PRD_SPEC_RAW_ITEM, PRD_UNIT_KG, 1),
     ("01-01-002", "Wheat Pvt - J", PRD_SPEC_RAW_ITEM, PRD_UNIT_KG, 1),
@@ -60,8 +57,6 @@ ITEMS = (
     ("03-01-002", "Jute-B (Wheat Pvt)", PRD_SPEC_RAW_PACKING, PRD_UNIT_PIECE, 0),
     ("03-01-003", "Poly-B (Wheat Govt)", PRD_SPEC_RAW_PACKING, PRD_UNIT_PIECE, 0),
     ("03-01-004", "Jute-B (Wheat Govt)", PRD_SPEC_RAW_PACKING, PRD_UNIT_PIECE, 0),
-    # The bags the mill packs into. "Open Stock without Bardana" is a real row
-    # so that a loose sale still points at something.
     ("03-02-001", "(5KG)", PRD_SPEC_FINISH_PACKING, PRD_UNIT_PIECE, 0),
     ("03-02-002", "16X21 (10Kg)", PRD_SPEC_FINISH_PACKING, PRD_UNIT_PIECE, 0),
     ("03-02-003", "17X26 (15 Kg)", PRD_SPEC_FINISH_PACKING, PRD_UNIT_PIECE, 0),
@@ -77,7 +72,6 @@ ITEMS = (
     ("03-02-013", "Open Stock without Bardana", PRD_SPEC_FINISH_PACKING, PRD_UNIT_PIECE, 0),
 )
 
-# wheat item code -> the sack it arrives in
 RAW_BARDANA = (
     ("01-01-001", "03-01-001"),
     ("01-01-002", "03-01-002"),
@@ -85,7 +79,6 @@ RAW_BARDANA = (
     ("01-02-002", "03-01-004"),
 )
 
-# finished product code -> the bag it is packed in
 FINISH_BARDANA = (
     ("02-01-044", "03-02-002"),
     ("02-01-002", "03-02-003"),

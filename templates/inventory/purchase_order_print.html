@@ -2,8 +2,6 @@
 {% block title %}Purchase Order {{ order.purchase_num }}{% endblock %}
 
 {% block print_content %}
-  {# An order nobody has released is not an instruction to a supplier. Printed #}
-  {# unmarked it looks exactly like one, so it says on its face what it is.     #}
   {% if order.status == "draft" %}
   <style>
     /* Sized against the page rather than in pixels, so it fills the sheet at
@@ -42,7 +40,6 @@
 
   <h1 class="doc-title">Purchase Order</h1>
 
-  {# Three label/value pairs to a row, and only what the order carries. #}
   <table class="meta">
     {% for label, value in meta_pairs %}
     {% if forloop.counter0|divisibleby:3 %}<tr>{% endif %}

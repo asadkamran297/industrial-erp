@@ -157,7 +157,6 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
     filter_fields = {"status": "status", "voucher_type": "voucher_type", "posted": "posted"}
     date_filters = [{"field": "voucher_date", "label": "Voucher date"}]
 
-    # Period shortcuts, resolved to the date range the mixin already filters on.
     PERIODS = ("this_month", "last_month", "this_year", "all")
 
     def _period_range(self):
@@ -176,13 +175,10 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # Explicit dates win; the period only fills them in when none were typed.
         if not self.request.GET.get("date_from") and not self.request.GET.get("date_to"):
             _period, start, end = self._period_range()
             if start:
                 queryset = queryset.filter(voucher_date__gte=start, voucher_date__lte=end)
-        # Cash vs bank is read off the header account, the same way the voucher
-        # number's book is decided, so the two always agree.
         money_mode = self.request.GET.get("money_mode", "").strip()
         if money_mode in FIN_MONEY_MODE_SUFFIX:
             group = "Cash" if money_mode == "cash" else "Bank"
@@ -204,7 +200,6 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
         if not vouchers:
             return
         titles = dict(ChartOfAccount.objects.values_list("code", "title"))
-        # One query for the whole page instead of one per row.
         lines = AccountVoucherLine.objects.filter(voucher__in=vouchers).order_by("line_number")
         by_voucher = {}
         for line in lines.values_list("voucher_id", "account_no"):
@@ -226,14 +221,11 @@ class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequired
         context["selected_money_mode"] = self.request.GET.get("money_mode", "")
         context["period_start"] = self.request.GET.get("date_from") or (start.isoformat() if start else "")
         context["period_end"] = self.request.GET.get("date_to") or (end.isoformat() if end else "")
-        # The date inputs need ISO; people read DD-MM-YYYY, so the tile gets its own.
         context["period_start_display"] = format_date(context["period_start"])
         context["period_end_display"] = format_date(context["period_end"])
         context["voucher_type_choices"] = FIN_VOUCHER_TYPE_CHOICES
         selected_type = self.request.GET.get("voucher_type", "")
         context["selected_voucher_type"] = selected_type
-        # A type-scoped list names itself and adds that same type; the unscoped
-        # list keeps the generic wording and starts a Payment.
         label = dict(FIN_VOUCHER_TYPE_CHOICES).get(selected_type, "")
         context["list_title"] = f"{label} Details" if label else "Vouchers"
         context["add_label"] = f"Add {label}" if label else "Add Voucher"
@@ -258,7 +250,6 @@ class AccountVoucherExportView(AccountVoucherListView):
         stamp = timezone.localdate().isoformat()
         voucher_type = request.GET.get("voucher_type", "") or "vouchers"
         response["Content-Disposition"] = f'attachment; filename="{voucher_type}-{stamp}.csv"'
-        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
         response.write("﻿")
         writer = csv.writer(response)
         writer.writerow(["Date", "Ref No.", "Account From", "Paid To", "Amount", "Status"])
@@ -283,8 +274,6 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
     success_message = "Voucher saved."
 
     def _selected_type(self):
-        # Same param name as the list filter, so one sidebar entry matches both
-        # the list and the entry screen for its type.
         value = self.request.GET.get("voucher_type", "") or self.request.GET.get("type", "")
         if value in {code for code, *_rest in FIN_VOUCHER_TYPE_PICKER_META}:
             return value
@@ -301,18 +290,11 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_type_meta"] = FIN_VOUCHER_TYPE_PICKER_META
         context["selected_voucher_type"] = self._selected_type()
         context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(self._selected_type(), "")
-        # Rendered server-side so the number is present before JavaScript runs;
-        # the fetch then keeps it in step as the type changes.
-        # Cash is the form's default money mode, so preview that book's number.
-        # A journal has no cash/bank book, so it numbers without that suffix.
         preview_mode = "" if self._selected_type() in VOUCHER_HEADERLESS_TYPES else "cash"
         context["next_voucher_no"] = next_voucher_number(self._selected_type(), preview_mode)
-        # Last (childless) nodes of the chart of accounts are the postable ones.
         money_groups = money_account_codes()
         customer_codes = receivable_account_codes()
         accounts = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code"))
-        # ChartOfAccount.depth walks parents one query at a time, so the levels
-        # are derived once here from a single pass over the tree.
         parents = dict(ChartOfAccount.objects.values_list("id", "parent_id"))
 
         def depth_of(account_id):
@@ -328,7 +310,6 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
             account.tree_depth = depth_of(account.id)
         context["voucher_accounts"] = accounts
         context["simple_voucher_types"] = list(VOUCHER_SIMPLE_SIDES)
-        # {type: (header side, line side)} — drives the posting preview.
         context["simple_voucher_sides"] = {code: list(sides) for code, sides in VOUCHER_SIMPLE_SIDES.items()}
         context["voucher_header_roles"] = FIN_VOUCHER_HEADER_ROLES
         context["voucher_line_roles"] = FIN_VOUCHER_LINE_ROLES
@@ -336,26 +317,19 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_party_roles"] = FIN_VOUCHER_PARTY_ROLES
         context["voucher_labels"] = FIN_VOUCHER_LABELS
         context["settlement_voucher_types"] = list(VOUCHER_SETTLEMENT_TYPES)
-        # Types entered purely as a grid: no header account, method or amount box.
         context["headerless_voucher_types"] = list(VOUCHER_HEADERLESS_TYPES)
-        # Kept on the form but off the screen: date defaults to today and the
-        # workflow fields stay at their model defaults until the detail page.
         context["hidden_header_fields"] = ["voucher_type", "voucher_date", "remarks", "status", "adj_entry", "adj_voucher"]
-        # {payment_method_id: [extra field names]} — drives the conditional fields.
         context["payment_method_fields"] = {
             str(pk): list(FIN_PAYMENT_METHOD_FIELDS.get((title or "").strip().lower(), ()))
             for pk, title in PaymentMethod.objects.values_list("id", "title")
         }
         context["payment_conditional_fields"] = list(FIN_PAYMENT_CONDITIONAL_FIELDS)
-        # Types whose bank side can carry a scanned slip; the JS keeps the box
-        # hidden until the money mode is actually Bank.
         context["receipt_upload_types"] = list(FIN_RECEIPT_UPLOAD_TYPES)
         return context
 
     @staticmethod
     def _decimal(values, index):
         try:
-            # Amount boxes are shown grouped, so a stray separator is dropped here.
             return Decimal(((values[index] if index < len(values) else "") or "0").replace(",", ""))
         except InvalidOperation:
             return Decimal("0")
@@ -368,8 +342,6 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         """
         sides = VOUCHER_SIMPLE_SIDES.get(self.request.POST.get("voucher_type", ""))
         accounts = self.request.POST.getlist("line_account[]")
-        # The grid has no description column: the voucher's narration describes
-        # every line of it, so each row carries the same words.
         narration = (self.request.POST.get("remarks") or "").strip()
         debits = self.request.POST.getlist("line_debit[]")
         credits = self.request.POST.getlist("line_credit[]")
@@ -396,7 +368,6 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
             return
         header_side = sides[0]
         self.object.recalculate_totals()
-        # The reason lines all sit on one side; the money leg mirrors their total.
         amount = self.object.debit_amount if header_side == "credit" else self.object.credit_amount
         if amount <= 0:
             return
@@ -452,12 +423,10 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         if self.object.lines.exists() and not self.object.is_balanced:
             messages.warning(self.request, "Voucher totals are not balanced yet. Debit and credit must match before posting.")
         if self._is_ajax():
-            # Stay on the form: the entry screen clears itself for the next voucher.
             return JsonResponse({
                 "ok": True,
                 "voucher_no": self.object.voucher_no,
                 "detail_url": reverse("finance:account_voucher_detail", args=[self.object.pk]),
-                # Where the browser goes once the save (and any print) is done.
                 "list_url": f"{reverse('finance:account_voucher_list')}?voucher_type={self.object.voucher_type}",
                 "print_url": reverse("finance:account_voucher_print", args=[self.object.pk]),
                 "messages": self._drain_messages(),
@@ -469,14 +438,11 @@ class AccountVoucherUpdateView(VoucherNavMixin, AccountVoucherCreateView, Update
     success_message = "Voucher updated."
 
     def form_valid(self, form):
-        # The screen is the entry screen, so the posted grid is the voucher's
-        # lines: the old ones go and the parent re-creates them from the POST.
         with transaction.atomic():
             self.get_object().lines.all().delete()
             return super().form_valid(form)
 
     def get_success_url(self):
-        # Back to the list for this voucher's type, where the entry started.
         return f"{reverse('finance:account_voucher_list')}?voucher_type={self.object.voucher_type}"
 
     def get_context_data(self, **kwargs):
@@ -484,7 +450,6 @@ class AccountVoucherUpdateView(VoucherNavMixin, AccountVoucherCreateView, Update
         voucher = self.object
         context["selected_voucher_type"] = voucher.voucher_type
         context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(voucher.voucher_type, "")
-        # The number is already allocated; previewing the next one would be a lie.
         context["next_voucher_no"] = voucher.voucher_no
         context["money_mode"] = money_mode_for_account(voucher.account_no)
         titles = dict(ChartOfAccount.objects.values_list("code", "title"))
@@ -492,8 +457,6 @@ class AccountVoucherUpdateView(VoucherNavMixin, AccountVoucherCreateView, Update
         for line in lines:
             line.account_title = titles.get(line.account_no, line.account_no)
         context["voucher_lines"] = lines
-        # Simple mode generates the money leg from the header account on save, so
-        # the grid shows only the reason lines the user actually typed.
         simple = voucher.voucher_type in VOUCHER_SIMPLE_SIDES
         entry_lines = [line for line in lines if not (simple and line.account_no == voucher.account_no)]
         for line in entry_lines:
@@ -551,12 +514,9 @@ class AccountVoucherPrintView(VoucherNavMixin, PrintContextMixin, PagePermission
             line.account_title = titles.get(line.account_no, line.account_no)
         context["lines"] = lines
         context["account_title"] = titles.get(self.object.account_no, self.object.account_no)
-        # The voucher's value is one side of it, not the sum of both.
         total = self.object.debit_amount or Decimal("0")
         context["voucher_total"] = total
         context["amount_words"] = amount_in_words(total)
-        # Which book it belongs to, and the account on the other side of it —
-        # the same two facts the on-screen preview leads with.
         context["money_mode"] = money_mode_for_account(self.object.account_no)
         counter = [line for line in lines if line.account_no != self.object.account_no]
         context["counter_titles"] = ", ".join(line.account_title for line in counter)
@@ -576,8 +536,6 @@ class AccountBalanceView(PagePermissionRequiredMixin, View):
             return JsonResponse({"error": "Unknown account."}, status=400)
         own = account_balances().get(code) or {}
         closing = own.get("closing") or Decimal("0")
-        # closing is signed on the account's own natural side, so the side it
-        # sits on flips when it goes negative (a debit account run into credit).
         natural_debit = account.account_type in DEBIT_NATURE_TYPES
         side = "" if not closing else ("Dr" if (closing > 0) == natural_debit else "Cr")
         return JsonResponse({
@@ -599,9 +557,6 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         context = super().get_context_data(**kwargs)
         voucher = self.object
         context["line_form"] = AccountVoucherLineForm()
-        # Lines validate against the chart of accounts, so the picker must
-        # offer postable leaves from the same chart. It previously listed the
-        # separate account master, whose codes fail that validation.
         context["active_accounts"] = ChartOfAccount.objects.filter(
             status=STATUS_ACTIVE, children__isnull=True
         ).order_by("code")
@@ -609,8 +564,6 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         context["lines"] = [
             {
                 "line": line,
-                # Name the account, or say plainly that it is missing — a bare
-                # code with no name tells the reader nothing.
                 "title": titles.get(line.account_no),
                 "known": line.account_no in titles,
             }
@@ -621,15 +574,10 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         context["balance_difference"] = voucher.balance_difference
         context["kind"] = voucher_kind(voucher)
         context["is_locked"] = voucher.posted == "Y"
-        # Which book the voucher belongs to, read off its money account — the same
-        # way the number's Cash/Bank suffix is decided.
         context["money_mode"] = money_mode_for_account(voucher.account_no)
-        # The voucher's value is one side of it, read the same way the entry
-        # screen and the printed copy read it.
         total = voucher.debit_amount or Decimal("0")
         context["voucher_total"] = total
         context["amount_words"] = amount_in_words(total)
-        # The account the money went to: the line that is not the money account.
         counter = [line for line in voucher.lines.all() if line.account_no != voucher.account_no]
         context["counter_titles"] = ", ".join(titles.get(line.account_no, line.account_no) for line in counter)
         return context
@@ -731,10 +679,6 @@ class AccountVoucherLineDeleteView(PagePermissionRequiredMixin, View):
         return redirect("finance:account_voucher_detail", pk=voucher.pk)
 
 
-# ---------------------------------------------------------------------------
-# Chart of Accounts (hierarchical tree with drag-and-drop)
-# ---------------------------------------------------------------------------
-
 def _serialize_coa_node(node, children_map, depth=0):
     return {
         "id": node.id,
@@ -770,10 +714,6 @@ class ChartOfAccountTreeView(PagePermissionRequiredMixin, TemplateView):
         context["account_types"] = FIN_COA_ACCOUNT_TYPE_CHOICES
         return context
 
-
-# ---------------------------------------------------------------------------
-# Opening balances (same tree, one amount field per postable account)
-# ---------------------------------------------------------------------------
 
 def _serialize_opening_node(node, children_map, balances, depth=0):
     children = [_serialize_opening_node(child, children_map, balances, depth + 1) for child in children_map.get(node.id, [])]
@@ -829,17 +769,12 @@ class OpeningBalanceView(PagePermissionRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         tree = _build_opening_forest()
         context["opening_tree"] = tree
-        # Roots are ASSETS / LIABILITIES / CAPITAL / REVENUE / EXPENSE — summing their
-        # debit vs credit sides across the whole tree is the accounting-equation check:
-        # total debit-natured (assets, expenses) must equal total credit-natured
-        # (liabilities, capital, revenue) once opening balances are entered correctly.
         keys = ("opening_dr", "opening_cr", "movement_dr", "movement_cr", "closing_dr", "closing_cr")
         context["grand_totals"] = {key: sum((root[key] for root in tree), Decimal("0.00")) for key in keys}
         return context
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        # Only leaves may carry an opening balance; headings roll their subtree up.
         leaves = {node.id: node for node in ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True)}
 
         def parse(prefix, node_id):
@@ -896,8 +831,6 @@ class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
                 totals[key] += rows[-1][key]
         context["rows"] = rows
         context["totals"] = totals
-        # A trial balance that hides what it could not account for is worse
-        # than one that does not balance, so the gaps are reported alongside.
         context["integrity"] = ledger_integrity()
         return context
 
@@ -948,7 +881,6 @@ class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
         code = (self.request.GET.get("account_no") or "").strip()
         date_from, date_to = self._dates()
 
-        # Only postable leaves hold entries, so only those are offered.
         context["accounts"] = ChartOfAccount.objects.filter(
             status=STATUS_ACTIVE, children__isnull=True
         ).order_by("code")
@@ -971,7 +903,6 @@ class AccountLedgerExportView(AccountLedgerView):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         stamp = timezone.localdate().isoformat()
         response["Content-Disposition"] = f'attachment; filename="ledger-{ledger["account"].code}-{stamp}.csv"'
-        # Excel reads a UTF-8 CSV correctly only when it starts with the BOM.
         response.write("﻿")
         writer = csv.writer(response)
         writer.writerow([ledger["account"].title, ledger["account"].code])
@@ -1119,7 +1050,6 @@ class ChartOfAccountRenameView(PagePermissionRequiredMixin, View):
         if not title:
             return JsonResponse({"ok": False, "error": "Title is required."}, status=400)
         node.title = title
-        # Codes are auto-generated by position; only title/is_group are editable.
         if node.parent_id is not None and "is_group" in request.POST:
             node.is_group = request.POST.get("is_group") != "false"
         node.updated_by = request.user
@@ -1158,13 +1088,10 @@ class ChartOfAccountReorderView(PagePermissionRequiredMixin, View):
             if node is None:
                 continue
             parent_id = move.get("parent_id")
-            # The five roots are fixed: they can be reordered but never re-parented.
             node.parent_id = None if node.id in root_ids else (parent_id or None)
             node.sort_order = move.get("sort_order", node.sort_order)
             node.updated_at = timezone.now()
 
-        # Validate no cycles against the in-memory batch, then cascade
-        # account_type down from each node's resolved root.
         def walk_to_root(node):
             seen = set()
             cursor = node
@@ -1181,7 +1108,6 @@ class ChartOfAccountReorderView(PagePermissionRequiredMixin, View):
             if walk_to_root(node) is None:
                 return JsonResponse({"ok": False, "error": "Invalid move: would create a cycle."}, status=400)
 
-        # Enforce the 5-level cap after the moves are applied.
         def level_of(node):
             depth, cursor = 1, node
             while cursor.parent_id is not None:

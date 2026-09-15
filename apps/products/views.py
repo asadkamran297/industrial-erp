@@ -40,8 +40,6 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
     def get_queryset(self):
         self.model = ProductNode
         queryset = selectors.items_with_stock()
-        # The account filter reaches across the link table rather than storing
-        # the account on the product, so a re-link is picked up here for free.
         account = self.request.GET.get("account", "").strip()
         if account:
             queryset = queryset.filter(account_link__purchase_account_id=account)
@@ -50,8 +48,6 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Headings are added around the page's own items, so a paged list is
-        # still readable as a tree rather than as a run of orphan codes.
         context["tree_rows"] = selectors.tree_rows(context["rows"])
         context["title"] = "Products"
         context["create_url"] = reverse("products:product_create")

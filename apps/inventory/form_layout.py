@@ -25,8 +25,6 @@ import re
 
 from apps.configurations.models import SystemConfiguration
 
-# One record per form. The purchase order keeps the key it already had, so a
-# site that has configured its order form does not lose that on upgrade.
 FORM_PURCHASE_ORDER = "purchase_order"
 FORM_PURCHASE_INVOICE = "purchase_invoice"
 
@@ -36,8 +34,6 @@ SETTING_KEYS = {
 }
 SETTING_KEY = SETTING_KEYS[FORM_PURCHASE_ORDER]
 
-# A code is what the value is filed under on the order, so it has to be stable,
-# unique and safe to put in an input name.
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 
 EXTRA_FIELD_TYPES = (
@@ -59,9 +55,6 @@ class OptionalField:
     note: str = ""
 
 
-# Only what the form can lose and still be a purchase order. Supplier, the item
-# lines, quantity and rate are not here: without them there is nothing to save,
-# so they are never on offer.
 OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
     OptionalField("expected_date", "Expected delivery date", "Header",
                   "Off, nothing counts as an overdue delivery."),
@@ -78,9 +71,6 @@ OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
     OptionalField("tax_amount", "Tax", "Money"),
     OptionalField("amount_words", "Amount in words panel", "Money"),
 )
-# The invoice asks for money the order does not, and does not ask for the
-# quotation the order does. Held apart rather than merged: a box offered on a
-# form that never draws it is a switch that does nothing.
 INVOICE_OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
     OptionalField("bill_number", "Supplier's bill no", "Header",
                   "Off, a duplicate supplier invoice cannot be caught."),
@@ -116,8 +106,6 @@ def _fields_for(form):
 def _codes_for(form):
     return {field.code for field in _fields_for(form)}
 
-# The codes a site may not take for one of its own fields, because the form
-# already posts something under each of them.
 RESERVED_CODES = OPTIONAL_FIELD_CODES | {field.code for field in INVOICE_OPTIONAL_FIELDS} | {
     "supplier", "order_date", "quantity", "rate", "item_id", "csrfmiddlewaretoken",
     "save_and_print", "save_and_new", "tax_percent",
@@ -171,7 +159,6 @@ def get_layout(form=FORM_PURCHASE_ORDER):
         extra.append(field)
 
     return {
-        # ``shown`` is what a template asks: ``{% if layout.shown.tax_amount %}``.
         "shown": {field.code: field.code not in hidden for field in _fields_for(form)},
         "hidden": sorted(hidden),
         "extra": extra,

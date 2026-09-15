@@ -1,13 +1,10 @@
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-# Application-wide date display format (Pakistan convention: 09-08-2026).
 DATE_DISPLAY_FORMAT = "%d-%m-%Y"
 
-# Application-wide quantity display precision. Change here to change everywhere.
 QTY_DECIMALS = 2
 
-# Application-wide amount display precision. Change here to change everywhere.
 AMOUNT_DECIMALS = 2
 
 

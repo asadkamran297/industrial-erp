@@ -33,7 +33,6 @@
           {% include "components/ui/search_box.html" with placeholder="Search records, reports..." %}
         </div>
 
-        {# Quick entry: the two things started most often, one click from anywhere. #}
         <div class="ml-auto flex items-center gap-2">
           <a href="{% url 'inventory:pos_create' %}" class="inline-flex h-9 items-center rounded-lg bg-[var(--primary-color)] px-3 text-sm font-semibold text-white hover:opacity-90">+ Add Sale</a>
           <a href="{% url 'finance:account_voucher_create' %}?voucher_type=PV" class="inline-flex h-9 items-center rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">+ Add Voucher</a>

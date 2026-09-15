@@ -27,8 +27,6 @@ def _snapshot() -> dict:
     totals = AccountVoucherLine.objects.aggregate(
         debit=Sum("debit_amount"), credit=Sum("credit_amount")
     )
-    # Per account, because two errors that cancel each other out leave the
-    # grand totals untouched and are exactly what this is meant to catch.
     balances = {
         row["account_no"]: str(
             (row["debit"] or Decimal("0.00")) - (row["credit"] or Decimal("0.00"))

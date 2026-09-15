@@ -45,7 +45,6 @@
               <td class="px-4 py-2 text-right">{{ row.disposal_wheat|floatformat:0|intcomma }}</td>
               <td class="px-4 py-2 text-right">{{ row.disposal_bag_qty|floatformat:0|intcomma }}</td>
               <td class="px-4 py-2 text-right">{{ row.total_output_kg|floatformat:0|intcomma }}</td>
-              {# A run below its wheat's standard is the whole reason this screen is read. #}
               <td class="px-4 py-2 text-right font-semibold {% if row.is_below_standard %}text-rose-600{% endif %}">
                 {{ row.yield_percent|floatformat:2 }}
                 {% if row.is_below_standard %}<span class="ml-1 text-xs">▼ {{ row.yield_variance|floatformat:2 }}</span>{% endif %}

@@ -36,12 +36,6 @@ urlpatterns = [
     path("ledger/", LedgerListView.as_view(), name="ledger_list"),
     path("ledger/print/", LedgerPrintView.as_view(), name="ledger_print"),
     path("customer-ledger/", CustomerLedgerListView.as_view(), name="customer_ledger_list"),
-    # Keyed on the note number rather than a row id: a note covering four
-    # lines is one document, and its number is what anybody holding the
-    # paper can read off it.
-    # The orders board keeps its own address. What used to be its address now
-    # lands on the purchase invoice form, because that is where a purchase is
-    # entered; the board is still there for anybody following an order through.
     path("purchase-orders/board/", PurchaseOrderListView.as_view(), name="purchase_order_board"),
     path("purchase-orders/", RedirectView.as_view(pattern_name="inventory:purchase_invoice_create", permanent=False),
          name="purchase_order_list"),
@@ -51,14 +45,10 @@ urlpatterns = [
     path("purchase-orders/form-settings/", PurchaseOrderFormSettingsView.as_view(), name="purchase_order_form_settings"),
     path("purchases/", PurchaseInvoiceListView.as_view(), name="purchase_invoice_list"),
     path("purchases/export/", PurchaseInvoiceExportView.as_view(), name="purchase_invoice_export"),
-    # Its own page rather than the order detail: the two documents are read
-    # for different reasons, and only one of them is still owed anything.
     path("purchases/<int:pk>/", PurchaseInvoiceDetailView.as_view(), name="purchase_invoice_detail"),
     path("sales/", SaleInvoiceListView.as_view(), name="sale_invoice_list"),
     path("sales/export/", SaleInvoiceExportView.as_view(), name="sale_invoice_export"),
     path("sales/new/", SaleInvoiceCreateView.as_view(), name="sale_invoice_create"),
-    # What the sale invoice screen asks for the moment a customer is picked:
-    # that customer's open orders, to copy lines from.
     path("sales/so-options/", CustomerSalesOrderOptionsView.as_view(), name="customer_so_options"),
     path("sales-orders/", SalesOrderListView.as_view(), name="sales_order_list"),
     path("sales-orders/new/", SalesOrderCreateView.as_view(), name="sales_order_create"),
@@ -67,15 +57,11 @@ urlpatterns = [
     path("purchases/wheat/new/", WheatPurchaseEntryView.as_view(), name="wheat_purchase_create"),
     path("purchases/form-settings/", PurchaseInvoiceFormSettingsView.as_view(), name="purchase_invoice_form_settings"),
     path("purchases/<int:pk>/reverse/", PurchaseInvoiceReverseView.as_view(), name="purchase_invoice_reverse"),
-    # What the purchase invoice screen asks for the moment a supplier is
-    # picked: that supplier's open orders, to copy lines from.
     path("purchases/po-options/", SupplierPurchaseOrderOptionsView.as_view(), name="supplier_po_options"),
     path("purchase-orders/quick-create/", PurchaseOrderQuickCreateView.as_view(), name="purchase_order_quick_create"),
     path("purchase-orders/draft-init/", PurchaseOrderDraftInitView.as_view(), name="purchase_order_draft_init"),
     path("purchase-orders/draft-finalize/", PurchaseOrderDraftFinalizeView.as_view(), name="purchase_order_draft_finalize"),
     path("purchase-orders/<int:pk>/raise/", PurchaseOrderRaiseView.as_view(), name="purchase_order_raise"),
-    # Ending an order early. Two verbs, not one: cancel is for an order nothing
-    # arrived against, close-short for one that was part delivered.
     path("purchase-orders/<int:pk>/cancel/", PurchaseOrderCancelView.as_view(), name="purchase_order_cancel"),
     path("purchase-orders/<int:pk>/close-short/", PurchaseOrderCloseShortView.as_view(), name="purchase_order_close_short"),
     path("purchase-orders/<int:pk>/reopen/", PurchaseOrderReopenView.as_view(), name="purchase_order_reopen"),
@@ -120,8 +106,6 @@ urlpatterns = [
     path("purchase-returns/<int:pk>/post/", PurchaseReturnPostView.as_view(), name="purchase_return_post"),
     path("reports/ledger/", LedgerListView.as_view(), name="report_ledger"),
     path("reports/purchases/", PurchaseReportView.as_view(), name="report_purchase"),
-    # What is still to come in. Its own screen rather than a filter on the
-    # orders board: the board is a working list, this is a commitment total.
     path("reports/pending-orders/", PendingOrdersReportView.as_view(), name="report_pending_orders"),
     path("reports/sales/", POSListView.as_view(), name="report_sale"),
     path("reports/sale-returns/", POSReturnListView.as_view(), name="report_sale_return"),

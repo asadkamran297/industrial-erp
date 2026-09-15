@@ -34,7 +34,6 @@ def database_from_url(url: str) -> dict[str, str]:
     }
 
 
-# Backwards-compatible alias.
 postgres_database_from_url = database_from_url
 
 
@@ -148,15 +147,12 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-# Dates render DD-MM-YYYY everywhere; see config/formats/en/formats.py.
 FORMAT_MODULE_PATH = ["config.formats"]
 TIME_ZONE = config("TIME_ZONE", default="Asia/Karachi")
 USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-# Kept configurable so hosts can collect outside the git checkout, which
-# would otherwise leave the working tree dirty after every deploy.
 STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"

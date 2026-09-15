@@ -7,7 +7,6 @@
 
   <div class="uom-split">
 
-    {# ── Categories ──────────────────────────────────────────────────────── #}
     <div class="uom-panel">
       <div class="uom-head">
         <div class="flex-1">
@@ -26,11 +25,9 @@
       <div class="uom-scroll" id="cat-rows">{% include "inventory/_class_rows.html" %}</div>
     </div>
 
-    {# ── Items filed under the open category ─────────────────────────────── #}
     <div id="cat-detail">{% include "inventory/_class_detail.html" %}</div>
   </div>
 
-  {# ── Add / Rename Category ───────────────────────────────────────────── #}
   {% if can_add %}
   <div class="uom-modal" id="cat-modal">
     <div class="uom-modal-box" style="max-width:26rem;">
@@ -57,7 +54,6 @@
     </div>
   </div>
 
-  {# ── Select Items to move ────────────────────────────────────────────── #}
   <div class="uom-modal" id="move-modal">
     <div class="uom-modal-box" style="max-width:44rem;">
       <form id="move-form">{% csrf_token %}
@@ -71,7 +67,6 @@
         <div class="px-5 pt-4">
           <input type="search" id="pick-search" placeholder="Search..." class="form-input">
         </div>
-        {# Scrolls on its own, so a long list never pushes the buttons away. #}
         <div id="pick-rows" style="max-height:22rem; overflow-y:auto;" class="mt-3"></div>
         <p class="uom-error px-5 pt-3" data-error-for="__all__" hidden></p>
 
@@ -90,7 +85,6 @@
   </div>
   {% endif %}
 
-  {# ── Delete confirmation ─────────────────────────────────────────────── #}
   {% if can_delete %}
   <div class="uom-modal" id="del-modal">
     <div class="uom-modal-box" style="max-width:26rem;">

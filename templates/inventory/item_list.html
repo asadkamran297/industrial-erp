@@ -10,11 +10,9 @@
       {% include "inventory/_item_tabs.html" %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {# Both carry the current search/filter query, so what is printed or exported is what is on screen. #}
       <a href="{% url 'inventory:item_export' %}{% if page_query %}?{{ page_query }}{% endif %}" class="toolbar-btn h-10 px-4">&#128202; Export Excel</a>
       <a href="{% url 'inventory:item_print' %}{% if page_query %}?{{ page_query }}{% endif %}" target="_blank" class="toolbar-btn h-10 px-4">&#128438; Print</a>
       {% if can_add %}
-      {# Split button: the main half adds one item, the caret opens the bulk route. #}
       <div class="relative" id="add-item-split">
         <div class="flex">
           <a href="{{ create_url }}" class="btn-primary inline-flex h-10 items-center gap-2 rounded-r-none px-5 text-sm font-semibold"><span class="text-base leading-none">&plus;</span> Add Item</a>
@@ -55,7 +53,6 @@
             <td class="px-4 py-3">{{ row.code }}</td>
             <td class="px-4 py-3">{{ row.item_class.title|default:"—" }}</td>
             <td class="px-4 py-3">{{ row.uom.title|default:"&mdash;" }}</td>
-            {# An item created before its stock row exists shows a dash rather than a zero it never earned. #}
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>
             <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.last_price|amount }}{% else %}&mdash;{% endif %}</td>

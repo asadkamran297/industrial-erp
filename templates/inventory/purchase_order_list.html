@@ -180,7 +180,6 @@
 {{ approval_lines|json_script:"approval-lines" }}
 <div x-data="poBoard()">
 
-{# ── Head ──────────────────────────────────────────────────────────────── #}
 <div class="flex flex-wrap items-start justify-between gap-4">
   <div class="max-w-xl">
     <h1 class="title-accent text-2xl font-bold">Purchase Orders</h1>
@@ -195,8 +194,6 @@
   </div>
 </div>
 
-{# ── Tiles: counted over everything the filters allow, so they hold still ── #}
-{# as the tabs are clicked through. #}
 <div class="po-tiles mt-5">
   <a class="po-tile po-tile--committed" href="?{{ base_query }}&amp;tab=open">
     <span class="po-tile-icon" aria-hidden="true">
@@ -225,15 +222,11 @@
         <p class="po-tile-value">{{ tiles.pending_count }}</p>
         <p class="po-tile-label">Awaiting approval</p>
       </div>
-      {# A draft with no lines on it has no figure to show, and a tile reading #}
-      {# Rs 0.00 looks broken rather than empty. #}
       <p class="po-tile-note{% if tiles.pending_value %} po-tile-note--alert{% endif %}">
         {% if tiles.pending_value %}Rs {{ tiles.pending_value|short_amount }} not yet committed
         {% elif tiles.pending_empty %}No items added yet
         {% else %}Nothing waiting{% endif %}
       </p>
-      {# Why an order is sitting here at all. Without the figure the queue #}
-      {# looks arbitrary to everyone except whoever set the limit.         #}
       <p class="po-tile-note">Above Rs {{ approval_limit|short_amount }} needs approval</p>
     </div>
   </a>
@@ -270,7 +263,6 @@
   </a>
 </div>
 
-{# ── Board ─────────────────────────────────────────────────────────────── #}
 <section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
   {% include "components/table/filter_bar.html" with table_id="order-table" date_filters_enabled=True search_placeholder="Search..." columns_action=columns_url export_url=export_url %}
 
@@ -295,8 +287,6 @@
         {% for order in orders %}
         <tr>
           <td class="print-hide po-expand-cell">
-            {# The lines behind the row's figures, opened where the row is #}
-            {# rather than on a screen of their own. #}
             <button type="button" class="po-expand" @click="toggleRow({{ order.pk }})"
                     :aria-expanded="isRowOpen({{ order.pk }}) ? 'true' : 'false'"
                     aria-label="Show the items on this order" title="Show the items on this order">
@@ -309,7 +299,6 @@
           {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|dmy }}</td>{% endif %}
           {% if "supplier" in columns %}
           <td>
-            {# Who raised it has a column of its own; it is not repeated here. #}
             <span class="font-semibold">{{ order.supplier.name }}</span>
           </td>
           {% endif %}
@@ -342,8 +331,6 @@
           {% endif %}
           {% if "status" in columns %}
           <td>
-            {# A state, never an instruction: what to do about it is the button #}
-            {# at the end of the row, and the two must not be spoken in one voice. #}
             {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
             {% elif order.days_late %}<span class="po-pill po-pill--late">Overdue</span>
             {% elif order.status == "partially_invoiced" %}<span class="po-pill po-pill--open">Partly invoiced</span>
@@ -354,14 +341,8 @@
           </td>
           {% endif %}
           <td class="print-hide">
-            {# One action per row: the next thing this order is waiting for. It #}
-            {# is drawn as an icon, so the label the mouse and the screen reader #}
-            {# get is the only place the word lives. #}
             <div class="po-row-actions">
               {% if order.next_action == "approve" %}
-              {# Approving commits money to a supplier and cannot be taken back, #}
-              {# so it keeps its word rather than hiding behind a tick, and it #}
-              {# asks in a dialog that shows what is being committed to whom. #}
               <button type="button" class="po-text-btn po-text-btn--go"
                       title="Approve &mdash; raise this order on the supplier"
                       @click="askApproval({
@@ -386,8 +367,6 @@
                 </svg>
               </a>
               {% elif order.next_action == "reopen" %}
-              {# Nothing is owed either way any more. The one move left is to #}
-              {# decide the closure was wrong, and that belongs on the order.  #}
               <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="Closed &mdash; open it to re-open or read why" aria-label="Open this closed order">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
@@ -402,21 +381,15 @@
               </a>
               {% endif %}
 
-              {# Ending the order sits with the row it concerns, not two screens #}
-              {# away. The two verbs are not the same act and do not share an     #}
-              {# icon: nothing arrived, so the order is voided; something did, so #}
-              {# the balance is closed off and the order filed as done.           #}
               {% if can_approve and order.end_action %}
               <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:purchase_order_detail' order.pk %}#{{ order.end_action }}"
                  title="{% if order.end_action == 'cancel' %}Cancel order &mdash; nothing has arrived against it{% else %}Close PO &mdash; the balance is not coming{% endif %}"
                  aria-label="{% if order.end_action == 'cancel' %}Cancel this order{% else %}Close this purchase order{% endif %}">
                 {% if order.end_action == 'cancel' %}
-                {# Voided: struck through. #}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path>
                 </svg>
                 {% else %}
-                {# Filed away: an archive box, closed on what did arrive. #}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <rect x="3" y="4" width="18" height="4" rx="1"></rect>
                   <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"></path>
@@ -426,9 +399,6 @@
               </a>
               {% endif %}
 
-              {# Correcting the lines happens on the order, where they are read. #}
-              {# The link arrives asking whether to edit rather than switching it #}
-              {# on, so a mistyped click changes nothing.                          #}
               {% if can_edit and order.is_live %}
               <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}?edit=1"
                  title="Edit &mdash; correct the quantities and prices on this order" aria-label="Edit this purchase order">
@@ -439,7 +409,6 @@
               </a>
               {% endif %}
 
-              {# Opening the order is always available, whatever it is waiting on. #}
               <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View this order" aria-label="View this order">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
@@ -458,14 +427,10 @@
           </td>
         </tr>
 
-        {# ── The order's own lines, opened from the + on the row ──────────── #}
         <tr class="po-lines-row print-hide" x-show="isRowOpen({{ order.pk }})" x-cloak>
           <td colspan="{{ column_span }}" class="po-lines-cell print-hide">
             {% with poi_list=order.items.all %}
             {% if poi_list %}
-            {# Two questions get asked of an open order, and they are different #}
-            {# questions: what is left on each line, and which invoices took    #}
-            {# the rest. The lines answer the first, the history the second.    #}
             <table class="po-lines">
               <thead>
                 <tr>
@@ -494,15 +459,11 @@
                   <td class="po-right">{{ poi.rate|amount }}</td>
                   <td class="po-right font-semibold">{{ poi.total_amount|amount }}</td>
                   <td class="po-right {% if poi.qty_invoiced %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.qty_invoiced|qty }}</td>
-                  {# Nil on a line closed short: the balance was given up on, #}
-                  {# not left outstanding, the same as everywhere else.       #}
                   <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
                     {% if poi.closed %}<span class="po-lines-nil">Closed</span>
                     {% elif poi.qty_pending %}{{ poi.qty_pending|qty }}
                     {% else %}<span class="po-lines-done">Complete</span>{% endif %}
                   </td>
-                  {# What the balance is worth, so a part-invoiced order can be #}
-                  {# read in money without the reader doing the multiplication. #}
                   <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
                     {% if poi.qty_pending %}{{ poi.pending_value|amount }}{% else %}&mdash;{% endif %}
                   </td>
@@ -544,8 +505,6 @@
       </tbody>
       {% if orders %}
       <tfoot>
-        {# The total sits under PO Value wherever that lands, so the label #}
-        {# stretches to meet it and the rest of the row trails after. #}
         <tr class="po-foot">
           {% if foot_tail_span %}
           <td colspan="{{ foot_lead_span }}">Total on this page</td>
@@ -563,8 +522,6 @@
 
 {% include "components/table/pagination.html" %}
 
-{# One dialog for the whole page: the row that opened it hands over what it #}
-{# needs to say, so there is not a copy of this per order. #}
 <div class="approve-backdrop" x-show="approval" x-cloak x-transition.opacity
      @keydown.escape.window="approval = null" role="dialog" aria-modal="true" aria-labelledby="approve-title">
   <div class="approve-card" @click.outside="approval = null" x-transition>
@@ -590,9 +547,6 @@
       </template>
     </dl>
 
-    {# What is actually being ordered. Nobody should approve a figure without #}
-    {# seeing what makes it up, and going to the order to check would mean #}
-    {# leaving the queue and finding their place in it again. #}
     <div class="approve-lines" x-show="lines.length" x-cloak>
       <p class="approve-lines-head">
         <span>Items</span>
@@ -615,20 +569,15 @@
       </div>
     </div>
 
-    {# An order with nothing on it cannot be committed to, so the dialog says #}
-    {# so rather than offering an approval of nothing. #}
     <p class="approve-empty" x-show="!lines.length" x-cloak>
       This order has no items on it yet. Add items before approving it.
     </p>
 
-    {# The figure is the decision, so it is not a row in the list above. #}
     <div class="approve-amount">
       <span>Committing</span>
       <strong>Rs <span x-text="approval?.amount"></span></strong>
     </div>
 
-    {# Said plainly rather than as a red banner: it is a fact about the action, #}
-    {# not an alarm about a mistake nobody has made yet. #}
     <p class="approve-note">
       Approval cannot be undone from this screen. The order can then be invoiced against.
     </p>

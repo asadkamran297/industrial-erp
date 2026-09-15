@@ -46,7 +46,6 @@ class TableExportView(View):
         columns = self.columns.exportable(request.session)
         rows_source = self.get_rows()
 
-        # Built once, so every format below writes the same figures.
         header = [column.label for column in columns]
         rows = [[column.export(row) for column in columns] for row in rows_source]
 
@@ -55,12 +54,10 @@ class TableExportView(View):
             kind = "csv"
         return getattr(self, f"_{kind}")(request, header, rows, columns)
 
-    # ── formats ────────────────────────────────────────────────────────────
     def _csv(self, request, header, rows, columns):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{self.filename}.csv"'
         # Excel reads a CSV as the machine's own encoding unless the file says
-        # otherwise, so the BOM is what keeps a supplier's name intact.
         response.write("﻿")
         writer = csv.writer(response)
         writer.writerow(header)
@@ -88,8 +85,6 @@ class TableExportView(View):
         for row in rows:
             sheet.append([self._native(value) for value in row])
 
-        # Room to read, a frozen heading and a filter row: what anybody would do
-        # to the sheet by hand the moment they opened it.
         for index, label in enumerate(header, start=1):
             widest = max([len(str(label))] + [len(str(row[index - 1])) for row in rows] or [0])
             sheet.column_dimensions[get_column_letter(index)].width = min(max(widest + 2, 10), 42)
@@ -127,7 +122,6 @@ class TableExportView(View):
         response["Content-Disposition"] = f'attachment; filename="{self.filename}.json"'
         return response
 
-    # ── shared bits ────────────────────────────────────────────────────────
     def _paper(self, request, header, rows):
         return {
             "title": self.title,

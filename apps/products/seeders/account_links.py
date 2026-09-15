@@ -19,7 +19,6 @@ from apps.products.models import ProductAccountLink, ProductNode
 WHEAT_ACCOUNT = "Wheat Purchase (Pvt) A/c"
 BARDANA_ACCOUNT = "PP & Jute Bags Purchase Exp."
 
-# specification -> the account everything of that kind is charged to
 SPEC_ACCOUNTS = {
     PRD_SPEC_RAW_ITEM: WHEAT_ACCOUNT,
     PRD_SPEC_RAW_PACKING: BARDANA_ACCOUNT,
@@ -34,8 +33,6 @@ def _direct_expenses() -> ChartOfAccount | None:
 def seed_account_links() -> int:
     parent = _direct_expenses()
     if parent is None:
-        # No chart of accounts yet. Nothing to link to, and inventing a root
-        # here would put the mill's expenses outside the tree the books use.
         return 0
 
     created = 0
