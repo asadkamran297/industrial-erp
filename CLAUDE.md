@@ -13,6 +13,7 @@ Work as a senior Django ERP engineer. The project foundation is intentionally sm
 7. Use clean Django model names and module-prefixed table names via `Meta.db_table`; for example `Employee` with `db_table = "hr_employees"`.
 8. Every new table ships with its indexes in the same migration that creates it. Follow the indexing checklist in `docs/DATABASE_RULES.md` — composite `(filter, -date)` indexes for list screens, `(fk, -date)` for per-party history — and verify with `EXPLAIN` rather than assuming.
 9. Do not create duplicate IAM login tables. Use the existing `accounts.User` model and relate assignments/roles to it.
+10. Do not add narrative or justification comments in code or templates (e.g. `{# why this button exists #}`, "offered beside X because Y"). No explanatory prose on screens either. Comment only when logic is truly non-obvious (a workaround, a hidden constraint), in one short line.
 
 ## After Editing
 
