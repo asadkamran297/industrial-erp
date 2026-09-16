@@ -2,12 +2,17 @@
 {% block content %}
 {% url 'inventory:purchase_invoice_list' as cancel_url %}
 {% component "ui/page_header" title="Purchase Invoice" back=True back_url=cancel_url %}
+  {% slot fields %}
+    <div class="w-40">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
+    {% firstof posted.bill_date today|date:"Y-m-d" as bill_date_value %}
+    <div>{% include "components/forms/control.html" with type="date" name="bill_date" id="bill_date" label="Date" value=bill_date_value form_id="purchase-form" only %}</div>
+  {% endslot %}
   {% slot actions %}{% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}{% endslot %}
 {% endcomponent %}
 
 <form method="post" id="purchase-form" class="card card-rail" data-own-keys>{% csrf_token %}
-  <div class="card-body flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-    <div class="w-full max-w-md">
+  <div class="card-body doc-head">
+    <div class="doc-head__party">
       <div class="notch-field notch-field--action">
         <label class="notch-label" for="supplier">Supplier <span class="req">*</span></label>
         {% component "forms/control" type="select" name="supplier" id="supplier" required=True only %}
@@ -24,22 +29,21 @@
       </div>
     </div>
 
-    <div class="doc-head-fields ml-auto">
-      <div class="w-40">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
-      {% if layout.shown.bill_number %}<div class="w-48">{% include "components/forms/control.html" with name="bill_number" id="bill_number" label="Supplier bill no" value=posted.bill_number only %}</div>{% endif %}
-      {% if layout.shown.due_date %}<div>{% include "components/forms/control.html" with type="date" name="due_date" id="due_date" label="Due date" value=posted.due_date only %}</div>{% endif %}
+    <div class="doc-head-fields doc-head-fields--compact">
+      {% if layout.shown.bill_number %}<div class="w-32">{% include "components/forms/control.html" with name="bill_number" id="bill_number" label="Bill no" value=posted.bill_number size="sm" only %}</div>{% endif %}
+      {% if layout.shown.due_date %}<div>{% include "components/forms/control.html" with type="date" name="due_date" id="due_date" label="Due date" value=posted.due_date size="sm" only %}</div>{% endif %}
       {% if layout.shown.godown %}
-      <div class="w-48">
-        {% component "forms/control" type="select" name="godown" id="godown" label="Godown" only %}
+      <div class="w-40">
+        {% component "forms/control" type="select" name="godown" id="godown" label="Godown" size="sm" only %}
           <option value="">&mdash;</option>
           {% for g in godowns %}<option value="{{ g.pk }}" {% if posted.godown == g.pk|stringformat:"s" %}selected{% endif %}>{{ g.code }} &mdash; {{ g.name }}</option>{% endfor %}
         {% endcomponent %}
       </div>
       {% endif %}
-      {% if layout.shown.vehicle_no %}<div class="w-40">{% include "components/forms/control.html" with name="vehicle_no" id="vehicle_no" label="Vehicle no" value=posted.vehicle_no extra="uppercase" only %}</div>{% endif %}
+      {% if layout.shown.vehicle_no %}<div class="w-28">{% include "components/forms/control.html" with name="vehicle_no" id="vehicle_no" label="Vehicle no" value=posted.vehicle_no extra="uppercase" size="sm" only %}</div>{% endif %}
       {% if layout.shown.broker %}
-      <div class="w-56">
-        {% component "forms/control" type="select" name="broker" id="broker" label="Broker" only %}
+      <div class="w-40">
+        {% component "forms/control" type="select" name="broker" id="broker" label="Broker" size="sm" only %}
           <option value="">&mdash;</option>
           {% for b in brokers %}<option value="{{ b.pk }}" {% if posted.broker == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.title }}</option>{% endfor %}
         {% endcomponent %}
@@ -47,19 +51,17 @@
       {% endif %}
       {% for field in layout.extra %}
       {% capture as extra_name %}extra__{{ field.code }}{% endcapture %}
-      <div class="w-48">
+      <div class="w-36">
         {% if field.type == "select" %}
-        {% component "forms/control" type="select" name=extra_name label=field.label required=field.required only %}
+        {% component "forms/control" type="select" name=extra_name label=field.label required=field.required size="sm" only %}
           <option value=""></option>
           {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
         {% endcomponent %}
         {% else %}
-        {% include "components/forms/control.html" with type=field.type name=extra_name label=field.label required=field.required only %}
+        {% include "components/forms/control.html" with type=field.type name=extra_name label=field.label required=field.required size="sm" only %}
         {% endif %}
       </div>
       {% endfor %}
-      {% firstof posted.bill_date today|date:"Y-m-d" as bill_date_value %}
-      <div>{% include "components/forms/control.html" with type="date" name="bill_date" id="bill_date" label="Date" value=bill_date_value only %}</div>
     </div>
   </div>
 
@@ -83,7 +85,7 @@
   {% endcomponent %}
 
   {% if wheat_products or bardana_products %}
-  <div id="mill-lines" class="card-body form-stack">
+  <div id="mill-lines" class="card-body mill-lines">
     {% component "forms/section" title="Wheat" flush=True %}
       {% slot actions %}{% include "components/ui/button.html" with type="button" id="add-wheat" label="Wheat line" icon="plus" variant="ghost" size="sm" only %}{% endslot %}
       <div class="overflow-x-auto">
@@ -113,10 +115,12 @@
   </div>
   {% endif %}
 
-  <div class="totals-block">
-    <div class="lg:col-span-2 form-stack">
+  <div class="totals-block totals-block--compact">
+    <div class="form-stack">
       {% if layout.shown.remarks %}{% include "components/forms/control.html" with type="textarea" name="remarks" id="remarks" label="Narration" rows=2 value=posted.remarks only %}{% endif %}
-      {% component "forms/totals_panel" %}
+      {% if layout.shown.amount_words %}{% include "components/forms/amount_words.html" %}{% endif %}
+    </div>
+    {% component "forms/totals_panel" extra="totals--compact" %}
         {% include "components/forms/totals_row.html" with label="Sub Total" value_id="sub-total" only %}
         {% if layout.shown.discount_amount %}{% include "components/forms/totals_row.html" with label="Discount (Rs)" field_id="discount_amount" value=posted.discount_amount only %}{% endif %}
         {% if layout.shown.freight_amount %}{% include "components/forms/totals_row.html" with label="Freight (Rs)" field_id="freight_amount" value=posted.freight_amount only %}{% endif %}
@@ -130,9 +134,7 @@
         {% include "components/forms/totals_row.html" with label="Paid" field_id="paid_amount" value=posted.paid_amount only %}
         <div class="totals-row"><span class="totals-label">Balance owed</span><span class="totals-value strong fig-bad" id="balance-owed">0.00</span></div>
         {% endif %}
-      {% endcomponent %}
-    </div>
-    {% if layout.shown.amount_words %}{% include "components/forms/amount_words.html" %}{% endif %}
+    {% endcomponent %}
   </div>
 
   {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_print=True label="Save Invoice" prepared_by=request.user only %}

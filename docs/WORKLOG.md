@@ -17,6 +17,8 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   - `static/js/ui.js`: Enter-to-next, Ctrl+S, `/` search, modals, confirm dialog, table export.
   - Board mixin now supplies status tiles, `filters_active`, `base_query`; salary, payroll and sales-order lists show page totals.
 - Migrated every screen: inventory, finance, products, production, godowns, hr, payroll, organizations, access control, configurations, dashboard, login.
+- Every `<select>` is now searchable (`searchable-select.js`; opt out with `data-native`); list opens fixed to the viewport, new rows picked up automatically.
+- Purchase invoice: totals panel moved to the right column with compact rows; narration and amount card on the left.
 - Fixed on the way: PI list print linked to the PO print; PO detail status mapping; supplier credit-limit clear; SO form comma parsing; COA save button; PI detail unclosed section; organization list mojibake.
 - Guard rails: `docs/UI_SYSTEM.md`, `python manage.py ui_lint` (clean), `docs/UI_AUDIT.md` statuses.
 

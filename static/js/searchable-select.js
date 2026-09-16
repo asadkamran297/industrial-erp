@@ -1,4 +1,7 @@
 (function () {
+  const STYLE_CLASS = /^(control(--[\w-]+)?|li-cell|li-item|wp-in|w-\S+|min-w-\S+|max-w-\S+|text-(right|center))$/;
+  const TARGET = 'select:not([multiple]):not([data-native]):not([size])';
+
   function enhanceSelect(select) {
     if (select.dataset.searchableEnhanced === 'true') {
       // Already enhanced, but the value underneath may have been written since
@@ -21,7 +24,9 @@
 
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'searchable-select-button';
+    const styleClasses = Array.from(select.classList).filter((name) => STYLE_CLASS.test(name));
+    button.className = ['searchable-select-button'].concat(styleClasses).join(' ');
+    if (select.disabled) button.disabled = true;
     button.setAttribute('aria-haspopup', 'listbox');
     button.setAttribute('aria-expanded', 'false');
 
@@ -29,8 +34,9 @@
     label.className = 'min-w-0 flex-1 truncate text-left';
 
     const arrow = document.createElement('span');
-    arrow.className = 'text-xs text-slate-400';
-    arrow.textContent = '>';
+    arrow.className = 'searchable-select-caret';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 
     const panel = document.createElement('div');
     panel.className = 'searchable-select-panel hidden';
@@ -90,16 +96,38 @@
       renderOptions();
     }
 
+    // Fixed to the viewport so a scrolling table wrapper cannot clip the list.
+    function placePanel() {
+      const rect = button.getBoundingClientRect();
+      const width = Math.max(rect.width, 220);
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      panel.style.position = 'fixed';
+      panel.style.left = left + 'px';
+      panel.style.right = 'auto';
+      panel.style.width = width + 'px';
+      const below = window.innerHeight - rect.bottom;
+      if (below < 280 && rect.top > below) {
+        panel.style.top = 'auto';
+        panel.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      } else {
+        panel.style.bottom = 'auto';
+        panel.style.top = (rect.bottom + 4) + 'px';
+      }
+    }
+
     function openPanel() {
+      if (select.disabled) return;
       wrapper.dataset.open = 'true';
       button.setAttribute('aria-expanded', 'true');
       panel.classList.remove('hidden');
       search.value = '';
       renderOptions();
+      placePanel();
       window.setTimeout(() => search.focus(), 0);
     }
 
     function closePanel() {
+      if (wrapper.dataset.open !== 'true') return;
       wrapper.dataset.open = 'false';
       button.setAttribute('aria-expanded', 'false');
       panel.classList.add('hidden');
@@ -154,6 +182,14 @@
     });
 
     search.addEventListener('input', renderOptions);
+    window.addEventListener('scroll', (event) => {
+      if (wrapper.dataset.open === 'true' && !panel.contains(event.target)) closePanel();
+    }, true);
+    window.addEventListener('resize', closePanel);
+    new MutationObserver(() => {
+      button.disabled = select.disabled;
+      updateLabel();
+    }).observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
     select.addEventListener('change', updateLabel);
     document.addEventListener('click', (event) => {
       if (!wrapper.contains(event.target) && event.target !== select) {
@@ -176,12 +212,27 @@
   }
 
   function initSearchableSelects() {
-    // Two ways in: the app-wide form control, and anything that opts in by
-    // name -- a filter chip is not a form field but still wants the search.
-    document.querySelectorAll('select.form-select, select[data-searchable]').forEach(enhanceSelect);
+    document.querySelectorAll(TARGET).forEach(enhanceSelect);
   }
 
-  document.addEventListener('DOMContentLoaded', initSearchableSelects);
+  let pending = false;
+  function scheduleSweep() {
+    if (pending) return;
+    pending = true;
+    window.requestAnimationFrame(() => {
+      pending = false;
+      document.querySelectorAll(TARGET + ':not([data-searchable-enhanced])').forEach(enhanceSelect);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initSearchableSelects();
+    new MutationObserver((records) => {
+      if (records.some((r) => Array.from(r.addedNodes).some((n) => n.nodeType === 1 && (n.matches('select') || n.querySelector('select'))))) {
+        scheduleSweep();
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
   document.addEventListener('htmx:afterSettle', initSearchableSelects);
   // Screens that build their own rows (the purchase invoice's lines) ask for the
   // sweep by name, rather than borrowing htmx's event to mean something else.
