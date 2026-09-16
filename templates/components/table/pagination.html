@@ -1,14 +1,12 @@
 {% if is_paginated %}
-  <nav class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-400" aria-label="Pagination">
-    <p>Showing page {{ page_obj.number }} of {{ paginator.num_pages }} · {{ paginator.count }} records</p>
-    <div class="flex items-center gap-2">
-      {% if page_obj.has_previous %}
-        <a class="toolbar-btn !min-h-9 px-3" href="?{{ page_query_prefix }}page={{ page_obj.previous_page_number }}">Previous</a>
-      {% endif %}
-      <span class="rounded-lg px-3.5 py-2 font-bold text-white" style="background: var(--grad-primary);">{{ page_obj.number }}</span>
-      {% if page_obj.has_next %}
-        <a class="toolbar-btn !min-h-9 px-3" href="?{{ page_query_prefix }}page={{ page_obj.next_page_number }}">Next</a>
-      {% endif %}
-    </div>
-  </nav>
+<nav class="pagination" aria-label="Pagination">
+  <p>Page {{ page_obj.number }} of {{ paginator.num_pages }} &middot; {{ paginator.count }} records</p>
+  <div class="pagination__pages">
+    {% if page_obj.has_previous %}<a class="btn btn--secondary btn--sm" href="?{{ page_query_prefix }}page={{ page_obj.previous_page_number }}" rel="prev">{% icon "back" %}<span>Previous</span></a>{% endif %}
+    <span class="pagination__current" aria-current="page">{{ page_obj.number }}</span>
+    {% if page_obj.has_next %}<a class="btn btn--secondary btn--sm" href="?{{ page_query_prefix }}page={{ page_obj.next_page_number }}" rel="next"><span>Next</span>{% icon "chevron-right" %}</a>{% endif %}
+  </div>
+</nav>
+{% elif paginator %}
+<nav class="pagination" aria-label="Pagination"><p>{{ paginator.count }} records</p></nav>
 {% endif %}

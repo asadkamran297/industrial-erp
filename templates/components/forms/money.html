@@ -1,0 +1,6 @@
+{% if field %}{% include "components/forms/field.html" with kind="money" %}{% else %}
+<div class="field{% if extra %} {{ extra }}{% endif %}">
+  {% if label %}<label class="field__label" for="{% if id %}{{ id }}{% else %}{{ name }}{% endif %}">{{ label }}{% if required %} <span class="req">*</span>{% endif %}</label>{% endif %}
+  <input type="text" inputmode="decimal" data-amount name="{{ name }}" id="{% if id %}{{ id }}{% else %}{{ name }}{% endif %}" value="{{ value|default_if_none:'' }}" placeholder="0.00" class="control control--money"{% if required %} required{% endif %}{% if readonly %} readonly{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}>
+</div>
+{% endif %}

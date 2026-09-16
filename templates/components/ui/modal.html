@@ -1,3 +1,12 @@
-<div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" data-modal>
-  <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl dark:bg-slate-900">{{ modal_content }}</div>
+<div class="modal-backdrop{% if not show %} is-closed{% endif %}"{% if id %} id="{{ id }}"{% endif %} data-modal role="dialog" aria-modal="true"{% if title %} aria-label="{{ title }}"{% endif %}{% if show %} x-show="{{ show }}" x-cloak x-transition.opacity @keydown.escape.window="{{ close }}" @click.self="{{ close }}"{% endif %}>
+  <div class="modal{% if size %} modal--{{ size }}{% endif %}{% if extra %} {{ extra }}{% endif %}">
+    {% if title %}
+    <div class="modal__head">
+      <h2 class="modal__title"{% if title_id %} id="{{ title_id }}"{% endif %}>{{ title }}</h2>
+      {% if show %}<button type="button" class="icon-btn" title="Close" aria-label="Close" @click="{{ close }}">{% icon "close" %}</button>{% else %}<button type="button" class="icon-btn" title="Close" aria-label="Close" data-modal-close>{% icon "close" %}</button>{% endif %}
+    </div>
+    {% endif %}
+    <div class="modal__body">{{ slot }}</div>
+    {% if slots.foot %}<div class="modal__foot">{{ slots.foot }}</div>{% endif %}
+  </div>
 </div>

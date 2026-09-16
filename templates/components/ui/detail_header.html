@@ -1,0 +1,12 @@
+<div class="detail-head{% if extra %} {{ extra }}{% endif %}">
+  <div class="detail-head__id">
+    {% if back %}{% include "components/ui/back_button.html" with back_url=back_url %}{% endif %}
+    {% if kind %}<span class="doc-kind">{{ kind }}</span>{% endif %}
+    <h1 class="detail-head__no">{{ number }}</h1>
+    {% if status %}<span class="pill pill--{{ status_tone|default:'closed' }}">{{ status }}</span>{% endif %}
+    {% if date %}<span class="detail-head__meta">{{ date }}</span>{% endif %}
+    {% if party %}<span class="detail-head__meta"><b>{{ party }}</b></span>{% endif %}
+    {{ slots.meta }}
+  </div>
+  {% if slots.actions or slot %}<div class="detail-head__actions">{{ slots.actions }}{{ slot }}</div>{% endif %}
+</div>

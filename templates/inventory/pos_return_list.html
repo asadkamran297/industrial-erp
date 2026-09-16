@@ -2,183 +2,115 @@
 {% block content %}
 {{ sales_json|json_script:"srt-sales" }}
 {{ sale_items_json|json_script:"srt-items" }}
+<div class="form-stack" x-data="posReturn()">
+  <form method="post" action="{% url 'inventory:pos_return_quick_create' %}" class="form-stack" @submit.prevent="submit($event)">{% csrf_token %}
+    {% include "components/ui/page_header.html" with title="POS Returns" only %}
 
-<section class="space-y-4" x-data="posReturn()">
-
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">POS Returns</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Select a posted sale to process a return.</p>
-    </div>
-  </div>
-
-  <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-    <form method="post" action="{% url 'inventory:pos_return_quick_create' %}" @submit.prevent="submit($event)">
-      {% csrf_token %}
-
-      <div class="mb-3 grid gap-3 sm:grid-cols-3">
-        <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">POS Sale *</label>
-          <select name="pos_master" class="form-select w-full" x-model="saleId" @change="loadItems()" required>
-            <option value="">— Select Sale —</option>
-            {% for s in sales_json %}
-            <option value="{{ s.id }}">{{ s.sale_num }}{% if s.customer %} — {{ s.customer }}{% endif %} ({{ s.date }}) — {{ s.net_amount|amount }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Return Date</label>
-          <input type="date" name="return_date" value="{{ today|date:'Y-m-d' }}" class="form-control w-full">
-        </div>
-        <input type="hidden" name="pay_mode" value="cash">
+    {% component "forms/section" %}
+      <div class="form-grid form-grid--cols-3">
+        {% component "forms/control" type="select" name="pos_master" id="pos-return-sale" label="POS Sale" required=True attrs='x-model="saleId" @change="loadItems()"' only %}
+          <option value=""></option>
+          {% for s in sales_json %}<option value="{{ s.id }}">{{ s.sale_num }}{% if s.customer %} — {{ s.customer }}{% endif %} ({{ s.date }}) — {{ s.net_amount|amount }}</option>{% endfor %}
+        {% endcomponent %}
+        {% include "components/forms/control.html" with type="date" name="return_date" id="pos-return-date" label="Return Date" value=today|date:"Y-m-d" only %}
       </div>
+      <input type="hidden" name="pay_mode" value="cash">
+    {% endcomponent %}
 
-      <div x-show="!saleId" class="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-        Select a sale above to load its items.
-      </div>
+    <div x-show="saleId && !items.length" x-cloak>{% include "components/ui/alert.html" with message="No items on this sale." tone="warning" only %}</div>
 
-      <div x-show="saleId && !items.length" x-cloak class="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800">
-        No items found for this sale.
-      </div>
-
-      <div x-show="saleId && items.length" x-cloak>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-              <tr>
-                <th class="px-3 py-2">Item</th>
-                <th class="px-3 py-2">Code</th>
-                <th class="px-3 py-2 text-right">Sale Qty</th>
-                <th class="px-3 py-2 text-right">Price</th>
-                <th class="px-3 py-2 text-right">Net Total</th>
-                <th class="px-3 py-2 w-28">Return Qty</th>
-                <th class="px-3 py-2">&#10003;</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+    <div x-show="saleId && items.length" x-cloak>
+      {% component "forms/section" title="Items" flush=True %}
+        <div class="li-scroll">
+          <table class="li-table">
+            <colgroup><col><col class="w-28"><col class="w-24"><col class="w-28"><col class="w-28"><col class="w-28"><col class="w-12"></colgroup>
+            <thead><tr><th>Item</th><th>Code</th><th class="num">Sale qty</th><th class="num">Price</th><th class="num">Net total</th><th class="num">Return qty</th><th></th></tr></thead>
+            <tbody>
               <template x-for="(it, i) in items" :key="it.id">
-                <tr :class="selected[i] ? 'bg-emerald-50 dark:bg-emerald-900/10' : ''">
-                  <td class="px-3 py-2 font-medium" x-text="it.item_name"></td>
-                  <td class="px-3 py-2 text-xs text-slate-500" x-text="it.item_code"></td>
-                  <td class="px-3 py-2 text-right" x-text="fmt(it.qty)"></td>
-                  <td class="px-3 py-2 text-right" x-text="fmt(it.price)"></td>
-                  <td class="px-3 py-2 text-right" x-text="fmt(it.net_total)"></td>
-                  <td class="px-3 py-2">
-                    <input type="number" step="0.0001" min="0.0001"
-                      :max="it.qty"
-                      x-model.number="returnQtys[i]"
-                      :disabled="!selected[i]"
-                      class="w-full rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800">
-                  </td>
-                  <td class="px-3 py-2">
-                    <input type="checkbox" x-model="selected[i]">
-                  </td>
+                <tr :class="selected[i] ? '' : 'row--off'">
+                  <td class="strong truncate" x-text="it.item_name"></td>
+                  <td class="muted" x-text="it.item_code"></td>
+                  <td class="num" x-text="fmt(it.qty)"></td>
+                  <td class="num" x-text="fmt(it.price)"></td>
+                  <td class="num" x-text="fmt(it.net_total)"></td>
+                  <td>{% include "components/forms/control.html" with type="number" cell=True kind="num" step="0.0001" min="0.0001" attrs=':max="it.qty" x-model.number="returnQtys[i]" :disabled="!selected[i]" data-no-amount' only %}</td>
+                  <td>{% include "components/forms/control.html" with type="checkbox" attrs='x-model="selected[i]" aria-label="Return this item"' only %}</td>
                 </tr>
               </template>
             </tbody>
           </table>
         </div>
-
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div class="flex gap-6 text-sm text-slate-600 dark:text-slate-300">
-            <span>Selected: <strong x-text="selectedCount()"></strong></span>
-            <span>Return Total: <strong x-text="fmt(returnTotal())"></strong></span>
-          </div>
-          <div class="flex items-center gap-3">
-            <input type="hidden" name="adjusted_amount" value="0">
-            <button type="submit" :disabled="selectedCount() === 0"
-              class="min-h-10 rounded-lg bg-rose-600 px-5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-40">
-              Return &amp; Print
-            </button>
-          </div>
+      {% endcomponent %}
+      <div class="submit-bar submit-bar--floating">
+        <p class="submit-bar__meta">Selected <b x-text="selectedCount()"></b> &middot; Return total <b x-text="fmt(returnTotal())"></b></p>
+        <input type="hidden" name="adjusted_amount" value="0">
+        <div class="submit-bar__actions">
+          {% include "components/ui/button.html" with label="Return & Print" icon="print" variant="danger" data="save" attrs=':disabled="selectedCount() === 0"' only %}
         </div>
       </div>
-
-      <div id="return-hidden-inputs"></div>
-    </form>
-  </div>
-
-  {% include "components/table/search_filters.html" %}
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-      <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Posted Returns</h2>
     </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Return #</th>
-            <th class="px-4 py-3">Against Sale</th>
-            <th class="px-4 py-3">Customer</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3 text-right">Amount</th>
-            <th class="px-4 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for row in returns %}
-          <tr>
-            <td class="px-4 py-3 font-medium">{{ row.return_num }}</td>
-            <td class="px-4 py-3">{{ row.sale_num }}</td>
-            <td class="px-4 py-3">{{ row.customer.customer_name|default:"—" }}</td>
-            <td class="px-4 py-3">{{ row.return_date|dmy }}</td>
-            <td class="px-4 py-3 text-right">{{ row.returned_amount|amount }}</td>
-            <td class="px-4 py-3">
-              <div class="flex justify-end gap-1">
-                <a href="{% url 'inventory:pos_return_receipt' row.pk %}"
-                   class="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" title="Print">&#128438;</a>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No posted returns yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+    <div id="return-hidden-inputs"></div>
+  </form>
 
-</section>
+  {% component "table/board" title="" table_id="pos-return-table" date_filters_enabled=True search_placeholder="Search" %}
+    {% slot bar %}<div class="section__head"><h2 class="section__title">Posted returns</h2></div>{% endslot %}
+    <thead><tr><th>Return #</th><th>Against sale</th><th>Customer</th><th>Date</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+    <tbody>
+      {% for row in returns %}
+      <tr>
+        <td><a class="doc-num" href="{% url 'inventory:pos_return_detail' row.pk %}">{{ row.return_num }}</a></td>
+        <td>{{ row.sale_num }}</td>
+        <td>{{ row.customer.customer_name|default:"—" }}</td>
+        <td>{{ row.return_date|dmy }}</td>
+        <td class="num">{{ row.returned_amount|amount }}</td>
+        <td class="actions-col">
+          {% url 'inventory:pos_return_detail' row.pk as view_url %}{% url 'inventory:pos_return_receipt' row.pk as print_url %}
+          {% include "components/table/actions.html" with view_url=view_url print_url=print_url only %}
+        </td>
+      </tr>
+      {% empty %}
+      {% include "components/table/empty_row.html" with span=6 label="No posted returns." only %}
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
+</div>
 
 <script>
-function posReturn() {
-  var allSales = JSON.parse(document.getElementById("srt-sales").textContent);
-  var allItems = JSON.parse(document.getElementById("srt-items").textContent);
-  return {
-    saleId: new URLSearchParams(location.search).get("sale") || "",
-    items: [],
-    selected: [],
-    returnQtys: [],
-    init() { if (this.saleId) this.loadItems(); },
-    loadItems() {
-      if (!this.saleId) { this.items = []; this.selected = []; this.returnQtys = []; return; }
-      this.items = allItems[String(this.saleId)] || [];
-      this.selected = this.items.map(() => false);
-      this.returnQtys = this.items.map(function(it) { return it.qty; });
-    },
-    selectedCount() { return this.selected.filter(Boolean).length; },
-    returnTotal() {
-      var self = this;
-      return this.items.reduce(function(s, it, i) {
-        return self.selected[i] ? s + (Number(self.returnQtys[i]) || 0) * it.price : s;
-      }, 0);
-    },
-    fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
-    submit(e) {
-      var form = e.target;
-      var container = form.querySelector("#return-hidden-inputs");
-      container.innerHTML = "";
-      var self = this;
-      this.items.forEach(function(it, i) {
-        if (!self.selected[i] || !(Number(self.returnQtys[i]) > 0)) return;
-        container.innerHTML +=
-          "<input type='hidden' name='detail_id' value='" + it.id + "'>" +
-          "<input type='hidden' name='return_qty' value='" + Number(self.returnQtys[i]) + "'>";
-      });
-      if (!container.innerHTML) return;
-      form.submit();
-    },
-  };
-}
+  function posReturn() {
+    const allSales = JSON.parse(document.getElementById("srt-sales").textContent);
+    const allItems = JSON.parse(document.getElementById("srt-items").textContent);
+    return {
+      sales: allSales,
+      saleId: new URLSearchParams(location.search).get("sale") || "",
+      items: [],
+      selected: [],
+      returnQtys: [],
+      init() { if (this.saleId) this.loadItems(); },
+      loadItems() {
+        if (!this.saleId) { this.items = []; this.selected = []; this.returnQtys = []; return; }
+        this.items = allItems[String(this.saleId)] || [];
+        this.selected = this.items.map(() => false);
+        this.returnQtys = this.items.map((it) => it.qty);
+      },
+      selectedCount() { return this.selected.filter(Boolean).length; },
+      returnTotal() {
+        return this.items.reduce((s, it, i) => (this.selected[i] ? s + (Number(this.returnQtys[i]) || 0) * it.price : s), 0);
+      },
+      fmt(v) { return (Number(v) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+      submit(e) {
+        const form = e.target;
+        const container = form.querySelector("#return-hidden-inputs");
+        container.innerHTML = "";
+        this.items.forEach((it, i) => {
+          if (!this.selected[i] || !(Number(this.returnQtys[i]) > 0)) return;
+          container.innerHTML +=
+            "<input type='hidden' name='detail_id' value='" + it.id + "'>" +
+            "<input type='hidden' name='return_qty' value='" + Number(this.returnQtys[i]) + "'>";
+        });
+        if (!container.innerHTML) return;
+        form.submit();
+      },
+    };
+  }
 </script>
 {% endblock %}

@@ -6,14 +6,12 @@
       <span class="uom-row-code">{{ row.code }}</span>
     </a>
     {% if can_edit %}
-    <button type="button" title="Edit unit"
-            data-unit-edit="{{ row.pk }}" data-title="{{ row.title }}" data-code="{{ row.code }}" data-status="{{ row.status }}"
-            class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-[var(--primary-color)] dark:hover:bg-slate-800">&#9998;</button>
+    {% capture as edit_attrs %}data-unit-edit="{{ row.pk }}" data-title="{{ row.title }}" data-code="{{ row.code }}" data-status="{{ row.status }}"{% endcapture %}
+    {% include "components/ui/icon_button.html" with icon="edit" title="Edit unit" attrs=edit_attrs only %}
     {% endif %}
     {% if can_delete %}
-    <button type="button" title="Delete unit"
-            data-unit-delete="{{ row.pk }}" data-title="{{ row.title }}"
-            class="mr-2 grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-slate-800">&#128465;</button>
+    {% capture as delete_attrs %}data-unit-delete="{{ row.pk }}" data-title="{{ row.title }}"{% endcapture %}
+    {% include "components/ui/icon_button.html" with icon="trash" title="Delete unit" tone="danger" extra="mr-2" attrs=delete_attrs only %}
     {% endif %}
   </div>
 {% empty %}

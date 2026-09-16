@@ -1,17 +1,11 @@
-<!doctype html>
-<html lang="en">
-{% load humanize %}
-<head>
-<meta charset="utf-8">
-<title>Receipt {{ sale.sale_num }}</title>
-{% load static %}<link rel="stylesheet" href="{% static 'dist/receipt.css' %}">
-</head>
-<body>
-  <div class="toolbar">
-    <button class="print" onclick="window.print()">Print</button>
-    <button class="back" onclick="goBack()">New Sale</button>
-  </div>
-
+{% extends "layouts/print.html" %}
+{% load humanize static %}
+{% block title %}Receipt {{ sale.sale_num }}{% endblock %}
+{% block stylesheet %}{% static 'dist/receipt.css' %}{% endblock %}
+{% block back_label %}New Sale{% endblock %}
+{% block back_url %}{% url 'inventory:pos_list' %}{% endblock %}
+{% block print_header %}{% endblock %}
+{% block print_content %}
   <div class="receipt">
     <div class="center">
       {% if org.logo %}<img class="logo" src="{{ org.logo }}" alt="logo"><br>{% endif %}
@@ -73,11 +67,5 @@
       Served by {{ sale.created_by.get_full_name|default:sale.created_by.username }}
     </div>
   </div>
-
-  <script>
-    function goBack() { window.location.href = "{% url 'inventory:pos_list' %}"; }
-    window.addEventListener("load", function () { window.print(); });
-    window.addEventListener("afterprint", goBack);
-  </script>
-</body>
-</html>
+{% endblock %}
+{% block print_footer %}{% endblock %}

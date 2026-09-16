@@ -1,10 +1,10 @@
 {% if node.collapsible %}
   <details class="tree-node" data-depth="{{ node.depth }}">
     <summary class="tree-row tree-row--flat tree-summary" style="--depth: {{ node.depth }}">
-      <span class="tree-caret tree-caret--static" aria-hidden="true">&#9656;</span>
+      <span class="tree-caret tree-caret--static" aria-hidden="true">{% icon "chevron-right" size="sm" %}</span>
       <span class="tree-title">
-        {% if node.link %}<a href="{% url node.link %}" class="hover:underline">{{ node.title }} &rsaquo;</a>
-        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="hover:underline" title="Open ledger">{{ node.title }}</a>
+        {% if node.link %}<a href="{% url node.link %}" class="doc-num">{{ node.title }}</a>
+        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="doc-num" title="Open ledger">{{ node.title }}</a>
         {% else %}{{ node.title }}{% endif %}
       </span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}
@@ -19,8 +19,8 @@
     <div class="tree-row tree-row--flat{% if node.children %} tree-row--heading{% endif %}" style="--depth: {{ node.depth }}">
       <span class="tree-caret tree-caret--static" aria-hidden="true"></span>
       <span class="tree-title">
-        {% if node.link %}<a href="{% url node.link %}" class="hover:underline">{{ node.title }} &rsaquo;</a>
-        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="hover:underline" title="Open ledger">{{ node.title }}</a>
+        {% if node.link %}<a href="{% url node.link %}" class="doc-num">{{ node.title }}</a>
+        {% elif node.is_leaf and node.code %}<a href="{% url 'finance:account_ledger' %}?account_no={{ node.code|urlencode }}" class="doc-num" title="Open ledger">{{ node.title }}</a>
         {% else %}{{ node.title }}{% endif %}
       </span>
       {% if node.code %}<span class="tree-code">{{ node.code }}</span>{% endif %}

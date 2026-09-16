@@ -438,7 +438,7 @@ class PurchaseOrderCancelForm(forms.Form):
     )
     remarks = forms.CharField(
         required=False, max_length=500, label="Remarks",
-        widget=forms.TextInput(attrs={"class": "form-input", "placeholder": "Anything worth recording"}),
+        widget=forms.TextInput(attrs={"class": "form-input"}),
     )
 
 
@@ -449,7 +449,7 @@ class PurchaseOrderCloseShortForm(forms.Form):
     )
     remarks = forms.CharField(
         required=False, max_length=500, label="Remarks",
-        widget=forms.TextInput(attrs={"class": "form-input", "placeholder": "Anything worth recording"}),
+        widget=forms.TextInput(attrs={"class": "form-input"}),
     )
 
 

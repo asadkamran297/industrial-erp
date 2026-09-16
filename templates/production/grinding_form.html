@@ -1,99 +1,60 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<div class="flex items-start gap-3">
-  {% include "components/ui/back_button.html" with back_url=cancel_url %}
-  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=title %}</div>
-</div>
+{% component "ui/page_header" title=title meta=voucher_no back=True back_url=cancel_url %}{% endcomponent %}
 
-{% if line_errors %}
-  <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40">
-    {% for error in line_errors %}<p>{{ error }}</p>{% endfor %}
-  </div>
-{% endif %}
+{% if line_errors %}<div class="field-errors" role="alert">{% for error in line_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
 
-<form method="post" id="grinding-form" class="mt-6 space-y-6">
-  {% csrf_token %}
-
-  <div class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm font-semibold text-slate-500">Voucher No</p>
-      <p class="font-mono text-lg font-bold">{{ voucher_no }}</p>
-    </div>
-    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-rose-600">{{ error }}</p>{% endfor %}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% for field in form %}
-        <div {% if field.name == "description" %}class="sm:col-span-2 lg:col-span-3"{% endif %}>
-          <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {{ field }}
-          {% if field.name == "wheat_item" %}<p class="mt-1 text-xs text-slate-500" id="wheat-stock"></p>{% endif %}
-          {% if field.name == "bag_item" %}<p class="mt-1 text-xs text-slate-500" id="bag-hint"></p>{% endif %}
-          {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+<form method="post" id="grinding-form" class="form-stack">{% csrf_token %}
+  {% component "ui/card" %}
+    <div class="form-stack">
+      {% include "components/forms/form_errors.html" with form=form only %}
+      <div class="form-grid form-grid--cols-3">
+        {% for field in form %}
+        <div{% if field.name == "description" %} class="span-full"{% endif %}>
+        {% include "components/forms/field.html" with field=field only %}
+        {% if field.name == "wheat_item" %}<p class="sub" id="wheat-stock"></p>{% endif %}
+        {% if field.name == "bag_item" %}<p class="sub" id="bag-hint"></p>{% endif %}
         </div>
-      {% endfor %}
+        {% endfor %}
+      </div>
     </div>
-  </div>
+  {% endcomponent %}
 
-  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-      <p class="text-sm font-semibold">Output</p>
-      <button type="button" id="add-line" class="toolbar-btn !min-h-9 px-4">+ Add Line</button>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm" id="line-table">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-3 py-3" style="min-width:16rem;">Product</th>
-            <th class="px-3 py-3 text-right" style="width:8rem;">Quantity</th>
-            <th class="px-3 py-3 text-right" style="width:7rem;">Unit Wt</th>
-            <th class="px-3 py-3 text-right" style="width:9rem;">Total Kg</th>
-            <th class="px-3 py-3" style="min-width:14rem;">Pack Product</th>
-            <th class="px-3 py-3 text-right" style="width:8rem;">Pack Qty</th>
-            <th class="px-3 py-3" style="width:3rem;"></th>
-          </tr>
+  {% component "forms/section" title="Output" flush=True %}
+    {% slot actions %}{% include "components/ui/button.html" with type="button" id="add-line" label="Line" icon="plus" size="sm" only %}{% endslot %}
+    <div class="li-scroll overflow-x-auto">
+      <table class="li-table li-table--auto" id="line-table">
+        <thead>
+          <tr><th class="min-w-[16rem]">Product</th><th class="num w-32">Quantity</th><th class="num w-28">Unit Wt</th><th class="num w-36">Total Kg</th><th class="min-w-[14rem]">Pack Product</th><th class="num w-32">Pack Qty</th><th class="w-12"></th></tr>
         </thead>
-        <tbody id="line-body" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
-        <tfoot class="bg-slate-50 text-sm font-semibold dark:bg-slate-800">
-          <tr>
-            <td class="px-3 py-3">Totals</td>
-            <td class="px-3 py-3 text-right" id="total-bags">0</td>
-            <td class="px-3 py-3"></td>
-            <td class="px-3 py-3 text-right" id="total-kg">0</td>
-            <td class="px-3 py-3"></td>
-            <td class="px-3 py-3 text-right" id="total-packs">0</td>
-            <td class="px-3 py-3"></td>
-          </tr>
+        <tbody id="line-body"></tbody>
+        <tfoot>
+          <tr class="li-foot"><td>Totals</td><td class="num" id="total-bags">0</td><td></td><td class="num" id="total-kg">0</td><td></td><td class="num" id="total-packs">0</td><td></td></tr>
         </tfoot>
       </table>
     </div>
-
-    <div class="grid gap-4 border-t border-slate-200 px-6 py-5 sm:grid-cols-2 lg:grid-cols-5 dark:border-slate-800">
-      <div><p class="text-xs uppercase tracking-wide text-slate-500">Disposal Wheat</p><p class="text-lg font-bold" id="sum-wheat">0</p></div>
-      <div><p class="text-xs uppercase tracking-wide text-slate-500">Total Output Kg</p><p class="text-lg font-bold" id="sum-output">0</p></div>
-      <div><p class="text-xs uppercase tracking-wide text-slate-500">Yield %</p><p class="text-lg font-bold" id="sum-yield">0.00</p></div>
-      <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage Kg</p><p class="text-lg font-bold" id="sum-short">0</p></div>
-      <div><p class="text-xs uppercase tracking-wide text-slate-500">Shortage %</p><p class="text-lg font-bold" id="sum-short-pct">0.00</p></div>
+    <div class="tiles p-3">
+      {% include "components/table/tile.html" with tone="amber" icon="wheat" value="0" label="Disposal Wheat" value_id="sum-wheat" only %}
+      {% include "components/table/tile.html" with tone="green" icon="box" value="0" label="Total Output Kg" value_id="sum-output" only %}
+      {% include "components/table/tile.html" with tone="sky" icon="chart" value="0.00" label="Yield %" value_id="sum-yield" only %}
+      {% include "components/table/tile.html" with tone="rose" icon="minus" value="0" label="Shortage Kg" value_id="sum-short" only %}
+      {% include "components/table/tile.html" with tone="slate" icon="minus" value="0.00" label="Shortage %" value_id="sum-short-pct" only %}
     </div>
-    <p class="px-6 pb-5 text-xs" id="variance-note"></p>
-  </div>
+    <p class="field__rule px-4 pb-3" id="variance-note"></p>
+  {% endcomponent %}
 
-  <div class="flex justify-end gap-3">
-    <a href="{{ cancel_url }}" class="toolbar-btn">Cancel</a>
-    <button class="btn-primary" type="submit">Save Voucher</button>
-  </div>
+  {% include "components/forms/submit_bar.html" with cancel_url=cancel_url label="Save Voucher" floating=True only %}
 </form>
 
 <template id="line-template">
   <tr class="line-row">
-    <td class="px-3 py-2">
-      <select name="line_product" class="form-select line-product"></select>
-      <p class="mt-1 text-xs text-slate-500 line-stock"></p>
-    </td>
-    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_quantity" class="form-input text-right line-qty" value=""></td>
-    <td class="px-3 py-2 text-right line-unit-weight">0</td>
-    <td class="px-3 py-2 text-right font-semibold line-total">0</td>
-    <td class="px-3 py-2"><select name="line_pack_product" class="form-select line-pack"></select></td>
-    <td class="px-3 py-2"><input type="text" inputmode="decimal" name="line_pack_qty" class="form-input text-right line-pack-qty" value=""></td>
-    <td class="px-3 py-2 text-right"><button type="button" class="toolbar-btn !min-h-8 px-2 line-remove" title="Remove">&times;</button></td>
+    <td>{% component "forms/control" type="select" name="line_product" size="sm" extra="line-product" attrs='aria-label="Product"' only %}{% endcomponent %}<p class="sub line-stock"></p></td>
+    <td>{% include "components/forms/control.html" with name="line_quantity" cell=True kind="num" extra="line-qty" attrs='inputmode="decimal" aria-label="Quantity"' only %}</td>
+    <td class="num line-unit-weight">0</td>
+    <td class="li-amount line-total">0</td>
+    <td>{% component "forms/control" type="select" name="line_pack_product" size="sm" extra="line-pack" attrs='aria-label="Pack product"' only %}{% endcomponent %}</td>
+    <td>{% include "components/forms/control.html" with name="line_pack_qty" cell=True kind="num" extra="line-pack-qty" attrs='inputmode="decimal" aria-label="Pack quantity"' only %}</td>
+    <td>{% include "components/ui/icon_button.html" with icon="close" title="Remove" tone="danger" extra="line-remove" only %}</td>
   </tr>
 </template>
 
@@ -179,7 +140,7 @@
     if (standard > 0 && wheat > 0) {
       const variance = yieldPct - standard;
       note.textContent = "Standard " + fmt(standard, 2) + "% · variance " + (variance >= 0 ? "+" : "") + fmt(variance, 2) + "%";
-      note.className = "px-6 pb-5 text-xs font-semibold " + (variance < 0 ? "text-rose-600" : "text-emerald-600");
+      note.className = "field__rule px-4 pb-3 strong " + (variance < 0 ? "fig-bad" : "fig-good");
     } else {
       note.textContent = "";
     }

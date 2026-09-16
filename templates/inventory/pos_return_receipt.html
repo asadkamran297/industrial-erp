@@ -1,17 +1,11 @@
-<!doctype html>
-<html lang="en">
-{% load humanize %}
-<head>
-<meta charset="utf-8">
-<title>Return Receipt {{ sale_return.return_num }}</title>
-{% load static %}<link rel="stylesheet" href="{% static 'dist/receipt.css' %}">
-</head>
-<body>
-  <div class="toolbar">
-    <button class="print" onclick="window.print()">Print</button>
-    <button class="back" onclick="window.location.href='{% url 'inventory:pos_return_list' %}'">New Return</button>
-  </div>
-
+{% extends "layouts/print.html" %}
+{% load humanize static %}
+{% block title %}Return Receipt {{ sale_return.return_num }}{% endblock %}
+{% block stylesheet %}{% static 'dist/receipt.css' %}{% endblock %}
+{% block back_label %}New Return{% endblock %}
+{% block back_url %}{% url 'inventory:pos_return_list' %}{% endblock %}
+{% block print_header %}{% endblock %}
+{% block print_content %}
   <div class="receipt">
     <div class="center">
       {% if org.logo %}<img class="logo" src="{{ org.logo }}" alt="logo"><br>{% endif %}
@@ -75,12 +69,5 @@
       Processed by {{ sale_return.created_by.get_full_name|default:sale_return.created_by.username }}
     </div>
   </div>
-
-  <script>
-    window.addEventListener("load", function () { window.print(); });
-    window.addEventListener("afterprint", function () {
-      window.location.href = "{% url 'inventory:pos_return_list' %}";
-    });
-  </script>
-</body>
-</html>
+{% endblock %}
+{% block print_footer %}{% endblock %}

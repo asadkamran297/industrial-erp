@@ -1,0 +1,1 @@
+<a class="tab{% if on %} is-on{% endif %}" role="tab" aria-selected="{{ on|yesno:'true,false' }}" href="{{ href }}">{{ label }}{% if count is not None and count != "" %}<span class="tab__count">{{ count }}</span>{% endif %}</a>

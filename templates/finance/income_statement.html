@@ -1,57 +1,28 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Income Statement" subtitle="Revenue and expense, life-to-date, with net profit or loss." %}
+<section class="form-stack max-w-3xl">
+  {% include "components/ui/page_header.html" with title="Income Statement" only %}
+  <section class="statement-section">
+    <header class="statement-header">Revenue</header>
+    {% for row in revenue %}
+    <div class="tree-row tree-row--flat" style="--depth: 2"><span class="tree-title">{{ row.title }}</span><span class="tree-code">{{ row.code }}</span><span class="tree-amount">{{ row.amount|amount }}</span></div>
+    {% empty %}
+    <p class="statement-empty">No revenue.</p>
+    {% endfor %}
+    <div class="statement-total"><span>Total Revenue</span><span class="tree-amount">{{ total_revenue|amount }}</span></div>
 
-<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-  <table class="w-full min-w-[600px] text-sm">
-    <thead>
-      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-        <th class="px-3 py-2">Code</th>
-        <th class="px-3 py-2">Account</th>
-        <th class="px-3 py-2 text-right">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="bg-slate-50/60 dark:bg-slate-800/40">
-        <td class="px-3 py-1.5 font-semibold" colspan="3">Revenue</td>
-      </tr>
-      {% for row in revenue %}
-      <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
-        <td class="px-3 py-1.5">{{ row.title }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.amount|amount }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="3" class="px-3 py-3 text-center text-sm text-slate-500">No revenue postings yet.</td></tr>
-      {% endfor %}
-      <tr class="border-t border-slate-200 font-semibold dark:border-slate-700">
-        <td class="px-3 py-1.5" colspan="2">Total Revenue</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ total_revenue|amount }}</td>
-      </tr>
+    <header class="statement-header statement-header--divided">Expense</header>
+    {% for row in expense %}
+    <div class="tree-row tree-row--flat" style="--depth: 2"><span class="tree-title">{{ row.title }}</span><span class="tree-code">{{ row.code }}</span><span class="tree-amount">{{ row.amount|amount }}</span></div>
+    {% empty %}
+    <p class="statement-empty">No expense.</p>
+    {% endfor %}
+    <div class="statement-total"><span>Total Expense</span><span class="tree-amount">{{ total_expense|amount }}</span></div>
 
-      <tr class="bg-slate-50/60 dark:bg-slate-800/40">
-        <td class="px-3 py-1.5 font-semibold" colspan="3">Expense</td>
-      </tr>
-      {% for row in expense %}
-      <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
-        <td class="px-3 py-1.5">{{ row.title }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.amount|amount }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="3" class="px-3 py-3 text-center text-sm text-slate-500">No expense postings yet.</td></tr>
-      {% endfor %}
-      <tr class="border-t border-slate-200 font-semibold dark:border-slate-700">
-        <td class="px-3 py-1.5" colspan="2">Total Expense</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ total_expense|amount }}</td>
-      </tr>
-    </tbody>
-    <tfoot>
-      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
-        <td class="px-3 py-2" colspan="2">Net {% if net_profit >= 0 %}Profit{% else %}Loss{% endif %}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if net_profit < 0 %}text-rose-600{% endif %}">{{ net_profit|amount }}</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
+    <div class="statement-total statement-total--grand">
+      <span>Net {% if net_profit >= 0 %}Profit{% else %}Loss{% endif %}</span>
+      <span class="tree-amount{% if net_profit < 0 %} is-negative{% endif %}">{{ net_profit|amount }}</span>
+    </div>
+  </section>
+</section>
 {% endblock %}

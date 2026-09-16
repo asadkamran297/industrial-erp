@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load widget_tweaks %}
 {% block title %}Login | {{ system_setting.company_name }}{% endblock %}
 {% block body %}
 <main class="grid min-h-screen lg:grid-cols-[1.15fr_0.85fr]">
@@ -47,29 +46,25 @@
           <h2 class="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Sign in securely</h2>
         </div>
         <div class="flex items-center gap-2">
-          <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700" @click="toggleTheme()" aria-label="Toggle theme">◐</button>
-          <input class="h-10 w-10 rounded-lg border border-slate-200 bg-transparent p-1 dark:border-slate-700" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Primary color">
+          {% include "components/ui/icon_button.html" with icon="sun-moon" title="Light / dark" bordered=True attrs='@click="toggleTheme()"' only %}
+          {% include "components/forms/control.html" with type="color" extra="h-9 w-9 p-0.5" attrs='x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Brand colour"' only %}
         </div>
       </div>
 
-      <form method="post" class="rounded-lg border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-          {% include "components/ui/alert.html" with message=form.non_field_errors.0 tone="danger" %}
-        {% endif %}
-        {% include "components/forms/input.html" with field=form.username %}
-        {% include "components/forms/input.html" with field=form.password %}
-        <div class="mb-5 flex items-center justify-between gap-3 text-sm">
-          <label class="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
-            {{ form.remember_me|add_class:"h-4 w-4 rounded border-slate-300 text-[var(--primary-color)]" }}
-            {{ form.remember_me.label }}
-          </label>
-          <a href="#" class="font-medium text-[var(--primary-color)]">Forgot password?</a>
+      <form method="post" class="card" data-own-keys>{% csrf_token %}
+        <div class="card-body form-stack">
+          {% if form.non_field_errors %}{% include "components/ui/alert.html" with message=form.non_field_errors.0 tone="danger" only %}{% endif %}
+          {% include "components/forms/field.html" with field=form.username only %}
+          {% include "components/forms/field.html" with field=form.password only %}
+          <div class="flex items-center justify-between gap-3">
+            {% include "components/forms/field.html" with field=form.remember_me only %}
+            <a href="#" class="link-btn">Forgot password?</a>
+          </div>
+          {% include "components/ui/button.html" with label="Sign in" variant="primary" size="lg" extra="btn--block" data="save" only %}
         </div>
-        {% include "components/forms/submit_bar.html" with label="Sign in" %}
       </form>
 
-      <p class="mt-5 text-center text-xs leading-6 text-slate-500 dark:text-slate-400">{{ system_setting.footer_text }} Activity may be monitored for security and audit.</p>
+      <p class="muted mt-4 text-center text-xs">{{ system_setting.footer_text }}</p>
     </div>
   </section>
 </main>

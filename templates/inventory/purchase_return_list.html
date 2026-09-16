@@ -1,279 +1,130 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "components/table/board_theme.html" %}
+{% if can_add %}{% url 'inventory:purchase_return_create' as create_url %}{% endif %}
+{% component "table/board" title="Purchase Returns" add_url=create_url add_label="Return" table_id="return-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
+  {% slot tiles %}
+    {% capture as all_on %}{% if current_tab == "all" and not request.GET.date_from %}1{% endif %}{% endcapture %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=all" tone="violet" icon="reverse" value=tiles.all_count label="All" on=all_on %}<p class="tile-note">Rs {{ tiles.all_value|short_amount }}</p>{% endcomponent %}
+    {% capture as draft_on %}{% if current_tab == "draft" %}1{% endif %}{% endcapture %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=draft" tone="slate" icon="file" value=tiles.draft_count label="Draft" on=draft_on %}<p class="tile-note{% if tiles.draft_count %} tile-note--alert{% endif %}">Rs {{ tiles.draft_value|short_amount }}</p>{% endcomponent %}
+    {% capture as posted_on %}{% if current_tab == "posted" and not request.GET.date_from %}1{% endif %}{% endcapture %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=posted" tone="green" icon="check" value=tiles.posted_count label="Posted" on=posted_on %}<p class="tile-note">Rs {{ tiles.posted_value|short_amount }}</p>{% endcomponent %}
+    {% capture as reversed_on %}{% if current_tab == "reversed" %}1{% endif %}{% endcapture %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=reversed" tone="rose" icon="deactivate" value=tiles.reversed_count label="Reversed" on=reversed_on %}<p class="tile-note">Rs {{ tiles.reversed_value|short_amount }}</p>{% endcomponent %}
+    {% capture as month_href %}?{{ base_query }}&amp;tab=posted&amp;date_from={{ tiles.month_from }}&amp;date_to={{ tiles.month_to }}{% endcapture %}
+    {% capture as month_on %}{% if request.GET.date_from == tiles.month_from %}1{% endif %}{% endcapture %}
+    {% component "table/tile" href=month_href tone="sky" icon="calendar" value=tiles.month_count label="This month" on=month_on %}<p class="tile-note">Rs {{ tiles.month_value|short_amount }}</p>{% endcomponent %}
+  {% endslot %}
 
-<style>
-  .pr-dialog { width: min(26rem, calc(100vw - 2rem)); border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff; color: #0f172a; padding: 0; }
-  .dark .pr-dialog { border-color: #334155; background: #0f172a; color: #e2e8f0; }
-  .pr-dialog::backdrop { background: rgba(15, 23, 42, .45); }
-  .pr-dialog-body { display: grid; gap: .875rem; padding: 1.25rem; }
-  .pr-dialog-title { font-size: 1rem; font-weight: 700; }
-  .pr-dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; }
-  .pr-btn { min-height: 2.25rem; border: 1px solid #cbd5e1; border-radius: .5rem; background: #fff; padding: 0 .875rem; font-size: .875rem; font-weight: 600; color: #334155; }
-  .dark .pr-btn { border-color: #334155; background: #1e293b; color: #e2e8f0; }
-  .pr-btn--danger { border-color: #dc2626; background: #dc2626; color: #fff; }
-  .dark .pr-btn--danger { border-color: #ef4444; background: #b91c1c; color: #fff; }
-</style>
-
-<div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
-
-<div class="flex flex-wrap items-start justify-between gap-4">
-  <div class="max-w-xl">
-    <h1 class="title-accent text-2xl font-bold">Purchase Returns</h1>
-  </div>
-  <div class="flex flex-wrap items-center gap-2">
-    {% if can_add %}
-    {% url 'inventory:purchase_return_create' as add_url %}
-    {% include "components/ui/button.html" with label="New Return" href=add_url variant="primary" icon="+" only %}
-    {% endif %}
-  </div>
-</div>
-
-<div class="po-tiles mt-5">
-  <a class="po-tile po-tile--committed{% if current_tab == 'all' and not request.GET.date_from %} is-on{% endif %}"
-     href="?{{ base_query }}&amp;tab=all">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 14 4 9l5-5"></path><path d="M4 9h11a5 5 0 0 1 0 10h-3"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.all_count }}</p>
-        <p class="po-tile-label">All</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.all_value|short_amount }}</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--approval{% if current_tab == 'draft' %} is-on{% endif %}"
-     href="?{{ base_query }}&amp;tab=draft">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 15h6"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.draft_count }}</p>
-        <p class="po-tile-label">Draft</p>
-      </div>
-      <p class="po-tile-note{% if tiles.draft_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.draft_value|short_amount }}</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--money{% if current_tab == 'posted' and not request.GET.date_from %} is-on{% endif %}"
-     href="?{{ base_query }}&amp;tab=posted">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 6 9 17l-5-5"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.posted_count }}</p>
-        <p class="po-tile-label">Posted</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.posted_value|short_amount }}</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--void{% if current_tab == 'reversed' %} is-on{% endif %}"
-     href="?{{ base_query }}&amp;tab=reversed">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"></circle><path d="m5.7 5.7 12.6 12.6"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.reversed_count }}</p>
-        <p class="po-tile-label">Reversed</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.reversed_value|short_amount }}</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--goods{% if request.GET.date_from == tiles.month_from %} is-on{% endif %}"
-     href="?{{ base_query }}&amp;tab=posted&amp;date_from={{ tiles.month_from }}&amp;date_to={{ tiles.month_to }}">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.month_count }}</p>
-        <p class="po-tile-label">This month</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.month_value|short_amount }}</p>
-    </div>
-  </a>
-</div>
-
-<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  {% include "components/table/filter_bar.html" with table_id="return-table" date_filters_enabled=True search_placeholder="Search..." export_url=export_url columns_action=columns_url %}
-
-  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
-    <table id="return-table" class="po-table">
-      <thead>
-        <tr>
-          <th class="print-hide po-expand-head"></th>
-          {% include "components/table/sort_header.html" with label="Return #" field="return_num" %}
-          {% if "return_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="return_date" %}{% endif %}
-          {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
-          {% if "invoice" in columns %}{% include "components/table/sort_header.html" with label="Invoice #" field="invoice" %}{% endif %}
-          {% if "order" in columns %}{% include "components/table/sort_header.html" with label="PO #" field="order" %}{% endif %}
-          {% if "lines" in columns %}<th class="po-right">Items</th>{% endif %}
-          {% if "quantity" in columns %}<th class="po-right">Qty</th>{% endif %}
-          {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
-          {% include "components/table/sort_header.html" with label="Amount" field="value" align="right" %}
-          <th class="print-hide po-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in returns %}
-        <tr>
-          <td class="print-hide po-expand-cell">
-            <button type="button" class="po-expand" @click="toggleRow({{ row.pk }})"
-                    :aria-expanded="isRowOpen({{ row.pk }}) ? 'true' : 'false'" aria-label="Items" title="Items">
-              <span x-text="isRowOpen({{ row.pk }}) ? '−' : '+'">+</span>
-            </button>
-          </td>
-          <td><a class="po-num" href="{% url 'inventory:purchase_return_detail' row.pk %}">{{ row.return_num|default:"—" }}</a></td>
-          {% if "return_date" in columns %}<td class="whitespace-nowrap">{{ row.return_date|dmy }}</td>{% endif %}
-          {% if "supplier" in columns %}<td><span class="font-semibold">{{ row.supplier.name }}</span></td>{% endif %}
-          {% if "invoice" in columns %}<td><a class="po-num" href="{% url 'inventory:purchase_invoice_detail' row.purchase_invoice_id %}">{{ row.purchase_invoice.invoice_num }}</a></td>{% endif %}
-          {% if "order" in columns %}<td>{% if row.purchase_order_id %}<a class="po-num" href="{% url 'inventory:purchase_order_detail' row.purchase_order_id %}">{{ row.purchase_order.purchase_num }}</a>{% else %}<span class="po-muted">—</span>{% endif %}</td>{% endif %}
-          {% if "lines" in columns %}<td class="po-right text-slate-500">{{ row.line_count }}</td>{% endif %}
-          {% if "quantity" in columns %}<td class="po-right">{{ row.qty_total|qty }}</td>{% endif %}
-          {% if "status" in columns %}
-          <td>
-            {% if row.status == "posted" %}<span class="po-pill po-pill--done">Posted</span>
-            {% elif row.status == "reversed" %}<span class="po-pill po-pill--dead">Reversed</span>
-            {% elif row.status in draft_statuses %}<span class="po-pill po-pill--draft">Draft</span>
-            {% else %}<span class="po-pill po-pill--dead">{{ row.get_status_display }}</span>{% endif %}
-          </td>
-          {% endif %}
-          <td class="po-right font-semibold">{{ row.returned_amount|amount }}</td>
-          <td class="print-hide">
-            <div class="po-row-actions">
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_return_detail' row.pk %}" title="View" aria-label="View">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </a>
-              {% if row.status != "reversed" and row.return_num %}
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_return_receipt' row.pk %}" target="_blank" title="Print" aria-label="Print">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M7 8V3h10v5"></path><path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><rect x="7" y="14" width="10" height="7" rx="1"></rect>
-                </svg>
-              </a>
-              {% endif %}
-              {% if can_edit and row.status in draft_statuses %}
-              <form method="post" action="{% url 'inventory:purchase_return_post' row.pk %}">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button type="submit" class="po-icon-btn po-icon-btn--go" title="Post" aria-label="Post">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </button>
-              </form>
-              {% endif %}
-              {% if can_edit and row.status == "posted" %}
-              <button type="button" class="po-icon-btn" title="Reverse" aria-label="Reverse"
-                      data-reverse-url="{% url 'inventory:purchase_return_reverse' row.pk %}" data-reverse-num="{{ row.return_num }}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 3v6h6"></path>
-                </svg>
-              </button>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-
-        <tr class="po-lines-row print-hide" x-show="isRowOpen({{ row.pk }})" x-cloak>
-          <td colspan="{{ row_span }}" class="po-lines-cell print-hide">
-            <table class="po-lines">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Item</th>
-                  <th class="po-right">Qty</th>
-                  <th>Unit</th>
-                  <th class="po-right">Rate</th>
-                  <th class="po-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for line in row.items.all %}
-                <tr>
-                  <td class="po-lines-num">{{ forloop.counter }}</td>
-                  <td><span class="font-semibold">{{ line.item_name }}</span>{% if line.item_code %}<span class="po-sub">{{ line.item_code }}</span>{% endif %}</td>
-                  <td class="po-right">{{ line.quantity|qty }}</td>
-                  <td>{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}</td>
-                  <td class="po-right">{{ line.rate|amount }}</td>
-                  <td class="po-right font-semibold">{{ line.total_price|amount }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="{{ row_span }}" class="px-4 py-12 text-center text-slate-500">No purchase returns.</td></tr>
-        {% endfor %}
-      </tbody>
-      {% if returns %}
-      <tfoot>
-        <tr class="po-foot">
-          <td colspan="{{ foot_span }}">Total on this page</td>
-          {% if "lines" in columns %}<td></td>{% endif %}
-          {% if "quantity" in columns %}<td class="po-right">{{ page_qty|qty }}</td>{% endif %}
-          {% if "status" in columns %}<td></td>{% endif %}
-          <td class="po-right">{{ page_total|amount }}</td>
-          <td class="print-hide"></td>
-        </tr>
-      </tfoot>
+  <thead>
+    <tr>
+      <th class="print-hide expand-col"></th>
+      {% include "components/table/sort_header.html" with label="Return #" field="return_num" %}
+      {% if "return_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="return_date" %}{% endif %}
+      {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
+      {% if "invoice" in columns %}{% include "components/table/sort_header.html" with label="Invoice #" field="invoice" %}{% endif %}
+      {% if "order" in columns %}{% include "components/table/sort_header.html" with label="PO #" field="order" %}{% endif %}
+      {% if "lines" in columns %}<th class="num">Items</th>{% endif %}
+      {% if "quantity" in columns %}<th class="num">Qty</th>{% endif %}
+      {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
+      {% include "components/table/sort_header.html" with label="Amount" field="value" align="right" %}
+      <th class="print-hide actions-col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in returns %}
+    <tr{% if row.status == "reversed" %} class="row--void"{% endif %}>
+      {% include "components/table/expand_toggle.html" with pk=row.pk only %}
+      <td><a class="doc-num" href="{% url 'inventory:purchase_return_detail' row.pk %}">{{ row.return_num|default:"—" }}</a></td>
+      {% if "return_date" in columns %}<td>{{ row.return_date|dmy }}</td>{% endif %}
+      {% if "supplier" in columns %}<td class="truncate strong" title="{{ row.supplier.name }}">{{ row.supplier.name }}</td>{% endif %}
+      {% if "invoice" in columns %}<td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.purchase_invoice_id %}">{{ row.purchase_invoice.invoice_num }}</a></td>{% endif %}
+      {% if "order" in columns %}<td>{% if row.purchase_order_id %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' row.purchase_order_id %}">{{ row.purchase_order.purchase_num }}</a>{% else %}<span class="muted">&mdash;</span>{% endif %}</td>{% endif %}
+      {% if "lines" in columns %}<td class="num muted">{{ row.line_count }}</td>{% endif %}
+      {% if "quantity" in columns %}<td class="num">{{ row.qty_total|qty }}</td>{% endif %}
+      {% if "status" in columns %}
+      <td>
+        {% if row.status == "posted" %}<span class="pill pill--posted">Posted</span>
+        {% elif row.status == "reversed" %}<span class="pill pill--reversed">Reversed</span>
+        {% elif row.status in draft_statuses %}<span class="pill pill--draft">Draft</span>
+        {% else %}<span class="pill pill--closed">{{ row.get_status_display }}</span>{% endif %}
+      </td>
       {% endif %}
-    </table>
-  </div>
-</section>
-
-{% include "components/table/pagination.html" %}
-
-</div>
+      <td class="num strong">{{ row.returned_amount|amount }}</td>
+      <td class="print-hide actions-col">
+        {% url 'inventory:purchase_return_detail' row.pk as view_url %}
+        {% capture as print_url %}{% if row.status != "reversed" and row.return_num %}{% url 'inventory:purchase_return_receipt' row.pk %}{% endif %}{% endcapture %}
+        {% component "table/actions" view_url=view_url print_url=print_url %}
+          {% if can_edit and row.status in draft_statuses %}
+          <form method="post" action="{% url 'inventory:purchase_return_post' row.pk %}">{% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            {% include "components/ui/icon_button.html" with type="submit" icon="post" title="Post" tone="go" only %}
+          </form>
+          {% endif %}
+          {% slot end %}
+            {% if can_edit and row.status == "posted" %}
+            {% capture as reverse_attrs %}data-reverse-url="{% url 'inventory:purchase_return_reverse' row.pk %}" data-reverse-num="{{ row.return_num }}"{% endcapture %}
+            {% include "components/ui/icon_button.html" with icon="reverse" title="Reverse" tone="danger" attrs=reverse_attrs only %}
+            {% endif %}
+          {% endslot %}
+        {% endcomponent %}
+      </td>
+    </tr>
+    {% component "table/lines_row" pk=row.pk span=row_span %}
+      <table class="lines-table">
+        <thead><tr><th>#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+          {% for line in row.items.all %}
+          <tr>
+            <td class="muted">{{ forloop.counter }}</td>
+            <td><span class="strong">{{ line.item_name }}</span>{% if line.item_code %}<span class="sub">{{ line.item_code }}</span>{% endif %}</td>
+            <td class="num">{{ line.quantity|qty }}</td>
+            <td>{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}</td>
+            <td class="num">{{ line.rate|amount }}</td>
+            <td class="num strong">{{ line.total_price|amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endcomponent %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=row_span label="No purchase returns." only %}
+    {% endfor %}
+  </tbody>
+  {% if returns %}
+  <tfoot>
+    <tr class="board-foot">
+      <td colspan="{{ foot_span }}">Total on this page</td>
+      {% if "lines" in columns %}<td></td>{% endif %}
+      {% if "quantity" in columns %}<td class="num">{{ page_qty|qty }}</td>{% endif %}
+      {% if "status" in columns %}<td></td>{% endif %}
+      <td class="num">{{ page_total|amount }}</td>
+      <td class="print-hide"></td>
+    </tr>
+  </tfoot>
+  {% endif %}
+{% endcomponent %}
 
 {% if can_edit %}
-<dialog id="pr-reverse" class="pr-dialog">
-  <form method="post" class="pr-dialog-body">
-    {% csrf_token %}
+<dialog id="pr-reverse" class="dialog-native">
+  <form method="post">{% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-    <p class="pr-dialog-title">Reverse <span data-reverse-label></span></p>
-    <label class="grid gap-1 text-sm font-medium">
-      Reason
-      <select name="reason" class="form-select" required>
-        <option value=""></option>
-        {% for value, label in reversal_reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select>
-    </label>
-    <div class="pr-dialog-actions">
-      <button type="button" class="pr-btn" data-close>Cancel</button>
-      <button type="submit" class="pr-btn pr-btn--danger">Reverse</button>
+    <div class="modal__head"><h2 class="modal__title">Reverse <span data-reverse-label></span></h2></div>
+    <div class="modal__body">
+      {% component "forms/control" type="select" name="reason" id="pr-reverse-reason" label="Reason" required=True %}<option value=""></option>{% for value, label in reversal_reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}{% endcomponent %}
+    </div>
+    <div class="modal__foot">
+      {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs="data-close" only %}
+      {% include "components/ui/button.html" with label="Reverse" icon="reverse" variant="danger" only %}
     </div>
   </form>
 </dialog>
-{% endif %}
-
 <script>
   (function () {
-    var dialog = document.getElementById('pr-reverse');
-    if (!dialog) return;
-    var form = dialog.querySelector('form');
-    document.addEventListener('click', function (event) {
-      var trigger = event.target.closest('[data-reverse-url]');
+    const dialog = document.getElementById('pr-reverse');
+    const form = dialog.querySelector('form');
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-reverse-url]');
       if (trigger) {
         form.action = trigger.dataset.reverseUrl;
         dialog.querySelector('[data-reverse-label]').textContent = trigger.dataset.reverseNum;
@@ -284,4 +135,5 @@
     });
   })();
 </script>
+{% endif %}
 {% endblock %}

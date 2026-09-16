@@ -1,169 +1,106 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "inventory/_purchase_theme.html" %}
 
-<style>
-  .prf-layout { display: grid; gap: 1.25rem; }
-  @media (min-width: 1024px) { .prf-layout { grid-template-columns: minmax(0, 1fr) 20rem; align-items: start; } }
-  .prf-head { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr)); }
-  .prf-date { min-width: 11.5rem; }
-  .prf-picked { display: flex; align-items: center; gap: .5rem; min-height: 2.5rem; }
-  .prf-qty { width: 7rem; text-align: right; }
-  .prf-row-off { opacity: .55; }
-  .prf-dialog { width: min(44rem, calc(100vw - 2rem)); border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff; color: #0f172a; padding: 0; }
-  .dark .prf-dialog { border-color: #334155; background: #0f172a; color: #e2e8f0; }
-  .prf-dialog::backdrop { background: rgba(15, 23, 42, .45); }
-  .prf-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0; }
-  .dark .prf-dialog-head { border-bottom-color: #1e293b; }
-  .prf-dialog-scroll { max-height: 60vh; overflow: auto; }
-  .prf-pick-row { cursor: pointer; }
-  .prf-pick-row:hover td { background: #f8fafc; }
-  .dark .prf-pick-row:hover td { background: #1e293b; }
-  .prf-pick-row[aria-disabled="true"] { cursor: not-allowed; opacity: .5; }
-</style>
 
 {{ posted_lines|json_script:"prf-posted-lines" }}
 
-<section class="space-y-5" x-data="purchaseReturnForm()" x-init="init()">
-  <div class="pur-head-row">
-    <div class="flex items-start gap-3">
-      {% include "components/ui/back_button.html" with back_url=list_url %}
-      <h1 class="pur-title title-accent">Purchase Return</h1>
-    </div>
-  </div>
+<section class="form-stack" x-data="purchaseReturnForm()" x-init="init()">
+  {% include "components/ui/page_header.html" with title="Purchase Return" back=True back_url=list_url only %}
 
-  <form method="post" class="prf-layout" x-ref="form">
-    {% csrf_token %}
-    <div class="space-y-5">
-      <div class="pur-card">
-        <div class="pur-card-body prf-head">
-          <div>
-            <label class="pur-label">Return No</label>
-            <input type="text" class="form-input w-full" value="{{ next_number }}" readonly>
-          </div>
-          <div>
-            <label class="pur-label" for="return_date">Return Date</label>
-            <input type="date" id="return_date" name="return_date" class="form-input prf-date w-full"
-                   value="{% if posted.return_date %}{{ posted.return_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
-          </div>
-          <div>
-            <label class="pur-label" for="supplier">Supplier</label>
-            <select id="supplier" name="supplier" class="form-select w-full" data-searchable required x-ref="supplier"
-                    @change="supplierChanged($event.target.value)">
-              <option value=""></option>
-              {% for supplier in suppliers %}
-              <option value="{{ supplier.pk }}" {% if posted.supplier == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="pur-label">Purchase Invoice</label>
+  <form method="post" class="split-layout" x-ref="form">{% csrf_token %}
+    <div class="form-stack">
+      {% component "ui/card" %}
+        <div class="form-grid form-grid--cols-4">
+          {% include "components/forms/control.html" with id="return-no" label="Return No" value=next_number readonly=True extra="strong num" only %}
+          {% firstof posted.return_date today|date:"Y-m-d" as return_date_value %}
+          {% include "components/forms/control.html" with type="date" id="return_date" name="return_date" label="Return Date" value=return_date_value required=True only %}
+          {% component "forms/control" type="select" id="supplier" name="supplier" label="Supplier" required=True searchable=True attrs='x-ref="supplier" @change="supplierChanged($event.target.value)"' only %}
+            <option value=""></option>
+            {% for supplier in suppliers %}<option value="{{ supplier.pk }}" {% if posted.supplier == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier.name }}</option>{% endfor %}
+          {% endcomponent %}
+          <div class="field">
+            <span class="field__label">Purchase Invoice</span>
             <input type="hidden" name="purchase_invoice" :value="invoice ? invoice.id : ''" value="{{ posted.purchase_invoice|default:'' }}">
-            <div class="prf-picked">
-              <span class="pur-strong" x-text="invoice ? invoice.number : ''"></span>
-              <button type="button" class="pur-btn pur-btn--ghost pur-btn--sm" :disabled="!supplierId" @click="openPicker()"
-                      x-text="invoice ? 'Change' : 'Pick invoice'">Pick invoice</button>
+            <div class="picked-row">
+              <span class="strong" x-text="invoice ? invoice.number : ''"></span>
+              {% include "components/ui/button.html" with type="button" label="Pick invoice" icon="file" size="sm" attrs=':disabled="!supplierId" @click="openPicker()"' only %}
             </div>
           </div>
         </div>
-      </div>
+      {% endcomponent %}
 
-      <div class="pur-card">
-        <div class="pur-card-body pur-card-body--flush overflow-x-auto">
-          <table class="pur-table">
+      {% component "ui/card" flush=True %}
+        <div class="li-scroll">
+          <table class="data-table">
             <thead>
-              <tr>
-                <th style="width: 2.5rem;"></th>
-                <th>Item</th>
-                <th>Unit</th>
-                <th class="pur-num">Invoiced</th>
-                <th class="pur-num">Returned</th>
-                <th class="pur-num">Returnable</th>
-                <th class="pur-num">Return Qty</th>
-                <th class="pur-num">Rate</th>
-                <th class="pur-num">Amount</th>
-              </tr>
+              <tr><th class="w-10"></th><th>Item</th><th>Unit</th><th class="num">Invoiced</th><th class="num">Returned</th><th class="num">Returnable</th><th class="num">Return Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr>
             </thead>
             <tbody>
               <template x-for="line in lines" :key="line.id">
-                <tr :class="{ 'prf-row-off': !line.on }">
-                  <td><input type="checkbox" x-model="line.on" :disabled="line.left <= 0" aria-label="Return this line"></td>
-                  <td>
-                    <span class="pur-strong" x-text="line.item"></span>
-                    <span class="pur-sub" x-text="line.code"></span>
-                  </td>
+                <tr :class="{ 'row--off': !line.on }">
+                  <td>{% include "components/forms/control.html" with type="checkbox" attrs='x-model="line.on" :disabled="line.left <= 0" aria-label="Return this line"' only %}</td>
+                  <td><span class="strong" x-text="line.item"></span><span class="sub" x-text="line.code"></span></td>
                   <td x-text="line.unit || '—'"></td>
-                  <td class="pur-num" x-text="qty(line.invoiced)"></td>
-                  <td class="pur-num" x-text="qty(line.returned)"></td>
-                  <td class="pur-num" x-text="qty(line.left)"></td>
-                  <td class="pur-num">
+                  <td class="num" x-text="qty(line.invoiced)"></td>
+                  <td class="num" x-text="qty(line.returned)"></td>
+                  <td class="num" x-text="qty(line.left)"></td>
+                  <td class="num">
                     <input type="hidden" name="line_id" :value="line.id" :disabled="!line.on">
-                    <input type="number" name="return_qty" class="form-input prf-qty" step="0.001" min="0.001"
-                           :max="line.left" x-model="line.qtyText" :disabled="!line.on" :required="line.on" data-no-amount>
+                    {% include "components/forms/control.html" with type="number" name="return_qty" kind="weight" size="sm" extra="cell-qty" min="0.001" attrs=':max="line.left" x-model="line.qtyText" :disabled="!line.on" :required="line.on" aria-label="Return quantity"' only %}
                   </td>
-                  <td class="pur-num" x-text="money(line.rate)"></td>
-                  <td class="pur-num pur-strong" x-text="money(line.on ? lineAmount(line) : 0)"></td>
+                  <td class="num" x-text="money(line.rate)"></td>
+                  <td class="num strong" x-text="money(line.on ? lineAmount(line) : 0)"></td>
                 </tr>
               </template>
-              <tr x-show="!lines.length">
-                <td colspan="9"><div class="pur-empty" x-text="invoice ? 'Nothing left to return.' : '—'"></div></td>
-              </tr>
+              <tr x-show="!lines.length"><td colspan="9" class="empty-note" x-text="invoice ? 'Nothing left to return.' : '—'"></td></tr>
             </tbody>
           </table>
         </div>
-      </div>
+      {% endcomponent %}
     </div>
 
-    <aside class="pur-card">
-      <div class="pur-card-body space-y-4">
-        <div class="pur-kv"><span>Lines</span><b x-text="picked().length"></b></div>
-        <div class="pur-kv"><span>Quantity</span><b x-text="qty(totalQty())"></b></div>
-        <div class="pur-kv"><span>Gross</span><b x-text="money(totalAmount())"></b></div>
-        <div class="pur-kv pur-kv--total"><span>Net</span><b x-text="money(totalAmount())"></b></div>
-        <div>
-          <label class="pur-label" for="remarks">Remarks</label>
-          <textarea id="remarks" name="remarks" rows="3" class="form-input w-full">{{ posted.remarks|default:'' }}</textarea>
-        </div>
+    <aside class="card">
+      <div class="card-body form-stack">
+        <dl>
+          <div class="kv"><dt>Lines</dt><dd x-text="picked().length"></dd></div>
+          <div class="kv"><dt>Quantity</dt><dd x-text="qty(totalQty())"></dd></div>
+          <div class="kv"><dt>Gross</dt><dd x-text="money(totalAmount())"></dd></div>
+          <div class="kv kv--total"><dt>Net</dt><dd x-text="money(totalAmount())"></dd></div>
+        </dl>
+        {% include "components/forms/control.html" with type="textarea" id="remarks" name="remarks" label="Remarks" rows=3 value=posted.remarks only %}
         <div class="flex flex-wrap justify-end gap-2">
-          <button type="submit" name="action" value="draft" class="pur-btn pur-btn--ghost" :disabled="!picked().length">Save Draft</button>
+          {% url 'inventory:purchase_return_list' as cancel_url %}
+          {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
           {% if can_post %}
-          <button type="submit" name="action" value="post" class="pur-btn pur-btn--primary" :disabled="!picked().length">Save &amp; Post</button>
+          {% include "components/ui/button.html" with label="Save Draft" name="action" value="draft" attrs=':disabled="!picked().length"' only %}
+          {% include "components/ui/button.html" with label="Save & Post" name="action" value="post" icon="save" variant="primary" attrs=':disabled="!picked().length"' only %}
+          {% else %}
+          {% include "components/ui/button.html" with label="Save Draft" name="action" value="draft" icon="save" variant="primary" attrs=':disabled="!picked().length"' only %}
           {% endif %}
         </div>
       </div>
     </aside>
   </form>
 
-  <dialog class="prf-dialog" x-ref="picker" @close="pickerOpen = false">
-    <div class="prf-dialog-head">
-      <p class="pur-strong">Purchase Invoices</p>
-      <button type="button" class="pur-btn pur-btn--ghost pur-btn--sm" @click="$refs.picker.close()" aria-label="Close">&times;</button>
+  <dialog class="dialog-native dialog-native--lg" x-ref="picker" @close="pickerOpen = false">
+    <div class="modal__head">
+      <h2 class="modal__title">Purchase Invoices</h2>
+      {% include "components/ui/icon_button.html" with icon="close" title="Close" attrs='@click="$refs.picker.close()"' only %}
     </div>
-    <div class="prf-dialog-scroll">
-      <table class="pur-table">
-        <thead>
-          <tr>
-            <th>Invoice #</th>
-            <th>Date</th>
-            <th>PO #</th>
-            <th class="pur-num">Lines</th>
-            <th class="pur-num">Total</th>
-          </tr>
-        </thead>
+    <div class="modal__scroll">
+      <table class="data-table">
+        <thead><tr><th>Invoice #</th><th>Date</th><th>PO #</th><th class="num">Lines</th><th class="num">Total</th></tr></thead>
         <tbody>
           <template x-for="row in invoices" :key="row.id">
-            <tr class="prf-pick-row" :aria-disabled="row.disabled ? 'true' : 'false'"
-                :title="row.mill_only ? 'Wheat / bardana only' : (row.disabled ? 'Nothing left to return' : '')"
-                @click="!row.disabled && chooseInvoice(row.id)">
-              <td><span class="pur-strong" x-text="row.number"></span><span class="pur-sub" x-text="row.supplier_ref"></span></td>
+            <tr class="row-link" :class="{ 'row--off': row.disabled }" :aria-disabled="row.disabled ? 'true' : 'false'" :title="row.mill_only ? 'Wheat / bardana only' : (row.disabled ? 'Nothing left to return' : '')" @click="!row.disabled && chooseInvoice(row.id)">
+              <td><span class="strong" x-text="row.number"></span><span class="sub" x-text="row.supplier_ref"></span></td>
               <td x-text="row.date"></td>
               <td x-text="row.order || '—'"></td>
-              <td class="pur-num" x-text="row.lines"></td>
-              <td class="pur-num" x-text="money(row.total)"></td>
+              <td class="num" x-text="row.lines"></td>
+              <td class="num" x-text="money(row.total)"></td>
             </tr>
           </template>
-          <tr x-show="!invoices.length"><td colspan="5"><div class="pur-empty" x-text="loading ? '…' : 'No posted invoices.'"></div></td></tr>
+          <tr x-show="!invoices.length"><td colspan="5" class="empty-note" x-text="loading ? '…' : 'No posted invoices.'"></td></tr>
         </tbody>
       </table>
     </div>

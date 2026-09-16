@@ -18,8 +18,10 @@ Work as a senior Django ERP engineer. The project foundation is intentionally sm
 
 ## Screens and Templates
 
+UI system: read `docs/UI_SYSTEM.md` before touching templates; `python manage.py ui_lint` must be clean.
+
 12. Screens show labels, figures and actions only. No page lede under the heading, no intro paragraphs, no explainer cards or notes. If an explanation is truly needed, use a `title=` tooltip.
-13. Every list/register screen follows the board pattern (Purchase Orders board): clickable tiles counted over the filtered set, shared filter bar, sortable table, status pill, icon row-actions, page-total footer, pagination, export. Include `templates/components/table/board_theme.html`; never paste its CSS.
+13. Every list/register screen follows the board pattern (Purchase Orders board): clickable tiles counted over the filtered set, shared filter bar, sortable table, status pill, icon row-actions, page-total footer, pagination, export. Use `{% component "table/board" %}` (`templates/components/table/board.html`); never paste its CSS.
 14. Reuse `templates/components/` (fields, buttons, back button, tables). Do not copy-paste a component's markup or styles into a screen.
 15. Form validation uses native HTML `required`; no custom validation bubbles.
 16. Django `{# #}` is single-line only. Never write a multi-line `{# #}` (it prints on the page); inside `<style>` use CSS comments.

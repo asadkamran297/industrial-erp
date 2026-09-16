@@ -1,106 +1,55 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<section class="space-y-4" x-data="{ open: null }">
-
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Purchase Orders Report</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">All purchase orders</p>
-    </div>
-  </div>
-
-  {% include "components/table/search_filters.html" %}
-
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
+{% component "table/board" title="Purchase Orders Report" table_id="po-report-table" search_placeholder="Search" %}
+  <thead>
+    <tr><th class="print-hide expand-col"></th><th>#</th><th>PO #</th><th>Supplier</th><th>Date</th><th>Quotation</th><th>Status</th><th class="num">Total amount</th><th class="actions-col">Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    <tr>
+      {% include "components/table/expand_toggle.html" with pk=order.pk only %}
+      <td class="muted">{{ forloop.counter }}</td>
+      <td><a class="doc-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a></td>
+      <td class="truncate">{{ order.supplier.name }}</td>
+      <td>{{ order.purchase_date|dmy }}</td>
+      <td>{{ order.quot_num|default:"—" }}</td>
+      <td>
+        {% if order.status == "draft" %}<span class="pill pill--draft">{{ order.get_status_display }}</span>
+        {% elif order.status == "cancelled" %}<span class="pill pill--reversed">{{ order.get_status_display }}</span>
+        {% elif order.status == "closed" %}<span class="pill pill--closed">{{ order.get_status_display }}</span>
+        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">{{ order.get_status_display }}</span>
+        {% elif order.status == "fully_invoiced" %}<span class="pill pill--posted">{{ order.get_status_display }}</span>
+        {% else %}<span class="pill pill--pending">{{ order.get_status_display }}</span>{% endif %}
+      </td>
+      <td class="num strong">{{ order.po_total|amount }}</td>
+      <td class="actions-col">
+        {% url 'inventory:purchase_order_detail' order.pk as view_url %}{% url 'inventory:purchase_order_print' order.pk as print_url %}
+        {% include "components/table/actions.html" with view_url=view_url print_url=print_url only %}
+      </td>
+    </tr>
+    {% component "table/lines_row" pk=order.pk span=9 %}
+      <table class="lines-table">
+        <thead><tr><th>#</th><th>Item</th><th>Unit</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+          {% for item in order.items.all %}
           <tr>
-            <th class="px-4 py-3">#</th>
-            <th class="px-4 py-3">PO #</th>
-            <th class="px-4 py-3">Supplier</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Quotation</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Total Amount</th>
-            <th class="px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for order in orders %}
-          <tr class="align-top">
-            <td class="px-4 py-3 text-slate-400">{{ forloop.counter }}</td>
-            <td class="px-4 py-3">
-              <button type="button"
-                class="flex items-center gap-2 font-medium text-slate-900 hover:text-[var(--primary-color)] dark:text-slate-100"
-                @click="open = open === {{ order.pk }} ? null : {{ order.pk }}"
-              >
-                <span class="inline-grid h-5 w-5 place-items-center rounded-full border border-slate-200 text-[10px] dark:border-slate-700"
-                  x-text="open === {{ order.pk }} ? '-' : '+'"></span>
-                {{ order.purchase_num }}
-              </button>
-            </td>
-            <td class="px-4 py-3">{{ order.supplier.name }}</td>
-            <td class="px-4 py-3">{{ order.purchase_date }}</td>
-            <td class="px-4 py-3">{{ order.quot_num|default:"—" }}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full px-2.5 py-1 text-xs font-medium
-                {% if order.status == 'draft' %}bg-amber-100 text-amber-700
-                {% elif order.status == 'raised' %}bg-blue-100 text-blue-700
-                {% elif order.status == 'partial_received' %}bg-violet-100 text-violet-700
-                {% elif order.status == 'fully_received' %}bg-emerald-100 text-emerald-700
-                {% else %}bg-slate-100 text-slate-600{% endif %}">
-                {{ order.get_status_display }}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-right font-medium">{{ order.po_total|amount }}</td>
-            <td class="px-4 py-3 text-right">
-              <a href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank"
-                 class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200">
-                &#128438; Print
-              </a>
-            </td>
-          </tr>
-          <tr x-show="open === {{ order.pk }}" x-cloak class="bg-slate-50/70 dark:bg-slate-950/30">
-            <td colspan="8" class="px-6 py-4">
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="text-slate-500 border-b border-slate-200 dark:border-slate-700">
-                    <th class="pb-2 text-left font-semibold">#</th>
-                    <th class="pb-2 text-left font-semibold">Item</th>
-                    <th class="pb-2 text-left font-semibold">UOM</th>
-                    <th class="pb-2 text-right font-semibold">Qty</th>
-                    <th class="pb-2 text-right font-semibold">Rate</th>
-                    <th class="pb-2 text-right font-semibold">Discount</th>
-                    <th class="pb-2 text-right font-semibold">Amount</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                  {% for item in order.items.all %}
-                  <tr>
-                    <td class="py-2">{{ forloop.counter }}</td>
-                    <td class="py-2">{{ item.descr }}</td>
-                    <td class="py-2">{{ item.uom.title }}</td>
-                    <td class="py-2 text-right">{{ item.quantity|qty }}</td>
-                    <td class="py-2 text-right">{{ item.rate|amount }}</td>
-                    <td class="py-2 text-right">{{ item.discount_amount|amount }}</td>
-                    <td class="py-2 text-right font-medium">{{ item.total_amount|amount }}</td>
-                  </tr>
-                  {% empty %}
-                  <tr><td colspan="7" class="py-4 text-center text-slate-400">No items.</td></tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </td>
+            <td class="muted">{{ forloop.counter }}</td>
+            <td>{{ item.descr }}</td>
+            <td>{{ item.uom.title }}</td>
+            <td class="num">{{ item.quantity|qty }}</td>
+            <td class="num">{{ item.rate|amount }}</td>
+            <td class="num">{{ item.discount_amount|amount }}</td>
+            <td class="num strong">{{ item.total_amount|amount }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No purchase orders found.</td></tr>
+          <tr><td colspan="7" class="empty-note">No items.</td></tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-  </div>
-
-  {% include "components/table/pagination.html" %}
-</section>
+    {% endcomponent %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=9 label="No purchase orders." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
 {% endblock %}

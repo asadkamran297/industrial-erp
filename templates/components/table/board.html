@@ -1,0 +1,25 @@
+<div class="board{% if extra %} {{ extra }}{% endif %}" x-data="{{ x_data|default:'rowFold()' }}">
+  {% if title %}
+  <div class="page-head">
+    <div class="page-head__lead">
+      {% if back %}{% include "components/ui/back_button.html" with back_url=back_url %}{% endif %}
+      <h1 class="page-title">{{ title }}</h1>
+    </div>
+    <div class="page-head__actions">
+      {{ slots.actions }}
+      {% if add_url %}{% include "components/ui/button.html" with label=add_label|default:"New" href=add_url icon="plus" variant="primary" only %}{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {{ slots.above }}
+  {% if slots.tiles %}<div class="tiles">{{ slots.tiles }}</div>{% elif board_tiles %}{% include "components/table/tiles.html" with tiles=board_tiles only %}{% endif %}
+  <section class="board-card">
+    {% if not no_filters %}{% include "components/table/filter_bar.html" with table_id=table_id|default:"board-table" %}{% endif %}
+    {{ slots.bar }}
+    <div class="board-scroll">
+      <table id="{{ table_id|default:'board-table' }}" class="board-table">{{ slot }}</table>
+    </div>
+    {% if not no_pagination %}{% include "components/table/pagination.html" %}{% endif %}
+  </section>
+  {{ slots.below }}
+</div>

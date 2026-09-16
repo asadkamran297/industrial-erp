@@ -1,127 +1,67 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Daybook" subtitle="Every transaction posted on a single day, in the order it was entered." %}
-
-<form method="get" class="toolbar mt-4">
-  <a href="?day={{ previous_day|date:'Y-m-d' }}{% if selected_type %}&voucher_type={{ selected_type }}{% endif %}"
-     class="toolbar-btn" title="Previous day">&lsaquo;</a>
-  <input type="date" name="day" value="{{ day|date:'Y-m-d' }}" class="toolbar-search" onchange="this.form.submit()">
-  <a href="?day={{ next_day|date:'Y-m-d' }}{% if selected_type %}&voucher_type={{ selected_type }}{% endif %}"
-     class="toolbar-btn" title="Next day">&rsaquo;</a>
-
-  <select name="voucher_type" class="toolbar-search" onchange="this.form.submit()">
-    <option value="">All transactions</option>
-    {% for value, label in voucher_types %}
-      <option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>
+{% component "table/board" title="Daybook" table_id="daybook-table" no_search=True no_pagination=True filters_active=False %}
+  {% slot filters %}
+    {% capture as prev_url %}?day={{ previous_day|date:'Y-m-d' }}{% if selected_type %}&amp;voucher_type={{ selected_type }}{% endif %}{% endcapture %}
+    {% include "components/ui/icon_button.html" with href=prev_url icon="back" title="Previous day" bordered=True only %}
+    {% include "components/forms/control.html" with type="date" name="day" value=day|date:'Y-m-d' size="sm" attrs='onchange="this.form.submit()" aria-label="Day"' only %}
+    {% capture as next_url %}?day={{ next_day|date:'Y-m-d' }}{% if selected_type %}&amp;voucher_type={{ selected_type }}{% endif %}{% endcapture %}
+    {% include "components/ui/icon_button.html" with href=next_url icon="chevron-right" title="Next day" bordered=True only %}
+    <label class="filter-chip">
+      Type
+      {% component "forms/control" type="select" name="voucher_type" cell=True attrs='onchange="this.form.submit()"' only %}
+        <option value="">All</option>
+        {% for value, label in voucher_types %}<option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    {% if not is_today or selected_type %}{% url 'finance:daybook' as today_url %}{% include "components/ui/button.html" with label="Today" href=today_url size="sm" only %}{% endif %}
+  {% endslot %}
+  {% slot tiles %}
+    {% include "components/table/tile.html" with tone="violet" icon="file" value=entries|length label="Entries" only %}
+    {% include "components/table/tile.html" with tone="green" icon="download" value=totals.cash_in|amount label="Cash In" only %}
+    {% include "components/table/tile.html" with tone="amber" icon="upload" value=totals.cash_out|amount label="Cash Out" only %}
+    {% capture as net_tone %}{% if net_cash < 0 %}rose{% else %}sky{% endif %}{% endcapture %}
+    {% include "components/table/tile.html" with tone=net_tone icon="sum" value=net_cash|amount label="Net Cash" only %}
+  {% endslot %}
+  {% slot bar %}
+    {% if summary %}
+    <div class="flex flex-wrap gap-2 px-3 py-2">
+      {% for row in summary %}<span class="chip">{{ row.kind }} &times;{{ row.count }} &middot; <span class="num">{{ row.amount|amount }}</span></span>{% endfor %}
+    </div>
+    {% endif %}
+  {% endslot %}
+  <thead><tr><th>Voucher</th><th>Type</th><th>Account</th><th>Narration</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+  <tbody>
+    {% for entry in entries %}
+    <tr class="note-row">
+      <td><a href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}" class="doc-num">{{ entry.voucher.voucher_no }}</a></td>
+      <td>{{ entry.kind }}</td>
+      <td class="strong">{{ entry.party }}</td>
+      <td class="muted truncate">{{ entry.voucher.remarks|default:"—" }}</td>
+      <td class="num strong">{{ entry.debit|amount }}</td>
+      <td class="num strong">{{ entry.credit|amount }}</td>
+    </tr>
+    {% for line in entry.lines %}
+    <tr>
+      <td></td>
+      <td class="muted">{{ line.account_no }}</td>
+      <td{% if not line.known %} class="fig-bad"{% endif %}>{{ line.title }}</td>
+      <td class="muted truncate">{{ line.remarks|default:"" }}</td>
+      <td class="num">{% if line.debit %}{{ line.debit|amount }}{% endif %}</td>
+      <td class="num">{% if line.credit %}{{ line.credit|amount }}{% endif %}</td>
+    </tr>
     {% endfor %}
-  </select>
-
-  {% if not is_today or selected_type %}
-    <a href="{% url 'finance:daybook' %}" class="toolbar-btn">Today</a>
-  {% endif %}
-  <span class="toolbar-status">{{ day|dmy }}</span>
-</form>
-
-<section class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-  <div class="kpi"><div class="kpi-rule"></div>
-    <p class="kpi-label">Entries</p>
-    <p class="kpi-value">{{ entries|length }}</p>
-    <p class="kpi-note">Vouchers posted this day</p>
-  </div>
-  <div class="kpi kpi--revenue"><div class="kpi-rule"></div>
-    <p class="kpi-label">Cash In</p>
-    <p class="kpi-value">{{ totals.cash_in|amount }}</p>
-    <p class="kpi-note">Received into cash and bank</p>
-  </div>
-  <div class="kpi kpi--expense"><div class="kpi-rule"></div>
-    <p class="kpi-label">Cash Out</p>
-    <p class="kpi-value">{{ totals.cash_out|amount }}</p>
-    <p class="kpi-note">Paid out of cash and bank</p>
-  </div>
-  <div class="kpi kpi--profit{% if net_cash < 0 %} is-loss{% endif %}"><div class="kpi-rule"></div>
-    <p class="kpi-label">Net Cash</p>
-    <p class="kpi-value{% if net_cash < 0 %} is-negative{% endif %}">{{ net_cash|amount }}</p>
-    <p class="kpi-note">Movement on the day</p>
-  </div>
-</section>
-
-{% if summary %}
-  <div class="mt-3 flex flex-wrap gap-2">
-    {% for row in summary %}
-      <span class="rounded-full border border-slate-200 px-3 py-1 text-xs dark:border-slate-700">
-        <span class="font-semibold">{{ row.kind }}</span>
-        <span class="text-slate-500">&times;{{ row.count }}</span>
-        <span class="ml-1 tabular-nums font-semibold">{{ row.amount|amount }}</span>
-      </span>
+    {% if not entry.balanced %}<tr><td colspan="6" class="text-alert">Debit and credit differ.</td></tr>{% endif %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=6 label="No transactions this day." only %}
     {% endfor %}
-  </div>
-{% endif %}
-
-<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-  <table class="w-full min-w-[860px] text-sm">
-    <thead>
-      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-        <th class="px-3 py-2">Voucher</th>
-        <th class="px-3 py-2">Type</th>
-        <th class="px-3 py-2">Account</th>
-        <th class="px-3 py-2">Narration</th>
-        <th class="px-3 py-2 text-right">Debit</th>
-        <th class="px-3 py-2 text-right">Credit</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for entry in entries %}
-        <tr class="row-link border-t-2 border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40"
-            data-href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}">
-          <td class="px-3 py-2 font-semibold">
-            <a href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}" class="hover:underline">{{ entry.voucher.voucher_no }}</a>
-          </td>
-          <td class="px-3 py-2">{{ entry.kind }}</td>
-          <td class="px-3 py-2">{{ entry.party }}</td>
-          <td class="px-3 py-2 text-slate-500">{{ entry.voucher.remarks|default:"—" }}</td>
-          <td class="px-3 py-2 text-right tabular-nums font-semibold">{{ entry.debit|amount }}</td>
-          <td class="px-3 py-2 text-right tabular-nums font-semibold">{{ entry.credit|amount }}</td>
-        </tr>
-        {% for line in entry.lines %}
-          <tr class="border-t border-slate-100 dark:border-slate-800">
-            <td class="px-3 py-1.5"></td>
-            <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ line.account_no }}</td>
-            <td class="px-3 py-1.5 {% if not line.known %}text-rose-600{% endif %}">{{ line.title }}</td>
-            <td class="px-3 py-1.5 text-slate-500">{{ line.remarks|default:"" }}</td>
-            <td class="px-3 py-1.5 text-right tabular-nums">{% if line.debit %}{{ line.debit|amount }}{% endif %}</td>
-            <td class="px-3 py-1.5 text-right tabular-nums">{% if line.credit %}{{ line.credit|amount }}{% endif %}</td>
-          </tr>
-        {% endfor %}
-        {% if not entry.balanced %}
-          <tr><td colspan="6" class="px-3 py-1 text-xs text-rose-600">
-            This voucher does not balance — debit and credit differ.
-          </td></tr>
-        {% endif %}
-      {% empty %}
-        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-slate-500">
-          No transactions posted on {{ day|dmy }}.
-        </td></tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
-        <td class="px-3 py-2" colspan="4">Day total</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if not balanced %}text-rose-600{% endif %}">{{ totals.debit|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if not balanced %}text-rose-600{% endif %}">{{ totals.credit|amount }}</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-
-<script>
-  // Whole-row navigation. The row still contains a real link, so keyboard and
-  // middle-click behaviour keep working; this only widens the hit target.
-  document.querySelectorAll('.row-link').forEach(function (row) {
-    row.addEventListener('click', function (event) {
-      if (event.target.closest('a, button, input, select')) return;
-      if (window.getSelection().toString()) return;  // don't hijack text selection
-      window.location.href = row.dataset.href;
-    });
-  });
-</script>
+  </tbody>
+  <tfoot>
+    <tr class="board-foot">
+      <td colspan="4">Day total</td>
+      <td class="num{% if not balanced %} fig-bad{% endif %}">{{ totals.debit|amount }}</td>
+      <td class="num{% if not balanced %} fig-bad{% endif %}">{{ totals.credit|amount }}</td>
+    </tr>
+  </tfoot>
+{% endcomponent %}
 {% endblock %}

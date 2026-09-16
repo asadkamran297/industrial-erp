@@ -1,0 +1,4 @@
+<section class="section{% if extra %} {{ extra }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+  {% if title or slots.actions %}<div class="section__head">{% if title %}<h2 class="section__title">{{ title }}</h2>{% endif %}{% if slots.actions %}<div class="flex items-center gap-2">{{ slots.actions }}</div>{% endif %}</div>{% endif %}
+  <div class="section__body{% if flush %} section__body--flush{% endif %}">{{ slot }}</div>
+</section>

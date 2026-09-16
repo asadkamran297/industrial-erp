@@ -1,379 +1,80 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "inventory/_purchase_theme.html" %}
+<section class="form-stack" x-data="{ cancelling: false, closing: false, askEdit: {% if can_edit_lines and request.GET.edit %}true{% else %}false{% endif %}, editing: false }">
+  {% url 'inventory:purchase_order_board' as orders_url %}
+  {% capture as status_label %}{% if order.status == "draft" %}Awaiting approval{% elif order.days_late %}Delivery overdue{% elif order.status == "partially_invoiced" %}Partly invoiced{% elif order.status == "fully_invoiced" %}Fully invoiced{% elif order.status == "closed" %}Closed{% elif order.status == "cancelled" %}Cancelled{% else %}Awaiting invoice{% endif %}{% endcapture %}
+  {% capture as status_tone %}{% if order.status == "draft" %}draft{% elif order.days_late %}danger{% elif order.status == "partially_invoiced" %}partial{% elif order.status == "fully_invoiced" %}posted{% elif order.status == "closed" %}closed{% elif order.status == "cancelled" %}reversed{% else %}pending{% endif %}{% endcapture %}
 
-<style>
-  /* An anchored panel is jumped to from the board, so it must not land under
-     the sticky header, and it says so when it arrives. */
-  .pur-anchor { scroll-margin-top: 5rem; }
-  .pur-anchor:target { box-shadow: 0 0 0 3px var(--ring-primary); }
-
-  /* Ending the order is asked about in a dialog, so the decision and the
-     reason for it are taken in one place. */
-  .pur-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    background: rgba(15, 23, 42, .45);
-    backdrop-filter: blur(2px);
-  }
-  .pur-modal-card {
-    width: 100%;
-    max-width: 28rem;
-    border-radius: .75rem;
-    background: #fff;
-    padding: 1.5rem;
-    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, .35);
-  }
-  .dark .pur-modal-card { background: #1e293b; }
-  .pur-modal-title { font-size: 1rem; font-weight: 700; }
-
-  /* The order as the paper it stands for. */
-
-  .pur-doc-sheet {
-    border: 1px solid #e2e8f0;
-    border-radius: .75rem;
-    background: #fff;
-    padding: 1.75rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
-  }
-  .dark .pur-doc-sheet { border-color: #1e293b; background: #0f172a; }
-  .pur-doc-top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #0f172a;
-  }
-  .dark .pur-doc-top { border-bottom-color: #cbd5e1; }
-  .pur-doc-org { font-size: 1.25rem; font-weight: 800; }
-  .pur-doc-sub { font-size: .8125rem; color: #94a3b8; }
-  .pur-doc-stamp { text-align: right; }
-  .pur-doc-kind {
-    font-size: .875rem;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--primary-color);
-  }
-  .pur-doc-no { font-size: 1.125rem; font-weight: 800; }
-  .pur-doc-date { font-size: .8125rem; color: #94a3b8; }
-  /* Lifted from the register so the two screens cannot drift apart. */
-  .po-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: .375rem;
-    border-radius: 9999px;
-    padding: .25rem .625rem;
-    font-size: .75rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
-  .po-pill--draft { color: #7c3aed; background: #ede9fe; }
-  .po-pill--open { color: #b45309; background: #fef3c7; }
-  .po-pill--late { color: #dc2626; background: #fee2e2; }
-  .po-pill--done { color: #047857; background: #d1fae5; }
-  .po-pill--dead { color: #475569; background: #e2e8f0; }
-
-  .pur-doc-parties {
-    display: grid;
-    gap: 1.5rem;
-    padding: 1.25rem 0;
-    grid-template-columns: 1fr;
-  }
-  @media (min-width: 768px) {
-    .pur-doc-parties { grid-template-columns: 1fr 1fr; }
-    /* The status sits against the right edge, under the document's own
-       number, so the sheet reads down both margins. */
-    .pur-doc-right { text-align: right; }
-  }
-
-  .pur-doc-cap {
-    font-size: .6875rem;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-  .pur-doc-name { font-size: 1rem; font-weight: 700; }
-  .pur-doc-table tfoot .pur-doc-total td {
-    border-top: 1px solid #e2e8f0;
-    background: #f8fafc;
-    font-weight: 700;
-  }
-  .dark .pur-doc-table tfoot .pur-doc-total td { border-top-color: #1e293b; background: rgba(15, 23, 42, .6); }
-
-  .pur-doc-foot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding-top: 1.25rem;
-  }
-  .pur-in { font-weight: 600; color: #047857; }
-  .pur-due { font-weight: 600; color: #b45309; }
-  .pur-nil { color: #94a3b8; }
-  /* The notes a line came in under, as chips: several fit without widening
-     the column past the money beside it. */
-  .pur-grns { min-width: 9rem; }
-  .pur-grn {
-    display: inline-flex;
-    align-items: baseline;
-    gap: .25rem;
-    margin: 0 .25rem .25rem 0;
-    border-radius: .25rem;
-    background: #e0f2fe;
-    padding: .0625rem .3125rem;
-    font-size: .625rem;
-    font-weight: 700;
-    color: #0369a1;
-    white-space: nowrap;
-  }
-  .pur-grn:hover { background: #bae6fd; }
-  .dark .pur-grn { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
-  .dark .pur-grn:hover { background: rgba(3, 105, 161, .4); }
-  .pur-grn-qty { font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
-  /* A note and the lines under it: the note reads as the row, the lines as
-     the account behind it. */
-  .pur-note-row > td { background: #f8fafc; }
-  .dark .pur-note-row > td { background: rgba(15, 23, 42, .55); }
-  .pur-lines-row:hover > td { background: #f8fafc; }
-  .dark .pur-lines-row:hover > td { background: rgba(15, 23, 42, .55); }
-  .pur-lines-cell { background: #f8fafc; padding: .75rem 1rem 1rem 2.5rem !important; }
-  .dark .pur-lines-cell { background: rgba(15, 23, 42, .55); }
-  .pur-lines { width: 100%; border-collapse: collapse; font-size: .75rem; }
-  .pur-lines thead th {
-    padding: .375rem .5rem;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: .625rem;
-    font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: #64748b;
-    white-space: nowrap;
-  }
-  .dark .pur-lines thead th { border-bottom-color: #1e293b; }
-  .pur-lines tbody td { padding: .375rem .5rem; border-bottom: 1px solid #eef2f7; }
-  .dark .pur-lines tbody td { border-bottom-color: rgba(30, 41, 59, .7); }
-  .pur-lines tbody tr:last-child td { border-bottom: 0; }
-  .pur-in { font-weight: 600; color: #047857; }
-  .pur-due { font-weight: 600; color: #b45309; }
-  .pur-nil { color: #94a3b8; }
-  .pur-fold {
-    display: grid;
-    place-items: center;
-    width: 1.375rem;
-    height: 1.375rem;
-    border: 1px solid #cbd5e1;
-    border-radius: .375rem;
-    font-size: .8125rem;
-    font-weight: 700;
-    line-height: 1;
-    color: #475569;
-  }
-  .pur-fold:hover { background: #e2e8f0; }
-  .dark .pur-fold { border-color: #475569; color: #cbd5e1; }
-  .pur-lines-save { display: flex; justify-content: flex-end; gap: .75rem; padding-top: .75rem; }
-
-  /* An editable cell reads as the figure it holds until it is used. */
-  .pur-edit {
-    width: 6rem;
-    border: 1px solid transparent;
-    border-radius: .375rem;
-    background: transparent;
-    padding: .25rem .375rem;
-    font-size: .875rem;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    color: inherit;
-    outline: none;
-  }
-  .pur-edit:hover { border-color: #e2e8f0; }
-  .pur-edit:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 3px var(--ring-primary); }
-  .dark .pur-edit:hover { border-color: #334155; }
-  .dark .pur-edit:focus { background: #0f172a; }
-  .pur-doc-narration { font-size: .875rem; }
-  .pur-doc-value { display: flex; align-items: baseline; gap: 1.5rem; font-size: .875rem; color: #64748b; }
-  .pur-doc-value b { font-size: 1.125rem; color: inherit; }
-  .dark .pur-doc-value { color: #94a3b8; }
-
-  /* The chain off this order, as chips: kind first so the row can be read
-     down its left edge, the number beside it. */
-  .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .pur-link {
-    display: inline-flex;
-    align-items: baseline;
-    gap: .375rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .5rem;
-    background: #fff;
-    padding: .375rem .625rem;
-    font-size: .75rem;
-    line-height: 1.2;
-  }
-  .pur-link:hover { border-color: var(--primary-color); background: #f8fafc; }
-  .dark .pur-link { border-color: #334155; background: #0f172a; }
-  .dark .pur-link:hover { background: #1e293b; }
-  .pur-link-kind { color: #64748b; }
-  .pur-link-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
-  .pur-link--dead { opacity: .55; }
-  .pur-link--dead .pur-link-num { color: #94a3b8; text-decoration: line-through; }
-</style>
-
-<section class="space-y-5"
-         x-data="{
-           cancelling: false,
-           closing: false,
-           askEdit: {% if can_edit_lines and request.GET.edit %}true{% else %}false{% endif %},
-           editing: false,
-         }">
-
-  <div class="pur-head-row pur-noprint">
-    <div class="flex items-start gap-3">
-      {% url 'inventory:purchase_order_board' as orders_url %}
-      {% include "components/ui/back_button.html" with back_url=orders_url %}
-      <div>
-        <h1 class="pur-title title-accent">Purchase Order</h1>
-      </div>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank">Print</a>
-
+  {% component "ui/detail_header" kind="Purchase Order" number=order.purchase_num date=order.purchase_date|dmy party=order.supplier.name status=status_label status_tone=status_tone back=True back_url=orders_url extra="no-print" %}
+    {% slot actions %}
+      {% url 'inventory:purchase_order_print' order.pk as print_url %}
+      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
       {% if order.unbilled_value and can_edit %}
-      <a class="pur-btn pur-btn--ghost"
-         href="{% url 'inventory:purchase_invoice_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}"
-         title="Enter the supplier's invoice against what arrived">Enter bill</a>
+        {% url 'inventory:purchase_invoice_create' as bill_base %}
+        {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
+        {% include "components/ui/button.html" with label="Enter invoice" href=bill_url icon="receipt" only %}
       {% endif %}
-
       {% if order.days_late %}
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' order.supplier_id %}"
-         title="{{ order.days_late }} day{{ order.days_late|pluralize }} late &mdash; supplier contact details">Chase supplier</a>
+        {% url 'inventory:supplier_detail' order.supplier_id as chase_url %}
+        {% include "components/ui/button.html" with label="Chase supplier" href=chase_url icon="phone" only %}
       {% endif %}
-
       {% if order.status == "draft" and can_edit %}
-      <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="pur-btn pur-btn--primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-          Approve order
-        </button>
+      <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
+        {% include "components/ui/button.html" with label="Approve order" icon="check" variant="primary" only %}
       </form>
       {% endif %}
+      {% if can_edit_lines %}{% include "components/ui/button.html" with type="button" label="Edit PO" icon="edit" attrs='x-show="!editing" @click="askEdit = true"' only %}{% endif %}
+      {% if can_approve and can_close_short %}{% include "components/ui/button.html" with type="button" id="close" label="Close PO" icon="archive" variant="danger" extra="anchor" attrs='@click="closing = true"' only %}{% endif %}
+      {% if can_approve and can_cancel %}{% include "components/ui/button.html" with type="button" id="cancel" label="Cancel order" icon="deactivate" variant="danger" extra="anchor" attrs='@click="cancelling = true"' only %}{% endif %}
+    {% endslot %}
+  {% endcomponent %}
 
-      {% if can_edit_lines %}
-      <button type="button" class="pur-btn pur-btn--danger" x-show="!editing"
-              @click="askEdit = true" title="Correct the quantities and prices on this order">Edit PO</button>
-      {% endif %}
+  {% if can_edit_lines %}
+  {% component "ui/modal" show="askEdit" close="askEdit = false" title="Edit "|add:order.purchase_num %}
+    <p class="text-sm">Quantities, rates and discounts become editable until Save PO.</p>
+    {% slot foot %}
+      {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs='@click="askEdit = false"' only %}
+      {% include "components/ui/button.html" with type="button" label="Edit PO" icon="edit" variant="danger" attrs='@click="editing = true; askEdit = false"' only %}
+    {% endslot %}
+  {% endcomponent %}
+  {% endif %}
 
-      {% if can_approve and can_close_short %}
-      <button type="button" class="pur-btn pur-btn--danger" @click="closing = true"
-              title="The balance is not coming">Close PO</button>
-      {% endif %}
+  {% if can_approve and can_cancel %}
+  {% component "ui/modal" show="cancelling" close="cancelling = false" title="Cancel "|add:order.purchase_num %}
+    <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" id="cancel-form" class="form-stack">{% csrf_token %}
+      {% include "components/forms/field.html" with field=cancel_form.reason label="Reason" only %}
+      {% include "components/forms/field.html" with field=cancel_form.remarks only %}
+    </form>
+    {% slot foot %}
+      {% include "components/ui/button.html" with type="button" label="Keep the order" variant="ghost" attrs='@click="cancelling = false"' only %}
+      {% include "components/ui/button.html" with label="Cancel order" icon="deactivate" variant="danger" form_id="cancel-form" only %}
+    {% endslot %}
+  {% endcomponent %}
+  {% endif %}
 
-      {% if can_approve and can_cancel %}
-      <button type="button" class="pur-btn pur-btn--danger" @click="cancelling = true">Cancel order</button>
-      {% endif %}
-    </div>
-
-    {% if can_edit_lines %}
-    <div class="pur-modal" x-show="askEdit" x-cloak @click.self="askEdit = false"
-         @keydown.escape.window="askEdit = false" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-      <div class="pur-modal-card" @click.stop>
-        <h2 class="pur-modal-title" id="edit-title">Edit {{ order.purchase_num }}</h2>
-        <p class="pur-help" style="margin-top: .25rem;">
-          Quantities, rates and discounts become editable. Nothing is saved until Save PO is used.
-        </p>
-        <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="pur-btn pur-btn--ghost" @click="askEdit = false">Cancel</button>
-          <button type="button" class="pur-btn pur-btn--danger" @click="editing = true; askEdit = false">Edit PO</button>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-
-    {% if can_approve and can_cancel %}
-    <div class="pur-modal" x-show="cancelling" x-cloak @click.self="cancelling = false"
-         @keydown.escape.window="cancelling = false" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
-      <form method="post" action="{% url 'inventory:purchase_order_cancel' order.pk %}" class="pur-modal-card" @click.stop>
-        {% csrf_token %}
-        <h2 class="pur-modal-title" id="cancel-title">Cancel {{ order.purchase_num }}</h2>
-        <p class="pur-help" style="margin-top: .25rem;">The order is abandoned. The number stays in the sequence.</p>
-        <div class="mt-4">
-          <label class="pur-label" for="{{ cancel_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
-          {{ cancel_form.reason }}
-        </div>
-        <div class="mt-3">
-          <label class="pur-label" for="{{ cancel_form.remarks.id_for_label }}">Remarks</label>
-          {{ cancel_form.remarks }}
-        </div>
-        <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="pur-btn pur-btn--ghost" @click="cancelling = false">Keep the order</button>
-          <button type="submit" class="pur-btn pur-btn--danger">Cancel order</button>
-        </div>
-      </form>
-    </div>
-    {% endif %}
-
-    {% if can_approve and can_close_short %}
-    <div class="pur-modal" x-show="closing" x-cloak @click.self="closing = false"
-         @keydown.escape.window="closing = false" role="dialog" aria-modal="true" aria-labelledby="close-title">
-      <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" class="pur-modal-card" @click.stop>
-        {% csrf_token %}
-        <h2 class="pur-modal-title" id="close-title">Close {{ order.purchase_num }}</h2>
-        <p class="pur-help" style="margin-top: .25rem;">
-          Writes off the outstanding <b>{{ outstanding_qty|qty }} units</b> as never arriving.
-        </p>
-        <div class="mt-4">
-          <label class="pur-label" for="{{ close_short_form.reason.id_for_label }}">Reason <span class="pur-req">*</span></label>
-          {{ close_short_form.reason }}
-        </div>
-        <div class="mt-3">
-          <label class="pur-label" for="{{ close_short_form.remarks.id_for_label }}">Remarks</label>
-          {{ close_short_form.remarks }}
-        </div>
-        <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="pur-btn pur-btn--ghost" @click="closing = false">Leave it open</button>
-          <button type="submit" class="pur-btn pur-btn--danger">Close PO</button>
-        </div>
-      </form>
-    </div>
-    {% endif %}
-  </div>
+  {% if can_approve and can_close_short %}
+  {% component "ui/modal" show="closing" close="closing = false" title="Close "|add:order.purchase_num %}
+    <p class="text-sm">Outstanding <b>{{ outstanding_qty|qty }}</b> units written off.</p>
+    <form method="post" action="{% url 'inventory:purchase_order_close_short' order.pk %}" id="close-form" class="form-stack">{% csrf_token %}
+      {% include "components/forms/field.html" with field=close_short_form.reason label="Reason" only %}
+      {% include "components/forms/field.html" with field=close_short_form.remarks only %}
+    </form>
+    {% slot foot %}
+      {% include "components/ui/button.html" with type="button" label="Leave it open" variant="ghost" attrs='@click="closing = false"' only %}
+      {% include "components/ui/button.html" with label="Close PO" icon="archive" variant="danger" form_id="close-form" only %}
+    {% endslot %}
+  {% endcomponent %}
+  {% endif %}
 
   {% if is_closed_early %}
-  <div class="pur-note {% if order.status == 'cancelled' %}pur-note--bad{% else %}pur-note--warn{% endif %}">
-    <span class="pur-note-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path>
-      </svg>
-    </span>
+  <div class="note {% if order.status == 'cancelled' %}note--bad{% else %}note--warn{% endif %}">
+    <span class="note-icon">{% icon "deactivate" %}</span>
     <div class="flex-1">
-      <p>
-        <b>{% if order.status == "cancelled" %}This order was cancelled{% else %}This order was closed short{% endif %}
-        on {{ order.closed_on|dmy }}{% if order.closed_by %} by {{ order.closed_by.get_full_name|default:order.closed_by.username }}{% endif %}.</b>
-        {{ order.close_reason_label }}
-      </p>
-      {% if order.short_qty %}
-      <p>
-        {{ order.short_qty|qty }} units worth {{ order.short_value|amount }} were released from what is
-        on order. No accounting entry was made: an order never had one, so there was nothing to reverse.
-      </p>
-      {% endif %}
+      <p><b>{% if order.status == "cancelled" %}Cancelled{% else %}Closed short{% endif %} on {{ order.closed_on|dmy }}{% if order.closed_by %} by {{ order.closed_by.get_full_name|default:order.closed_by.username }}{% endif %}.</b> {{ order.close_reason_label }}</p>
+      {% if order.short_qty %}<p>{{ order.short_qty|qty }} units &middot; {{ order.short_value|amount }} released.</p>{% endif %}
       {% if can_approve %}
-      <form method="post" action="{% url 'inventory:purchase_order_reopen' order.pk %}" class="mt-3">
-        {% csrf_token %}
-        <button type="submit" class="pur-btn pur-btn--ghost">Re-open &mdash; the goods turned up after all</button>
+      <form method="post" action="{% url 'inventory:purchase_order_reopen' order.pk %}" class="mt-2">{% csrf_token %}
+        {% include "components/ui/button.html" with label="Re-open" icon="refresh" size="sm" only %}
       </form>
       {% endif %}
     </div>
@@ -381,268 +82,153 @@
   {% endif %}
 
   {% if linked_documents %}
-  <div class="pur-card">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Linked documents</h2>
-      <span class="pur-card-hint">Raised against this order</span>
+  {% component "ui/card" title="Linked documents" %}
+    <div class="doc-links">
+      {% for link in linked_documents %}
+      <a class="doc-link{% if link.dead %} doc-link--dead{% endif %}" href="{{ link.url }}"{% if link.new_tab %} target="_blank"{% endif %} title="{{ link.kind }} {{ link.label }}{% if link.dead %} (reversed){% endif %}">
+        <span class="doc-link-kind">{{ link.kind }}</span><span class="doc-link-num">{{ link.label }}</span>
+      </a>
+      {% endfor %}
     </div>
-    <div class="pur-card-body">
-      <div class="pur-links">
-        {% for link in linked_documents %}
-        <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
-           {% if link.new_tab %}target="_blank"{% endif %}
-           title="{{ link.kind }} {{ link.label }}{% if link.dead %} — reversed{% endif %}">
-          <span class="pur-link-kind">{{ link.kind }}</span>
-          <span class="pur-link-num">{{ link.label }}</span>
-        </a>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
+  {% endcomponent %}
   {% endif %}
 
-  <div class="pur-doc-sheet">
-    <div class="pur-doc-top">
-      <div>
-        <p class="pur-doc-org">{{ system_setting.company_name }}</p>
-        {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
-      </div>
-      <div class="pur-doc-stamp">
-        <p class="pur-doc-kind">Purchase Order</p>
-        <p class="pur-doc-no">{{ order.purchase_num }}</p>
-        <p class="pur-doc-date">{{ order.purchase_date|dmy }}</p>
-      </div>
+  {% component "ui/card" flush=True %}
+    <div class="card-body">
+      {% component "ui/detail_grid" cols=4 %}
+        {% include "components/ui/detail_item.html" with label="Supplier" value=order.supplier.name only %}
+        {% include "components/ui/detail_item.html" with label="Order date" value=order.purchase_date|dmy only %}
+        {% include "components/ui/detail_item.html" with label="Expected" value=order.expected_date|dmy only %}
+        {% if order.godown %}{% capture as godown_label %}{{ order.godown.code }} &mdash; {{ order.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
+        {% if order.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=order.broker.title only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Value" value=order_total|amount num=True only %}
+      {% endcomponent %}
     </div>
-
-    <div class="pur-doc-parties">
-      <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ order.supplier.name }}</span>
-        {% if order.godown %}<span class="pur-doc-cap ml-4">Godown:</span> {{ order.godown.code }} — {{ order.godown.name }}{% endif %}
-        {% if order.broker %}<span class="pur-doc-cap ml-4">Broker:</span> {{ order.broker.title }}{% endif %}</p>
-      <p class="pur-doc-right">
-        <span class="pur-doc-cap">Status:</span>
-        {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
-        {% elif order.days_late %}<span class="po-pill po-pill--late">Delivery overdue</span>
-        {% elif order.status == "partial_received" %}<span class="po-pill po-pill--open">Partly received</span>
-        {% elif order.status == "fully_received" %}<span class="po-pill po-pill--done">Received</span>
-        {% elif order.status == "closed_short" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
-        {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Cancelled</span>
-        {% else %}<span class="po-pill po-pill--open">Awaiting goods</span>{% endif %}
-      </p>
-    </div>
-
     <div class="overflow-x-auto">
-      <table class="pur-table pur-doc-table">
+      <table class="data-table doc-table">
         <thead>
-          <tr>
-            <th style="width: 2.5rem;">#</th>
-            <th>Item</th>
-            <th class="pur-num">Qty</th>
-            <th>Unit</th>
-            <th class="pur-num">Rate</th>
-            <th class="pur-num">Tax %</th>
-            <th class="pur-num">Discount</th>
-            <th class="pur-num">Amount</th>
-          </tr>
+          <tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Tax %</th><th class="num">Discount</th><th class="num">Amount</th></tr>
         </thead>
         <tbody>
           {% for item in order.items.all %}
           <tr>
-            <td class="pur-muted">{{ item.seq_num }}</td>
-            <td>
-              <span class="pur-strong">{{ item.descr }}</span>
-              <span class="pur-sub">{{ item.inventory_item.item_code }}{% if item.closed %} &middot; balance given up on{% endif %}</span>
-            </td>
-            <td class="pur-num">
+            <td class="muted">{{ item.seq_num }}</td>
+            <td><span class="strong">{{ item.descr }}</span><span class="sub">{{ item.inventory_item.item_code }}{% if item.closed %} &middot; balance closed{% endif %}</span></td>
+            <td class="num">
               {% if can_edit_lines %}
               <span x-show="!editing">{{ item.quantity|qty }}</span>
-              <input x-show="editing" x-cloak form="order-lines" type="number" step="0.1" min="0.1"
-                     name="quantity_{{ item.pk }}" class="pur-edit"
-                     value="{{ item.quantity|stringformat:'f'|floatformat:'-1' }}"
-                     aria-label="Quantity ordered of {{ item.descr }}">
+              {% capture as qty_name %}quantity_{{ item.pk }}{% endcapture %}{% capture as qty_attrs %}x-show="editing" x-cloak aria-label="Quantity of {{ item.descr }}"{% endcapture %}
+              {% include "components/forms/control.html" with type="number" step="0.1" min="0.1" name=qty_name value=item.quantity|stringformat:'f'|floatformat:'-1' form_id="order-lines" extra="cell-edit" cell=True attrs=qty_attrs only %}
               {% else %}{{ item.quantity|qty }}{% endif %}
             </td>
-            <td>{{ item.uom.title|default:"&mdash;" }}</td>
-            <td class="pur-num">
+            <td>{{ item.uom.title|default:"—" }}</td>
+            <td class="num">
               {% if can_edit_lines %}
               <span x-show="!editing">{{ item.rate|amount }}</span>
-              <input x-show="editing" x-cloak form="order-lines" type="number" step="0.01" min="0"
-                     name="rate_{{ item.pk }}" class="pur-edit"
-                     value="{{ item.rate|stringformat:'f'|floatformat:'-2' }}"
-                     aria-label="Rate for {{ item.descr }}">
+              {% capture as rate_name %}rate_{{ item.pk }}{% endcapture %}{% capture as rate_attrs %}x-show="editing" x-cloak aria-label="Rate of {{ item.descr }}"{% endcapture %}
+              {% include "components/forms/control.html" with type="number" step="0.01" min=0 name=rate_name value=item.rate|stringformat:'f'|floatformat:'-2' form_id="order-lines" extra="cell-edit" cell=True attrs=rate_attrs only %}
               {% else %}{{ item.rate|amount }}{% endif %}
             </td>
-            <td class="pur-num">{{ item.tax_perc|floatformat:"-2" }}</td>
-            <td class="pur-num">
+            <td class="num">{{ item.tax_perc|floatformat:"-2" }}</td>
+            <td class="num">
               {% if can_edit_lines %}
               <span x-show="!editing">{{ item.discount_amount|amount }}</span>
-              <input x-show="editing" x-cloak form="order-lines" type="number" step="0.01" min="0"
-                     name="discount_{{ item.pk }}" class="pur-edit"
-                     value="{{ item.discount_amount|stringformat:'f'|floatformat:'-2' }}"
-                     aria-label="Discount on {{ item.descr }}">
+              {% capture as disc_name %}discount_{{ item.pk }}{% endcapture %}{% capture as disc_attrs %}x-show="editing" x-cloak aria-label="Discount on {{ item.descr }}"{% endcapture %}
+              {% include "components/forms/control.html" with type="number" step="0.01" min=0 name=disc_name value=item.discount_amount|stringformat:'f'|floatformat:'-2' form_id="order-lines" extra="cell-edit" cell=True attrs=disc_attrs only %}
               {% else %}{{ item.discount_amount|amount }}{% endif %}
             </td>
-            <td class="pur-num pur-strong">{{ item.total_amount|amount }}</td>
+            <td class="num strong">{{ item.total_amount|amount }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="9"><div class="pur-empty">No items added yet.</div></td></tr>
+          <tr><td colspan="8" class="empty-note">No items.</td></tr>
           {% endfor %}
         </tbody>
         {% if order.items.all %}
-        <tfoot>
-          <tr class="pur-doc-total">
-            <td colspan="7">Total</td>
-            <td class="pur-num">{{ order_total|amount }}</td>
-          </tr>
-        </tfoot>
+        <tfoot><tr class="doc-total"><td colspan="7">Total</td><td class="num">{{ order_total|amount }}</td></tr></tfoot>
         {% endif %}
       </table>
     </div>
-
     {% if can_edit_lines %}
-    <form method="post" id="order-lines" action="{% url 'inventory:purchase_order_lines_update' order.pk %}"
-          class="pur-lines-save" x-show="editing" x-cloak>{% csrf_token %}
-      <button type="button" class="pur-btn pur-btn--ghost" @click="editing = false">Cancel</button>
-      <button type="submit" class="pur-btn pur-btn--primary">Save PO</button>
+    <form method="post" id="order-lines" action="{% url 'inventory:purchase_order_lines_update' order.pk %}" class="lines-save card-body" x-show="editing" x-cloak>{% csrf_token %}
+      {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs='@click="editing = false"' only %}
+      {% include "components/ui/button.html" with label="Save PO" icon="save" variant="primary" data="save" only %}
     </form>
     {% endif %}
-
-    <div class="pur-doc-foot">
-      <div>
-        <p class="pur-doc-cap">Narration</p>
-        <p class="pur-doc-narration">{{ order.descr|default:"&mdash;"|linebreaksbr }}</p>
-      </div>
-      <div class="pur-doc-value">
-        <span>Document value</span>
-        <b>{{ order_total|amount }}</b>
-      </div>
+    <div class="card-body doc-foot">
+      <div><p class="doc-cap">Narration</p><p class="doc-narration">{{ order.descr|default:"—"|linebreaksbr }}</p></div>
+      <div class="doc-value"><span>Document value</span><b>{{ order_total|amount }}</b></div>
     </div>
-  </div>
+  {% endcomponent %}
 
   {% if receipt_notes %}
-  <div class="pur-card" x-data="{ open: [] }">
-    <div class="pur-card-head">
-      <h2 class="pur-card-title">Goods received</h2>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="pur-table pur-recd-table">
-        <thead>
-          <tr>
-            <th style="width: 2.5rem;"></th>
-            <th>Goods receipt</th>
-            <th>Date</th>
-            <th class="pur-num">Items</th>
-            <th class="pur-num">Ordered</th>
-            <th class="pur-num">Received</th>
-            <th class="pur-num">Balance</th>
-            <th class="pur-num">Landed value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for note in receipt_notes %}
-          <tr class="pur-note-row">
-            <td>
-              <button type="button" class="pur-fold"
-                      @click="open = open.includes({{ forloop.counter0 }}) ? open.filter(n => n !== {{ forloop.counter0 }}) : [...open, {{ forloop.counter0 }}]"
-                      :aria-expanded="open.includes({{ forloop.counter0 }}) ? 'true' : 'false'"
-                      aria-label="Show the items on this goods receipt">
-                <span x-text="open.includes({{ forloop.counter0 }}) ? '−' : '+'">+</span>
-              </button>
-            </td>
-            <td class="pur-strong">
-              <span class="pur-doc">{{ note.number }}</span>
-            </td>
-            <td class="whitespace-nowrap">{{ note.date|dmy }}</td>
-            <td class="pur-num pur-muted">{{ note.lines|length }}</td>
-            <td class="pur-num">{{ note.ordered|qty }}</td>
-            <td class="pur-num pur-in">{{ note.quantity|qty }}</td>
-            <td class="pur-num {% if note.balance %}pur-due{% else %}pur-nil{% endif %}">{{ note.balance|qty }}</td>
-            <td class="pur-num pur-strong">{{ note.value|amount }}</td>
-          </tr>
-
-          <tr class="pur-lines-row" x-show="open.includes({{ forloop.counter0 }})" x-cloak>
-            <td colspan="8" class="pur-lines-cell">
-              <table class="pur-lines">
-                <thead>
-                  <tr>
-                    <th style="width: 2rem;">#</th>
-                    <th>Item</th>
-                    <th class="pur-num">Ordered</th>
-                    <th>Unit</th>
-                    <th class="pur-num">Rate</th>
-                    <th class="pur-num">Discount</th>
-                    <th class="pur-num">Amount</th>
-                    <th class="pur-num">Received</th>
-                    <th class="pur-num">Balance</th>
-                    <th>Billed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for receipt in note.lines %}
-                  <tr {% if receipt.reversed or receipt.reversal_of_id %}class="pur-void"{% endif %}>
-                    <td class="pur-muted">{{ receipt.line.seq_num }}</td>
-                    <td class="pur-strong">{{ receipt.descr }}</td>
-                    <td class="pur-num">{{ receipt.line.quantity|qty }}</td>
-                    <td>{{ receipt.line.uom.title|default:"&mdash;" }}</td>
-                    <td class="pur-num">{{ receipt.line.rate|amount }}</td>
-                    <td class="pur-num">{{ receipt.line.discount_amount|amount }}</td>
-                    <td class="pur-num pur-strong">{{ receipt.line.total_amount|amount }}</td>
-                    <td class="pur-num pur-in">{{ receipt.received_units|qty }}</td>
-                    <td class="pur-num {% if receipt.line.open_receive_qty %}pur-due{% else %}pur-nil{% endif %}">
-                      {% if receipt.line.closed %}<span class="pur-nil">Closed</span>{% else %}{{ receipt.line.open_receive_qty|qty }}{% endif %}
-                    </td>
-                    <td>
-                      {% if receipt.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>
-                      {% elif receipt.reversal_of_id %}<span class="pur-pill pur-pill--dead">Reversal</span>
-                      {% elif receipt.pending_bill_qty %}<span class="pur-pill pur-pill--wait">Not billed</span>
-                      {% else %}<span class="pur-pill pur-pill--done">{{ receipt.invoice_num|default:"Billed" }}</span>{% endif %}
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  {% component "table/board" title="" table_id="receipt-table" no_filters=True no_pagination=True %}
+    {% slot bar %}<div class="section__head"><h2 class="section__title">Goods received</h2></div>{% endslot %}
+    <thead>
+      <tr><th class="expand-col"></th><th>Goods receipt</th><th>Date</th><th class="num">Items</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Balance</th><th class="num">Landed value</th></tr>
+    </thead>
+    <tbody>
+      {% for note in receipt_notes %}
+      <tr class="note-row">
+        {% include "components/table/expand_toggle.html" with pk=forloop.counter only %}
+        <td><span class="doc-num">{{ note.number }}</span></td>
+        <td>{{ note.date|dmy }}</td>
+        <td class="num muted">{{ note.lines|length }}</td>
+        <td class="num">{{ note.ordered|qty }}</td>
+        <td class="num fig-in">{{ note.quantity|qty }}</td>
+        <td class="num {% if note.balance %}fig-due{% else %}fig-nil{% endif %}">{{ note.balance|qty }}</td>
+        <td class="num strong">{{ note.value|amount }}</td>
+      </tr>
+      {% component "table/lines_row" pk=forloop.counter span=8 %}
+        <table class="lines-table">
+          <thead>
+            <tr><th class="w-8">#</th><th>Item</th><th class="num">Ordered</th><th>Unit</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th><th class="num">Received</th><th class="num">Balance</th><th>Invoiced</th></tr>
+          </thead>
+          <tbody>
+            {% for receipt in note.lines %}
+            <tr{% if receipt.reversed or receipt.reversal_of_id %} class="row--void"{% endif %}>
+              <td class="muted">{{ receipt.line.seq_num }}</td>
+              <td class="strong">{{ receipt.descr }}</td>
+              <td class="num">{{ receipt.line.quantity|qty }}</td>
+              <td>{{ receipt.line.uom.title|default:"—" }}</td>
+              <td class="num">{{ receipt.line.rate|amount }}</td>
+              <td class="num">{{ receipt.line.discount_amount|amount }}</td>
+              <td class="num strong">{{ receipt.line.total_amount|amount }}</td>
+              <td class="num fig-in">{{ receipt.received_units|qty }}</td>
+              <td class="num {% if receipt.line.open_receive_qty %}fig-due{% else %}fig-nil{% endif %}">{% if receipt.line.closed %}<span class="fig-nil">Closed</span>{% else %}{{ receipt.line.open_receive_qty|qty }}{% endif %}</td>
+              <td>
+                {% if receipt.reversed %}<span class="pill pill--reversed">Reversed</span>
+                {% elif receipt.reversal_of_id %}<span class="pill pill--closed">Reversal</span>
+                {% elif receipt.pending_bill_qty %}<span class="pill pill--pending">Not invoiced</span>
+                {% else %}<span class="pill pill--posted">{{ receipt.invoice_num|default:"Invoiced" }}</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endcomponent %}
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
   {% endif %}
 
   {% if order_invoices %}
-  <div class="pur-doc mt-6">
-    <p class="pur-doc-cap px-1 pb-2">Invoices against this order</p>
-    <div class="overflow-x-auto">
-      <table class="pur-table">
-        <thead>
-          <tr>
-            <th>Invoice</th>
-            <th>Date</th>
-            <th>Supplier's ref</th>
-            <th>Vehicle</th>
-            <th class="pur-num">Quantity</th>
-            <th class="pur-num">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in order_invoices %}
-          <tr {% if row.reversed %}class="pur-void"{% endif %}>
-            <td>
-              <a class="pur-strong" href="{% url 'inventory:purchase_invoice_detail' row.invoice.pk %}">{{ row.invoice.invoice_num }}</a>
-              {% if row.reversed %}<span class="pur-pill pur-pill--bad">Reversed</span>{% endif %}
-            </td>
-            <td>{{ row.invoice.invoice_date|dmy }}</td>
-            <td>{{ row.invoice.supplier_invoice_num|default:"&mdash;" }}</td>
-            <td>{{ row.invoice.vehicle_no|default:"&mdash;" }}</td>
-            <td class="pur-num">{{ row.quantity|qty }}</td>
-            <td class="pur-num pur-strong">{{ row.invoice.total_amount|amount }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  {% component "table/board" title="" table_id="order-invoice-table" no_filters=True no_pagination=True %}
+    {% slot bar %}<div class="section__head"><h2 class="section__title">Invoices against this order</h2></div>{% endslot %}
+    <thead><tr><th>Invoice</th><th>Date</th><th>Supplier's ref</th><th>Vehicle</th><th class="num">Quantity</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+    <tbody>
+      {% for row in order_invoices %}
+      <tr{% if row.reversed %} class="row--void"{% endif %}>
+        <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.invoice.pk %}">{{ row.invoice.invoice_num }}</a>{% if row.reversed %} <span class="pill pill--reversed">Reversed</span>{% endif %}</td>
+        <td>{{ row.invoice.invoice_date|dmy }}</td>
+        <td>{{ row.invoice.supplier_invoice_num|default:"—" }}</td>
+        <td>{{ row.invoice.vehicle_no|default:"—" }}</td>
+        <td class="num">{{ row.quantity|qty }}</td>
+        <td class="num strong">{{ row.invoice.total_amount|amount }}</td>
+        <td class="actions-col">{% url 'inventory:purchase_invoice_detail' row.invoice.pk as view_url %}{% include "components/table/actions.html" with view_url=view_url only %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
   {% endif %}
-
 </section>
 {% endblock %}

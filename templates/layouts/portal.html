@@ -16,7 +16,7 @@
         <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ system_setting.company_tagline }}</p>
       </div>
       <button type="button" class="ml-auto hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 lg:grid dark:border-slate-700 dark:hover:bg-slate-800" @click="toggleSidebarCollapse()" :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
-        <span class="text-sm transition" :class="{ 'rotate-180': sidebarCollapsed }">&lt;</span>
+        <span class="grid transition" :class="{ 'rotate-180': sidebarCollapsed }">{% icon "back" %}</span>
       </button>
     </div>
 
@@ -25,23 +25,21 @@
 
   <div class="transition-all" :class="sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'">
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
-      <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
-        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 lg:hidden dark:border-slate-700" @click="sidebarOpen = true" aria-label="Open menu">
-          <span class="text-xl">=</span>
-        </button>
+      <div class="flex h-14 items-center gap-2 px-4">
+        <button type="button" class="icon-btn icon-btn--bordered lg:hidden" @click="sidebarOpen = true" title="Open menu" aria-label="Open menu">{% icon "menu" %}</button>
         <div class="hidden min-w-0 sm:block">
           {% include "components/ui/search_box.html" with placeholder="Search records, reports..." %}
         </div>
 
         <div class="ml-auto flex items-center gap-2">
-          <a href="{% url 'inventory:pos_create' %}" class="inline-flex h-9 items-center rounded-lg bg-[var(--primary-color)] px-3 text-sm font-semibold text-white hover:opacity-90">+ Add Sale</a>
-          <a href="{% url 'finance:account_voucher_create' %}?voucher_type=PV" class="inline-flex h-9 items-center rounded-lg border border-[var(--primary-color)] px-3 text-sm font-semibold text-[var(--primary-color)] hover:bg-[var(--primary-color)] hover:text-white">+ Add Voucher</a>
+          {% url 'inventory:pos_create' as sale_url %}{% include "components/ui/button.html" with label="Sale" href=sale_url icon="plus" variant="primary" size="sm" only %}
+          {% url 'finance:account_voucher_create' as voucher_url %}{% include "components/ui/button.html" with label="Voucher" href=voucher_url|add:"?voucher_type=PV" icon="plus" size="sm" only %}
         </div>
-        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" @click="toggleTheme()" aria-label="Toggle theme">◐</button>
-        <input class="h-10 w-10 rounded-lg border border-slate-200 bg-transparent p-1 dark:border-slate-700" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Primary color">
+        <button type="button" class="icon-btn icon-btn--bordered" @click="toggleTheme()" title="Light / dark" aria-label="Toggle theme">{% icon "sun-moon" %}</button>
+        <input class="control h-9 w-9 p-0.5" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" title="Brand colour" aria-label="Primary color">
         <div class="relative">
-          <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="notificationsOpen = !notificationsOpen" aria-label="Notifications" :aria-expanded="notificationsOpen.toString()">
-            <span class="text-lg leading-none" aria-hidden="true">&#128276;</span>
+          <button type="button" class="icon-btn icon-btn--bordered relative" @click="notificationsOpen = !notificationsOpen" title="Notifications" aria-label="Notifications" :aria-expanded="notificationsOpen.toString()">
+            {% icon "bell" %}
             <span class="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-bold leading-none text-white">3</span>
           </button>
           <div x-show="notificationsOpen" x-transition @click.outside="notificationsOpen = false" class="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
@@ -67,25 +65,26 @@
           </div>
         </div>
         <div class="relative">
-          <button class="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 dark:border-slate-700" @click="profileOpen = !profileOpen">
-            <span class="grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{{ request.user.username|slice:":2"|upper }}</span>
+          <button type="button" class="btn btn--secondary px-1.5" @click="profileOpen = !profileOpen">
+            <span class="grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{{ request.user.username|slice:":2"|upper }}</span>
             <span class="hidden text-sm font-medium sm:block">{{ request.user.display_name }}</span>
           </button>
           <div x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-2 w-52 rounded-lg border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
             <p class="px-3 py-2 text-xs text-slate-500">{{ request.user.get_user_type_display }}</p>
             <form method="post" action="{% url 'logout' %}">
               {% csrf_token %}
-              <button class="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">Sign out</button>
+              <button type="submit" class="btn btn--ghost btn--block justify-start">Sign out</button>
             </form>
           </div>
         </div>
       </div>
     </header>
 
-    <main class="px-4 py-4 sm:px-6 lg:px-8">
+    <main class="shell-main">
       {% include "components/ui/messages.html" %}
       {% block content %}{% endblock %}
     </main>
+    {% include "components/ui/confirmation_dialog.html" %}
   </div>
 </div>
 {% endblock %}

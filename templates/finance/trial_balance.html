@@ -1,96 +1,56 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Trial Balance" subtitle="Opening, movement and closing per account, split by Debit and Credit." %}
-
-{% if not integrity.is_clean %}
-  <div class="mt-4 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm dark:border-rose-900 dark:bg-rose-950">
-    <p class="font-semibold text-rose-800 dark:text-rose-300">This trial balance does not account for everything.</p>
-
-    {% if integrity.orphans %}
-      <p class="mt-2 text-rose-700 dark:text-rose-400">
-        {{ integrity.orphans|length }} account code{{ integrity.orphans|length|pluralize }} posted to but missing from the
-        Chart of Accounts. These entries are excluded from every report, so the figures below balance only because
-        they are absent:
-      </p>
-      <ul class="mt-1 space-y-0.5 text-rose-700 dark:text-rose-400">
-        {% for row in integrity.orphans %}
-          <li>
-            <span class="tabular-nums font-semibold">{{ row.account_no }}</span>
-            &mdash; Dr <span class="tabular-nums">{{ row.debit|amount }}</span>,
-            Cr <span class="tabular-nums">{{ row.credit|amount }}</span>
-          </li>
-        {% endfor %}
-      </ul>
+{% component "table/board" title="Trial Balance" table_id="trial-balance-table" no_filters=True no_pagination=True %}
+  {% slot above %}
+    {% if not integrity.is_clean %}
+    <div class="note note--bad">
+      <span class="note-icon">{% icon "alert" %}</span>
+      <div>
+        <p><b>Not everything is accounted for.</b></p>
+        {% if integrity.orphans %}
+        <p>{{ integrity.orphans|length }} code{{ integrity.orphans|length|pluralize }} missing from the Chart of Accounts (excluded below):</p>
+        <ul class="list-disc pl-5">{% for row in integrity.orphans %}<li><b class="num">{{ row.account_no }}</b> &middot; Dr <span class="num">{{ row.debit|amount }}</span>, Cr <span class="num">{{ row.credit|amount }}</span></li>{% endfor %}</ul>
+        {% endif %}
+        {% if integrity.unbalanced %}
+        <p>{{ integrity.unbalanced|length }} unbalanced voucher{{ integrity.unbalanced|length|pluralize }}:</p>
+        <ul class="list-disc pl-5">{% for row in integrity.unbalanced %}<li><a href="{% url 'finance:account_voucher_detail' row.voucher.pk %}" class="doc-num">{{ row.voucher.voucher_no }}</a> &middot; Dr <span class="num">{{ row.debit|amount }}</span>, Cr <span class="num">{{ row.credit|amount }}</span>, out by <b class="num">{{ row.difference|amount }}</b></li>{% endfor %}</ul>
+        {% endif %}
+        {% if integrity.opening_difference %}
+        <p>Opening balances out by <b class="num">{{ integrity.opening_difference|amount }}</b> (Dr {{ integrity.opening_debit|amount }} / Cr {{ integrity.opening_credit|amount }}). <a href="{% url 'finance:opening_balances' %}" class="doc-num">Opening Balances</a></p>
+        {% endif %}
+      </div>
+    </div>
     {% endif %}
-
-    {% if integrity.unbalanced %}
-      <p class="mt-2 text-rose-700 dark:text-rose-400">
-        {{ integrity.unbalanced|length }} voucher{{ integrity.unbalanced|length|pluralize }} whose own lines do not balance:
-      </p>
-      <ul class="mt-1 space-y-0.5 text-rose-700 dark:text-rose-400">
-        {% for row in integrity.unbalanced %}
-          <li>
-            <a href="{% url 'finance:account_voucher_detail' row.voucher.pk %}" class="font-semibold hover:underline">{{ row.voucher.voucher_no }}</a>
-            &mdash; Dr <span class="tabular-nums">{{ row.debit|amount }}</span>,
-            Cr <span class="tabular-nums">{{ row.credit|amount }}</span>,
-            out by <span class="tabular-nums font-semibold">{{ row.difference|amount }}</span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if integrity.opening_difference %}
-      <p class="mt-2 text-rose-700 dark:text-rose-400">
-        Opening balances are out by <span class="tabular-nums font-semibold">{{ integrity.opening_difference|amount }}</span>
-        (Dr {{ integrity.opening_debit|amount }} against Cr {{ integrity.opening_credit|amount }}).
-        Enter the missing counterpart on
-        <a href="{% url 'finance:opening_balances' %}" class="font-semibold underline">Opening Balances</a>.
-      </p>
-    {% endif %}
-  </div>
-{% endif %}
-
-<div class="mt-4 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-  <table class="w-full min-w-[900px] text-sm">
-    <thead>
-      <tr class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-        <th class="px-3 py-2">Code</th>
-        <th class="px-3 py-2">Account</th>
-        <th class="px-3 py-2 text-right">Opening Dr</th>
-        <th class="px-3 py-2 text-right">Opening Cr</th>
-        <th class="px-3 py-2 text-right">Movement Dr</th>
-        <th class="px-3 py-2 text-right">Movement Cr</th>
-        <th class="px-3 py-2 text-right">Closing Dr</th>
-        <th class="px-3 py-2 text-right">Closing Cr</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-      <tr class="border-t border-slate-100 dark:border-slate-800">
-        <td class="px-3 py-1.5 tabular-nums text-xs text-slate-500">{{ row.code }}</td>
-        <td class="px-3 py-1.5">{{ row.title }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening_dr|amount }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.opening_cr|amount }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.movement_dr|amount }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.movement_cr|amount }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing_dr|amount }}</td>
-        <td class="px-3 py-1.5 text-right tabular-nums">{{ row.closing_cr|amount }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="8" class="px-3 py-6 text-center text-sm text-slate-500">No postable accounts with a balance yet.</td></tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-700 dark:bg-slate-800">
-        <td class="px-3 py-2" colspan="2">Total</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_dr|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.opening_dr != totals.opening_cr %}text-rose-600{% endif %}">{{ totals.opening_cr|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_dr|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.movement_dr != totals.movement_cr %}text-rose-600{% endif %}">{{ totals.movement_cr|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_dr|amount }}</td>
-        <td class="px-3 py-2 text-right tabular-nums {% if totals.closing_dr != totals.closing_cr %}text-rose-600{% endif %}">{{ totals.closing_cr|amount }}</td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
+  {% endslot %}
+  <thead>
+    <tr><th>Code</th><th>Account</th><th class="num">Opening Dr</th><th class="num">Opening Cr</th><th class="num">Movement Dr</th><th class="num">Movement Cr</th><th class="num">Closing Dr</th><th class="num">Closing Cr</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="muted">{{ row.code }}</td>
+      <td class="truncate">{{ row.title }}</td>
+      <td class="num">{{ row.opening_dr|amount }}</td>
+      <td class="num">{{ row.opening_cr|amount }}</td>
+      <td class="num">{{ row.movement_dr|amount }}</td>
+      <td class="num">{{ row.movement_cr|amount }}</td>
+      <td class="num">{{ row.closing_dr|amount }}</td>
+      <td class="num">{{ row.closing_cr|amount }}</td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=8 label="No balances." only %}
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="board-foot">
+      <td colspan="2">Total</td>
+      <td class="num{% if totals.opening_dr != totals.opening_cr %} fig-bad{% endif %}">{{ totals.opening_dr|amount }}</td>
+      <td class="num{% if totals.opening_dr != totals.opening_cr %} fig-bad{% endif %}">{{ totals.opening_cr|amount }}</td>
+      <td class="num{% if totals.movement_dr != totals.movement_cr %} fig-bad{% endif %}">{{ totals.movement_dr|amount }}</td>
+      <td class="num{% if totals.movement_dr != totals.movement_cr %} fig-bad{% endif %}">{{ totals.movement_cr|amount }}</td>
+      <td class="num{% if totals.closing_dr != totals.closing_cr %} fig-bad{% endif %}">{{ totals.closing_dr|amount }}</td>
+      <td class="num{% if totals.closing_dr != totals.closing_cr %} fig-bad{% endif %}">{{ totals.closing_cr|amount }}</td>
+    </tr>
+  </tfoot>
+{% endcomponent %}
 {% endblock %}

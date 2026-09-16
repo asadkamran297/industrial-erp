@@ -1,0 +1,1 @@
+<dl class="detail-grid{% if cols %} detail-grid--cols-{{ cols }}{% endif %}{% if extra %} {{ extra }}{% endif %}">{% if slot %}{{ slot }}{% else %}{% for label, value in items %}{% include "components/ui/detail_item.html" with label=label value=value only %}{% endfor %}{% endif %}</dl>

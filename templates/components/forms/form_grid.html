@@ -1,0 +1,3 @@
+<div class="form-grid{% if cols %} form-grid--cols-{{ cols }}{% endif %}{% if extra %} {{ extra }}{% endif %}">
+  {% if slot %}{{ slot }}{% else %}{% for field in form.hidden_fields %}{{ field }}{% endfor %}{% for field in form.visible_fields %}{% include "components/forms/field.html" with field=field kind="" label="" span="" extra="" rule="" %}{% endfor %}{% endif %}
+</div>

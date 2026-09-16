@@ -1,0 +1,1 @@
+<div class="detail-item{% if num %} detail-item--num{% endif %}{% if wide %} detail-item--wide{% endif %}"><dt>{{ label }}</dt><dd>{% if slot %}{{ slot }}{% elif value or value == 0 %}{{ value }}{% else %}&mdash;{% endif %}</dd></div>

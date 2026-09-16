@@ -32,21 +32,23 @@
   .totals .row { display: flex; justify-content: space-between; padding: 1px 0; }
   .totals .grand { font-size: 13px; font-weight: 700; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 0; margin-top: 3px; }
   .thanks { font-size: 10px; font-weight: 700; }
-  .toolbar { text-align: center; margin: 10px 0; }
-  .toolbar button { font: inherit; padding: 8px 18px; margin: 0 4px; border: 0; border-radius: 6px; cursor: pointer; }
-  .toolbar .print { background: #059669; color: #fff; }
-  .toolbar .back { background: #e2e8f0; color: #0f172a; }
+  .toolbar, .print-btn { text-align: center; margin: 10px 0; }
+  .toolbar button, .print-btn button { font: inherit; padding: 8px 18px; margin: 0 4px; border: 0; border-radius: 6px; cursor: pointer; }
+  .toolbar .print, .print-btn button:first-child { background: #059669; color: #fff; }
+  .toolbar .back, .print-btn button + button { background: #e2e8f0; color: #0f172a; }
   @media print {
     body { background: #fff; }
     .receipt { width: 3in; margin: 0; padding: 2mm 2mm; }
-    .toolbar { display: none; }
+    .toolbar, .print-btn { display: none; }
   }
 
 /* --- return receipt only --- */
   .doc-type { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 4px 0 2px; }
   .c-qty { width: 9mm; }
-  .toolbar .print { background: #dc2626; color: #fff; }
+  .toolbar .print, .print-btn button:first-child { background: #dc2626; color: #fff; }
 
 /* ── Utilities ───────────────────────────────────────────────── */
 .row-total { border-top: 1px solid #000; font-weight: 700; }
 .note-strong { font-size: 10px; font-weight: 700; }
+
+.icon { width: 14px; height: 14px; vertical-align: -2px; }

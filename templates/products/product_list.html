@@ -1,88 +1,44 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "components/table/board_theme.html" %}
-<section class="space-y-4">
-  {% if can_add %}
-    {% include "components/ui/page_header.html" with title=title action_label="Add Product" action_url=create_url %}
-  {% else %}
-    {% include "components/ui/page_header.html" with title=title %}
-  {% endif %}
-  {% include "components/table/search_filters.html" %}
-
-  <div class="flex flex-wrap gap-2">
-    <a class="toolbar-btn" href="{% url 'products:account_linking' %}">Account Linking</a>
-    <a class="toolbar-btn" href="{% url 'products:raw_bardana_linking' %}">Raw Bardana</a>
-    <a class="toolbar-btn" href="{% url 'products:finish_bardana_linking' %}">Finish Bardana</a>
-    <a class="toolbar-btn" href="{% url 'products:opening_balance' %}">Opening Balance</a>
-    <a class="toolbar-btn" href="{% url 'products:rate_update' %}">Rate Update</a>
-  </div>
-
-  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table class="po-table w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Starting Date</th>
-            <th class="px-4 py-3">Complete Code</th>
-            <th class="px-4 py-3">Product</th>
-            <th class="px-4 py-3 text-right">Qty</th>
-            <th class="px-4 py-3 text-right">Stock (Kg)</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for node in tree_rows %}
-            {% if node.is_heading %}
-            <tr class="bg-slate-50/80 dark:bg-slate-800/40">
-              <td class="px-4 py-2 text-slate-400">—</td>
-              <td class="px-4 py-2 font-mono text-xs font-semibold">{{ node.display_code }}</td>
-              <td class="px-4 py-2 font-semibold uppercase tracking-wide {% if node.level == 1 %}text-slate-900 dark:text-white{% else %}pl-8 text-slate-600 dark:text-slate-300{% endif %}">{{ node.name }}</td>
-              <td colspan="4" class="px-4 py-2"></td>
-            </tr>
-            {% else %}
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-              <td class="px-4 py-3 whitespace-nowrap">{{ node.starting_date|dmy|default:"—" }}</td>
-              <td class="px-4 py-3 font-mono text-xs">{{ node.display_code }}</td>
-              <td class="px-4 py-3 pl-12 font-medium">
-                {{ node.name }}
-                <span class="ml-2 text-xs text-slate-400">{{ node.get_specification_display }}</span>
-                {% if node.quick_code %}<span class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] dark:bg-slate-800">{{ node.quick_code }}</span>{% endif %}
-              </td>
-              <td class="px-4 py-3 text-right tabular-nums">{{ node.stock|floatformat:3 }} <span class="text-xs text-slate-400">{{ node.get_unit_display|lower }}</span></td>
-              <td class="px-4 py-3 text-right tabular-nums">
-                {% if node.keeps_stock %}{{ node.stock_kg|floatformat:2 }}{% else %}<span class="text-slate-400">—</span>{% endif %}
-              </td>
-              <td class="px-4 py-3">
-                {% if node.status == 'closed' %}
-                  <span class="po-pill po-pill--void">Closed</span>
-                {% elif can_edit %}
-                <form method="post" action="{% url 'products:product_status_toggle' node.pk %}">
-                  {% csrf_token %}
-                  <label class="relative inline-flex cursor-pointer items-center">
-                    <input type="checkbox" class="peer sr-only" onchange="this.form.submit()" {% if node.status == 'active' %}checked{% endif %}>
-                    <div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-5 dark:bg-slate-600"></div>
-                  </label>
-                </form>
-                {% else %}
-                  {{ node.get_status_display }}
-                {% endif %}
-              </td>
-              <td class="px-4 py-3">
-                <div class="flex justify-end gap-1">
-                  {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'products:product_update' node.pk %}" title="Edit" aria-label="Edit">&#9998;</a>{% endif %}
-                </div>
-              </td>
-            </tr>
-            {% endif %}
-          {% empty %}
-          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No products found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% include "components/table/pagination.html" %}
-</section>
+{% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
+{% component "table/board" title=title add_url=add_url add_label="Product" table_id="product-table" search_placeholder="Search products" %}
+  {% slot actions %}
+    {% url 'products:account_linking' as u %}{% include "components/ui/button.html" with label="Account Linking" href=u icon="ledger" size="sm" only %}
+    {% url 'products:raw_bardana_linking' as u %}{% include "components/ui/button.html" with label="Raw Bardana" href=u icon="layers" size="sm" only %}
+    {% url 'products:finish_bardana_linking' as u %}{% include "components/ui/button.html" with label="Finish Bardana" href=u icon="layers" size="sm" only %}
+    {% url 'products:opening_balance' as u %}{% include "components/ui/button.html" with label="Opening Balance" href=u icon="box" size="sm" only %}
+    {% url 'products:rate_update' as u %}{% include "components/ui/button.html" with label="Rate Update" href=u icon="cash" size="sm" only %}
+  {% endslot %}
+  <thead>
+    <tr><th>Starting Date</th><th>Complete Code</th><th>Product</th><th class="num">Qty</th><th class="num">Stock (Kg)</th><th>Status</th><th class="actions-col">Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for node in tree_rows %}
+    {% if node.is_heading %}
+    <tr class="note-row">
+      <td class="muted">&mdash;</td>
+      <td class="strong">{{ node.display_code }}</td>
+      <td class="strong uppercase{% if node.level != 1 %} pl-8{% endif %}">{{ node.name }}</td>
+      <td colspan="4"></td>
+    </tr>
+    {% else %}
+    <tr>
+      <td>{{ node.starting_date|dmy|default:"—" }}</td>
+      <td class="muted">{{ node.display_code }}</td>
+      <td class="pl-12"><span class="strong">{{ node.name }}</span> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
+      <td class="num">{{ node.stock|floatformat:3 }} <span class="muted">{{ node.get_unit_display|lower }}</span></td>
+      <td class="num">{% if node.keeps_stock %}{{ node.stock_kg|floatformat:3 }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
+      <td>
+        {% if node.status == 'closed' %}<span class="pill pill--reversed">Closed</span>
+        {% elif can_edit %}{% url 'products:product_status_toggle' node.pk as toggle_url %}{% capture as is_on %}{% if node.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}
+        {% else %}{% include "components/table/status_badge.html" with status=node.status label=node.get_status_display only %}{% endif %}
+      </td>
+      <td class="actions-col">{% capture as edit_url %}{% if can_edit %}{% url 'products:product_update' node.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with edit_url=edit_url only %}</td>
+    </tr>
+    {% endif %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=7 label="No products." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
 {% endblock %}

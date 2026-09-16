@@ -1,23 +1,23 @@
 {% extends "layouts/portal.html" %}
 {% load static %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Chart of Accounts" subtitle="Five fixed roots. Use + on any row to add accounts under it; drag to reorder." %}
+<section class="form-stack">
+{% include "components/ui/page_header.html" with title="Chart of Accounts" only %}
 
 {% csrf_token %}
 {{ coa_tree|json_script:"coa-tree-data" }}
 
-
-<section class="coa-wrap tree-hide-codes mt-6">
-  <div class="toolbar">
-    <input id="coa-search" class="toolbar-search" type="search" placeholder="Search..." autocomplete="off">
-    <button id="coa-expand" type="button" class="toolbar-btn">Expand all</button>
-    <button id="coa-collapse" type="button" class="toolbar-btn">Collapse all</button>
-    {% if can_add %}<button id="coa-add-new" type="button" class="toolbar-btn toolbar-btn--primary">+ Add New</button>{% endif %}
+<section class="coa-wrap tree-hide-codes form-stack">
+  <div class="filter-bar card">
+    {% include "components/forms/control.html" with type="search" id="coa-search" placeholder="Search" size="sm" extra="max-w-xs" attrs='autocomplete="off" aria-label="Search accounts" data-board-search' only %}
+    {% include "components/ui/button.html" with type="button" id="coa-expand" label="Expand all" size="sm" icon="chevron-down" only %}
+    {% include "components/ui/button.html" with type="button" id="coa-collapse" label="Collapse all" size="sm" icon="chevron-up" only %}
+    {% if can_add %}{% include "components/ui/button.html" with type="button" id="coa-add-new" label="Account" icon="plus" variant="primary" size="sm" only %}{% endif %}
     <div class="segmented segmented--compact">
-      <label><input type="radio" name="coa-codes" value="hide" checked><span>Hide numbers</span></label>
-      <label><input type="radio" name="coa-codes" value="show"><span>Show numbers</span></label>
+      <label>{% include "components/forms/control.html" with type="radio" name="coa-codes" value="hide" checked=True only %}<span>Hide numbers</span></label>
+      <label>{% include "components/forms/control.html" with type="radio" name="coa-codes" value="show" only %}<span>Show numbers</span></label>
     </div>
-    <span id="coa-status" class="toolbar-status"></span>
+    <span id="coa-status" class="toolbar-status ml-auto"></span>
   </div>
 
   <div class="tree-card">
@@ -25,70 +25,56 @@
       {% for node in coa_tree %}
         {% include "finance/_coa_node.html" with node=node %}
       {% empty %}
-        <li class="tree-empty">No accounts. Run <code>seed_chart_of_accounts</code>.</li>
+        <li class="tree-empty">No accounts.</li>
       {% endfor %}
     </ul>
   </div>
+</section>
 </section>
 
 <div id="coa-modal" class="dialog-backdrop" role="dialog" aria-modal="true">
   <div class="dialog">
     <h3 id="coa-modal-title">Account</h3>
     <div class="dialog-body">
-      <div id="coa-form-fields">
-        <div class="field">
-          <label for="coa-f-name">Name</label>
-          <input id="coa-f-name" type="text" autocomplete="off" placeholder="Account name">
-        </div>
+      <div id="coa-form-fields" class="form-stack">
+        {% include "components/forms/control.html" with id="coa-f-name" label="Name" attrs='autocomplete="off"' only %}
         <div class="field" id="coa-f-type-wrap">
-          <label>Type</label>
+          <span class="field__label">Type</span>
           <div class="segmented">
-            <label><input type="radio" name="coa-isgroup" value="true"><span>Group / heading</span></label>
-            <label><input type="radio" name="coa-isgroup" value="false"><span>Postable account</span></label>
+            <label>{% include "components/forms/control.html" with type="radio" name="coa-isgroup" value="true" only %}<span>Group / heading</span></label>
+            <label>{% include "components/forms/control.html" with type="radio" name="coa-isgroup" value="false" only %}<span>Postable account</span></label>
           </div>
         </div>
       </div>
       <p id="coa-del-text" class="dialog-hint is-hidden"></p>
     </div>
     <div class="dialog-foot">
-      <button type="button" class="dialog-btn dialog-btn--ghost" data-close>Cancel</button>
-      <button type="button" class="dialog-btn dialog-btn--primary" id="coa-modal-save">Save</button>
+      {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs="data-close" only %}
+      {% include "components/ui/button.html" with type="button" id="coa-modal-save" label="Save" variant="primary" only %}
     </div>
   </div>
 </div>
 
 <div id="coa-new-modal" class="dialog-backdrop" role="dialog" aria-modal="true">
   <div class="dialog">
-    <h3>Add New Account</h3>
+    <h3>Add Account</h3>
     <div class="dialog-body">
+      {% include "components/forms/control.html" with id="nm-title" label="Title" attrs='autocomplete="off"' only %}
+      {% component "forms/control" type="select" id="nm-type" label="Type" only %}<option value=""></option>{% endcomponent %}
+      <div class="is-hidden" id="nm-l2-wrap">{% component "forms/control" type="select" id="nm-l2" label="Level 2" only %}{% endcomponent %}</div>
+      <div class="is-hidden" id="nm-l3-wrap">{% component "forms/control" type="select" id="nm-l3" label="Level 3" only %}{% endcomponent %}</div>
       <div class="field">
-        <label for="nm-title">Title</label>
-        <input id="nm-title" type="text" autocomplete="off" placeholder="New account name">
-      </div>
-      <div class="field">
-        <label for="nm-type">Type</label>
-        <select id="nm-type" class="field-select"><option value="">Select type…</option></select>
-      </div>
-      <div class="field is-hidden" id="nm-l2-wrap">
-        <label for="nm-l2">Level 2</label>
-        <select id="nm-l2" class="field-select"></select>
-      </div>
-      <div class="field is-hidden" id="nm-l3-wrap">
-        <label for="nm-l3">Level 3</label>
-        <select id="nm-l3" class="field-select"></select>
-      </div>
-      <div class="field">
-        <label>Kind</label>
+        <span class="field__label">Kind</span>
         <div class="segmented">
-          <label><input type="radio" name="nm-isgroup" value="true" checked><span>Group / heading</span></label>
-          <label><input type="radio" name="nm-isgroup" value="false"><span>Postable account</span></label>
+          <label>{% include "components/forms/control.html" with type="radio" name="nm-isgroup" value="true" checked=True only %}<span>Group / heading</span></label>
+          <label>{% include "components/forms/control.html" with type="radio" name="nm-isgroup" value="false" only %}<span>Postable account</span></label>
         </div>
       </div>
       <p class="dialog-hint" id="nm-target"></p>
     </div>
     <div class="dialog-foot">
-      <button type="button" class="dialog-btn dialog-btn--ghost" data-close>Cancel</button>
-      <button type="button" class="dialog-btn dialog-btn--primary" id="nm-save">Add</button>
+      {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs="data-close" only %}
+      {% include "components/ui/button.html" with type="button" id="nm-save" label="Add" icon="plus" variant="primary" only %}
     </div>
   </div>
 </div>
@@ -112,7 +98,8 @@
   function flash(msg, ok = true) {
     if (!status) return;
     status.textContent = msg;
-    status.style.color = ok ? '#059669' : '#e11d48';
+    status.classList.toggle('fig-good', ok);
+    status.classList.toggle('fig-bad', !ok);
     setTimeout(() => { status.textContent = ''; }, 2500);
   }
 
@@ -203,7 +190,7 @@
     const del = mode === 'delete';
     fields.classList.toggle('is-hidden', del);
     delText.classList.toggle('is-hidden', !del);
-    saveBtn.className = 'dialog-btn ' + (del ? 'danger' : 'primary');
+    saveBtn.className = 'btn ' + (del ? 'btn--danger' : 'btn--primary');
     saveBtn.textContent = del ? 'Delete' : 'Save';
     if (mode === 'add') {
       mTitle.textContent = 'Add account under “' + titleText(li) + '”';
@@ -216,7 +203,7 @@
       setGroup(li.dataset.group === '1' ? 'true' : 'false');
     } else {
       mTitle.textContent = 'Delete account';
-      delText.innerHTML = 'Delete <span class="dialog-danger-name">' + titleText(li) + '</span> and all of its child accounts? This cannot be undone.';
+      delText.innerHTML = 'Delete <span class="dialog-danger-name">' + titleText(li) + '</span> and all child accounts?';
     }
     modal.classList.add('open');
     if (!del) setTimeout(() => fName.focus(), 30);

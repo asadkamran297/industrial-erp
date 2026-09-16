@@ -1,0 +1,4 @@
+<div class="totals-row{% if grand %} totals-grand{% endif %}">
+  {% if field_id %}<label class="totals-label" for="{{ field_id }}">{{ label }}</label>{% else %}<span class="{% if not grand %}totals-label{% endif %}">{{ label }}</span>{% endif %}
+  {% if field_id %}<input type="text" inputmode="decimal" data-amount name="{{ name|default:field_id }}" id="{{ field_id }}" value="{{ value|default_if_none:'' }}" placeholder="0.00" class="control control--money"{% if readonly %} readonly{% endif %}>{% else %}<span class="totals-value"{% if value_id %} id="{{ value_id }}"{% endif %}>{{ value|default:"0.00" }}</span>{% endif %}
+</div>

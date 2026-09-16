@@ -1,0 +1,3 @@
+<nav class="tabs{% if extra %} {{ extra }}{% endif %}" role="tablist"{% if label %} aria-label="{{ label }}"{% endif %}>
+  {% if slot %}{{ slot }}{% else %}{% for tab in tabs %}{% include "components/ui/tab.html" with href=tab.href label=tab.label on=tab.on count=tab.count only %}{% endfor %}{% endif %}
+</nav>

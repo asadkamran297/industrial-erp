@@ -1,120 +1,66 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
+{% url 'inventory:sales_order_list' as cancel_url %}
+{% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}
 
+<form method="post" id="so-form" class="card card-rail" x-data="salesOrderForm()">{% csrf_token %}
+  <div class="card-body form-grid form-grid--cols-4">
+    {% component "forms/control" type="select" name="customer" id="customer" label="Customer" required=True only %}
+      <option value=""></option>
+      {% for row in customers %}<option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
+    {% endcomponent %}
+    {% include "components/forms/control.html" with id="order-no" label="Order #" value=next_order_no readonly=True extra="strong num" only %}
+    {% firstof posted.order_date today|date:"Y-m-d" as order_date_value %}
+    {% include "components/forms/control.html" with type="date" name="order_date" id="order_date" label="Order date" value=order_date_value required=True only %}
+    {% include "components/forms/control.html" with type="date" name="expected_date" id="expected_date" label="Promised by" value=posted.expected_date only %}
+    {% include "components/forms/control.html" with name="customer_ref" id="customer_ref" label="Customer's reference" value=posted.customer_ref wrap="span-2" only %}
+    {% include "components/forms/control.html" with name="remarks" id="remarks" label="Narration" value=posted.remarks wrap="span-2" only %}
+  </div>
 
-<div class="flex flex-wrap items-start justify-between gap-4">
-  <h1 class="title-accent text-2xl font-bold">{{ title }}</h1>
-  {% include "components/ui/back_button.html" %}
-</div>
-
-<form method="post" id="so-form"
-      class="card-rail mt-5 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
-      x-data="salesOrderForm()">{% csrf_token %}
-
-  <div class="grid gap-4 border-b border-slate-200 p-5 dark:border-slate-800 md:grid-cols-4">
-    <div>
-      <label class="form-label" for="customer">Customer</label>
-      <select name="customer" id="customer" class="form-input h-10 w-full" required>
-        <option value="">Select a customer</option>
-        {% for row in customers %}
-        <option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>
-        {% endfor %}
-      </select>
+  <div class="li-wrap">
+    <div class="li-scroll">
+      <table class="li-table">
+        <colgroup><col class="min-w-[16rem]"><col class="w-36"><col class="w-36"><col class="w-40"><col class="w-44"><col class="w-12"></colgroup>
+        <thead><tr><th>Item</th><th class="num">Quantity</th><th>Unit</th><th class="num">Rate</th><th class="num">Amount</th><th></th></tr></thead>
+        <tbody>
+          <template x-for="(row, index) in rows" :key="row.key">
+            <tr>
+              <td>
+                {% component "forms/control" type="select" name="item_id" size="sm" attrs='x-model="row.item" @change="pickItem(index)" aria-label="Item"' only %}
+                  <option value=""></option>
+                  <template x-for="item in items" :key="item.id"><option :value="item.id" x-text="item.name"></option></template>
+                {% endcomponent %}
+              </td>
+              <td>{% include "components/forms/control.html" with name="quantity" cell=True kind="num" attrs='x-model="row.quantity" inputmode="decimal" data-no-amount aria-label="Quantity"' only %}</td>
+              <td>
+                {% component "forms/control" type="select" name="line_uom" cell=True attrs='x-model="row.uom" aria-label="Unit"' only %}
+                  <option value="">&mdash;</option>
+                  {% for unit in units %}<option value="{{ unit.pk }}">{{ unit.title }}</option>{% endfor %}
+                {% endcomponent %}
+              </td>
+              <td>{% include "components/forms/control.html" with name="rate" cell=True kind="num" attrs='x-model="row.rate" inputmode="decimal" data-no-amount aria-label="Rate"' only %}</td>
+              <td class="li-amount" x-text="money(lineTotal(row))"></td>
+              <td>{% include "components/ui/icon_button.html" with icon="close" title="Remove line" tone="danger" attrs='@click="removeRow(index)"' only %}</td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
     </div>
-    <div>
-      <label class="form-label" for="order-no">Order #</label>
-      <input type="text" id="order-no" class="form-input h-10 w-full font-bold tabular-nums"
-             value="{{ next_order_no }}" readonly>
-    </div>
-    <div>
-      <label class="form-label" for="order_date">Order date</label>
-      <input type="date" name="order_date" id="order_date" class="form-input h-10 w-full"
-             value="{% if posted.order_date %}{{ posted.order_date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
-    </div>
-    <div>
-      <label class="form-label" for="expected_date">Promised by</label>
-      <input type="date" name="expected_date" id="expected_date" class="form-input h-10 w-full"
-             value="{{ posted.expected_date|default:'' }}">
-    </div>
-    <div class="md:col-span-2">
-      <label class="form-label" for="customer_ref">Customer's reference</label>
-      <input type="text" name="customer_ref" id="customer_ref" class="form-input h-10 w-full"
-             value="{{ posted.customer_ref|default:'' }}" placeholder="Their order number, if they gave one">
-    </div>
-    <div class="md:col-span-2">
-      <label class="form-label" for="remarks">Narration</label>
-      <input type="text" name="remarks" id="remarks" class="form-input h-10 w-full"
-             value="{{ posted.remarks|default:'' }}">
+    <div class="li-foot flex items-center justify-between gap-3 px-3 py-2">
+      {% include "components/ui/button.html" with type="button" label="Line" icon="plus" variant="ghost" size="sm" attrs='@click="addRow()"' only %}
+      <span class="flex items-baseline gap-4"><span class="totals-label">Order value</span><b class="num" x-text="money(total())"></b></span>
     </div>
   </div>
 
-  <div class="overflow-x-auto">
-    <table class="po-table">
-      <thead>
-        <tr>
-          <th style="min-width:16rem">Item</th>
-          <th style="width:9rem" class="po-right">Quantity</th>
-          <th style="width:9rem">Unit</th>
-          <th style="width:10rem" class="po-right">Rate</th>
-          <th style="width:11rem" class="po-right">Amount</th>
-          <th style="width:3rem"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <template x-for="(row, index) in rows" :key="row.key">
-          <tr>
-            <td>
-              <select class="form-input h-10 w-full" name="item_id" x-model="row.item"
-                      @change="pickItem(index)">
-                <option value="">Select an item</option>
-                <template x-for="item in items" :key="item.id">
-                  <option :value="item.id" x-text="item.name"></option>
-                </template>
-              </select>
-            </td>
-            <td><input type="text" class="form-input h-10 w-full text-right tabular-nums"
-                       name="quantity" x-model="row.quantity" inputmode="decimal"></td>
-            <td>
-              <select class="form-input h-10 w-full" name="line_uom" x-model="row.uom">
-                <option value="">—</option>
-                {% for unit in units %}<option value="{{ unit.pk }}">{{ unit.title }}</option>{% endfor %}
-              </select>
-            </td>
-            <td><input type="text" class="form-input h-10 w-full text-right tabular-nums"
-                       name="rate" x-model="row.rate" inputmode="decimal"></td>
-            <td class="po-right font-semibold tabular-nums" x-text="money(lineTotal(row))"></td>
-            <td class="po-right">
-              <button type="button" class="po-icon-btn" @click="removeRow(index)"
-                      aria-label="Remove this line" title="Remove this line">×</button>
-            </td>
-          </tr>
-        </template>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="6">
-            <button type="button" class="pur-btn pur-btn--ghost" @click="addRow()">+ Add line</button>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="4" class="po-right font-semibold">Order value</td>
-          <td class="po-right font-bold tabular-nums" x-text="money(total())"></td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-
-  <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 p-5 dark:border-slate-800">
-    <button type="submit" name="save_draft" value="1" class="pur-btn pur-btn--ghost">Save as draft</button>
-    <button type="submit" class="pur-btn pur-btn--primary">Raise order</button>
-  </div>
+  {% component "forms/submit_bar" cancel_url=cancel_url label="Raise order" prepared_by=request.user only %}
+    {% include "components/ui/button.html" with label="Save as draft" name="save_draft" value="1" variant="secondary" only %}
+  {% endcomponent %}
 </form>
 
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
 <script>
   function salesOrderForm() {
+    const figure = (value) => parseFloat(String(value || "").replace(/,/g, "")) || 0;
     return {
       items: JSON.parse(document.getElementById("items-data").textContent || "[]"),
       rows: [],
@@ -129,18 +75,13 @@
         const row = this.rows[index];
         const item = this.items.find((candidate) => String(candidate.id) === String(row.item));
         if (!item) return;
-        // The sale price off the item, so the common case is typed once.
         if (!row.rate) row.rate = item.rate;
         if (!row.uom) row.uom = item.uom;
       },
-      lineTotal(row) {
-        return (parseFloat(row.quantity) || 0) * (parseFloat(row.rate) || 0);
-      },
-      total() {
-        return this.rows.reduce((sum, row) => sum + this.lineTotal(row), 0);
-      },
+      lineTotal(row) { return figure(row.quantity) * figure(row.rate); },
+      total() { return this.rows.reduce((sum, row) => sum + this.lineTotal(row), 0); },
       money(value) {
-        return (value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return (value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },
     };
   }

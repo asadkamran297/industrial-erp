@@ -1,306 +1,80 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "inventory/_purchase_theme.html" %}
-
-<style>
-  /* The invoice as the paper it stands for. Same sheet as the purchase order,
-     because the two are read one after the other and a purchase that looked
-     like a different product would only make the reader work out afresh where
-     to look. */
-  .pur-doc-sheet {
-    border: 1px solid #e2e8f0;
-    border-radius: .75rem;
-    background: #fff;
-    padding: 1.75rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
-  }
-  .dark .pur-doc-sheet { border-color: #1e293b; background: #0f172a; }
-  .pur-doc-top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #0f172a;
-  }
-  .dark .pur-doc-top { border-bottom-color: #cbd5e1; }
-  .pur-doc-org { font-size: 1.25rem; font-weight: 800; }
-  .pur-doc-sub { font-size: .8125rem; color: #94a3b8; }
-  .pur-doc-stamp { text-align: right; }
-  .pur-doc-kind {
-    font-size: .875rem;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: var(--primary-color);
-  }
-  .pur-doc-no { font-size: 1.125rem; font-weight: 800; }
-  .pur-doc-date { font-size: .8125rem; color: #94a3b8; }
-
-  /* Lifted from the register so the two screens cannot drift apart. */
-  .po-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: .375rem;
-    border-radius: 9999px;
-    padding: .25rem .625rem;
-    font-size: .75rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .po-pill::before { content: ""; width: .375rem; height: .375rem; border-radius: 9999px; background: currentColor; }
-  .po-pill--done { color: #047857; background: #d1fae5; }
-  .po-pill--bill { color: #dc2626; background: #fee2e2; }
-
-  .pur-doc-parties {
-    display: grid;
-    gap: 1.5rem;
-    padding: 1.25rem 0;
-    grid-template-columns: 1fr;
-  }
-  @media (min-width: 768px) {
-    .pur-doc-parties { grid-template-columns: 1fr 1fr; }
-    .pur-doc-right { text-align: right; }
-  }
-  .pur-doc-cap {
-    font-size: .6875rem;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-  .pur-doc-name { font-size: 1rem; font-weight: 700; }
-  .pur-doc-table tfoot .pur-doc-total td {
-    border-top: 1px solid #e2e8f0;
-    background: #f8fafc;
-    font-weight: 700;
-  }
-  .dark .pur-doc-table tfoot .pur-doc-total td { border-top-color: #1e293b; background: rgba(15, 23, 42, .6); }
-
-  .pur-doc-foot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding-top: 1.25rem;
-  }
-  .pur-doc-narration { font-size: .875rem; }
-
-  /* What the supplier charged, as the bill states it: the goods, then what was
-     added or taken off, then the figure that became the payable. Read down the
-     right edge, which is where a total is looked for. */
-  .pur-sums { min-width: 15rem; margin-left: auto; }
-  .pur-sums > div {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding: .1875rem 0;
-    font-size: .8125rem;
-    color: #64748b;
-  }
-  .dark .pur-sums > div { color: #94a3b8; }
-  .pur-sums b { font-weight: 600; color: #334155; font-variant-numeric: tabular-nums; }
-  .dark .pur-sums b { color: #e2e8f0; }
-  .pur-sums .pur-sums-net {
-    margin-top: .375rem;
-    border-top: 1px solid #e2e8f0;
-    padding-top: .5rem;
-    font-size: .875rem;
-    font-weight: 700;
-    color: #0f172a;
-  }
-  .dark .pur-sums .pur-sums-net { border-top-color: #1e293b; color: #f1f5f9; }
-  .pur-sums .pur-sums-net b { font-size: 1.125rem; color: var(--primary-color); }
-
-  .pur-in { font-weight: 600; color: #047857; }
-  .pur-nil { color: #94a3b8; }
-
-  /* The chain this purchase created, as chips: kind first so the row can be
-     read down its left edge, the number beside it. */
-  .pur-links { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .pur-link {
-    display: inline-flex;
-    align-items: baseline;
-    gap: .375rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .5rem;
-    background: #fff;
-    padding: .375rem .625rem;
-    font-size: .75rem;
-    line-height: 1.2;
-  }
-  .pur-link:hover { border-color: var(--primary-color); background: #f8fafc; }
-  .dark .pur-link { border-color: #334155; background: #0f172a; }
-  .dark .pur-link:hover { background: #1e293b; }
-  .pur-link-kind { color: #64748b; }
-  .pur-link-num { font-weight: 700; color: var(--primary-color); white-space: nowrap; }
-  .pur-link--dead { opacity: .55; }
-  .pur-link--dead .pur-link-num { color: #94a3b8; text-decoration: line-through; }
-  .pur-chain {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem .75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .625rem;
-    background: #fff;
-    padding: .4375rem .75rem;
-  }
-  .dark .pur-chain { border-color: #1e293b; background: #0f172a; }
-  .pur-chain-cap {
-    font-size: .625rem;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-</style>
-
-<section class="space-y-5">
-
-  <div class="pur-head-row pur-noprint">
-    <div class="flex items-start gap-3">
-      {% include "components/ui/back_button.html" with back_url=invoices_url %}
-      <div>
-        <h1 class="pur-title title-accent">Purchase Invoice</h1>
-      </div>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-      {% for order in source_orders %}
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
-      {% endfor %}
-      <a class="pur-btn pur-btn--ghost" href="{% url 'inventory:supplier_detail' invoice.supplier_id %}">Supplier</a>
-    </div>
-  </div>
+<section class="form-stack">
+  {% capture as status_label %}{% if invoice.status == "reversed" %}Reversed{% else %}Posted{% endif %}{% endcapture %}
+  {% capture as status_tone %}{% if invoice.status == "reversed" %}reversed{% else %}posted{% endif %}{% endcapture %}
+  {% component "ui/detail_header" kind="Purchase Invoice" number=invoice.invoice_num date=invoice.invoice_date|dmy party=invoice.supplier.name status=status_label status_tone=status_tone back=True back_url=invoices_url extra="no-print" %}
+    {% slot meta %}{% if invoice.legacy_bill_no %}<span class="chip" title="Earlier bill number">{{ invoice.legacy_bill_no }}</span>{% endif %}{% endslot %}
+    {% slot actions %}
+      {% for order in source_orders %}{% url 'inventory:purchase_order_detail' order.pk as order_url %}{% include "components/ui/button.html" with label=order.purchase_num href=order_url icon="file" only %}{% endfor %}
+      {% url 'inventory:supplier_detail' invoice.supplier_id as supplier_url %}
+      {% include "components/ui/button.html" with label="Supplier" href=supplier_url icon="user" only %}
+    {% endslot %}
+  {% endcomponent %}
 
   {% if linked_documents %}
-  <div class="pur-chain">
-    <span class="pur-chain-cap">Linked documents</span>
+  <div class="doc-chain">
+    <span class="doc-chain__cap">Linked documents</span>
     {% for link in linked_documents %}
-    <a class="pur-link{% if link.dead %} pur-link--dead{% endif %}" href="{{ link.url }}"
-       {% if link.new_tab %}target="_blank"{% endif %}>
-      <span class="pur-link-kind">{{ link.kind }}</span>
-      <span class="pur-link-num">{{ link.label }}</span>
-    </a>
+    <a class="doc-link{% if link.dead %} doc-link--dead{% endif %}" href="{{ link.url }}"{% if link.new_tab %} target="_blank"{% endif %}><span class="doc-link-kind">{{ link.kind }}</span><span class="doc-link-num">{{ link.label }}</span></a>
     {% endfor %}
   </div>
   {% endif %}
 
-  <div class="pur-doc-sheet">
-    <div class="pur-doc-top">
-      <div>
-        <p class="pur-doc-org">{{ system_setting.company_name }}</p>
-        {% if system_setting.company_tagline %}<p class="pur-doc-sub">{{ system_setting.company_tagline }}</p>{% endif %}
-      </div>
-      <div class="pur-doc-stamp">
-        <p class="pur-doc-kind">Purchase Invoice</p>
-        <p class="pur-doc-no">{{ invoice.invoice_num }}</p>
-        <p class="pur-doc-date">{{ invoice.invoice_date|dmy }}</p>
-      </div>
+  {% component "ui/card" flush=True %}
+    <div class="card-body">
+      {% component "ui/detail_grid" cols=4 %}
+        {% include "components/ui/detail_item.html" with label="Supplier" value=invoice.supplier.name only %}
+        {% include "components/ui/detail_item.html" with label="Supplier invoice no" value=invoice.supplier_invoice_num only %}
+        {% if invoice.godown %}{% capture as godown_label %}{{ invoice.godown.code }} &mdash; {{ invoice.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
+        {% if invoice.vehicle_no %}{% include "components/ui/detail_item.html" with label="Vehicle" value=invoice.vehicle_no only %}{% endif %}
+        {% if invoice.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=invoice.broker.title only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Entered by" value=invoice.created_by.get_full_name|default:invoice.created_by.username only %}
+      {% endcomponent %}
     </div>
-
-    <div class="pur-doc-parties">
-      <div>
-        <p><span class="pur-doc-cap">Supplier:</span> <span class="pur-doc-name">{{ invoice.supplier.name }}</span></p>
-        {% if invoice.supplier_invoice_num %}
-        <p class="mt-2"><span class="pur-doc-cap">Supplier's invoice no:</span> {{ invoice.supplier_invoice_num }}</p>
-        {% endif %}
-        {% if invoice.godown %}
-        <p class="mt-2"><span class="pur-doc-cap">Godown:</span> {{ invoice.godown.code }} — {{ invoice.godown.name }}</p>
-        {% endif %}
-        {% if invoice.vehicle_no %}
-        <p class="mt-2"><span class="pur-doc-cap">Vehicle:</span> {{ invoice.vehicle_no }}</p>
-        {% endif %}
-        {% if invoice.broker %}
-        <p class="mt-2"><span class="pur-doc-cap">Broker:</span> {{ invoice.broker.title }}</p>
-        {% endif %}
-        <p class="mt-2"><span class="pur-doc-cap">Entered by:</span>
-          {{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</p>
-      </div>
-      <p class="pur-doc-right">
-        <span class="pur-doc-cap">Status:</span>
-        {% if invoice.status == "reversed" %}<span class="po-pill po-pill--bill">Reversed</span>
-        {% else %}<span class="po-pill po-pill--done">Posted</span>{% endif %}
-        {% if invoice.legacy_bill_no %}
-        <span class="po-pill" title="The bill number this purchase carried before purchases became one document">{{ invoice.legacy_bill_no }}</span>
-        {% endif %}
-      </p>
-    </div>
-
     <div class="overflow-x-auto">
-      <table class="pur-table pur-doc-table">
-        <thead>
-          <tr>
-            <th style="width: 2.5rem;">#</th>
-            <th>Item</th>
-            <th class="pur-num">Qty</th>
-            <th>Unit</th>
-            <th class="pur-num">Rate</th>
-            <th class="pur-num">Discount</th>
-            <th class="pur-num">Amount</th>
-          </tr>
-        </thead>
+      <table class="data-table doc-table">
+        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th></tr></thead>
         <tbody>
           {% for line in lines %}
           <tr>
-            <td class="pur-muted">{{ line.seq_num }}</td>
+            <td class="muted">{{ line.seq_num }}</td>
             <td>
-              <span class="pur-strong">{{ line.descr }}</span>
-              {% if line.inventory_item.item_code %}<span class="pur-sub">{{ line.inventory_item.item_code }}</span>{% endif %}
-              {% if line.product %}<span class="pur-sub">{{ line.product.complete_code }}</span>{% endif %}
+              <span class="strong">{{ line.descr }}</span>
+              {% if line.inventory_item.item_code %}<span class="sub">{{ line.inventory_item.item_code }}</span>{% endif %}
+              {% if line.product %}<span class="sub">{{ line.product.complete_code }}</span>{% endif %}
               {% if line.credit_weight %}
-              <span class="pur-sub">Party {{ line.party_weight|qty }} &middot; Mill {{ line.mill_weight|qty }} &middot;
-                Selected {{ line.selected_weight|qty }}
-                &minus; katla {{ line.katla|default:0|qty }}, khoot {{ line.khoot|default:0|qty }},
-                moisture {{ line.moisture|default:0|qty }}, sacks {{ line.sack_weight_deduction|default:0|qty }}
-                = credit {{ line.credit_weight|qty }} kg @ {{ line.rate_per_mund|amount }}/mund</span>
+              <span class="sub">Party {{ line.party_weight|qty }} &middot; Mill {{ line.mill_weight|qty }} &middot; Selected {{ line.selected_weight|qty }} &minus; katla {{ line.katla|default:0|qty }}, impurities {{ line.khoot|default:0|qty }}, moisture {{ line.moisture|default:0|qty }}, sacks {{ line.sack_weight_deduction|default:0|qty }} = credit {{ line.credit_weight|qty }} kg @ {{ line.rate_per_mund|amount }}/mund</span>
               {% endif %}
-              {% if line.bardana_ownership %}<span class="pur-sub">{{ line.get_bardana_ownership_display }}{% if not line.is_purchased_bardana %} — held, not bought{% endif %}</span>{% endif %}
+              {% if line.bardana_ownership %}<span class="sub">{{ line.get_bardana_ownership_display }}{% if not line.is_purchased_bardana %} &middot; held, not bought{% endif %}</span>{% endif %}
             </td>
-            <td class="pur-num">{{ line.quantity|qty }}</td>
-            <td>{{ line.uom.title|default:"&mdash;" }}</td>
-            <td class="pur-num">{{ line.rate|amount }}</td>
-            <td class="pur-num">{{ line.discount_amount|amount }}</td>
-            <td class="pur-num pur-strong">{{ line.total_amount|amount }}</td>
+            <td class="num">{{ line.quantity|qty }}</td>
+            <td>{{ line.uom.title|default:"—" }}</td>
+            <td class="num">{{ line.rate|amount }}</td>
+            <td class="num">{{ line.discount_amount|amount }}</td>
+            <td class="num strong">{{ line.total_amount|amount }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="7"><div class="pur-empty">Nothing on this invoice.</div></td></tr>
+          <tr><td colspan="7" class="empty-note">No items.</td></tr>
           {% endfor %}
         </tbody>
         {% if lines %}
-        <tfoot>
-          <tr class="pur-doc-total">
-            <td colspan="2">Total</td>
-            <td class="pur-num">{{ qty_total|qty }}</td>
-            <td colspan="3"></td>
-            <td class="pur-num">{{ goods_total|amount }}</td>
-          </tr>
-        </tfoot>
+        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td colspan="3"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
         {% endif %}
       </table>
     </div>
-
-    <div class="pur-doc-foot">
-      <div>
-        <p class="pur-doc-cap">Narration</p>
-        <p class="pur-doc-narration">{{ invoice.remarks|default:"&mdash;"|linebreaksbr }}</p>
-      </div>
-      <div class="pur-sums">
+    <div class="card-body doc-foot">
+      <div><p class="doc-cap">Narration</p><p class="doc-narration">{{ invoice.remarks|default:"—"|linebreaksbr }}</p></div>
+      <div class="sums">
         <div><span>Goods</span><b>{{ invoice.goods_amount|amount }}</b></div>
         {% if invoice.discount_amount %}<div><span>Discount</span><b>{{ invoice.discount_amount|amount }}</b></div>{% endif %}
         {% if invoice.freight_amount %}<div><span>Freight</span><b>{{ invoice.freight_amount|amount }}</b></div>{% endif %}
         {% if invoice.tax_amount %}<div><span>Sales tax</span><b>{{ invoice.tax_amount|amount }}</b></div>{% endif %}
-        <div class="pur-sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
-        {% if invoice.brokerage_amount %}
-        <div><span>Brokerage @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg</span><b>{{ invoice.brokerage_amount|amount }}</b></div>
-        {% endif %}
+        <div class="sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
+        {% if invoice.brokerage_amount %}<div><span>Brokerage @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg</span><b>{{ invoice.brokerage_amount|amount }}</b></div>{% endif %}
         {% if invoice.withholding_amount %}
         <div><span>Withheld @ {{ invoice.withholding_rate_per_40kg|amount }}/40kg</span><b>&minus;{{ invoice.withholding_amount|amount }}</b></div>
-        <div class="pur-sums-net"><span>Payable to supplier</span><b>{{ invoice.supplier_payable_amount|amount }}</b></div>
+        <div class="sums-net"><span>Payable to supplier</span><b>{{ invoice.supplier_payable_amount|amount }}</b></div>
         {% endif %}
         {% if invoice.paid_amount %}
         <div><span>Paid</span><b>{{ invoice.paid_amount|amount }}</b></div>
@@ -308,6 +82,6 @@
         {% endif %}
       </div>
     </div>
-  </div>
-
+  {% endcomponent %}
+</section>
 {% endblock %}

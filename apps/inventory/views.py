@@ -3620,6 +3620,7 @@ class SalesOrderListView(SortableListMixin, InventoryListMixin, ListView):
             order.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
             order.qty_still_due = sum((line.qty_pending for line in lines), Decimal("0"))
             order.value_total = sum((line.total_amount for line in lines), Decimal("0.00"))
+        context["page_total"] = sum((order.value_total for order in rows), Decimal("0.00"))
         context["statuses"] = INV_SALES_ORDER_STATUS_CHOICES
         context["create_url"] = reverse_lazy("inventory:sales_order_create")
         return context

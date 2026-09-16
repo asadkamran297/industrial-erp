@@ -1,3 +1,10 @@
-<div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-5 dark:border-slate-800">
-  <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--primary-color)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/10 transition hover:brightness-95 focus:outline-none focus:ring-4 focus:ring-blue-500/20">{{ label|default:"Save" }}</button>
+<div class="submit-bar{% if floating %} submit-bar--floating{% endif %}{% if extra %} {{ extra }}{% endif %}">
+  {% if prepared_by %}<p class="submit-bar__meta">Prepared by <b>{{ prepared_by.get_full_name|default:prepared_by.username }}</b></p>{% endif %}
+  <div class="submit-bar__actions">
+    {% if embed %}{% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs="data-embed-cancel" only %}{% elif cancel_url %}{% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}{% endif %}
+    {% if show_print %}{% include "components/ui/button.html" with label="Save & Print" icon="print" name="save_and_print" value="1" variant="secondary" form_id=form_id only %}{% endif %}
+    {% if show_new %}{% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" variant="secondary" form_id=form_id only %}{% endif %}
+    {{ slot }}
+    {% include "components/ui/button.html" with label=label|default:"Save" icon="save" variant="primary" extra="btn--wide" data="save" form_id=form_id disabled=disabled only %}
+  </div>
 </div>

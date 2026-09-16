@@ -1,23 +1,23 @@
 {% load inventory_extras %}
-<table class="w-full text-left text-sm">
-  <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-    <tr class="border-b border-slate-100 dark:border-slate-800">
-      <th class="w-12 px-4 py-2.5"><input type="checkbox" id="pick-all" class="h-4 w-4 rounded border-slate-300"></th>
-      <th class="px-4 py-2.5">Item Name</th>
-      <th class="px-4 py-2.5">Current Category</th>
-      <th class="px-4 py-2.5 text-right">Quantity</th>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th class="w-12">{% include "components/forms/control.html" with type="checkbox" id="pick-all" attrs='aria-label="Select all"' only %}</th>
+      <th>Item Name</th>
+      <th>Current Category</th>
+      <th class="num">Quantity</th>
     </tr>
   </thead>
-  <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+  <tbody>
     {% for row in items %}
     <tr>
-      <td class="px-4 py-3"><input type="checkbox" name="item_ids" value="{{ row.pk }}" class="pick-one h-4 w-4 rounded border-slate-300"></td>
-      <td class="px-4 py-3 text-slate-700 dark:text-slate-200">{{ row.item_name }}</td>
-      <td class="px-4 py-3 text-slate-500">{{ row.item_class.title|default:"&mdash;" }}</td>
-      <td class="px-4 py-3 text-right tabular-nums {% if row.stock_quantity < 0 %}text-rose-600{% endif %}">{{ row.stock_quantity|qty }}</td>
+      <td>{% include "components/forms/control.html" with type="checkbox" name="item_ids" value=row.pk extra="pick-one" attrs='aria-label="Select"' only %}</td>
+      <td>{{ row.item_name }}</td>
+      <td class="muted">{{ row.item_class.title|default:"—" }}</td>
+      <td class="num{% if row.stock_quantity < 0 %} fig-bad{% endif %}">{{ row.stock_quantity|qty }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="4" class="uom-empty">Nothing left to move here.</td></tr>
+    <tr><td colspan="4" class="uom-empty">No items to move.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -1,16 +1,15 @@
-<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-  <div class="title-accent">
-    <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ title }}</h1>
-    {% if subtitle %}<p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400">{{ subtitle }}</p>{% endif %}
+<div class="page-head{% if extra %} {{ extra }}{% endif %}">
+  <div class="page-head__lead">
+    {% if back %}{% include "components/ui/back_button.html" with back_url=back_url %}{% endif %}
+    <h1 class="page-title">{{ title }}{% if meta %}<span class="page-title__meta">{{ meta }}</span>{% endif %}</h1>
+    {% if status %}<span class="pill pill--{{ status_tone|default:'closed' }}">{{ status }}</span>{% endif %}
   </div>
-  {% if action_label or secondary_label %}
-  <div class="flex flex-wrap items-center gap-2">
-    {% if secondary_label %}
-      {% include "components/ui/button.html" with label=secondary_label href=secondary_url icon=secondary_icon variant=secondary_variant|default:"secondary" only %}
-    {% endif %}
-    {% if action_label %}
-      {% include "components/ui/button.html" with label=action_label href=action_url|default:"#" icon=action_icon|default:"+" variant=action_variant|default:"primary" only %}
-    {% endif %}
+  {% if slots.fields %}<div class="page-head__fields">{{ slots.fields }}</div>{% endif %}
+  {% if slots.actions or slot or action_label or secondary_label %}
+  <div class="page-head__actions">
+    {{ slots.actions }}{{ slot }}
+    {% if secondary_label %}{% include "components/ui/button.html" with label=secondary_label href=secondary_url icon=secondary_icon variant=secondary_variant|default:"secondary" only %}{% endif %}
+    {% if action_label %}{% include "components/ui/button.html" with label=action_label href=action_url|default:"#" icon=action_icon|default:"plus" variant="primary" only %}{% endif %}
   </div>
   {% endif %}
 </div>

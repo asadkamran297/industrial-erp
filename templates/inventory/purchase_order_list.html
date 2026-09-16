@@ -1,663 +1,212 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "components/table/board_theme.html" %}
-<style>
-  /* The notes a line came in under. Several fit in the cell without widening
-     it, so they wrap as chips rather than pushing the money columns off. */
-  .po-grns { min-width: 9rem; }
-  .po-lines-done { color: #059669; font-weight: 600; }
-  .dark .po-lines-done { color: #34d399; }
-  .po-lines-foot-label { font-weight: 700; color: #475569; }
-  .dark .po-lines-foot-label { color: #cbd5e1; }
-  .po-lines tfoot td { border-top: 2px solid #e2e8f0; padding-top: .5rem; }
-  .dark .po-lines tfoot td { border-top-color: #1e293b; }
-  .po-grn {
-    display: inline-flex;
-    align-items: baseline;
-    gap: .25rem;
-    margin: 0 .25rem .25rem 0;
-    border-radius: .25rem;
-    background: #e0f2fe;
-    padding: .0625rem .3125rem;
-    font-size: .625rem;
-    font-weight: 700;
-    color: #0369a1;
-    white-space: nowrap;
-  }
-  .po-grn:hover { background: #bae6fd; }
-  .dark .po-grn { background: rgba(3, 105, 161, .25); color: #7dd3fc; }
-  .dark .po-grn:hover { background: rgba(3, 105, 161, .4); }
-  .po-grn-qty { font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
-  /* ── Approval dialog ──────────────────────────────────────────────────── */
-  .approve-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 90;
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-    background: rgba(2, 6, 23, .55);
-    backdrop-filter: blur(2px);
-  }
-  .approve-card {
-    width: 100%;
-    max-width: 25rem;
-    border-radius: 1rem;
-    background: #fff;
-    padding: 1.25rem;
-    box-shadow: 0 30px 60px -20px rgba(2, 6, 23, .55);
-  }
-  .dark .approve-card { background: #0f172a; }
-  .approve-head { display: flex; align-items: flex-start; gap: .75rem; }
-  /* A shield with a tick: this is a control step, not a warning. */
-  .approve-mark {
-    display: grid;
-    place-items: center;
-    flex: none;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: .75rem;
-    color: var(--primary-color);
-    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  }
-  .approve-mark svg { width: 1.375rem; height: 1.375rem; }
-  .approve-title { margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; }
-  .dark .approve-title { color: #f1f5f9; }
-  .approve-sub { margin: .125rem 0 0; font-size: .8125rem; color: #64748b; }
-  .approve-facts {
-    margin: 1rem 0 0;
-    display: grid;
-    gap: .375rem;
-    border-top: 1px solid #f1f5f9;
-    padding-top: .875rem;
-  }
-  .dark .approve-facts { border-top-color: #1e293b; }
-  .approve-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-  .approve-facts dt { font-size: .75rem; color: #94a3b8; }
-  .approve-facts dd { margin: 0; font-size: .8125rem; font-weight: 600; color: #334155; text-align: right; }
-  .dark .approve-facts dd { color: #e2e8f0; }
-  /* The figure is the decision, so it is given a block of its own rather than
-     another row in the list above it. */
-  .approve-amount {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-top: .875rem;
-    border-radius: .625rem;
-    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
-    padding: .625rem .75rem;
-  }
-  .approve-amount span { font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
-  .approve-amount strong { font-size: 1.25rem; font-weight: 800; color: var(--primary-color); font-variant-numeric: tabular-nums; }
-  .approve-lines { margin-top: .875rem; }
-  .approve-lines-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin: 0 0 .25rem;
-    font-size: .6875rem;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-  /* Long orders scroll inside the dialog rather than pushing the amount and
-     the buttons off the bottom of the screen. */
-  .approve-lines-scroll {
-    max-height: 11rem;
-    overflow-y: auto;
-    border: 1px solid #f1f5f9;
-    border-radius: .5rem;
-  }
-  .dark .approve-lines-scroll { border-color: #1e293b; }
-  .approve-lines-scroll table { width: 100%; border-collapse: collapse; }
-  .approve-lines-scroll td { padding: .4375rem .625rem; border-bottom: 1px solid #f8fafc; vertical-align: top; }
-  .dark .approve-lines-scroll td { border-bottom-color: rgba(30, 41, 59, .7); }
-  .approve-lines-scroll tr:last-child td { border-bottom: 0; }
-  .approve-line-name span {
-    display: block;
-    font-size: .8125rem;
-    font-weight: 600;
-    color: #334155;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 13rem;
-  }
-  .dark .approve-line-name span { color: #e2e8f0; }
-  /* What the line is made of, under its name, so the amount beside it can be
-     checked rather than taken on trust. */
-  .approve-line-name em { display: block; font-size: .6875rem; font-style: normal; color: #94a3b8; }
-  .approve-line-amount { text-align: right; font-size: .8125rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: #334155; }
-  .dark .approve-line-amount { color: #e2e8f0; }
-  .approve-empty {
-    margin: .875rem 0 0;
-    border: 1px dashed #fecdd3;
-    border-radius: .5rem;
-    padding: .625rem .75rem;
-    font-size: .75rem;
-    font-weight: 600;
-    color: #b91c1c;
-    background: #fff1f2;
-  }
-  .dark .approve-empty { background: rgba(136, 19, 55, .2); border-color: rgba(244, 63, 94, .35); color: #fda4af; }
-  .approve-note { margin: .75rem 0 0; font-size: .75rem; line-height: 1.45; color: #94a3b8; }
-  .approve-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
-  .approve-cancel {
-    height: 2.25rem;
-    border: 1px solid #e2e8f0;
-    border-radius: .5rem;
-    padding: 0 1rem;
-    font-size: .8125rem;
-    font-weight: 600;
-    color: #475569;
-    background: #fff;
-  }
-  .approve-cancel:hover { background: #f8fafc; }
-  .dark .approve-cancel { border-color: #1e293b; background: transparent; color: #cbd5e1; }
-  .approve-go {
-    display: inline-flex;
-    align-items: center;
-    gap: .375rem;
-    height: 2.25rem;
-    border: 1px solid color-mix(in srgb, var(--primary-color) 88%, #000);
-    border-radius: .5rem;
-    padding: 0 1.125rem;
-    font-size: .8125rem;
-    font-weight: 700;
-    color: #fff;
-    background-image: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 88%, #fff), var(--primary-color));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 1px 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
-  }
-  .approve-go svg { width: .9375rem; height: .9375rem; }
-  .approve-go:hover { filter: brightness(1.06); }
-  .approve-go:active { transform: translateY(1px); }
-  .approve-go:disabled { opacity: .6; }
-</style>
-
 {{ approval_lines|json_script:"approval-lines" }}
-<div x-data="poBoard()">
+{% if can_add %}{% url 'inventory:purchase_order_create' as create_url %}{% endif %}
+{% component "table/board" title="Purchase Orders" add_url=create_url add_label="Purchase Order" table_id="order-table" x_data="poBoard()" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
+  {% slot tiles %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=open" tone="violet" icon="file" value=tiles.open_count label="Open POs" %}
+      <p class="tile-note">Rs {{ tiles.open_value|short_amount }} committed</p>
+    {% endcomponent %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=pending" tone="amber" icon="clock" value=tiles.pending_count label="Awaiting approval" %}
+      <p class="tile-note{% if tiles.pending_value %} tile-note--alert{% endif %}">{% if tiles.pending_value %}Rs {{ tiles.pending_value|short_amount }} not committed{% elif tiles.pending_empty %}No items added{% else %}Nothing waiting{% endif %}</p>
+      <p class="tile-note">Approval above Rs {{ approval_limit|short_amount }}</p>
+    {% endcomponent %}
+    {% component "table/tile" href="?"|add:base_query|add:"&tab=open" tone="sky" icon="box" value=tiles.awaiting_count label="Awaiting goods" %}
+      <p class="tile-note">Rs {{ tiles.awaiting_value|short_amount }} to arrive</p>
+    {% endcomponent %}
+    {% url 'inventory:purchase_invoice_list' as invoice_list_url %}
+    {% component "table/tile" href=invoice_list_url tone="rose" icon="cash" value=tiles.unbilled_count label="Awaiting invoice" %}
+      <p class="tile-note{% if tiles.unbilled_count %} tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} not invoiced</p>
+    {% endcomponent %}
+  {% endslot %}
 
-<div class="flex flex-wrap items-start justify-between gap-4">
-  <div class="max-w-xl">
-    <h1 class="title-accent text-2xl font-bold">Purchase Orders</h1>
-  </div>
-
-  <div class="flex flex-wrap items-center gap-2">
-    {% if can_add %}
-    {% url 'inventory:purchase_order_create' as add_url %}
-    {% include "components/ui/button.html" with label="Purchase Order" href=add_url variant="primary" icon="+" only %}
-    {% endif %}
-
-  </div>
-</div>
-
-<div class="po-tiles mt-5">
-  <a class="po-tile po-tile--committed" href="?{{ base_query }}&amp;tab=open">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h4"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.open_count }}</p>
-        <p class="po-tile-label">Open POs</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.open_value|short_amount }} committed</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--approval" href="?{{ base_query }}&amp;tab=pending">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.pending_count }}</p>
-        <p class="po-tile-label">Awaiting approval</p>
-      </div>
-      <p class="po-tile-note{% if tiles.pending_value %} po-tile-note--alert{% endif %}">
-        {% if tiles.pending_value %}Rs {{ tiles.pending_value|short_amount }} not yet committed
-        {% elif tiles.pending_empty %}No items added yet
-        {% else %}Nothing waiting{% endif %}
-      </p>
-      <p class="po-tile-note">Above Rs {{ approval_limit|short_amount }} needs approval</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--goods" href="?{{ base_query }}&amp;tab=open">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 7l9-4 9 4v10l-9 4-9-4z"></path><path d="M3 7l9 4 9-4"></path><path d="M12 11v10"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.awaiting_count }}</p>
-        <p class="po-tile-label">Awaiting goods</p>
-      </div>
-      <p class="po-tile-note">Rs {{ tiles.awaiting_value|short_amount }} still to arrive</p>
-    </div>
-  </a>
-
-  <a class="po-tile po-tile--payable" href="{% url 'inventory:purchase_invoice_list' %}">
-    <span class="po-tile-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-        <circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path>
-      </svg>
-    </span>
-    <div class="po-tile-body">
-      <div class="po-tile-head">
-        <p class="po-tile-value">{{ tiles.unbilled_count }}</p>
-        <p class="po-tile-label">Awaiting invoice</p>
-      </div>
-      <p class="po-tile-note{% if tiles.unbilled_count %} po-tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} ordered, not invoiced</p>
-    </div>
-  </a>
-</div>
-
-<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  {% include "components/table/filter_bar.html" with table_id="order-table" date_filters_enabled=True search_placeholder="Search..." columns_action=columns_url export_url=export_url %}
-
-  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
-    <table id="order-table" class="po-table">
-      <thead>
-        <tr>
-          <th class="print-hide po-expand-head"></th>
-          {% include "components/table/sort_header.html" with label="Order #" field="purchase_num" %}
-          {% if "purchase_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}{% endif %}
-          {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
-          {% if "buyer" in columns %}<th>Raised by</th>{% endif %}
-          {% if "expected" in columns %}{% include "components/table/sort_header.html" with label="Expected" field="expected" %}{% endif %}
-          {% if "value" in columns %}<th class="po-right">Order value</th>{% endif %}
-          {% if "received" in columns %}<th style="width: 10rem;">Progress</th>{% endif %}
-          {% if "billed" in columns %}<th>Invoiced</th>{% endif %}
-          {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
-          <th class="print-hide po-actions-head">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for order in orders %}
-        <tr>
-          <td class="print-hide po-expand-cell">
-            <button type="button" class="po-expand" @click="toggleRow({{ order.pk }})"
-                    :aria-expanded="isRowOpen({{ order.pk }}) ? 'true' : 'false'"
-                    aria-label="Show the items on this order" title="Show the items on this order">
-              <span x-text="isRowOpen({{ order.pk }}) ? '−' : '+'">+</span>
-            </button>
-          </td>
-          <td>
-            <a class="po-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a>
-          </td>
-          {% if "purchase_date" in columns %}<td class="whitespace-nowrap">{{ order.purchase_date|dmy }}</td>{% endif %}
-          {% if "supplier" in columns %}
-          <td>
-            <span class="font-semibold">{{ order.supplier.name }}</span>
-          </td>
-          {% endif %}
-          {% if "buyer" in columns %}
-          <td class="whitespace-nowrap">{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>
-          {% endif %}
-          {% if "expected" in columns %}<td class="whitespace-nowrap">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
-          {% if "value" in columns %}<td class="po-right font-semibold">{{ order.total_amount|amount }}</td>{% endif %}
-          {% if "received" in columns %}
-          <td>
-            <div class="po-bar-track">
-              <div class="po-bar-fill{% if order.received_percent >= 100 %} po-bar-fill--full{% elif order.received_percent > 0 %} po-bar-fill--part{% endif %}"
-                   style="width: {{ order.received_percent }}%;"></div>
-            </div>
-            <span class="po-bar-note{% if order.days_late %} po-bar-note--late{% endif %}">
-              {% if order.short_closed_qty %}{{ order.short_closed_qty|qty }} never invoiced
-              {% elif order.days_late %}{{ order.days_late }} day{{ order.days_late|pluralize }} late
-              {% elif order.received_percent %}{{ order.received_percent }}% invoiced
-              {% else %}Not invoiced{% endif %}
-            </span>
-          </td>
-          {% endif %}
-          {% if "billed" in columns %}
-          <td>
-            {% if order.billed_state == "billed" %}{{ order.invoice_numbers|join:", " }}
-            {% elif order.billed_state == "partial" %}<span class="po-unbilled">Part invoiced</span>
-            {% elif order.billed_state == "unbilled" %}<span class="po-unbilled">Not invoiced</span>
-            {% else %}<span class="po-muted" title="Nothing has arrived yet, so there is nothing to invoice">&mdash;</span>{% endif %}
-          </td>
-          {% endif %}
-          {% if "status" in columns %}
-          <td>
-            {% if order.status == "draft" %}<span class="po-pill po-pill--draft">Awaiting approval</span>
-            {% elif order.days_late %}<span class="po-pill po-pill--late">Overdue</span>
-            {% elif order.status == "partially_invoiced" %}<span class="po-pill po-pill--open">Partly invoiced</span>
-            {% elif order.status == "fully_invoiced" %}<span class="po-pill po-pill--done">Fully invoiced</span>
-            {% elif order.status == "closed" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Closed</span>
-            {% elif order.status == "cancelled" %}<span class="po-pill po-pill--dead" title="{{ order.close_reason_label }}">Cancelled</span>
-            {% else %}<span class="po-pill po-pill--open">Awaiting invoice</span>{% endif %}
-          </td>
-          {% endif %}
-          <td class="print-hide">
-            <div class="po-row-actions">
-              {% if order.next_action == "approve" %}
-              <button type="button" class="po-text-btn po-text-btn--go"
-                      title="Approve &mdash; raise this order on the supplier"
-                      @click="askApproval({
-                        pk: '{{ order.pk }}',
-                        url: '{% url 'inventory:purchase_order_raise' order.pk %}',
-                        number: '{{ order.purchase_num|escapejs }}',
-                        supplier: '{{ order.supplier.name|escapejs }}',
-                        amount: '{{ order.total_amount|amount|escapejs }}',
-                        date: '{{ order.purchase_date|dmy|escapejs }}',
-                        lines: '{{ order.line_count }}',
-                        expected: '{{ order.expected_date|dmy|default:''|escapejs }}'
-                      })">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M20 6L9 17l-5-5"></path>
-                </svg>
-                Approve
-              </button>
-              {% elif order.next_action == "chase" %}
-              <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:supplier_detail' order.supplier_id %}" title="Chase &mdash; supplier contact details" aria-label="Chase this supplier">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"></path>
-                </svg>
-              </a>
-              {% elif order.next_action == "reopen" %}
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="Closed &mdash; open it to re-open or read why" aria-label="Open this closed order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>
-                </svg>
-              </a>
-              {% elif order.next_action == "bill" %}
-              <a class="po-icon-btn po-icon-btn--go" href="{% url 'inventory:purchase_invoice_create' %}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}" title="Invoice &mdash; enter the supplier's invoice against this order" aria-label="Enter the invoice for this order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M5 3v18l2.5-1.5L10 21l2-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z"></path>
-                  <path d="M9 8h6M9 12h6"></path>
-                </svg>
-              </a>
-              {% endif %}
-
-              {% if can_approve and order.end_action %}
-              <a class="po-icon-btn po-icon-btn--warn" href="{% url 'inventory:purchase_order_detail' order.pk %}#{{ order.end_action }}"
-                 title="{% if order.end_action == 'cancel' %}Cancel order &mdash; nothing has arrived against it{% else %}Close PO &mdash; the balance is not coming{% endif %}"
-                 aria-label="{% if order.end_action == 'cancel' %}Cancel this order{% else %}Close this purchase order{% endif %}">
-                {% if order.end_action == 'cancel' %}
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"></circle><path d="M5.6 5.6l12.8 12.8"></path>
-                </svg>
-                {% else %}
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <rect x="3" y="4" width="18" height="4" rx="1"></rect>
-                  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"></path>
-                  <path d="M10 12h4"></path>
-                </svg>
-                {% endif %}
-              </a>
-              {% endif %}
-
-              {% if can_edit and order.is_live %}
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}?edit=1"
-                 title="Edit &mdash; correct the quantities and prices on this order" aria-label="Edit this purchase order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 20h9"></path>
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>
-                </svg>
-              </a>
-              {% endif %}
-
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_detail' order.pk %}" title="View this order" aria-label="View this order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </a>
-
-              <a class="po-icon-btn" href="{% url 'inventory:purchase_order_print' order.pk %}" target="_blank" title="Print this order" aria-label="Print this order">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M7 8V3h10v5"></path>
-                  <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
-                  <rect x="7" y="14" width="10" height="7" rx="1"></rect>
-                </svg>
-              </a>
-            </div>
-          </td>
-        </tr>
-
-        <tr class="po-lines-row print-hide" x-show="isRowOpen({{ order.pk }})" x-cloak>
-          <td colspan="{{ column_span }}" class="po-lines-cell print-hide">
-            {% with poi_list=order.items.all %}
-            {% if poi_list %}
-            <table class="po-lines">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Item</th>
-                  <th class="po-right">Ordered</th>
-                  <th>Unit</th>
-                  <th class="po-right">Rate</th>
-                  <th class="po-right">Amount</th>
-                  <th class="po-right">Invoiced</th>
-                  <th class="po-right">Pending</th>
-                  <th class="po-right">Value pending</th>
-                  <th>Invoices</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for poi in poi_list %}
-                <tr>
-                  <td class="po-lines-num">{{ forloop.counter }}</td>
-                  <td>
-                    <span class="font-semibold">{{ poi.descr }}</span>
-                    {% if poi.inventory_item.item_code %}<span class="po-sub">{{ poi.inventory_item.item_code }}</span>{% endif %}
-                  </td>
-                  <td class="po-right">{{ poi.qty_ordered|qty }}</td>
-                  <td>{{ poi.uom.title|default:"—" }}</td>
-                  <td class="po-right">{{ poi.rate|amount }}</td>
-                  <td class="po-right font-semibold">{{ poi.total_amount|amount }}</td>
-                  <td class="po-right {% if poi.qty_invoiced %}po-lines-in{% else %}po-lines-nil{% endif %}">{{ poi.qty_invoiced|qty }}</td>
-                  <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
-                    {% if poi.closed %}<span class="po-lines-nil">Closed</span>
-                    {% elif poi.qty_pending %}{{ poi.qty_pending|qty }}
-                    {% else %}<span class="po-lines-done">Complete</span>{% endif %}
-                  </td>
-                  <td class="po-right {% if poi.qty_pending %}po-lines-due{% else %}po-lines-nil{% endif %}">
-                    {% if poi.qty_pending %}{{ poi.pending_value|amount }}{% else %}&mdash;{% endif %}
-                  </td>
-                  <td class="po-grns">
-                    {% for ref in poi.invoice_refs %}
-                    <a class="po-grn" href="{% url 'inventory:purchase_invoice_detail' ref.pk %}"
-                       title="{{ ref.number }} &mdash; {{ ref.qty|qty }} invoiced {{ ref.date|dmy }}{% if ref.supplier_ref %} on {{ ref.supplier_ref }}{% endif %}">
-                      {{ ref.number }}<span class="po-grn-qty">{{ ref.qty|qty }}</span>
-                    </a>
-                    {% empty %}
-                    <span class="po-lines-nil">&mdash;</span>
-                    {% endfor %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="2" class="po-lines-foot-label">Order total</td>
-                  <td class="po-right">{{ order.ordered_qty|qty }}</td>
-                  <td colspan="2"></td>
-                  <td class="po-right font-semibold">{{ order.total_amount|amount }}</td>
-                  <td class="po-right po-lines-in">{{ order.invoiced_qty|qty }}</td>
-                  <td class="po-right {% if order.pending_qty %}po-lines-due{% else %}po-lines-nil{% endif %}">{{ order.pending_qty|qty }}</td>
-                  <td colspan="2"></td>
-                </tr>
-              </tfoot>
-            </table>
-
-            {% else %}
-            <p class="po-lines-empty">Nothing on this order yet.</p>
-            {% endif %}
-            {% endwith %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="{{ column_span }}" class="px-4 py-12 text-center text-slate-500">No purchase orders here.</td></tr>
-        {% endfor %}
-      </tbody>
-      {% if orders %}
-      <tfoot>
-        <tr class="po-foot">
-          {% if foot_tail_span %}
-          <td colspan="{{ foot_lead_span }}">Total on this page</td>
-          <td class="po-right">{{ page_total|amount }}</td>
-          <td colspan="{{ foot_tail_span }}"></td>
-          {% else %}
-          <td colspan="{{ foot_lead_span }}">Total on this page</td>
-          {% endif %}
-        </tr>
-      </tfoot>
+  <thead>
+    <tr>
+      <th class="print-hide expand-col"></th>
+      {% include "components/table/sort_header.html" with label="Order #" field="purchase_num" %}
+      {% if "purchase_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="purchase_date" %}{% endif %}
+      {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
+      {% if "buyer" in columns %}<th>Raised by</th>{% endif %}
+      {% if "expected" in columns %}{% include "components/table/sort_header.html" with label="Expected" field="expected" %}{% endif %}
+      {% if "value" in columns %}<th class="num">Order value</th>{% endif %}
+      {% if "received" in columns %}<th class="w-40">Progress</th>{% endif %}
+      {% if "billed" in columns %}<th>Invoiced</th>{% endif %}
+      {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
+      <th class="print-hide actions-col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    <tr{% if order.status == "cancelled" %} class="row--void"{% endif %}>
+      {% include "components/table/expand_toggle.html" with pk=order.pk only %}
+      <td><a class="doc-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a></td>
+      {% if "purchase_date" in columns %}<td>{{ order.purchase_date|dmy }}</td>{% endif %}
+      {% if "supplier" in columns %}<td class="truncate strong" title="{{ order.supplier.name }}">{{ order.supplier.name }}</td>{% endif %}
+      {% if "buyer" in columns %}<td>{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>{% endif %}
+      {% if "expected" in columns %}<td>{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
+      {% if "value" in columns %}<td class="num strong">{{ order.total_amount|amount }}</td>{% endif %}
+      {% if "received" in columns %}
+      <td>
+        <div class="meter"><div class="meter__fill{% if order.received_percent >= 100 %} meter__fill--full{% elif order.received_percent > 0 %} meter__fill--part{% endif %}" style="--pct: {{ order.received_percent }}%"></div></div>
+        <span class="meter__note{% if order.days_late %} meter__note--late{% endif %}">{% if order.short_closed_qty %}{{ order.short_closed_qty|qty }} never invoiced{% elif order.days_late %}{{ order.days_late }} day{{ order.days_late|pluralize }} late{% elif order.received_percent %}{{ order.received_percent }}% invoiced{% else %}Not invoiced{% endif %}</span>
+      </td>
       {% endif %}
-    </table>
-  </div>
-</section>
+      {% if "billed" in columns %}
+      <td>
+        {% if order.billed_state == "billed" %}{{ order.invoice_numbers|join:", " }}
+        {% elif order.billed_state == "partial" %}<span class="text-alert">Part invoiced</span>
+        {% elif order.billed_state == "unbilled" %}<span class="text-alert">Not invoiced</span>
+        {% else %}<span class="muted">&mdash;</span>{% endif %}
+      </td>
+      {% endif %}
+      {% if "status" in columns %}
+      <td>
+        {% if order.status == "draft" %}<span class="pill pill--draft">Awaiting approval</span>
+        {% elif order.days_late %}<span class="pill pill--danger">Overdue</span>
+        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">Partly invoiced</span>
+        {% elif order.status == "fully_invoiced" %}<span class="pill pill--posted">Fully invoiced</span>
+        {% elif order.status == "closed" %}<span class="pill pill--closed" title="{{ order.close_reason_label }}">Closed</span>
+        {% elif order.status == "cancelled" %}<span class="pill pill--reversed" title="{{ order.close_reason_label }}">Cancelled</span>
+        {% else %}<span class="pill pill--pending">Awaiting invoice</span>{% endif %}
+      </td>
+      {% endif %}
+      <td class="print-hide actions-col">
+        {% url 'inventory:purchase_order_detail' order.pk as view_url %}
+        {% url 'inventory:purchase_order_print' order.pk as print_url %}
+        {% capture as edit_url %}{% if can_edit and order.is_live %}{{ view_url }}?edit=1{% endif %}{% endcapture %}
+        {% component "table/actions" view_url=view_url edit_url=edit_url print_url=print_url %}
+          {% if order.next_action == "approve" %}
+            {% capture as approve_attrs %}@click="askApproval($el.dataset)" data-pk="{{ order.pk }}" data-url="{% url 'inventory:purchase_order_raise' order.pk %}" data-number="{{ order.purchase_num }}" data-supplier="{{ order.supplier.name }}" data-amount="{{ order.total_amount|amount }}" data-date="{{ order.purchase_date|dmy }}" data-expected="{{ order.expected_date|dmy|default:'' }}"{% endcapture %}
+            {% include "components/ui/button.html" with type="button" label="Approve" icon="check" variant="primary" size="sm" attrs=approve_attrs only %}
+          {% elif order.next_action == "chase" %}
+            {% url 'inventory:supplier_detail' order.supplier_id as chase_url %}
+            {% include "components/ui/icon_button.html" with href=chase_url icon="phone" title="Chase supplier" tone="danger" only %}
+          {% elif order.next_action == "reopen" %}
+            {% include "components/ui/icon_button.html" with href=view_url icon="refresh" title="Re-open" only %}
+          {% elif order.next_action == "bill" %}
+            {% url 'inventory:purchase_invoice_create' as bill_base %}
+            {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
+            {% include "components/ui/icon_button.html" with href=bill_url icon="receipt" title="Enter invoice" tone="go" only %}
+          {% endif %}
+          {% slot end %}
+            {% if can_approve and order.end_action %}
+              {% capture as end_url %}{{ view_url }}#{{ order.end_action }}{% endcapture %}
+              {% if order.end_action == "cancel" %}
+                {% include "components/ui/icon_button.html" with href=end_url icon="deactivate" title="Cancel order" tone="danger" only %}
+              {% else %}
+                {% include "components/ui/icon_button.html" with href=end_url icon="archive" title="Close PO" tone="danger" only %}
+              {% endif %}
+            {% endif %}
+          {% endslot %}
+        {% endcomponent %}
+      </td>
+    </tr>
 
-{% include "components/table/pagination.html" %}
-
-<div class="approve-backdrop" x-show="approval" x-cloak x-transition.opacity
-     @keydown.escape.window="approval = null" role="dialog" aria-modal="true" aria-labelledby="approve-title">
-  <div class="approve-card" @click.outside="approval = null" x-transition>
-    <div class="approve-head">
-      <span class="approve-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3l8 4v5c0 4.5-3.2 8.3-8 9.5-4.8-1.2-8-5-8-9.5V7z"></path>
-          <path d="M9 12l2 2 4-4"></path>
-        </svg>
-      </span>
-      <div>
-        <h2 class="approve-title" id="approve-title">Approve this purchase order?</h2>
-        <p class="approve-sub">It becomes a commitment to the supplier once approved.</p>
-      </div>
-    </div>
-
-    <dl class="approve-facts">
-      <div><dt>Order</dt><dd x-text="approval?.number"></dd></div>
-      <div><dt>Supplier</dt><dd x-text="approval?.supplier"></dd></div>
-      <div><dt>Ordered</dt><dd x-text="approval?.date"></dd></div>
-      <template x-if="approval?.expected">
-        <div><dt>Expected</dt><dd x-text="approval?.expected"></dd></div>
-      </template>
-    </dl>
-
-    <div class="approve-lines" x-show="lines.length" x-cloak>
-      <p class="approve-lines-head">
-        <span>Items</span>
-        <span x-text="lines.length + (lines.length === 1 ? ' line' : ' lines')"></span>
-      </p>
-      <div class="approve-lines-scroll">
-        <table>
+    {% component "table/lines_row" pk=order.pk span=column_span %}
+        {% with poi_list=order.items.all %}
+        {% if poi_list %}
+        <table class="lines-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Item</th><th class="num">Ordered</th><th>Unit</th><th class="num">Rate</th>
+              <th class="num">Amount</th><th class="num">Invoiced</th><th class="num">Pending</th><th class="num">Value pending</th><th>Invoices</th>
+            </tr>
+          </thead>
           <tbody>
-            <template x-for="(line, i) in lines" :key="i">
-              <tr>
-                <td class="approve-line-name">
-                  <span x-text="line.name" :title="line.name"></span>
-                  <em x-text="line.qty + (line.uom ? ' ' + line.uom : '') + ' \u00d7 ' + money(line.rate)"></em>
-                </td>
-                <td class="approve-line-amount" x-text="money(line.amount)"></td>
-              </tr>
-            </template>
+            {% for poi in poi_list %}
+            <tr>
+              <td class="muted">{{ forloop.counter }}</td>
+              <td><span class="strong">{{ poi.descr }}</span>{% if poi.inventory_item.item_code %}<span class="sub">{{ poi.inventory_item.item_code }}</span>{% endif %}</td>
+              <td class="num">{{ poi.qty_ordered|qty }}</td>
+              <td>{{ poi.uom.title|default:"—" }}</td>
+              <td class="num">{{ poi.rate|amount }}</td>
+              <td class="num strong">{{ poi.total_amount|amount }}</td>
+              <td class="num {% if poi.qty_invoiced %}fig-in{% else %}fig-nil{% endif %}">{{ poi.qty_invoiced|qty }}</td>
+              <td class="num {% if poi.qty_pending %}fig-due{% else %}fig-nil{% endif %}">{% if poi.closed %}<span class="fig-nil">Closed</span>{% elif poi.qty_pending %}{{ poi.qty_pending|qty }}{% else %}<span class="fig-in">Complete</span>{% endif %}</td>
+              <td class="num {% if poi.qty_pending %}fig-due{% else %}fig-nil{% endif %}">{% if poi.qty_pending %}{{ poi.pending_value|amount }}{% else %}&mdash;{% endif %}</td>
+              <td class="ref-chips">
+                {% for ref in poi.invoice_refs %}
+                <a class="ref-chip" href="{% url 'inventory:purchase_invoice_detail' ref.pk %}" title="{{ ref.number }} &middot; {{ ref.qty|qty }} &middot; {{ ref.date|dmy }}{% if ref.supplier_ref %} &middot; {{ ref.supplier_ref }}{% endif %}">{{ ref.number }}<span class="ref-chip__qty">{{ ref.qty|qty }}</span></a>
+                {% empty %}<span class="fig-nil">&mdash;</span>{% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" class="lines-foot-label">Order total</td>
+              <td class="num">{{ order.ordered_qty|qty }}</td>
+              <td colspan="2"></td>
+              <td class="num strong">{{ order.total_amount|amount }}</td>
+              <td class="num fig-in">{{ order.invoiced_qty|qty }}</td>
+              <td class="num {% if order.pending_qty %}fig-due{% else %}fig-nil{% endif %}">{{ order.pending_qty|qty }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
         </table>
+        {% else %}
+        <p class="empty-note">No items on this order.</p>
+        {% endif %}
+        {% endwith %}
+    {% endcomponent %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=column_span label="No purchase orders." only %}
+    {% endfor %}
+  </tbody>
+  {% if orders %}
+    {% if foot_tail_span %}
+      {% include "components/table/table_footer.html" with lead=foot_lead_span value=page_total|amount tail=foot_tail_span only %}
+    {% else %}
+      {% include "components/table/table_footer.html" with lead=foot_lead_span only %}
+    {% endif %}
+  {% endif %}
+
+  {% slot below %}
+    {% component "ui/modal" show="approval" close="approval = null" title="Approve purchase order" title_id="approve-title" %}
+      <dl class="facts">
+        <div><dt>Order</dt><dd x-text="approval?.number"></dd></div>
+        <div><dt>Supplier</dt><dd x-text="approval?.supplier"></dd></div>
+        <div><dt>Ordered</dt><dd x-text="approval?.date"></dd></div>
+        <div x-show="approval?.expected"><dt>Expected</dt><dd x-text="approval?.expected"></dd></div>
+      </dl>
+      <div x-show="lines.length" x-cloak>
+        <p class="mini-head"><span>Items</span><span x-text="lines.length + (lines.length === 1 ? ' line' : ' lines')"></span></p>
+        <div class="mini-scroll">
+          <table>
+            <tbody>
+              <template x-for="(line, i) in lines" :key="i">
+                <tr>
+                  <td><span class="truncate-name" x-text="line.name" :title="line.name"></span><em x-text="line.qty + (line.uom ? ' ' + line.uom : '') + ' × ' + money(line.rate)"></em></td>
+                  <td class="num strong" x-text="money(line.amount)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-
-    <p class="approve-empty" x-show="!lines.length" x-cloak>
-      This order has no items on it yet. Add items before approving it.
-    </p>
-
-    <div class="approve-amount">
-      <span>Committing</span>
-      <strong>Rs <span x-text="approval?.amount"></span></strong>
-    </div>
-
-    <p class="approve-note">
-      Approval cannot be undone from this screen. The order can then be invoiced against.
-    </p>
-
-    <form method="post" :action="approval?.url" class="approve-actions">{% csrf_token %}
-      <button type="button" class="approve-cancel" @click="approval = null">Cancel</button>
-      <button type="submit" class="approve-go" x-ref="approveGo" :disabled="!lines.length">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 6L9 17l-5-5"></path>
-        </svg>
-        Approve order
-      </button>
-    </form>
-  </div>
-</div>
-
-</div>
+      <p class="alert alert--danger" x-show="!lines.length" x-cloak>No items on this order.</p>
+      <div class="figure-box"><span>Committing</span><strong>Rs <span x-text="approval?.amount"></span></strong></div>
+      {% slot foot %}
+        <form method="post" :action="approval?.url" class="flex gap-2">{% csrf_token %}
+          {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs='@click="approval = null"' only %}
+          {% include "components/ui/button.html" with label="Approve order" icon="check" variant="primary" attrs=':disabled="!lines.length"' only %}
+        </form>
+      {% endslot %}
+    {% endcomponent %}
+  {% endslot %}
+{% endcomponent %}
 
 <script>
-  // The board's own state: which order, if any, is waiting on an approval
-  // decision. One dialog serves every row, so the row hands over what it says.
-
-  // The board's own state: which order, if any, is waiting on an approval
-  // decision. One dialog serves every row, so the row hands over what it says.
   function poBoard() {
-    var LINES = JSON.parse(document.getElementById('approval-lines').textContent);
-    return {
+    const LINES = JSON.parse(document.getElementById('approval-lines').textContent);
+    return Object.assign(rowFold(), {
       approval: null,
-      // The lines belonging to whatever the dialog is currently asking about.
       get lines() { return (this.approval && LINES[this.approval.pk]) || []; },
-      askApproval(order) { this.approval = order; },
-      // Which rows are opened out to their lines. A list rather than one row,
-      // so two orders can be compared without one closing the other.
-      openRows: [],
-      isRowOpen(pk) { return this.openRows.includes(pk); },
-      toggleRow(pk) {
-        this.openRows = this.isRowOpen(pk) ? this.openRows.filter(function (id) { return id !== pk; }) : this.openRows.concat(pk);
-      },
+      askApproval(order) { this.approval = Object.assign({}, order); },
       money(value) {
         return (Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },
-    };
-  }
-
-  // Copy the table as it stands, tab separated, which is what a spreadsheet
-  // pastes into cells rather than into one. Built from the rendered table so
-  // it carries exactly the columns on screen.
-  function copyTable(event) {
-    var table = document.getElementById('order-table');
-    var lines = [];
-    table.querySelectorAll('tr').forEach(function (row) {
-      var cells = Array.from(row.querySelectorAll('th, td'))
-        .filter(function (cell) { return !cell.classList.contains('print-hide'); })
-        .map(function (cell) { return cell.innerText.replace(/\s+/g, ' ').trim(); });
-      if (cells.length) lines.push(cells.join('\t'));
     });
-    var text = lines.join('\n');
-
-    var done = function () {
-      var button = event.currentTarget;
-      var label = button.querySelector('strong');
-      var was = label.textContent;
-      label.textContent = 'Copied';
-      setTimeout(function () { label.textContent = was; }, 1500);
-    };
-
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(done);
-      return;
-    }
-    // Plain HTTP, where the clipboard API is not handed out: the old way still
-    // works and this screen is served over it on the local network.
-    var box = document.createElement('textarea');
-    box.value = text;
-    box.style.position = 'fixed';
-    box.style.opacity = '0';
-    document.body.appendChild(box);
-    box.select();
-    try { document.execCommand('copy'); done(); } finally { box.remove(); }
   }
-
 </script>
 {% endblock %}

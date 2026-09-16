@@ -1,0 +1,7 @@
+{% if href %}<a class="tile tile--{{ tone|default:'slate' }}{% if on %} is-on{% endif %}" href="{{ href }}"{% if on %} aria-current="true"{% endif %}>{% else %}<div class="tile tile--{{ tone|default:'slate' }}">{% endif %}
+  {% if icon %}<span class="tile-icon" aria-hidden="true">{% icon icon %}</span>{% endif %}
+  <div class="tile-body">
+    <div class="tile-head"><p class="tile-value"{% if value_id %} id="{{ value_id }}"{% endif %}{% if value_x %} x-text="{{ value_x }}"{% endif %}>{{ value }}</p><p class="tile-label">{{ label }}</p></div>
+    {% if slot %}{{ slot }}{% elif note %}<p class="tile-note{% if alert %} tile-note--alert{% endif %}">{{ note }}</p>{% endif %}
+  </div>
+{% if href %}</a>{% else %}</div>{% endif %}

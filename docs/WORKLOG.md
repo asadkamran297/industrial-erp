@@ -5,6 +5,32 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-09-16
+
+### Local
+
+- One design system across all screens:
+  - Tokens only in `static/src/app.css`; `static/src/components.css` rewritten as plain CSS on tokens.
+  - Icon set (`apps/core/icons.py`, `{% icon %}`), `{% component %}`/`{% slot %}`, `{% capture %}`, `|control` filter.
+  - New components: `forms/control`, `money`, `weight`, `section`, `form_errors`, `crud_form`, `line_items`, `totals_*`, `amount_words`, `switch`; `ui/icon_button`, `page_header`, `modal`, `tab_button`, `detail_*`, `frame_modal`; `table/board`, `tiles`, `tile`, `filter_bar`, `actions`, `table_footer`, `empty_row`, `expand_toggle`, `lines_row`.
+  - Removed `board_theme`, `search_filters`, `field_wrapper`, `hero_stat`, `print_base` (now `layouts/print.html`).
+  - `static/js/ui.js`: Enter-to-next, Ctrl+S, `/` search, modals, confirm dialog, table export.
+  - Board mixin now supplies status tiles, `filters_active`, `base_query`; salary, payroll and sales-order lists show page totals.
+- Migrated every screen: inventory, finance, products, production, godowns, hr, payroll, organizations, access control, configurations, dashboard, login.
+- Fixed on the way: PI list print linked to the PO print; PO detail status mapping; supplier credit-limit clear; SO form comma parsing; COA save button; PI detail unclosed section; organization list mojibake.
+- Guard rails: `docs/UI_SYSTEM.md`, `python manage.py ui_lint` (clean), `docs/UI_AUDIT.md` statuses.
+
+### Live
+
+- Nothing deployed.
+
+### Open
+
+- Browser pass over all migrated screens.
+- Not committed.
+
+---
+
 ## 2026-09-15
 
 ### Local

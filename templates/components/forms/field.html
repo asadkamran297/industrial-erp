@@ -1,0 +1,12 @@
+{% with auto_kind=field|field_kind %}{% with kind=kind|default:auto_kind %}{% if kind == "hidden" %}{{ field }}{% else %}
+<div class="field{% if kind == 'checkbox' %} field--check{% endif %}{% if kind == 'date' %} field--date{% endif %}{% if span %} span-{{ span }}{% endif %}{% if extra %} {{ extra }}{% endif %}">
+  {% if kind == "checkbox" %}
+  <label class="check-row" for="{{ field.id_for_label }}">{{ field|control:kind }}<span>{{ label|default:field.label }}</span></label>
+  {% else %}
+  {% if not hide_label %}<label class="field__label" for="{{ field.id_for_label }}">{{ label|default:field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}</label>{% endif %}
+  {% if kind == "radio" or kind == "multi" %}<div class="radio-row">{{ field|control:kind }}</div>{% else %}{{ field|control:kind }}{% endif %}
+  {% endif %}
+  {% if rule %}<p class="field__rule">{{ rule }}</p>{% endif %}
+  {% for error in field.errors %}<p class="field__error">{{ error }}</p>{% endfor %}
+</div>
+{% endif %}{% endwith %}{% endwith %}

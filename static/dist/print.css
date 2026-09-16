@@ -2,7 +2,7 @@
  * Print stylesheet
  * --------------------------------------------------------------------
  * Print pages are standalone documents that never load app.css, so this
- * file is linked directly by print_base.html and by the popup that
+ * file is linked directly by layouts/print.html and by the popup that
  * print.js opens. Plain CSS — it is not run through Tailwind.
  * ==================================================================== */
 /* Print pages are standalone documents and never load app.css, so Inter is
@@ -118,7 +118,6 @@
   /* ── Controls ────────────────────────────────────────────────── */
   .print-btn { margin-bottom: 14px; }
   @media print { .print-btn { display: none; } body { margin: 0; } }
-  {% block extra_style %}{% endblock %}
 
 /* ── Utilities ───────────────────────────────────────────────── */
 .u-center { text-align: center; }
@@ -130,3 +129,12 @@
 .status-stamp.duplicate { border-color: #555; color: #555; }
 .doc-subtitle { text-align: center; margin-bottom: 10px; }
 .footer-meta { text-align: right; white-space: nowrap; }
+
+/* ── Shared print chrome ──────────────────────────────────────── */
+.print-btn button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-weight: 600; padding: 6px 14px; margin-right: 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; cursor: pointer; }
+.print-btn button:first-child { border-color: #1e3a5f; background: #1e3a5f; color: #fff; }
+.icon { width: 14px; height: 14px; flex: none; }
+.print-watermark { position: fixed; inset: 0; z-index: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.print-watermark span { transform: rotate(-32deg); border: .12em solid rgba(220, 38, 38, .13); border-radius: .15em; padding: .1em .35em; font-size: 9vw; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: rgba(220, 38, 38, .13); }
+.doc-title, .meta, .items, .totals, .sign-row, .footer, .org-header { position: relative; z-index: 1; }
+@media print { .print-watermark span { font-size: 1.5cm; } }

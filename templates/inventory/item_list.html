@@ -1,115 +1,66 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<section class="space-y-4">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div class="flex flex-wrap items-center gap-3">
-      <h1 class="flex items-center gap-2.5 text-xl font-semibold text-slate-900 dark:text-slate-100">
-        {{ title }}
-        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-sm font-bold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">{% if is_paginated %}{{ paginator.count }}{% else %}{{ records|length }}{% endif %}</span>
-      </h1>
-      {% include "inventory/_item_tabs.html" %}
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <a href="{% url 'inventory:item_export' %}{% if page_query %}?{{ page_query }}{% endif %}" class="toolbar-btn h-10 px-4">&#128202; Export Excel</a>
-      <a href="{% url 'inventory:item_print' %}{% if page_query %}?{{ page_query }}{% endif %}" target="_blank" class="toolbar-btn h-10 px-4">&#128438; Print</a>
-      {% if can_add %}
-      <div class="relative" id="add-item-split">
-        <div class="flex">
-          <a href="{{ create_url }}" class="btn-primary inline-flex h-10 items-center gap-2 rounded-r-none px-5 text-sm font-semibold"><span class="text-base leading-none">&plus;</span> Add Item</a>
-          <button type="button" id="add-item-caret" class="btn-primary inline-flex h-10 items-center rounded-l-none border-l border-white/30 px-3 text-sm" aria-haspopup="true" aria-expanded="false" aria-label="More add options">&#9662;</button>
-        </div>
-        <div id="add-item-menu" class="absolute right-0 z-20 mt-1 hidden w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-          <a href="{% url 'inventory:item_import' %}" class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">&#128196; Import Items</a>
-        </div>
-      </div>
-      {% endif %}
-    </div>
-  </div>
+{% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
+{% capture as item_count %}{% if is_paginated %}{{ paginator.count }}{% else %}{{ records|length }}{% endif %}{% endcapture %}
+{% component "table/board" title=title add_url=add_url add_label="Item" table_id="item-table" search_placeholder="Search items" %}
+  {% slot actions %}
+    <span class="chip">{{ item_count }}</span>
+    {% url 'inventory:item_export' as export_base %}{% capture as export_href %}{{ export_base }}{% if page_query %}?{{ page_query }}{% endif %}{% endcapture %}
+    {% include "components/ui/button.html" with label="Excel" href=export_href icon="download" only %}
+    {% url 'inventory:item_print' as print_base %}{% capture as print_href %}{{ print_base }}{% if page_query %}?{{ page_query }}{% endif %}{% endcapture %}
+    {% include "components/ui/button.html" with label="Print" href=print_href icon="print" target="_blank" only %}
+    {% if can_add %}{% url 'inventory:item_import' as import_url %}{% include "components/ui/button.html" with label="Import" href=import_url icon="upload" only %}{% endif %}
+  {% endslot %}
+  {% slot above %}
+    {% include "inventory/_item_tabs.html" %}
+    {% if control_account %}{% include "components/ui/control_account_banner.html" %}{% endif %}
+  {% endslot %}
 
-  {% if control_account %}{% include "components/ui/control_account_banner.html" %}{% endif %}
-  {% include "components/table/search_filters.html" %}
-
-  <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">Name</th>
-            <th class="px-4 py-3">Code</th>
-            <th class="px-4 py-3">Category</th>
-            <th class="px-4 py-3">UOM</th>
-            <th class="px-4 py-3 text-right">Stock Qty</th>
-            <th class="px-4 py-3 text-right">Current Price</th>
-            <th class="px-4 py-3 text-right">Last Price</th>
-            <th class="px-4 py-3 text-right">Stock Value</th>
-            <th class="px-4 py-3">Status</th>
-            <th class="px-4 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for row in records %}
-          <tr>
-            <td class="px-4 py-3">{{ row.item_name }}</td>
-            <td class="px-4 py-3">{{ row.code }}</td>
-            <td class="px-4 py-3">{{ row.item_class.title|default:"—" }}</td>
-            <td class="px-4 py-3">{{ row.uom.title|default:"&mdash;" }}</td>
-            <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
-            <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>
-            <td class="px-4 py-3 text-right tabular-nums">{% if row.stock %}{{ row.stock.last_price|amount }}{% else %}&mdash;{% endif %}</td>
-            <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ row.stock_value|amount }}</td>
-            <td class="px-4 py-3">
-              <form method="post" action="{% url 'inventory:item_toggle_status' row.pk %}">{% csrf_token %}
-                <label class="relative inline-flex cursor-pointer items-center">
-                  <input type="checkbox" class="peer sr-only" onchange="this.form.submit()" {% if row.status == 'active' %}checked{% endif %}>
-                  <div class="h-6 w-11 rounded-full bg-slate-300 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-5 dark:bg-slate-600"></div>
-                </label>
-              </form>
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex justify-end gap-2">
-                {% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100" href="{% url 'inventory:item_update' row.pk %}" title="Edit"><span>&#9998;</span></a>{% endif %}
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No records found.</td></tr>
-          {% endfor %}
-        </tbody>
-        {% if records %}
-        <tfoot class="border-t border-slate-200 bg-slate-50 text-sm font-semibold dark:border-slate-700 dark:bg-slate-800">
-          <tr>
-            <td colspan="4" class="px-4 py-3 text-right">Page totals :</td>
-            <td class="px-4 py-3 text-right tabular-nums">{{ page_total_quantity|qty }}</td>
-            <td colspan="2"></td>
-            <td class="px-4 py-3 text-right tabular-nums">{{ page_total_value|amount }}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
-        {% endif %}
-      </table>
-    </div>
-  </div>
-  {% include "components/table/pagination.html" %}
-</section>
-
-<script>
-(function () {
-  const caret = document.getElementById('add-item-caret');
-  const menu = document.getElementById('add-item-menu');
-  if (!caret || !menu) return;
-
-  function close() {
-    menu.classList.add('hidden');
-    caret.setAttribute('aria-expanded', 'false');
-  }
-
-  caret.addEventListener('click', (e) => {
-    e.stopPropagation();  // the document handler below would close it again
-    const open = menu.classList.toggle('hidden');
-    caret.setAttribute('aria-expanded', open ? 'false' : 'true');
-  });
-  document.addEventListener('click', close);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-})();
-</script>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Code</th>
+      <th>Category</th>
+      <th>Unit</th>
+      <th class="num">Stock qty</th>
+      <th class="num">Current price</th>
+      <th class="num">Last price</th>
+      <th class="num">Stock value</th>
+      <th>Active</th>
+      <th class="actions-col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in records %}
+    <tr>
+      <td class="truncate strong" title="{{ row.item_name }}">{{ row.item_name }}</td>
+      <td>{{ row.code }}</td>
+      <td>{{ row.item_class.title|default:"—" }}</td>
+      <td>{{ row.uom.title|default:"—" }}</td>
+      <td class="num">{% if row.stock %}{{ row.stock.current_quantity|qty }}{% else %}&mdash;{% endif %}</td>
+      <td class="num">{% if row.stock %}{{ row.stock.current_price|amount }}{% else %}&mdash;{% endif %}</td>
+      <td class="num">{% if row.stock %}{{ row.stock.last_price|amount }}{% else %}&mdash;{% endif %}</td>
+      <td class="num strong">{{ row.stock_value|amount }}</td>
+      <td>{% url 'inventory:item_toggle_status' row.pk as toggle_url %}{% capture as is_on %}{% if row.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}</td>
+      <td class="actions-col">
+        {% capture as edit_url %}{% if can_edit %}{% url 'inventory:item_update' row.pk %}{% endif %}{% endcapture %}
+        {% include "components/table/actions.html" with edit_url=edit_url only %}
+      </td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=10 only %}
+    {% endfor %}
+  </tbody>
+  {% if records %}
+  <tfoot>
+    <tr class="board-foot">
+      <td colspan="4">Total on this page</td>
+      <td class="num">{{ page_total_quantity|qty }}</td>
+      <td colspan="2"></td>
+      <td class="num">{{ page_total_value|amount }}</td>
+      <td colspan="2"></td>
+    </tr>
+  </tfoot>
+  {% endif %}
+{% endcomponent %}
 {% endblock %}

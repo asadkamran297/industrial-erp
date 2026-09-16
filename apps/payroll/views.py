@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
@@ -25,6 +27,7 @@ class EmployeeSalaryListView(SearchFilterPaginationMixin, PagePermissionRequired
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Salary Items", "")]
+        context["page_total"] = sum((item.amount or Decimal("0") for item in context["salary_items"]), Decimal("0"))
         return context
 
 
@@ -82,6 +85,7 @@ class PayrollListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["breadcrumbs"] = [("Dashboard", reverse_lazy("portal:dashboard")), ("Payrolls", "")]
+        context["page_total"] = sum((payroll.net_salary or Decimal("0") for payroll in context["payrolls"]), Decimal("0"))
         return context
 
 

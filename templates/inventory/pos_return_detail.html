@@ -1,1 +1,39 @@
-{% extends "layouts/portal.html" %}{% block content %}<section class="space-y-6">{% include "components/ui/page_header.html" with title=sale_return.return_num subtitle=sale_return.sale_num %}{% if sale_return.posted != 'Y' %}<form method="post" action="{% url 'inventory:pos_return_item_create' sale_return.pk %}" class="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">{% csrf_token %}<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{% for field in item_form %}<div><label class="mb-1 block text-xs font-medium">{{ field.label }}</label>{{ field }}</div>{% endfor %}<div class="flex items-end"><button class="min-h-10 rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Add Return Item</button></div></div></form>{% endif %}<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><table class="w-full text-left text-sm"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3">Item</th><th class="px-4 py-3">Qty</th><th class="px-4 py-3">Net</th></tr></thead><tbody>{% for item in sale_return.items.all %}<tr><td class="px-4 py-3">{{ item.item_name }}</td><td class="px-4 py-3">{{ item.quantity|qty }}</td><td class="px-4 py-3">{{ item.net_total|amount }}</td></tr>{% empty %}<tr><td colspan="3" class="px-4 py-8 text-center text-slate-500">No return items found.</td></tr>{% endfor %}</tbody></table></div>{% if sale_return.posted != 'Y' %}<form method="post" action="{% url 'inventory:pos_return_post' sale_return.pk %}">{% csrf_token %}<button class="inline-flex min-h-10 items-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white">Post Sale Return</button></form>{% endif %}</section>{% endblock %}
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="form-stack">
+  {% url 'inventory:pos_return_list' as list_url %}
+  {% capture as status_label %}{% if sale_return.posted == 'Y' %}Posted{% else %}Draft{% endif %}{% endcapture %}
+  {% capture as status_tone %}{% if sale_return.posted == 'Y' %}posted{% else %}draft{% endif %}{% endcapture %}
+  {% component "ui/detail_header" kind="Sale Return" number=sale_return.return_num party=sale_return.sale_num status=status_label status_tone=status_tone back=True back_url=list_url %}
+    {% slot actions %}
+      {% url 'inventory:pos_return_receipt' sale_return.pk as print_url %}
+      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
+      {% if sale_return.posted != 'Y' %}
+      <form method="post" action="{% url 'inventory:pos_return_post' sale_return.pk %}">{% csrf_token %}
+        {% include "components/ui/button.html" with label="Post Sale Return" icon="post" variant="primary" only %}
+      </form>
+      {% endif %}
+    {% endslot %}
+  {% endcomponent %}
+
+  {% if sale_return.posted != 'Y' %}
+  {% component "forms/section" title="Add return item" %}
+    <form method="post" action="{% url 'inventory:pos_return_item_create' sale_return.pk %}" class="flex flex-wrap items-end gap-3">{% csrf_token %}
+      {% for field in item_form %}{% include "components/forms/field.html" with field=field extra="min-w-[10rem] flex-1" only %}{% endfor %}
+      {% include "components/ui/button.html" with label="Add Return Item" icon="plus" variant="primary" data="save" only %}
+    </form>
+  {% endcomponent %}
+  {% endif %}
+
+  {% component "table/board" title="" table_id="return-items" no_filters=True no_pagination=True %}
+    <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Net</th></tr></thead>
+    <tbody>
+      {% for item in sale_return.items.all %}
+      <tr><td class="strong">{{ item.item_name }}</td><td class="num">{{ item.quantity|qty }}</td><td class="num strong">{{ item.net_total|amount }}</td></tr>
+      {% empty %}
+      {% include "components/table/empty_row.html" with span=3 label="No return items." only %}
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
+</section>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% spaceless %}
+{% if href %}
+<a href="{{ href }}" class="icon-btn{% if tone %} icon-btn--{{ tone }}{% endif %}{% if bordered %} icon-btn--bordered{% endif %}{% if extra %} {{ extra }}{% endif %}" title="{{ title }}" aria-label="{{ title }}"{% if target %} target="{{ target }}"{% endif %}{% if id %} id="{{ id }}"{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{% icon icon %}</a>
+{% else %}
+<button type="{{ type|default:'button' }}" class="icon-btn{% if tone %} icon-btn--{{ tone }}{% endif %}{% if bordered %} icon-btn--bordered{% endif %}{% if extra %} {{ extra }}{% endif %}" title="{{ title }}" aria-label="{{ title }}"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if value %} value="{{ value }}"{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}{% if confirm %} data-confirm="{{ confirm }}"{% endif %}{% if post %} data-post="{{ post }}"{% endif %}{% if reason %} data-reason="{{ reason }}"{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{% icon icon %}</button>
+{% endif %}
+{% endspaceless %}

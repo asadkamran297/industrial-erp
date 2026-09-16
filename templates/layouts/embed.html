@@ -1,6 +1,8 @@
 {% extends "base.html" %}
+{% load static %}
 {% block body %}
-<main class="p-4 sm:p-5">
+<main class="shell-main">
   {% block content %}{% endblock %}
 </main>
+{% include "components/ui/confirmation_dialog.html" %}
 {% endblock %}

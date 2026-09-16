@@ -1,0 +1,4 @@
+<div class="settings-menu{% if extra %} {{ extra }}{% endif %}" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+  <button type="button" class="icon-btn icon-btn--bordered" title="{{ title }}" aria-label="{{ title }}" :aria-expanded="open.toString()" @click="open = !open">{% icon icon|default:"menu" %}</button>
+  <div class="settings-panel{% if panel_extra %} {{ panel_extra }}{% endif %}" x-show="open" x-cloak x-transition.opacity role="menu">{{ slot }}</div>
+</div>

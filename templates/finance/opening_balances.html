@@ -1,13 +1,11 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Opening Balances" subtitle="Enter each account's opening balance on its Debit or Credit side. Movement and closing update with every voucher." %}
-
-
-<div>
-  <div class="toolbar">
-    <input type="search" id="ob-search" class="toolbar-search" placeholder="Search..." autocomplete="off">
-    <button type="button" class="toolbar-btn" id="ob-expand">Expand all</button>
-    <button type="button" class="toolbar-btn" id="ob-collapse">Collapse all</button>
+<section class="form-stack">
+  {% include "components/ui/page_header.html" with title="Opening Balances" only %}
+  <div class="filter-bar card">
+    {% include "components/forms/control.html" with type="search" id="ob-search" placeholder="Search" size="sm" extra="max-w-xs" attrs='autocomplete="off" aria-label="Search accounts" data-board-search' only %}
+    {% include "components/ui/button.html" with type="button" id="ob-expand" label="Expand all" size="sm" icon="chevron-down" only %}
+    {% include "components/ui/button.html" with type="button" id="ob-collapse" label="Collapse all" size="sm" icon="chevron-up" only %}
   </div>
 
   <form method="post">{% csrf_token %}
@@ -25,14 +23,14 @@
         {% endfor %}
       </ul>
       <div class="tree-row tree-foot">
-        <span class="tree-title">Total (live, from the Debit/Credit inputs above)</span>
+        <span class="tree-title">Total (entered)</span>
         <span class="tree-rollup" id="ob-total-dr">0.00</span>
         <span class="tree-rollup" id="ob-total-cr">0.00</span>
         <span class="tree-num"></span>
         <span class="tree-num"></span>
       </div>
       <div class="tree-row tree-foot tree-foot--last">
-        <span class="tree-title">Total (saved, whole ledger)</span>
+        <span class="tree-title">Total (saved)</span>
         <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_dr|amount }}</span>
         <span class="tree-rollup {% if grand_totals.opening_dr != grand_totals.opening_cr %}is-negative{% endif %}">{{ grand_totals.opening_cr|amount }}</span>
         <span class="tree-num {% if grand_totals.movement_dr != grand_totals.movement_cr %}is-negative{% endif %}">{{ grand_totals.movement_dr|amount }} / {{ grand_totals.movement_cr|amount }}</span>
@@ -40,15 +38,12 @@
       </div>
     </div>
 
-    <div class="mt-4 flex items-center justify-between gap-3">
-      <p class="text-xs" id="ob-tally-hint">
-        Receivable/asset opening balances go under Debit; payable/liability balances go under Credit.
-        Debit and Credit totals must match before saving.
-      </p>
-      <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white">Save Opening Balances</button>
+    <div class="submit-bar submit-bar--floating">
+      <p class="submit-bar__meta" id="ob-tally-hint">Debit and Credit must match</p>
+      <div class="submit-bar__actions">{% include "components/ui/button.html" with label="Save Opening Balances" icon="save" variant="primary" data="save" only %}</div>
     </div>
   </form>
-</div>
+</section>
 
 <script>
 (function () {
@@ -85,8 +80,7 @@
     const balanced = Math.abs(dr - cr) < 0.005;
     totalDr.classList.toggle('is-negative', !balanced);
     totalCr.classList.toggle('is-negative', !balanced);
-    if (tallyHint) tallyHint.classList.toggle('text-rose-600', !balanced);
-    if (tallyHint) tallyHint.classList.toggle('text-slate-500', balanced);
+    if (tallyHint) tallyHint.classList.toggle('fig-bad', !balanced);
   }
   root.addEventListener('input', (e) => {
     if (e.target.classList.contains('tree-dr-input') || e.target.classList.contains('tree-cr-input')) recalcTotals();

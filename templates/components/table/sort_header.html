@@ -1,12 +1,5 @@
-<th class="px-4 py-3 {% if align == 'right' %}text-right{% elif align == 'center' %}text-center{% else %}text-left{% endif %} {{ width|default:'' }}">
-  <a class="group inline-flex items-center gap-1 transition hover:text-[var(--primary-color)] {% if align == 'right' %}flex-row-reverse{% endif %}"
-     href="?{{ sort_base_query }}sort={{ field }}&dir={% if sort_key == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-    <span>{{ label }}</span>
-    {% if sort_key == field %}
-      <span class="text-[var(--primary-color)]" aria-hidden="true">{% if sort_dir == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-      <span class="sr-only">sorted {{ sort_dir }}</span>
-    {% else %}
-      <span class="text-slate-300 opacity-0 transition group-hover:opacity-100 dark:text-slate-600" aria-hidden="true">&#9650;</span>
-    {% endif %}
+<th{% if align == 'right' %} class="num"{% elif align == 'center' %} class="text-center"{% endif %}>
+  <a class="sort-link{% if sort_key == field %} is-on{% endif %}" href="?{{ sort_base_query }}sort={{ field }}&amp;dir={% if sort_key == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"{% if sort_key == field %} aria-sort="{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}"{% endif %}>
+    <span>{{ label }}</span>{% if sort_key == field and sort_dir == 'desc' %}{% icon "sort-down" %}{% else %}{% icon "sort-up" %}{% endif %}
   </a>
 </th>

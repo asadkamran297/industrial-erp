@@ -1,47 +1,27 @@
-{% extends "layouts/portal.html" %}{% block content %}
-<section class="space-y-4">
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Item Ledger</h1>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Opening and closing stock movement by transaction.</p>
-    </div>
-    <a href="{% url 'inventory:ledger_print' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" target="_blank" class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90">&#128438; Print</a>
-  </div>
-  {% include "components/table/search_filters.html" %}
-  <div id="ledger-print-area" class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="overflow-x-auto">
-      <table id="ledger-table" class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">
-          <tr>
-            <th class="px-4 py-3">#</th>
-            <th class="px-4 py-3">Date</th>
-            <th class="px-4 py-3">Transaction</th>
-            <th class="px-4 py-3">Item</th>
-            <th class="px-4 py-3">Opening Qty</th>
-            <th class="px-4 py-3">Movement Qty</th>
-            <th class="px-4 py-3">Closing Qty</th>
-            <th class="px-4 py-3">Ref</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {% for row in ledgers %}
-            <tr>
-              <td class="px-4 py-3">{{ row.pk }}</td>
-              <td class="px-4 py-3">{{ row.transaction_date }}</td>
-              <td class="px-4 py-3">{{ row.get_transaction_type_display }}</td>
-              <td class="px-4 py-3">{{ row.item_name }}</td>
-              <td class="px-4 py-3">{{ row.old_quantity|qty }}</td>
-              <td class="px-4 py-3">{{ row.quantity|qty }}</td>
-              <td class="px-4 py-3 font-medium">{{ row.new_quantity|qty }}</td>
-              <td class="px-4 py-3">{% if row.ref_url %}<a href="{{ row.ref_url }}" target="_blank" class="inline-flex items-center gap-1 font-medium text-[var(--primary-color)] hover:underline" title="Open source document">{{ row.ref_no|default:"View" }} &#8599;</a>{% else %}{{ row.ref_no }}{% endif %}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No ledger entries found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% include "components/table/pagination.html" %}
-</section>
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% url 'inventory:ledger_print' as print_base %}
+{% capture as print_href %}{{ print_base }}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}{% endcapture %}
+{% component "table/board" title="Item Ledger" table_id="ledger-table" search_placeholder="Search" %}
+  {% slot actions %}{% include "components/ui/button.html" with label="Print" href=print_href icon="print" target="_blank" only %}{% endslot %}
+  <thead>
+    <tr><th>#</th><th>Date</th><th>Transaction</th><th>Item</th><th class="num">Opening qty</th><th class="num">Movement qty</th><th class="num">Closing qty</th><th>Ref</th></tr>
+  </thead>
+  <tbody>
+    {% for row in ledgers %}
+    <tr>
+      <td class="muted">{{ row.pk }}</td>
+      <td>{{ row.transaction_date|dmy }}</td>
+      <td>{{ row.get_transaction_type_display }}</td>
+      <td class="truncate strong" title="{{ row.item_name }}">{{ row.item_name }}</td>
+      <td class="num">{{ row.old_quantity|qty }}</td>
+      <td class="num">{{ row.quantity|qty }}</td>
+      <td class="num strong">{{ row.new_quantity|qty }}</td>
+      <td>{% if row.ref_url %}<a href="{{ row.ref_url }}" target="_blank" class="doc-num">{{ row.ref_no|default:"View" }}</a>{% else %}{{ row.ref_no }}{% endif %}</td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=8 label="No ledger entries." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
 {% endblock %}

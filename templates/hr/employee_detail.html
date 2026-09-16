@@ -1,355 +1,185 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
+<section class="form-stack" x-data="{ tab: window.location.hash ? window.location.hash.substring(1) : 'profile', setTab(v) { this.tab = v; window.history.replaceState(null, '', '#' + v); } }">
+  {% url 'hr:employee_list' as list_url %}
+  {% capture as role %}{{ employee.designation|default:"" }}{% if employee.designation and employee.department %} &middot; {% endif %}{{ employee.department|default:"" }}{% endcapture %}
+  {% capture as status_tone %}{% if employee.status == "active" %}posted{% else %}closed{% endif %}{% endcapture %}
+  {% component "ui/detail_header" kind="Employee" number=employee.full_name date=role status=employee.get_status_display status_tone=status_tone back=True back_url=list_url %}
+    {% slot meta %}
+      {% if employee.avatar %}<img src="{{ employee.avatar.url }}" alt="" class="h-9 w-9 rounded-full object-cover">{% endif %}
+      {% if employee.organization %}<span class="chip">{{ employee.organization }}</span>{% endif %}
+      {% if employee.branch %}<span class="chip">{{ employee.branch }}</span>{% endif %}
+      {% if employee.job_type %}<span class="chip">{{ employee.job_type }}</span>{% endif %}
+      {% if employee.doj %}<span class="chip">Joined {{ employee.doj|dmy }}</span>{% endif %}
+    {% endslot %}
+    {% slot actions %}{% url 'hr:employee_update' employee.pk as edit_url %}{% include "components/ui/button.html" with label="Edit Profile" href=edit_url icon="edit" variant="primary" only %}{% endslot %}
+  {% endcomponent %}
 
-<div class="space-y-6" x-data="{
-  tab: window.location.hash ? window.location.hash.substring(1) : 'profile',
-  setTab(v){ this.tab=v; window.history.replaceState(null,'','#'+v); }
-}">
-
-  <div class="hero">
-    <div class="hero-body">
-
-      <a href="{% url 'hr:employee_list' %}" class="hero-back">← Back to Directory</a>
-
-      <div class="hero-top">
-
-        <div class="hero-avatar">
-          {% if employee.avatar %}
-            <img src="{{ employee.avatar.url }}" alt="{{ employee.full_name }}">
-          {% else %}
-            <div class="hero-avatar-fallback">{{ employee.full_name|slice:":2"|upper }}</div>
-          {% endif %}
-          {% if employee.status == 'active' %}
-            <span class="hero-status-dot"></span>
-          {% endif %}
-        </div>
-
-        <div class="hero-identity">
-          <h1 class="hero-name">{{ employee.full_name }}</h1>
-          <p class="hero-subtitle">
-            {{ employee.designation|default:"" }}{% if employee.designation and employee.department %} &nbsp;·&nbsp; {% endif %}{{ employee.department|default:"" }}
-          </p>
-          <div class="hero-chips">
-            {% if employee.organization %}<span class="hero-chip">🏢 {{ employee.organization }}</span>{% endif %}
-            {% if employee.branch %}<span class="hero-chip">📍 {{ employee.branch }}</span>{% endif %}
-            {% if employee.job_type %}<span class="hero-chip">💼 {{ employee.job_type }}</span>{% endif %}
-            {% if employee.doj %}<span class="hero-chip">📅 Joined {{ employee.doj|dmy }}</span>{% endif %}
-          </div>
-        </div>
-
-        <div class="hero-aside">
-          <a href="{% url 'hr:employee_update' employee.pk %}" class="hero-action">✏️ Edit Profile</a>
-        </div>
-      </div>
-
-      <div class="hero-stats">
-        {% include "components/ui/hero_stat.html" with label="Base Salary" value=employee.salary|amount hint="PKR / month" %}
-        {% include "components/ui/hero_stat.html" with label="Payroll Records" value=payrolls.count hint="Processed months" %}
-        {% include "components/ui/hero_stat.html" with label="Experience" value=employee.experiences.count hint="Previous jobs" %}
-        {% include "components/ui/hero_stat.html" with label="Qualifications" value=employee.qualifications.count hint="Degrees / certs" %}
-      </div>
-
-    </div>
+  <div class="tiles">
+    {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
+    {% include "components/table/tile.html" with tone="sky" icon="receipt" value=payrolls.count label="Payroll Records" only %}
+    {% include "components/table/tile.html" with tone="violet" icon="archive" value=employee.experiences.count label="Experience" only %}
+    {% include "components/table/tile.html" with tone="amber" icon="file" value=employee.qualifications.count label="Qualifications" only %}
   </div>
 
-  <div class="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-900">
-    <button @click="setTab('profile')"
-      :class="tab==='profile' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Profile</button>
-    <button @click="setTab('employment')"
-      :class="tab==='employment' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Employment</button>
-    <button @click="setTab('experience')"
-      :class="tab==='experience' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Experience</button>
-    <button @click="setTab('qualification')"
-      :class="tab==='qualification' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Qualifications</button>
-    <button @click="setTab('payroll')"
-      :class="tab==='payroll' ? 'bg-white text-[var(--primary-color)] shadow dark:bg-slate-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
-      class="flex-1 whitespace-nowrap rounded-lg px-5 py-2 text-sm font-semibold transition-all">Payroll</button>
-  </div>
+  {% component "ui/tabs" %}
+    {% include "components/ui/tab_button.html" with key="profile" label="Profile" setter="setTab" only %}
+    {% include "components/ui/tab_button.html" with key="employment" label="Employment" setter="setTab" only %}
+    {% include "components/ui/tab_button.html" with key="experience" label="Experience" setter="setTab" only %}
+    {% include "components/ui/tab_button.html" with key="qualification" label="Qualifications" setter="setTab" only %}
+    {% include "components/ui/tab_button.html" with key="payroll" label="Payroll" setter="setTab" only %}
+  {% endcomponent %}
 
-  <section x-show="tab==='profile'" x-cloak>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% include "hr/_info_card.html" with icon="🪪" label="CNIC" value=employee.cnic %}
-      {% include "hr/_info_card.html" with icon="📧" label="Email" value=employee.email|default:"—" %}
-      {% include "hr/_info_card.html" with icon="📱" label="Contact" value=employee.contact|default:"—" %}
-      {% include "hr/_info_card.html" with icon="👤" label="Father / Husband" value=employee.father_husband_name|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🎂" label="Date of Birth" value=employee.dob|dmy|default:"—" %}
-      {% include "hr/_info_card.html" with icon="💍" label="Marital Status" value=employee.marital_status|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🩸" label="Blood Group" value=employee.blood_group|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🕌" label="Religion" value=employee.religion|default:"—" %}
-      {% include "hr/_info_card.html" with icon="⚧" label="Gender" value=employee.gender|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🆘" label="Emergency Contact" value=employee.emergency_contact|default:"—" %}
-      {% include "hr/_info_card.html" with icon="👨‍👩‍👧" label="Next of Kin" value=employee.nok|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🪪" label="NOK CNIC" value=employee.nok_cnic|default:"—" %}
-    </div>
-    {% if employee.address %}
-    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      <p class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400">📍 Address</p>
-      <p class="text-sm text-slate-700 dark:text-slate-200">{{ employee.address }}</p>
-    </div>
-    {% endif %}
+  <section x-show="tab === 'profile'" x-cloak>
+    {% component "ui/card" %}
+      {% component "ui/detail_grid" cols=3 %}
+        {% include "components/ui/detail_item.html" with label="CNIC" value=employee.cnic only %}
+        {% include "components/ui/detail_item.html" with label="Email" value=employee.email only %}
+        {% include "components/ui/detail_item.html" with label="Contact" value=employee.contact only %}
+        {% include "components/ui/detail_item.html" with label="Father / Husband" value=employee.father_husband_name only %}
+        {% include "components/ui/detail_item.html" with label="Date of Birth" value=employee.dob|dmy only %}
+        {% include "components/ui/detail_item.html" with label="Marital Status" value=employee.marital_status only %}
+        {% include "components/ui/detail_item.html" with label="Blood Group" value=employee.blood_group only %}
+        {% include "components/ui/detail_item.html" with label="Religion" value=employee.religion only %}
+        {% include "components/ui/detail_item.html" with label="Gender" value=employee.gender only %}
+        {% include "components/ui/detail_item.html" with label="Emergency Contact" value=employee.emergency_contact only %}
+        {% include "components/ui/detail_item.html" with label="Next of Kin" value=employee.nok only %}
+        {% include "components/ui/detail_item.html" with label="NOK CNIC" value=employee.nok_cnic only %}
+        {% if employee.address %}{% include "components/ui/detail_item.html" with label="Address" value=employee.address wide=True only %}{% endif %}
+      {% endcomponent %}
+    {% endcomponent %}
   </section>
 
-  <section x-show="tab==='employment'" x-cloak>
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {% include "hr/_info_card.html" with icon="🏢" label="Organization" value=employee.organization|default:"—" %}
-      {% include "hr/_info_card.html" with icon="📍" label="Branch" value=employee.branch|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🗂️" label="Department" value=employee.department|default:"—" %}
-      {% include "hr/_info_card.html" with icon="💼" label="Designation" value=employee.designation|default:"—" %}
-      {% include "hr/_info_card.html" with icon="📋" label="Job Type" value=employee.job_type|default:"—" %}
-      {% include "hr/_info_card.html" with icon="📅" label="Date of Joining" value=employee.doj|dmy|default:"—" %}
-      {% include "hr/_info_card.html" with icon="💰" label="Base Salary (PKR)" value=employee.salary|amount %}
-      {% include "hr/_info_card.html" with icon="🏦" label="Bank" value=employee.bank|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🔢" label="Account Number" value=employee.account_number|default:"—" %}
-      {% include "hr/_info_card.html" with icon="🤖" label="Attendance Code" value=employee.att_machine_code|default:"—" %}
-    </div>
+  <section x-show="tab === 'employment'" x-cloak>
+    {% component "ui/card" %}
+      {% component "ui/detail_grid" cols=3 %}
+        {% include "components/ui/detail_item.html" with label="Organization" value=employee.organization only %}
+        {% include "components/ui/detail_item.html" with label="Branch" value=employee.branch only %}
+        {% include "components/ui/detail_item.html" with label="Department" value=employee.department only %}
+        {% include "components/ui/detail_item.html" with label="Designation" value=employee.designation only %}
+        {% include "components/ui/detail_item.html" with label="Job Type" value=employee.job_type only %}
+        {% include "components/ui/detail_item.html" with label="Date of Joining" value=employee.doj|dmy only %}
+        {% include "components/ui/detail_item.html" with label="Base Salary (PKR)" value=employee.salary|amount num=True only %}
+        {% include "components/ui/detail_item.html" with label="Bank" value=employee.bank only %}
+        {% include "components/ui/detail_item.html" with label="Account Number" value=employee.account_number only %}
+        {% include "components/ui/detail_item.html" with label="Attendance Code" value=employee.att_machine_code only %}
+      {% endcomponent %}
+    {% endcomponent %}
   </section>
 
-  <section x-show="tab==='experience'" x-cloak class="space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      <h3 class="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Add Experience</h3>
-      <form method="post" action="{% url 'hr:employee_experience_create' employee.pk %}">
-        {% csrf_token %}
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {% for field in experience_form %}
-          <div {% if field.name == "leave_reason" %}class="lg:col-span-2"{% endif %}>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">{{ field.label }}</label>
-            {{ field }}
-          </div>
-          {% endfor %}
-          <div class="flex items-end">
-            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Add</button>
-          </div>
-        </div>
+  <section x-show="tab === 'experience'" x-cloak class="form-stack">
+    {% component "forms/section" title="Add Experience" %}
+      <form method="post" action="{% url 'hr:employee_experience_create' employee.pk %}" class="form-grid form-grid--cols-6 items-end">{% csrf_token %}
+        {% for field in experience_form %}{% if field.name == "leave_reason" %}{% include "components/forms/field.html" with field=field span=2 only %}{% else %}{% include "components/forms/field.html" with field=field only %}{% endif %}{% endfor %}
+        {% include "components/ui/button.html" with label="Add" icon="plus" variant="primary" only %}
       </form>
-    </div>
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">Work History</h3>
-      </div>
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
-          <tr>
-            <th class="px-5 py-3">Organization</th>
-            <th class="px-5 py-3">From</th>
-            <th class="px-5 py-3">To</th>
-            <th class="px-5 py-3">Salary</th>
-            <th class="px-5 py-3 text-right">Action</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          {% for exp in employee.experiences.all %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ exp.organization }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ exp.from_date|date:"M Y"|default:"—" }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ exp.to_date|date:"M Y"|default:"Present" }}</td>
-            <td class="px-5 py-3 text-slate-600">{{ exp.salary|amount }}</td>
-            <td class="px-5 py-3">
-              <form class="flex justify-end" method="post"
-                    action="{% url 'hr:employee_experience_delete' employee.pk exp.pk %}"
-                    onsubmit="return confirm('Remove?');">
-                {% csrf_token %}
-                <button class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
-              </form>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="5" class="px-5 py-10 text-center text-slate-400">No experience records.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% endcomponent %}
+    {% component "table/board" title="" table_id="experience-table" no_filters=True no_pagination=True %}
+      {% slot bar %}<div class="section__head"><h2 class="section__title">Work History</h2></div>{% endslot %}
+      <thead><tr><th>Organization</th><th>From</th><th>To</th><th class="num">Salary</th><th class="actions-col">Actions</th></tr></thead>
+      <tbody>
+        {% for exp in employee.experiences.all %}
+        <tr>
+          <td class="strong">{{ exp.organization }}</td>
+          <td>{{ exp.from_date|date:"M Y"|default:"—" }}</td>
+          <td>{{ exp.to_date|date:"M Y"|default:"Present" }}</td>
+          <td class="num">{{ exp.salary|amount }}</td>
+          <td class="actions-col">{% url 'hr:employee_experience_delete' employee.pk exp.pk as delete_url %}{% include "components/table/actions.html" with delete_url=delete_url delete_confirm="Remove this experience?" only %}</td>
+        </tr>
+        {% empty %}
+        {% include "components/table/empty_row.html" with span=5 label="No experience records." only %}
+        {% endfor %}
+      </tbody>
+    {% endcomponent %}
   </section>
 
-  <section x-show="tab==='qualification'" x-cloak class="space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      <h3 class="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Add Qualification</h3>
-      <form method="post" action="{% url 'hr:employee_qualification_create' employee.pk %}">
-        {% csrf_token %}
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {% for field in qualification_form %}
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">{{ field.label }}</label>
-            {{ field }}
-          </div>
-          {% endfor %}
-          <div class="flex items-end">
-            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90">Add</button>
-          </div>
-        </div>
+  <section x-show="tab === 'qualification'" x-cloak class="form-stack">
+    {% component "forms/section" title="Add Qualification" %}
+      <form method="post" action="{% url 'hr:employee_qualification_create' employee.pk %}" class="form-grid form-grid--cols-6 items-end">{% csrf_token %}
+        {% for field in qualification_form %}{% include "components/forms/field.html" with field=field only %}{% endfor %}
+        {% include "components/ui/button.html" with label="Add" icon="plus" variant="primary" only %}
       </form>
-    </div>
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">Academic Record</h3>
-      </div>
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
-          <tr>
-            <th class="px-5 py-3">Qualification</th>
-            <th class="px-5 py-3">Type</th>
-            <th class="px-5 py-3">Institute</th>
-            <th class="px-5 py-3">Year</th>
-            <th class="px-5 py-3">Status</th>
-            <th class="px-5 py-3 text-right">Action</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          {% for q in employee.qualifications.all %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ q.qualification }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ q.get_qualification_type_display }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ q.institute|default:"—" }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ q.to_date|date:"Y"|default:"—" }}</td>
-            <td class="px-5 py-3">
-              <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                {{ q.get_status_display }}
-              </span>
-            </td>
-            <td class="px-5 py-3">
-              <form class="flex justify-end" method="post"
-                    action="{% url 'hr:employee_qualification_delete' employee.pk q.pk %}"
-                    onsubmit="return confirm('Remove?');">
-                {% csrf_token %}
-                <button class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
-              </form>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">No qualifications found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% endcomponent %}
+    {% component "table/board" title="" table_id="qualification-table" no_filters=True no_pagination=True %}
+      {% slot bar %}<div class="section__head"><h2 class="section__title">Academic Record</h2></div>{% endslot %}
+      <thead><tr><th>Qualification</th><th>Type</th><th>Institute</th><th>Year</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+      <tbody>
+        {% for q in employee.qualifications.all %}
+        <tr>
+          <td class="strong">{{ q.qualification }}</td>
+          <td>{{ q.get_qualification_type_display }}</td>
+          <td>{{ q.institute|default:"—" }}</td>
+          <td>{{ q.to_date|date:"Y"|default:"—" }}</td>
+          <td>{% include "components/table/status_badge.html" with status=q.status label=q.get_status_display only %}</td>
+          <td class="actions-col">{% url 'hr:employee_qualification_delete' employee.pk q.pk as delete_url %}{% include "components/table/actions.html" with delete_url=delete_url delete_confirm="Remove this qualification?" only %}</td>
+        </tr>
+        {% empty %}
+        {% include "components/table/empty_row.html" with span=6 label="No qualifications." only %}
+        {% endfor %}
+      </tbody>
+    {% endcomponent %}
   </section>
 
-  <section x-show="tab==='payroll'" x-cloak class="space-y-5">
-    <div class="grid gap-4 sm:grid-cols-3">
-      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Base Salary</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ employee.salary|amount }}</p>
-        <p class="mt-1 text-xs text-slate-400">PKR / month</p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Salary Elements</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ salary_items.count }}</p>
-        <p class="mt-1 text-xs text-slate-400">Allowances &amp; deductions</p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Payroll Records</p>
-        <p class="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">{{ payrolls.count }}</p>
-        <p class="mt-1 text-xs text-slate-400">Total processed</p>
-      </div>
+  <section x-show="tab === 'payroll'" x-cloak class="form-stack">
+    <div class="tiles">
+      {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
+      {% include "components/table/tile.html" with tone="violet" icon="layers" value=salary_items.count label="Salary Elements" only %}
+      {% include "components/table/tile.html" with tone="sky" icon="receipt" value=payrolls.count label="Payroll Records" only %}
     </div>
 
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        <h3 class="font-bold text-slate-800 dark:text-slate-100">Salary Elements</h3>
-        <p class="mt-0.5 text-xs text-slate-400">Base salary comes from the profile. Add each allowance/deduction once.</p>
-      </div>
-      <form method="post" action="{% url 'hr:employee_salary_item_create' employee.pk %}"
-            class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        {% csrf_token %}
-        <div class="grid gap-3 sm:grid-cols-[1fr_12rem_auto]">
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">Element</label>
-            {{ salary_item_form.allowance_deduction }}
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">Amount</label>
-            {{ salary_item_form.amount }}
-          </div>
-          <div class="flex items-end">
-            <button class="w-full min-h-10 rounded-xl bg-[var(--primary-color)] px-4 text-sm font-semibold text-white hover:opacity-90" type="submit">Add</button>
-          </div>
-        </div>
-      </form>
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
-          <tr>
-            <th class="px-5 py-3">Element</th>
-            <th class="px-5 py-3">Type</th>
-            <th class="px-5 py-3">Amount</th>
-            <th class="px-5 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          {% for item in salary_items %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-            <td class="px-5 py-3 font-medium text-slate-800 dark:text-slate-100">{{ item.allowance_deduction }}</td>
-            <td class="px-5 py-3">
-              {% if item.get_allowance_deduction_type_display == 'Allowance' %}
-                <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Allowance</span>
-              {% else %}
-                <span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">Deduction</span>
-              {% endif %}
-            </td>
-            <td class="px-5 py-3">
-              <form id="sui-{{ item.pk }}" method="post" action="{% url 'hr:employee_salary_item_update' employee.pk item.pk %}">
-                {% csrf_token %}
-                <input type="hidden" name="allowance_deduction" value="{{ item.allowance_deduction_id }}">
-                <input class="form-input max-w-36" type="number" min="0" step="0.01" name="amount" value="{{ item.amount }}">
-              </form>
-            </td>
-            <td class="px-5 py-3">
-              <div class="flex justify-end gap-1">
-                <button form="sui-{{ item.pk }}" type="submit"
-                        class="grid h-8 w-8 place-items-center rounded-lg text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700"
-                        title="Save">✓</button>
-                <form method="post" action="{% url 'hr:employee_salary_item_delete' employee.pk item.pk %}"
-                      onsubmit="return confirm('Remove element?');">
-                  {% csrf_token %}
-                  <button type="submit" class="grid h-8 w-8 place-items-center rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">🗑️</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" class="px-5 py-10 text-center text-slate-400">No salary elements yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% component "table/board" title="" table_id="salary-element-table" no_filters=True no_pagination=True %}
+      {% slot bar %}
+        <div class="section__head"><h2 class="section__title">Salary Elements</h2></div>
+        <form method="post" action="{% url 'hr:employee_salary_item_create' employee.pk %}" class="flex flex-wrap items-end gap-3 px-3 py-2">{% csrf_token %}
+          {% include "components/forms/field.html" with field=salary_item_form.allowance_deduction label="Element" extra="min-w-[14rem] flex-1" only %}
+          {% include "components/forms/field.html" with field=salary_item_form.amount label="Amount" kind="money" extra="w-48" only %}
+          {% include "components/ui/button.html" with label="Add" icon="plus" variant="primary" only %}
+        </form>
+      {% endslot %}
+      <thead><tr><th>Element</th><th>Type</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+      <tbody>
+        {% for item in salary_items %}
+        <tr>
+          <td class="strong">{{ item.allowance_deduction }}</td>
+          <td>{% if item.get_allowance_deduction_type_display == 'Allowance' %}<span class="pill pill--posted">Allowance</span>{% else %}<span class="pill pill--reversed">Deduction</span>{% endif %}</td>
+          <td class="num">
+            <form id="sui-{{ item.pk }}" method="post" action="{% url 'hr:employee_salary_item_update' employee.pk item.pk %}" class="inline-flex">{% csrf_token %}
+              <input type="hidden" name="allowance_deduction" value="{{ item.allowance_deduction_id }}">
+              {% include "components/forms/control.html" with name="amount" value=item.amount kind="money" size="sm" extra="max-w-36" attrs='aria-label="Amount"' only %}
+            </form>
+          </td>
+          <td class="actions-col">
+            {% url 'hr:employee_salary_item_delete' employee.pk item.pk as delete_url %}
+            {% component "table/actions" delete_url=delete_url delete_confirm="Remove this element?" only %}
+              {% capture as save_form %}sui-{{ item.pk }}{% endcapture %}
+              {% include "components/ui/icon_button.html" with type="submit" icon="check" title="Save" tone="success" form_id=save_form only %}
+            {% endcomponent %}
+          </td>
+        </tr>
+        {% empty %}
+        {% include "components/table/empty_row.html" with span=4 label="No salary elements." only %}
+        {% endfor %}
+      </tbody>
+    {% endcomponent %}
 
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-        <h3 class="font-bold text-slate-800 dark:text-slate-100">Payroll History</h3>
-      </div>
-      <table class="w-full text-left text-sm">
-        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-800">
-          <tr>
-            <th class="px-5 py-3">Period</th>
-            <th class="px-5 py-3">Base</th>
-            <th class="px-5 py-3">Allowances</th>
-            <th class="px-5 py-3">Deductions</th>
-            <th class="px-5 py-3">Net</th>
-            <th class="px-5 py-3">Status</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
-          {% for p in payrolls %}
-          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-            <td class="px-5 py-3 font-semibold text-slate-800 dark:text-slate-100">{{ p.month }}/{{ p.year }}</td>
-            <td class="px-5 py-3 text-slate-500">{{ p.base_salary|amount }}</td>
-            <td class="px-5 py-3 font-medium text-emerald-600">+{{ p.total_allowances|amount }}</td>
-            <td class="px-5 py-3 font-medium text-rose-500">-{{ p.total_deductions|amount }}</td>
-            <td class="px-5 py-3 text-base font-extrabold text-slate-900 dark:text-white">{{ p.net_salary|amount }}</td>
-            <td class="px-5 py-3">
-              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                {{ p.get_status_display }}
-              </span>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="px-5 py-10 text-center text-slate-400">No payroll history.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% component "table/board" title="" table_id="payroll-history-table" no_filters=True no_pagination=True %}
+      {% slot bar %}<div class="section__head"><h2 class="section__title">Payroll History</h2></div>{% endslot %}
+      <thead><tr><th>Period</th><th class="num">Base</th><th class="num">Allowances</th><th class="num">Deductions</th><th class="num">Net</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for p in payrolls %}
+        <tr>
+          <td class="strong">{{ p.month }}/{{ p.year }}</td>
+          <td class="num">{{ p.base_salary|amount }}</td>
+          <td class="num fig-good">+{{ p.total_allowances|amount }}</td>
+          <td class="num fig-bad">&minus;{{ p.total_deductions|amount }}</td>
+          <td class="num strong">{{ p.net_salary|amount }}</td>
+          <td>{% include "components/table/status_badge.html" with status=p.status label=p.get_status_display only %}</td>
+        </tr>
+        {% empty %}
+        {% include "components/table/empty_row.html" with span=6 label="No payroll history." only %}
+        {% endfor %}
+      </tbody>
+    {% endcomponent %}
   </section>
-
-</div>
+</section>
 {% endblock %}

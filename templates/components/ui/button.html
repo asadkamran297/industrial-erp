@@ -1,19 +1,7 @@
 {% spaceless %}
 {% if href %}
-<a href="{{ href }}"
-   class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"
-   {% if title %}title="{{ title }}" aria-label="{{ title }}"{% endif %}
-   {% if target %}target="{{ target }}"{% endif %}>
-  {% if icon %}<span aria-hidden="true">{{ icon }}</span>{% endif %}{% if label %}<span>{{ label }}</span>{% endif %}
-</a>
+<a href="{{ href }}" class="btn btn--{{ variant|default:'secondary' }}{% if size %} btn--{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"{% if title %} title="{{ title }}" aria-label="{{ title }}"{% endif %}{% if target %} target="{{ target }}"{% endif %}{% if id %} id="{{ id }}"{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{% if icon %}{% icon icon %}{% endif %}{% if label and not only_icon %}<span>{{ label }}</span>{% endif %}</a>
 {% else %}
-<button type="{{ type|default:'submit' }}"
-        class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"
-        {% if name %}name="{{ name }}"{% endif %}{% if value %} value="{{ value }}"{% endif %}
-        {% if title %}title="{{ title }}" aria-label="{{ title }}"{% endif %}
-        {% if onclick %}onclick="{{ onclick }}"{% endif %}
-        {% if disabled %}disabled{% endif %}>
-  {% if icon %}<span aria-hidden="true">{{ icon }}</span>{% endif %}{% if label %}<span>{{ label }}</span>{% endif %}
-</button>
+<button type="{{ type|default:'submit' }}" class="btn btn--{{ variant|default:'secondary' }}{% if size %} btn--{{ size }}{% endif %}{% if only_icon %} btn--icon{% endif %}{% if extra %} {{ extra }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}{% if name %} name="{{ name }}"{% endif %}{% if value %} value="{{ value }}"{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %}{% if data %} data-{{ data }}{% endif %}{% if confirm %} data-confirm="{{ confirm }}"{% endif %}{% if post %} data-post="{{ post }}"{% endif %}{% if title %} title="{{ title }}" aria-label="{{ title }}"{% endif %}{% if disabled %} disabled{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{% if icon %}{% icon icon %}{% endif %}{% if slot %}{{ slot }}{% elif label and not only_icon %}<span>{{ label }}</span>{% endif %}</button>
 {% endif %}
 {% endspaceless %}

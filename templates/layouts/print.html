@@ -2,29 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Print{% endblock %}</title>
-<link rel="stylesheet" href="{% static 'dist/print.css' %}">
+<link rel="stylesheet" href="{% block stylesheet %}{% static 'dist/print.css' %}{% endblock %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
+  {% block toolbar %}
   <div class="print-btn">
-    <button onclick="window.print()">&#128438; Print</button>
-    <button onclick="goBack()">&#10005; Close</button>
+    <button type="button" onclick="window.print()">{% icon "print" %} Print</button>
+    <button type="button" onclick="printGoBack()">{% icon "close" %} {% block back_label %}Close{% endblock %}</button>
   </div>
+  {% endblock %}
   <script>
-    var backUrl = "{{ print_back_url|default:'' }}";
-    function goBack() { if (backUrl) { window.location.href = backUrl; } else { window.history.back(); } }
+    var printBackUrl = "{% block back_url %}{{ print_back_url|default:'' }}{% endblock %}";
+    function printGoBack() { if (printBackUrl) { window.location.href = printBackUrl; } else { window.history.back(); } }
     window.addEventListener("load", function () { window.print(); });
-    window.addEventListener("afterprint", goBack);
+    window.addEventListener("afterprint", printGoBack);
   </script>
 
   {% block print_header %}
   <div class="org-header">
     <div class="org-logo">
-      {% if org.logo %}
-        <img src="{{ org.logo }}" alt="{{ org.title }}">
-      {% else %}
-        <div class="org-initial">{{ org.title|default:"O"|slice:":1" }}</div>
-      {% endif %}
+      {% if org.logo %}<img src="{{ org.logo }}" alt="{{ org.title }}">{% else %}<div class="org-initial">{{ org.title|default:"O"|slice:":1" }}</div>{% endif %}
     </div>
     <div class="org-center">
       <div class="org-name">{{ org.title|default:"Organization" }}</div>
@@ -41,6 +40,8 @@
     </div>
   </div>
   {% endblock %}
+
+  {% block watermark %}{% if watermark %}<div class="print-watermark" aria-hidden="true"><span>{{ watermark }}</span></div>{% endif %}{% endblock %}
 
   {% block print_content %}{% endblock %}
 

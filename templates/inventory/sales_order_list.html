@@ -1,105 +1,61 @@
 {% extends "layouts/portal.html" %}
-{% load core_extras %}
 {% block content %}
-{% include "components/table/board_theme.html" %}
-
-<div x-data="{ openRows: [], isRowOpen(pk) { return this.openRows.includes(pk); }, toggleRow(pk) { this.openRows = this.isRowOpen(pk) ? this.openRows.filter((id) => id !== pk) : this.openRows.concat(pk); } }">
-
-<div class="flex flex-wrap items-start justify-between gap-4">
-  <div class="max-w-xl">
-    <h1 class="title-accent text-2xl font-bold">Sales Orders</h1>
-  </div>
-
-  <div class="flex flex-wrap items-center gap-2">
-    {% if can_add %}
-    {% include "components/ui/button.html" with label="Sales Order" href=create_url variant="primary" icon="+" only %}
-    {% endif %}
-  </div>
-</div>
-
-<section class="mt-5 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  {% include "components/table/filter_bar.html" with table_id="so-table" date_filters_enabled=True search_placeholder="Search..." %}
-
-  <div class="overflow-x-auto" style="border-bottom-left-radius: .75rem; border-bottom-right-radius: .75rem;">
-    <table id="so-table" class="po-table">
-      <thead>
-        <tr>
-          <th class="print-hide po-expand-head"></th>
-          {% include "components/table/sort_header.html" with label="Order #" field="order_num" %}
-          {% include "components/table/sort_header.html" with label="Date" field="order_date" %}
-          {% include "components/table/sort_header.html" with label="Customer" field="customer" %}
-          <th>Status</th>
-          <th class="po-right">Items</th>
-          <th class="po-right">Ordered</th>
-          <th class="po-right">Still due</th>
-          <th class="po-right">Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for order in orders %}
-        <tr>
-          <td class="print-hide po-expand-cell">
-            <button type="button" class="po-expand" @click="toggleRow({{ order.pk }})"
-                    :aria-expanded="isRowOpen({{ order.pk }}) ? 'true' : 'false'"
-                    aria-label="Show the items on this order" title="Show the items on this order">
-              <span x-text="isRowOpen({{ order.pk }}) ? '−' : '+'">+</span>
-            </button>
-          </td>
-          <td>
-            <span class="po-num">{{ order.order_num }}</span>
-            {% if order.customer_ref %}<span class="po-sub">{{ order.customer_ref }}</span>{% endif %}
-          </td>
-          <td class="whitespace-nowrap">{{ order.order_date|dmy }}</td>
-          <td><span class="font-semibold">{{ order.customer.customer_name }}</span></td>
-          <td>
-            {% if order.status == "fully_invoiced" %}<span class="po-pill po-pill--done">Fully invoiced</span>
-            {% elif order.status == "partially_invoiced" %}<span class="po-pill po-pill--part">Partly invoiced</span>
-            {% elif order.status == "draft" %}<span class="po-pill">Draft</span>
-            {% elif order.status == "cancelled" or order.status == "closed" %}<span class="po-pill po-pill--bill">{{ order.get_status_display }}</span>
-            {% else %}<span class="po-pill">{{ order.get_status_display }}</span>{% endif %}
-          </td>
-          <td class="po-right text-slate-500">{{ order.line_count }}</td>
-          <td class="po-right">{{ order.qty_total|qty }}</td>
-          <td class="po-right">{{ order.qty_still_due|qty }}</td>
-          <td class="po-right font-semibold">{{ order.value_total|amount }}</td>
-        </tr>
-        <tr x-show="isRowOpen({{ order.pk }})" x-cloak class="po-lines-row">
-          <td colspan="9">
-            <table class="po-lines">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th class="po-right">Ordered</th>
-                  <th class="po-right">Invoiced</th>
-                  <th class="po-right">Pending</th>
-                  <th class="po-right">Rate</th>
-                  <th class="po-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for line in order.items.all %}
-                <tr>
-                  <td>{{ line.descr }}</td>
-                  <td class="po-right">{{ line.qty_ordered|qty }} {{ line.uom.title|default:"" }}</td>
-                  <td class="po-right">{{ line.qty_invoiced|qty }}</td>
-                  <td class="po-right">{{ line.qty_pending|qty }}</td>
-                  <td class="po-right">{{ line.rate|amount }}</td>
-                  <td class="po-right">{{ line.total_amount|amount }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="9" class="po-empty">No sales orders yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  {% include "components/table/pagination.html" %}
-</section>
-
-</div>
+{% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
+{% component "table/board" title="Sales Orders" add_url=add_url add_label="Sales Order" table_id="so-table" search_placeholder="Search" date_filters_enabled=True %}
+  <thead>
+    <tr>
+      <th class="print-hide expand-col"></th>
+      {% include "components/table/sort_header.html" with label="Order #" field="order_num" %}
+      {% include "components/table/sort_header.html" with label="Date" field="order_date" %}
+      {% include "components/table/sort_header.html" with label="Customer" field="customer" %}
+      <th>Status</th>
+      <th class="num">Items</th>
+      <th class="num">Ordered</th>
+      <th class="num">Still due</th>
+      <th class="num">Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    <tr{% if order.status == "cancelled" %} class="row--void"{% endif %}>
+      {% include "components/table/expand_toggle.html" with pk=order.pk only %}
+      <td><span class="doc-num">{{ order.order_num }}</span>{% if order.customer_ref %}<span class="sub">{{ order.customer_ref }}</span>{% endif %}</td>
+      <td>{{ order.order_date|dmy }}</td>
+      <td class="truncate strong" title="{{ order.customer.customer_name }}">{{ order.customer.customer_name }}</td>
+      <td>
+        {% if order.status == "fully_invoiced" %}<span class="pill pill--posted">Fully invoiced</span>
+        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">Partly invoiced</span>
+        {% elif order.status == "draft" %}<span class="pill pill--draft">Draft</span>
+        {% elif order.status == "cancelled" %}<span class="pill pill--reversed">{{ order.get_status_display }}</span>
+        {% elif order.status == "closed" %}<span class="pill pill--closed">{{ order.get_status_display }}</span>
+        {% else %}<span class="pill pill--pending">{{ order.get_status_display }}</span>{% endif %}
+      </td>
+      <td class="num muted">{{ order.line_count }}</td>
+      <td class="num">{{ order.qty_total|qty }}</td>
+      <td class="num">{{ order.qty_still_due|qty }}</td>
+      <td class="num strong">{{ order.value_total|amount }}</td>
+    </tr>
+    {% component "table/lines_row" pk=order.pk span=9 %}
+      <table class="lines-table">
+        <thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Invoiced</th><th class="num">Pending</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+          {% for line in order.items.all %}
+          <tr>
+            <td>{{ line.descr }}</td>
+            <td class="num">{{ line.qty_ordered|qty }} {{ line.uom.title|default:"" }}</td>
+            <td class="num">{{ line.qty_invoiced|qty }}</td>
+            <td class="num">{{ line.qty_pending|qty }}</td>
+            <td class="num">{{ line.rate|amount }}</td>
+            <td class="num">{{ line.total_amount|amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endcomponent %}
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=9 label="No sales orders." only %}
+    {% endfor %}
+  </tbody>
+  {% if orders %}{% include "components/table/table_footer.html" with lead=8 value=page_total|amount only %}{% endif %}
+{% endcomponent %}
 {% endblock %}

@@ -1,0 +1,7 @@
+<tfoot>
+  <tr class="board-foot">
+    <td colspan="{{ lead|default:1 }}">{{ label|default:"Total on this page" }}</td>
+    {% if value is not None %}<td class="num">{{ value }}</td>{% endif %}
+    {% if tail %}<td colspan="{{ tail }}"></td>{% endif %}
+  </tr>
+</tfoot>

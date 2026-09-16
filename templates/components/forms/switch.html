@@ -1,0 +1,6 @@
+<form method="post" action="{{ url }}" class="inline-flex">{% csrf_token %}
+  <label class="switch" title="{{ title|default:'Active' }}">
+    <input type="checkbox" class="switch__input" onchange="this.form.submit()"{% if checked %} checked{% endif %} aria-label="{{ title|default:'Active' }}">
+    <span class="switch__track" aria-hidden="true"></span>
+  </label>
+</form>

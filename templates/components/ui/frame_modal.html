@@ -1,0 +1,12 @@
+<div class="entity-modal" id="entity-modal" hidden role="dialog" aria-modal="true" aria-labelledby="entity-modal-title">
+  <div class="entity-modal-card entity-modal-card--lg">
+    <div class="entity-modal-head">
+      <h2 class="modal__title" id="entity-modal-title">{{ entity_title|default:"New Supplier" }}</h2>
+      <div class="flex items-center gap-1">
+        <button type="button" id="entity-modal-max" class="icon-btn" aria-label="Maximize" title="Maximize" aria-pressed="false">{% icon "maximize" extra="max-icon" %}{% icon "minimize" extra="min-icon hidden" %}</button>
+        {% include "components/ui/icon_button.html" with id="entity-modal-close" icon="close" title="Close" only %}
+      </div>
+    </div>
+    <iframe id="entity-frame" title="{{ entity_title|default:'New Supplier' }}" src="about:blank"></iframe>
+  </div>
+</div>

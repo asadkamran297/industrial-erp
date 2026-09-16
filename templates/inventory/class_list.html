@@ -1,8 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "inventory/_master_detail_css.html" %}
-
-<section class="space-y-4" id="cat-screen" data-url="{% url 'inventory:class_list' %}">
+<section class="form-stack" id="cat-screen" data-url="{% url 'inventory:class_list' %}">
   {% include "inventory/_item_tabs.html" %}
 
   <div class="uom-split">
@@ -10,15 +8,14 @@
     <div class="uom-panel">
       <div class="uom-head">
         <div class="flex-1">
-          <input type="search" id="cat-search" value="{{ search_query }}" placeholder="Search..."
-                 class="form-input" style="height:2.25rem; padding-top:.375rem; padding-bottom:.375rem;">
+          {% include "components/forms/control.html" with type="search" id="cat-search" value=search_query placeholder="Search" size="sm" attrs='aria-label="Search categories"' only %}
         </div>
         {% if can_add %}
-        <button type="button" id="cat-add" class="btn-primary h-9 shrink-0 px-4 text-sm">+ Add Category</button>
+        {% include "components/ui/button.html" with type="button" id="cat-add" label="Category" icon="plus" variant="primary" size="sm" only %}
         {% endif %}
       </div>
 
-      <div class="uom-subhead" style="display:flex; justify-content:space-between;">
+      <div class="uom-subhead flex justify-between">
         <span>Category</span><span>Items</span>
       </div>
 
@@ -30,54 +27,52 @@
 
   {% if can_add %}
   <div class="uom-modal" id="cat-modal">
-    <div class="uom-modal-box" style="max-width:26rem;">
+    <div class="uom-modal-box max-w-md">
       <form id="cat-form">{% csrf_token %}
         <input type="hidden" name="action" value="category">
         <input type="hidden" name="category_id" id="cat-id">
         <div class="uom-modal-head">
-          <p class="text-sm font-bold text-slate-800 dark:text-slate-100" id="cat-title">Add Category</p>
-          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+          <h2 class="modal__title" id="cat-title">Add Category</h2>
+          {% include "components/ui/icon_button.html" with icon="close" title="Close" extra="uom-close" only %}
         </div>
-        <div class="px-5 py-5">
-          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="cat-name">Category Name</label>
-          <input type="text" name="title" id="cat-name" class="form-input" placeholder="e.g. Grocery" maxlength="160" autocomplete="off">
+        <div class="modal__body">
+          {% include "components/forms/control.html" with name="title" id="cat-name" label="Category Name" maxlength=160 attrs='autocomplete="off"' only %}
           <p class="uom-error" data-error-for="title" hidden></p>
           <p class="uom-error" data-error-for="class_code" hidden></p>
           <p class="uom-error" data-error-for="__all__" hidden></p>
-          <p class="mt-2 text-xs text-slate-400">The code is taken from the name, the same way the item form takes it.</p>
         </div>
         <div class="uom-modal-foot">
-          <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
-          <button type="submit" class="btn-primary h-9 px-6 text-sm" id="cat-submit">Create</button>
+          {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" extra="uom-close" only %}
+          {% include "components/ui/button.html" with id="cat-submit" label="Create" icon="save" variant="primary" data="save" only %}
         </div>
       </form>
     </div>
   </div>
 
   <div class="uom-modal" id="move-modal">
-    <div class="uom-modal-box" style="max-width:44rem;">
+    <div class="uom-modal-box max-w-2xl">
       <form id="move-form">{% csrf_token %}
         <input type="hidden" name="action" value="move">
         <input type="hidden" name="selected_class" id="move-selected">
         <div class="uom-modal-head">
-          <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Select Items</p>
-          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+          <h2 class="modal__title">Select Items</h2>
+          {% include "components/ui/icon_button.html" with icon="close" title="Close" extra="uom-close" only %}
         </div>
 
-        <div class="px-5 pt-4">
-          <input type="search" id="pick-search" placeholder="Search..." class="form-input">
+        <div class="px-4 pt-3">
+          {% include "components/forms/control.html" with type="search" id="pick-search" placeholder="Search" attrs='aria-label="Search items"' only %}
         </div>
-        <div id="pick-rows" style="max-height:22rem; overflow-y:auto;" class="mt-3"></div>
+        <div id="pick-rows" class="modal__scroll mt-3"></div>
         <p class="uom-error px-5 pt-3" data-error-for="__all__" hidden></p>
 
-        <div class="uom-modal-foot" style="justify-content:space-between;">
-          <label class="flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <input type="checkbox" name="remove_existing" value="1" class="h-4 w-4 rounded border-slate-300">
-            Remove selected items from existing category
+        <div class="uom-modal-foot justify-between">
+          <label class="check-row">
+            {% include "components/forms/control.html" with type="checkbox" name="remove_existing" value="1" only %}
+            <span>Remove from current category</span>
           </label>
           <div class="flex gap-2">
-            <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
-            <button type="submit" class="btn-primary h-9 px-6 text-sm">Move to this category</button>
+            {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" extra="uom-close" only %}
+            {% include "components/ui/button.html" with label="Move here" icon="check" variant="primary" data="save" only %}
           </div>
         </div>
       </form>
@@ -87,22 +82,21 @@
 
   {% if can_delete %}
   <div class="uom-modal" id="del-modal">
-    <div class="uom-modal-box" style="max-width:26rem;">
+    <div class="uom-modal-box max-w-md">
       <form id="del-form">{% csrf_token %}
         <input type="hidden" name="action" value="category_delete">
         <input type="hidden" name="category_id" id="del-id">
         <div class="uom-modal-head">
-          <p class="text-sm font-bold text-slate-800 dark:text-slate-100">Delete Category</p>
-          <button type="button" class="uom-close text-xl leading-none text-slate-400 hover:text-slate-600">&times;</button>
+          <h2 class="modal__title">Delete Category</h2>
+          {% include "components/ui/icon_button.html" with icon="close" title="Close" extra="uom-close" only %}
         </div>
-        <div class="px-5 py-5">
-          <p class="text-sm text-slate-600 dark:text-slate-300" id="del-body"></p>
-          <p class="mt-2 text-xs text-slate-400">Items are never deleted with a category. A category still holding items has to be emptied first.</p>
+        <div class="modal__body">
+          <p class="text-sm" id="del-body"></p>
           <p class="uom-error mt-3" data-error-for="__all__" hidden></p>
         </div>
         <div class="uom-modal-foot">
-          <button type="button" class="uom-close toolbar-btn h-9 px-5">Cancel</button>
-          <button type="submit" class="h-9 rounded-lg bg-rose-600 px-6 text-sm font-semibold text-white hover:bg-rose-700">Delete</button>
+          {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" extra="uom-close" only %}
+          {% include "components/ui/button.html" with label="Delete" icon="trash" variant="danger" only %}
         </div>
       </form>
     </div>

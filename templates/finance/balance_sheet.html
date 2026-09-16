@@ -1,8 +1,8 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "components/ui/page_header.html" with title="Balance Sheet" subtitle="Assets against Liabilities and Capital. Click a group to open its detail." %}
-
-<div class="mt-4 grid gap-4 md:grid-cols-2">
+<section class="form-stack">
+{% include "components/ui/page_header.html" with title="Balance Sheet" only %}
+<div class="grid gap-4 md:grid-cols-2">
   <section class="statement-section">
     <header class="statement-header">Assets</header>
     {% for node in assets %}
@@ -48,4 +48,5 @@
     </div>
   </section>
 </div>
+</section>
 {% endblock %}

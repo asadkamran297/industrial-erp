@@ -1,0 +1,7 @@
+<div class="li-wrap{% if extra %} {{ extra }}{% endif %}">
+  <div class="li-scroll">
+    <div class="{{ grid|default:'li-grid' }} li-head">{{ slots.head }}</div>
+    <div id="{{ rows_id|default:'line-rows' }}">{{ slot }}</div>
+  </div>
+  {% if slots.foot %}<div class="{{ grid|default:'li-grid' }} li-foot">{{ slots.foot }}</div>{% endif %}
+</div>

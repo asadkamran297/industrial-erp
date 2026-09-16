@@ -1,238 +1,107 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% include "inventory/_purchase_theme.html" %}
-<style>
-  /* The gate's slip. Plain CSS, like every other purchase screen: the Tailwind
-     bundle is prebuilt, so a new utility here would not exist until a rebuild. */
-
-  .wp-wrap { max-width: 78rem; margin: 0 auto; padding-bottom: 5rem; }
-  .wp-section + .wp-section { margin-top: 1rem; }
-
-  .wp-legend {
-    font-size: .6875rem; font-weight: 700; letter-spacing: .06em;
-    text-transform: uppercase; color: var(--secondary-color, #0f172a);
-  }
-  .dark .wp-legend { color: #cbd5e1; }
-
-  /* Labels sit above their field, always, so a row reads top to bottom in the
-     order the clerk's eye already runs. */
-  .wp-grid { display: grid; gap: .875rem 1rem; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-  .wp-f { display: flex; flex-direction: column; gap: .3125rem; min-width: 0; }
-  .wp-f > label { font-size: .75rem; font-weight: 600; color: #475569; }
-  .dark .wp-f > label { color: #94a3b8; }
-
-  .c2 { grid-column: span 2; } .c3 { grid-column: span 3; }
-  .c4 { grid-column: span 4; } .c12 { grid-column: span 12; }
-  /* A tablet stacks the rows; the sections keep their order, which is the part
-     the staff have memorised. */
-  @media (max-width: 860px) { .c2, .c3, .c4 { grid-column: span 12; } }
-
-  /* Read across a desk, at night. 40px is the floor, not the target. */
-  .wp-in {
-    width: 100%; height: 2.5rem; border: 1px solid #cbd5e1; border-radius: .5rem;
-    background: #fff; padding: 0 .625rem; font-size: .9375rem; color: #0f172a;
-    outline: none; font-variant-numeric: tabular-nums;
-  }
-  .wp-in:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--ring-primary); }
-  .dark .wp-in { border-color: #334155; background: #0f172a; color: #e2e8f0; }
-  .wp-in--num { text-align: right; }
-
-  /* The system's own numbers: grey, borderless, right-aligned, a size up. The
-     clerk should never have to wonder which boxes he owns. */
-  .wp-out {
-    width: 100%; height: 2.5rem; display: flex; align-items: center; justify-content: flex-end;
-    border: 0; border-radius: .5rem; background: #f1f5f9; padding: 0 .625rem;
-    font-size: 1rem; font-weight: 600; color: #334155; font-variant-numeric: tabular-nums;
-  }
-  .dark .wp-out { background: rgba(30, 41, 59, .7); color: #e2e8f0; }
-  .wp-f--calc > label::after { content: " (auto)"; font-weight: 500; color: #94a3b8; }
-
-  /* The three figures argued over at the gate. */
-  .wp-out--key { height: 3rem; font-size: 1.375rem; font-weight: 800; color: #0f172a; }
-  .dark .wp-out--key { color: #f8fafc; }
-  .wp-in--key { height: 3rem; font-size: 1.375rem; font-weight: 800; }
-
-  .wp-bill {
-    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
-    gap: .75rem; border-top: 2px solid #e2e8f0; margin-top: 1rem; padding-top: 1rem;
-  }
-  .dark .wp-bill { border-top-color: #1e293b; }
-  .wp-bill-label { font-size: .875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
-  .wp-bill-value { font-size: 2.25rem; font-weight: 800; line-height: 1.1; color: #0f172a; font-variant-numeric: tabular-nums; }
-  .dark .wp-bill-value { color: #f8fafc; }
-
-  .wp-note { font-weight: 700; color: #b45309; }
-  .dark .wp-note { color: #fbbf24; }
-  .wp-hint { font-size: .75rem; color: #64748b; font-variant-numeric: tabular-nums; }
-  .dark .wp-hint { color: #94a3b8; }
-  .wp-link { text-decoration: underline; }
-
-  /* Bardana grid */
-  .wp-tbl { width: 100%; border-collapse: collapse; }
-  .wp-tbl th {
-    padding: .5rem; text-align: left; font-size: .6875rem; font-weight: 700;
-    letter-spacing: .06em; text-transform: uppercase; color: #94a3b8;
-    background: #f8fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap;
-  }
-  .dark .wp-tbl th { background: rgba(30, 41, 59, .5); border-bottom-color: #1e293b; }
-  .wp-tbl td { padding: .375rem .5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-  .dark .wp-tbl td { border-bottom-color: #1e293b; }
-  .wp-tbl-scroll { overflow-x: auto; }
-  .wp-del {
-    display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .375rem;
-    border: 0; background: transparent; color: #94a3b8; cursor: pointer;
-  }
-  .wp-del:hover { background: #fef2f2; color: #dc2626; }
-
-  .wp-add {
-    display: inline-flex; align-items: center; gap: .375rem; height: 2.25rem;
-    border-radius: .5rem; border: 1px solid #a7f3d0; background: #ecfdf5;
-    padding: 0 .875rem; font-size: .8125rem; font-weight: 700; color: #047857; cursor: pointer;
-  }
-  .wp-add:hover { background: #d1fae5; }
-  .dark .wp-add { border-color: rgba(16, 185, 129, .35); background: rgba(6, 78, 59, .3); color: #6ee7b7; }
-  .wp-ghost { border-color: #cbd5e1; background: #f8fafc; color: #334155; }
-  .dark .wp-ghost { border-color: #334155; background: rgba(30, 41, 59, .6); color: #cbd5e1; }
-
-  /* Always reachable, however long the slip runs. */
-  .wp-save-bar {
-    position: sticky; bottom: 0; z-index: 30; margin-top: 1rem;
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
-    border: 1px solid #e2e8f0; border-radius: .75rem; background: rgba(255, 255, 255, .94);
-    backdrop-filter: blur(6px); padding: .75rem 1rem;
-    box-shadow: 0 -6px 20px -14px rgba(2, 6, 23, .5);
-  }
-  .dark .wp-save-bar { border-color: #1e293b; background: rgba(15, 23, 42, .94); }
-  .wp-save {
-    height: 2.75rem; border: 0; border-radius: .5rem; background: var(--secondary-color, #0f172a);
-    padding: 0 1.75rem; font-size: .9375rem; font-weight: 700; color: #fff; cursor: pointer;
-  }
-  .wp-save:hover { filter: brightness(1.2); }
-
-  /* Confirmation: what this one screen is about to write, before it writes it. */
-  .wp-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(2, 6, 23, .55); }
-  .wp-modal[data-open="true"] { display: flex; }
-  .wp-modal-box { width: min(46rem, 100%); max-height: 88vh; overflow-y: auto; border-radius: .75rem; background: #fff; padding: 1.25rem; }
-  .dark .wp-modal-box { background: #0f172a; color: #e2e8f0; }
-  .wp-eff { width: 100%; border-collapse: collapse; font-size: .8125rem; }
-  .wp-eff td { padding: .375rem .5rem; border-bottom: 1px solid #f1f5f9; }
-  .dark .wp-eff td { border-bottom-color: #1e293b; }
-  .wp-eff .num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .wp-eff .code { font-weight: 700; letter-spacing: .04em; }
-  .wp-eff .post { color: #64748b; font-size: .75rem; }
-  .dark .wp-eff .post { color: #94a3b8; }
-
-  .wp-errors { display: none; border: 1px solid #fecdd3; border-radius: .5rem; background: #fff1f2; padding: .75rem 1rem; color: #9f1239; font-size: .8125rem; }
-  .wp-errors[data-open="true"] { display: block; }
-  .dark .wp-errors { border-color: rgba(244, 63, 94, .35); background: rgba(136, 19, 55, .25); color: #fda4af; }
-</style>
 
 <div class="wp-wrap">
-  <div class="pur-head-row">
-    <h1 class="pur-title">Wheat Purchase</h1>
-    {% include "components/ui/back_button.html" with back_url=list_url %}
-  </div>
+  {% include "components/ui/page_header.html" with title="Wheat Purchase" back=True back_url=list_url only %}
 
-  <form id="wp-form" class="mt-4" autocomplete="off" novalidate>
+  <form id="wp-form" class="mt-3" autocomplete="off" novalidate data-own-keys>
     {% csrf_token %}
 
-    <section class="pur-card wp-section">
-      <div class="pur-card-body">
+    <section class="card wp-section">
+      <div class="card-body">
         <div class="wp-grid">
           <div class="wp-f wp-f--calc c2">
             <label>V. No.</label>
-            <div class="wp-out" id="voucher_no" style="justify-content: flex-start;">{{ next_voucher_no }}</div>
+            <div class="wp-out justify-start" id="voucher_no">{{ next_voucher_no }}</div>
           </div>
           <div class="wp-f c2">
             <label for="voucher_date">Date</label>
-            <input class="wp-in" type="date" id="voucher_date" name="voucher_date" value="{{ today|date:'Y-m-d' }}">
+            {% include "components/forms/control.html" with type="date" id="voucher_date" name="voucher_date" value=today|date:'Y-m-d' extra="wp-in control--date" only %}
           </div>
           <div class="wp-f c4">
             <label for="supplier">Sender</label>
-            <select class="wp-in" id="supplier" name="supplier" data-searchable>
+            {% component "forms/control" type="select" id="supplier" name="supplier" extra="wp-in" searchable=True only %}
               <option value="">Select sender</option>
               {% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
-            </select>
+            {% endcomponent %}
             <span class="wp-hint" id="supplier-balance"></span>
           </div>
           <div class="wp-f c4">
             <label for="wheat_product">Wheat Item</label>
-            <select class="wp-in" id="wheat_product" name="wheat_product" data-searchable>
+            {% component "forms/control" type="select" id="wheat_product" name="wheat_product" extra="wp-in" searchable=True only %}
               <option value="">Select wheat</option>
               {% for p in wheat_products %}<option value="{{ p.pk }}">{{ p.complete_code }} &mdash; {{ p.name }}</option>{% endfor %}
-            </select>
+            {% endcomponent %}
           </div>
 
           <div class="wp-f c2">
             <label for="withholding_rate">WHT / 40kg</label>
-            <input class="wp-in wp-in--num" id="withholding_rate" name="withholding_rate"
-                   data-amount value="{{ default_withholding_rate|floatformat:2 }}">
+            {% include "components/forms/control.html" with id="withholding_rate" name="withholding_rate" value=default_withholding_rate|floatformat:2 kind="money" extra="wp-in wp-in--num" only %}
           </div>
           <div class="wp-f c4">
             <label for="broker">Broker</label>
-            <select class="wp-in" id="broker" name="broker" data-searchable>
+            {% component "forms/control" type="select" id="broker" name="broker" extra="wp-in" searchable=True only %}
               <option value="">No broker</option>
               {% for b in brokers %}<option value="{{ b.pk }}">{{ b.title }}</option>{% endfor %}
-            </select>
+            {% endcomponent %}
           </div>
           <div class="wp-f c2">
             <label for="brokerage_rate">Brokerage / 100kg</label>
-            <input class="wp-in wp-in--num" id="brokerage_rate" name="brokerage_rate"
-                   data-amount value="{{ default_brokerage_rate|floatformat:2 }}">
+            {% include "components/forms/control.html" with id="brokerage_rate" name="brokerage_rate" value=default_brokerage_rate|floatformat:2 kind="money" extra="wp-in wp-in--num" only %}
           </div>
           <div class="wp-f c4">
             <label for="godown">Godown</label>
-            <select class="wp-in" id="godown" name="godown" data-searchable>
+            {% component "forms/control" type="select" id="godown" name="godown" extra="wp-in" searchable=True only %}
               <option value="">Select godown</option>
               {% for g in godowns %}<option value="{{ g.pk }}">{{ g.code }} &mdash; {{ g.title }}</option>{% endfor %}
-            </select>
+            {% endcomponent %}
           </div>
 
           <div class="wp-f c12">
             <label for="remark">Manual Remark</label>
-            <input class="wp-in" id="remark" name="remark" placeholder="Unload silos#2" data-no-amount>
+            {% include "components/forms/control.html" with id="remark" name="remark" extra="wp-in" attrs='data-no-amount' only %}
           </div>
         </div>
       </div>
     </section>
 
-    <section class="pur-card wp-section">
-      <div class="pur-card-head"><span class="wp-legend">Bardana Detail</span></div>
-      <div class="pur-card-body pur-card-body--flush">
+    <section class="card wp-section">
+      <div class="card-head"><span class="wp-legend">Bardana Detail</span></div>
+      <div class="card-body card-body--flush">
         <div class="wp-tbl-scroll">
           <table class="wp-tbl">
             <thead>
               <tr>
-                <th style="min-width: 16rem;">Bag Type</th>
-                <th style="width: 7rem;">Qty</th>
-                <th style="width: 10rem;">Ownership</th>
-                <th style="width: 8rem;">Item Price</th>
-                <th style="width: 9rem;">Amount</th>
-                <th style="width: 8rem;">Ded. / Bag</th>
-                <th style="width: 9rem;">Total Ded.</th>
-                <th style="width: 3rem;"></th>
+                <th class="min-w-[16rem]">Bag Type</th>
+                <th class="w-28">Qty</th>
+                <th class="w-40">Ownership</th>
+                <th class="w-32">Item Price</th>
+                <th class="w-36">Amount</th>
+                <th class="w-32">Ded. / Bag</th>
+                <th class="w-36">Total Ded.</th>
+                <th class="w-12"></th>
               </tr>
             </thead>
             <tbody id="bardana-rows"></tbody>
           </table>
         </div>
-        <div style="padding: 1rem;">
-          <button type="button" class="wp-add" id="add-bardana">+ Add New Item</button>
+        <div class="card-body">
+          {% include "components/ui/button.html" with type="button" id="add-bardana" label="Add New Item" icon="plus" variant="success" only %}
         </div>
       </div>
     </section>
 
-    <section class="pur-card wp-section">
-      <div class="pur-card-head"><span class="wp-legend">Stock Details</span></div>
-      <div class="pur-card-body">
+    <section class="card wp-section">
+      <div class="card-head"><span class="wp-legend">Stock Details</span></div>
+      <div class="card-body">
         <div class="wp-grid">
           <div class="wp-f c4">
             <label for="party_load">Party Load Wgt.</label>
-            <input class="wp-in wp-in--num" id="party_load" name="party_load" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="party_load" name="party_load" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f c4">
             <label for="party_tare">Party Tare Wgt.</label>
-            <input class="wp-in wp-in--num" id="party_tare" name="party_tare" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="party_tare" name="party_tare" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f wp-f--calc c4">
             <label>Party Net Wgt.</label>
@@ -241,11 +110,11 @@
 
           <div class="wp-f c4">
             <label for="mill_load">Mill Load Wgt.</label>
-            <input class="wp-in wp-in--num" id="mill_load" name="mill_load" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="mill_load" name="mill_load" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f c4">
             <label for="mill_tare">Mill Tare Wgt.</label>
-            <input class="wp-in wp-in--num" id="mill_tare" name="mill_tare" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="mill_tare" name="mill_tare" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f wp-f--calc c4">
             <label>Mill Net Wgt.</label>
@@ -254,24 +123,24 @@
 
           <div class="wp-f c4">
             <label for="selected_weight">Selected Wgt.</label>
-            <input class="wp-in wp-in--num" id="selected_weight" name="selected_weight" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="selected_weight" name="selected_weight" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
             <span class="wp-hint">
-              <button type="button" class="wp-link" data-use="party">use party</button> &middot;
-              <button type="button" class="wp-link" data-use="mill">use mill</button>
+              {% include "components/ui/button.html" with type="button" label="use party" variant="ghost" size="sm" extra="wp-link" attrs='data-use="party"' only %}
+              {% include "components/ui/button.html" with type="button" label="use mill" variant="ghost" size="sm" extra="wp-link" attrs='data-use="mill"' only %}
               <span class="wp-note" id="weight-gap"></span>
             </span>
           </div>
           <div class="wp-f c2">
             <label for="katla">Katla</label>
-            <input class="wp-in wp-in--num" id="katla" name="katla" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="katla" name="katla" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f c2">
             <label for="impurities">Impurities</label>
-            <input class="wp-in wp-in--num" id="impurities" name="impurities" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="impurities" name="impurities" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f c2">
             <label for="moisture">Mois. Ded.</label>
-            <input class="wp-in wp-in--num" id="moisture" name="moisture" data-no-amount data-weight>
+            {% include "components/forms/control.html" with id="moisture" name="moisture" kind="weight" extra="wp-in wp-in--num" attrs='data-weight' only %}
           </div>
           <div class="wp-f wp-f--calc c2">
             <label>Bag Ded.</label>
@@ -284,7 +153,7 @@
           </div>
           <div class="wp-f c4">
             <label for="rate_per_mund">@ / 40kg</label>
-            <input class="wp-in wp-in--num wp-in--key" id="rate_per_mund" name="rate_per_mund" data-amount>
+            {% include "components/forms/control.html" with id="rate_per_mund" name="rate_per_mund" kind="money" extra="wp-in wp-in--num wp-in--key" only %}
           </div>
           <div class="wp-f wp-f--calc c4">
             <label>Stock Amount</label>
@@ -304,58 +173,60 @@
       </div>
     </section>
 
-    <section class="pur-card wp-section">
-      <div class="pur-card-head"><span class="wp-legend">Carrier</span></div>
-      <div class="pur-card-body">
+    <section class="card wp-section">
+      <div class="card-head"><span class="wp-legend">Carrier</span></div>
+      <div class="card-body">
         <div class="wp-grid">
           <div class="wp-f c3">
             <label for="transporter">Transporter Name</label>
-            <input class="wp-in" id="transporter" name="transporter" data-no-amount>
+            {% include "components/forms/control.html" with id="transporter" name="transporter" extra="wp-in" attrs='data-no-amount' only %}
           </div>
           <div class="wp-f c2">
             <label for="vehicle_no">Vehicle No.</label>
-            <input class="wp-in" id="vehicle_no" name="vehicle_no" placeholder="Jv-7454" data-no-amount>
+            {% include "components/forms/control.html" with id="vehicle_no" name="vehicle_no" placeholder="Jv-7454" extra="wp-in" attrs='data-no-amount' only %}
           </div>
           <div class="wp-f c3">
             <label for="driver_phone">Driver Phone</label>
-            <input class="wp-in" id="driver_phone" name="driver_phone" placeholder="0302-4254786" data-no-amount>
+            {% include "components/forms/control.html" with id="driver_phone" name="driver_phone" placeholder="0302-4254786" extra="wp-in" attrs='data-no-amount' only %}
           </div>
           <div class="wp-f c2">
             <label for="builty_no">Builty No.</label>
-            <input class="wp-in" id="builty_no" name="builty_no" data-no-amount>
+            {% include "components/forms/control.html" with id="builty_no" name="builty_no" extra="wp-in" attrs='data-no-amount' only %}
           </div>
           <div class="wp-f c2">
             <label for="freight">Freight</label>
-            <input class="wp-in wp-in--num" id="freight" name="freight" data-amount>
+            {% include "components/forms/control.html" with id="freight" name="freight" kind="money" extra="wp-in wp-in--num" only %}
           </div>
         </div>
       </div>
     </section>
 
-    <div class="wp-errors" id="wp-errors" style="margin-top: .75rem;"></div>
+    <div class="wp-errors field-errors mt-3" id="wp-errors"></div>
 
-    <div class="wp-save-bar">
-      <span class="wp-hint">Ctrl+S saves &middot; Enter in the bardana grid adds a line</span>
-      <button type="submit" class="wp-save" id="wp-save">Save</button>
+    <div class="submit-bar submit-bar--floating">
+      <div class="submit-bar__actions">
+        {% include "components/ui/button.html" with id="wp-save" label="Save" icon="save" variant="primary" size="lg" extra="btn--wide" data="save" title="Save (Ctrl+S)" only %}
+      </div>
     </div>
   </form>
 </div>
 
 <div class="wp-modal" id="wp-confirm" role="dialog" aria-modal="true" aria-labelledby="wp-confirm-title">
-  <div class="wp-modal-box">
-    <h2 class="wp-legend" id="wp-confirm-title">This entry will create</h2>
-    <p class="wp-hint" style="margin-top: .375rem;">One voucher, carrying all four effects. Nothing is entered twice.</p>
-    <table class="wp-eff" style="margin-top: .75rem;"><tbody id="wp-vouchers"></tbody></table>
-    <h3 class="wp-legend" style="margin-top: 1rem;">Stock in</h3>
-    <table class="wp-eff" style="margin-top: .5rem;"><tbody id="wp-stock"></tbody></table>
-    <div class="wp-bill">
-      <span class="wp-bill-label" id="wp-net-label">Net effect</span>
-      <span class="wp-bill-value" id="wp-net-value" style="font-size: 1.5rem;">0</span>
+  <div class="modal modal--lg">
+    <div class="modal__head"><h2 class="modal__title" id="wp-confirm-title">This entry will create</h2></div>
+    <div class="modal__body">
+      <table class="wp-eff"><tbody id="wp-vouchers"></tbody></table>
+      <h3 class="section__title">Stock in</h3>
+      <table class="wp-eff"><tbody id="wp-stock"></tbody></table>
+      <div class="wp-bill">
+        <span class="wp-bill-label" id="wp-net-label">Net effect</span>
+        <span class="wp-bill-value text-2xl" id="wp-net-value">0</span>
+      </div>
+      <div class="wp-errors field-errors" id="wp-save-error"></div>
     </div>
-    <div class="wp-errors" id="wp-save-error" style="margin-top: .75rem;"></div>
-    <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: .5rem;">
-      <button type="button" class="wp-add wp-ghost" id="wp-back">Go Back</button>
-      <button type="button" class="wp-save" id="wp-commit">Confirm &amp; Save</button>
+    <div class="modal__foot">
+      {% include "components/ui/button.html" with type="button" id="wp-back" label="Go Back" variant="ghost" only %}
+      {% include "components/ui/button.html" with type="button" id="wp-commit" label="Confirm & Save" icon="check" variant="primary" only %}
     </div>
   </div>
 </div>
@@ -373,6 +244,7 @@
 
   const form = document.getElementById('wp-form');
   const rowsBox = document.getElementById('bardana-rows');
+  const ICON_CLOSE = '{% filter escapejs %}{% icon "close" %}{% endfilter %}';
   const el = id => document.getElementById(id);
 
   // Money boxes are grouped with commas by amount-format.js, so what is read
@@ -409,7 +281,7 @@
       '<td><div class="wp-out b-amount">0</div></td>' +
       '<td><input class="wp-in wp-in--num b-ded" name="bardana_ded_per_bag" data-no-amount data-weight></td>' +
       '<td><div class="wp-out b-total-ded">0</div></td>' +
-      '<td><button type="button" class="wp-del" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
+      '<td><button type="button" class="icon-btn icon-btn--danger wp-del" title="Remove line" aria-label="Remove line">' + ICON_CLOSE + '</button></td>';
     rowsBox.appendChild(tr);
     if (bagId) tr.querySelector('.b-bag').value = String(bagId);
     enhanceWeights(tr);

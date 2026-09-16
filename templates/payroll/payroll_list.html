@@ -1,7 +1,28 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% url "payroll:payroll_create" as create_url %}
-{% if can_add %}{% include "components/ui/page_header.html" with title="Payroll Runs" subtitle="Manage monthly employee payroll records." action_label="New Payroll" action_url=create_url %}{% else %}{% include "components/ui/page_header.html" with title="Payroll Runs" subtitle="Manage monthly employee payroll records." %}{% endif %}
-<section class="mt-6">{% include "components/table/search_filters.html" with search_placeholder="Search..." %}
-<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"><div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400"><tr><th class="px-4 py-3">Employee</th><th class="px-4 py-3">Period</th><th class="px-4 py-3">Base</th><th class="px-4 py-3">Allowances</th><th class="px-4 py-3">Deductions</th><th class="px-4 py-3">Net</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">{% for payroll in payrolls %}<tr><td class="px-4 py-3 font-medium">{{ payroll.employee }}</td><td class="px-4 py-3">{{ payroll.month }}/{{ payroll.year }}</td><td class="px-4 py-3">{{ payroll.base_salary|amount }}</td><td class="px-4 py-3">{{ payroll.total_allowances|amount }}</td><td class="px-4 py-3">{{ payroll.total_deductions|amount }}</td><td class="px-4 py-3 font-semibold">{{ payroll.net_salary|amount }}</td><td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">{{ payroll.get_status_display }}</span></td><td class="px-4 py-3"><div class="flex justify-end gap-2">{% if can_edit %}<a class="grid h-8 w-8 place-items-center rounded-md text-[var(--primary-color)] hover:bg-slate-100 dark:hover:bg-slate-800" href="{% url 'payroll:payroll_update' payroll.pk %}" title="Edit" aria-label="Edit"><span aria-hidden="true">&#9998;</span></a>{% endif %}{% if can_delete %}<form method="post" action="{% url 'payroll:payroll_delete' payroll.pk %}" onsubmit="return confirm('Delete this payroll?');">{% csrf_token %}<button class="grid h-8 w-8 place-items-center rounded-md text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" type="submit" title="Delete" aria-label="Delete"><span aria-hidden="true">&#128465;</span></button></form>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No payrolls found.</td></tr>{% endfor %}</tbody></table></div></div>{% include "components/table/pagination.html" %}</section>
+{% capture as add_url %}{% if can_add %}{% url 'payroll:payroll_create' %}{% endif %}{% endcapture %}
+{% component "table/board" title="Payroll Runs" add_url=add_url add_label="Payroll" table_id="payroll-table" search_placeholder="Search" %}
+  <thead><tr><th>Employee</th><th>Period</th><th class="num">Base</th><th class="num">Allowances</th><th class="num">Deductions</th><th class="num">Net</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <tbody>
+    {% for payroll in payrolls %}
+    <tr>
+      <td class="strong">{{ payroll.employee }}</td>
+      <td>{{ payroll.month }}/{{ payroll.year }}</td>
+      <td class="num">{{ payroll.base_salary|amount }}</td>
+      <td class="num">{{ payroll.total_allowances|amount }}</td>
+      <td class="num">{{ payroll.total_deductions|amount }}</td>
+      <td class="num strong">{{ payroll.net_salary|amount }}</td>
+      <td>{% include "components/table/status_badge.html" with status=payroll.status label=payroll.get_status_display only %}</td>
+      <td class="actions-col">
+        {% capture as edit_url %}{% if can_edit %}{% url 'payroll:payroll_update' payroll.pk %}{% endif %}{% endcapture %}
+        {% capture as delete_url %}{% if can_delete %}{% url 'payroll:payroll_delete' payroll.pk %}{% endif %}{% endcapture %}
+        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this payroll?" only %}
+      </td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=8 label="No payrolls." only %}
+    {% endfor %}
+  </tbody>
+  {% if payrolls %}{% include "components/table/table_footer.html" with lead=5 value=page_total|amount tail=2 only %}{% endif %}
+{% endcomponent %}
 {% endblock %}

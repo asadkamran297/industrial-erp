@@ -1,44 +1,17 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-<div class="flex items-start gap-3">
-  {% include "components/ui/back_button.html" %}
-  <div class="min-w-0 flex-1">{% include "components/ui/page_header.html" with title=page_title subtitle="Base salary comes from employee profile. Add each allowance/deduction only once." %}</div>
-</div>
-<form method="post" class="mt-6 max-w-4xl rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-  {% csrf_token %}
-  {% if form.non_field_errors %}<div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ form.non_field_errors }}</div>{% endif %}
-  <div class="mb-5 grid gap-4 sm:grid-cols-2">
-    <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
-      <p class="text-xs font-medium uppercase text-slate-500">Profile Base Salary</p>
-      <p id="profile-base-salary" class="mt-1 text-2xl font-bold">0</p>
-    </div>
-    <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
-      <p class="text-xs font-medium uppercase text-slate-500">Selected Element Type</p>
-      <p id="selected-element-type" class="mt-1 text-2xl font-bold">-</p>
-    </div>
+{% url 'payroll:employee_salary_list' as cancel_url %}
+{% component "forms/crud_form" title=page_title form=form cancel_url=cancel_url narrow=True %}
+  <div class="tiles">
+    {% include "components/table/tile.html" with tone="sky" icon="cash" value="0" value_id="profile-base-salary" label="Profile Base Salary" only %}
+    {% include "components/table/tile.html" with tone="violet" icon="layers" value="-" value_id="selected-element-type" label="Element Type" only %}
   </div>
-  <div class="grid gap-4 sm:grid-cols-3">
-    {% for field in form %}
-      <div>
-        <label class="mb-1.5 block text-sm font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}
-        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
-      </div>
-    {% endfor %}
-  </div>
-  <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
-    Base salary is maintained in Employee Profile. This page only stores extra allowance/deduction elements.
-  </div>
-  <div class="mt-6 flex justify-end gap-3">
-    <a href="{% url 'payroll:employee_salary_list' %}" class="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium dark:border-slate-700">Cancel</a>
-    <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--primary-color)] px-4 text-sm font-semibold text-white" type="submit">Save</button>
-  </div>
-</form>
-
+  {% include "components/forms/form_grid.html" with form=form cols=3 only %}
+{% endcomponent %}
 {{ employee_salary_map|json_script:"employee-salary-map" }}
 {{ element_type_map|json_script:"element-type-map" }}
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', () => {
     const salaryMap = JSON.parse(document.getElementById('employee-salary-map').textContent || '{}');
     const typeMap = JSON.parse(document.getElementById('element-type-map').textContent || '{}');
     const employeeSelect = document.getElementById('id_employee');
@@ -46,11 +19,11 @@
     const salaryTarget = document.getElementById('profile-base-salary');
     const typeTarget = document.getElementById('selected-element-type');
     const render = () => {
-      salaryTarget.textContent = Number(salaryMap[employeeSelect.value] || 0).toLocaleString();
+      salaryTarget.textContent = Number(salaryMap[employeeSelect.value] || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       typeTarget.textContent = typeMap[elementSelect.value] || '-';
     };
-    employeeSelect && employeeSelect.addEventListener('change', render);
-    elementSelect && elementSelect.addEventListener('change', render);
+    if (employeeSelect) employeeSelect.addEventListener('change', render);
+    if (elementSelect) elementSelect.addEventListener('change', render);
     render();
   });
 </script>

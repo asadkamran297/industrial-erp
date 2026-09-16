@@ -1,10 +1,11 @@
-<nav class="-mx-1 flex flex-wrap gap-1" aria-label="Item masters">
-  <a href="{% url 'inventory:item_list' %}?kind={{ product_value|default:'P' }}"
-     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'products' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">PRODUCTS</a>
-  <a href="{% url 'inventory:item_list' %}?kind={{ service_value|default:'S' }}"
-     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'services' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">SERVICES</a>
-  <a href="{% url 'inventory:class_list' %}"
-     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'category' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">CATEGORY</a>
-  <a href="{% url 'inventory:uom_list' %}"
-     class="border-b-2 px-5 py-2.5 text-sm font-semibold tracking-wide {% if active_tab == 'units' %}border-[var(--primary-color)] text-[var(--primary-color)]{% else %}border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300{% endif %}">UNITS</a>
-</nav>
+{% url 'inventory:item_list' as items_url %}
+{% component "ui/tabs" label="Item masters" %}
+  {% capture as tab_href %}{{ items_url }}?kind={{ product_value|default:'P' }}{% endcapture %}{% capture as tab_on %}{% if active_tab == 'products' %}1{% endif %}{% endcapture %}
+  {% include "components/ui/tab.html" with href=tab_href label="Products" on=tab_on only %}
+  {% capture as tab_href %}{{ items_url }}?kind={{ service_value|default:'S' }}{% endcapture %}{% capture as tab_on %}{% if active_tab == 'services' %}1{% endif %}{% endcapture %}
+  {% include "components/ui/tab.html" with href=tab_href label="Services" on=tab_on only %}
+  {% url 'inventory:class_list' as tab_href %}{% capture as tab_on %}{% if active_tab == 'category' %}1{% endif %}{% endcapture %}
+  {% include "components/ui/tab.html" with href=tab_href label="Category" on=tab_on only %}
+  {% url 'inventory:uom_list' as tab_href %}{% capture as tab_on %}{% if active_tab == 'units' %}1{% endif %}{% endcapture %}
+  {% include "components/ui/tab.html" with href=tab_href label="Units" on=tab_on only %}
+{% endcomponent %}
