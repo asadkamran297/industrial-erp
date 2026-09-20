@@ -1875,20 +1875,20 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
 /* ==================================================================== *
  * Wheat purchase slip — mirrors the mill's paper gate slip
  * ==================================================================== */
-.wp-wrap { max-width: 78rem; margin: 0 auto; }
-.wp-section + .wp-section { margin-top: var(--gap-3); }
-.wp-legend { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
-.wp-grid { display: grid; gap: var(--gap-3) var(--gap-4); grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.wp-f { display: flex; flex-direction: column; gap: .3125rem; min-width: 0; }
-.wp-f > label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-soft); }
-.c2 { grid-column: span 2; }
-.c3 { grid-column: span 3; }
-.c4 { grid-column: span 4; }
-.c12 { grid-column: span 12; }
-@media (max-width: 860px) { .c2, .c3, .c4 { grid-column: span 12; } }
+.wp-wrap { max-width: 100%; margin: 0 auto; }
+.wp-slip .card-body { padding: var(--gap-3) var(--gap-4); }
+.wp-rule { margin: var(--gap-3) 0; border: 0; border-top: 1px solid var(--border-strong); }
+.dark .wp-rule { border-top-color: var(--border); }
+.wp-title { margin: 0 0 var(--gap-2); font-size: var(--fs-lg); font-weight: 700; color: var(--text-strong); }
+.dark .wp-title { color: var(--text-strong); }
+.wp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-2) var(--gap-3); }
+.wp-row + .wp-row { margin-top: var(--gap-2); }
+.wp-f { display: flex; flex-direction: column; flex: 0 0 auto; gap: .25rem; min-width: 0; }
+.wp-f--grow { flex: 1 1 14rem; }
+.wp-f > label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-soft); white-space: nowrap; }
 .wp-in {
   width: 100%;
-  height: var(--control-h-lg);
+  height: var(--control-h);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
@@ -1903,7 +1903,7 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
 .wp-out {
   display: flex;
   width: 100%;
-  height: var(--control-h-lg);
+  height: var(--control-h);
   align-items: center;
   justify-content: flex-end;
   border: 0;
@@ -1915,18 +1915,13 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
   font-variant-numeric: tabular-nums;
   color: var(--text-body);
 }
-.wp-f--calc > label::after { content: " (auto)"; font-weight: 500; color: var(--text-faint); }
-.wp-out--key,
-.wp-in--key { height: 3rem; font-size: 1.375rem; font-weight: 800; color: var(--text); }
+.wp-out--key { font-weight: 800; color: var(--text); }
 .wp-bill { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--gap-3); margin-top: var(--gap-4); border-top: 2px solid var(--border); padding-top: var(--gap-4); }
 .wp-bill-label { font-size: var(--fs-md); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
 .wp-bill-value { font-size: 2.25rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
-.wp-note { font-weight: 700; color: var(--warning-strong); }
-.wp-hint { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--text-muted); }
-.wp-link { text-decoration: underline; }
 .wp-tbl { width: 100%; border-collapse: collapse; }
-.wp-tbl th { border-bottom: 1px solid var(--border); background: var(--surface-alt); padding: var(--gap-2); text-align: left; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: var(--text-faint); }
-.wp-tbl td { border-bottom: 1px solid var(--border-soft); padding: .375rem var(--gap-2); vertical-align: middle; }
+.wp-tbl th { padding: 0 var(--gap-2) .25rem 0; text-align: left; font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; color: var(--text-soft); }
+.wp-tbl td { padding: 0 var(--gap-2) var(--gap-2) 0; vertical-align: middle; }
 .wp-tbl-scroll { overflow-x: auto; }
 .wp-eff { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .wp-eff td { border-bottom: 1px solid var(--border-soft); padding: .375rem var(--gap-2); }

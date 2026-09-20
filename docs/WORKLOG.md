@@ -5,6 +5,24 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-09-20
+
+### Local
+
+- Wheat purchase slip (`/inventory/purchases/wheat/new/`) restyled to one flat card: header row, `<hr>` rules between Bardana Detail / Stock Details / Total Bill / Carrier, plain labels, no "(auto)" tags, no hints. Title now "Purchase Invoice".
+- Selected Wgt. is a Party / Mill select; the numeric weight is derived from the chosen net and posted as before. Weight gap, Bag Ded. and sender balance shown as figures.
+- `wp-*` CSS trimmed: `wp-row`, `wp-rule`, `wp-title`; `wp-grid`/`c2..c12`/`wp-legend`/`wp-hint` removed; controls at `--control-h`.
+
+### Live
+
+- Nothing deployed.
+
+### Open
+
+- `/inventory/purchases/new/` (stores invoice) untouched; decide whether the Purchase Invoices list should default to the wheat slip.
+
+---
+
 ## 2026-09-16
 
 ### Local
