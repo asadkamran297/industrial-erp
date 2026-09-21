@@ -26,7 +26,7 @@ print('DB_NAME=%r' % d['NAME'])
 print('DB_USER=%r' % d['USER'])
 print('DB_PASSWORD=%r' % d['PASSWORD'])
 print('DB_HOST=%r' % (d.get('HOST') or 'localhost'))
-")"
+" | grep '^DB_')"
 echo "TARGET DB: $DB_ENGINE $DB_NAME $DB_HOST"
 case "$DB_ENGINE" in *mysql*) ;; *) echo "not mysql; abort" >&2; exit 1;; esac
 
