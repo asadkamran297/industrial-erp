@@ -30,6 +30,7 @@ UI system: read `docs/UI_SYSTEM.md` before touching templates; `python manage.py
 19. No CDNs. Vendor JS lives in `static/vendor/`. After touching Tailwind classes run `npm run build:css`.
 20. Weights keep three decimals (weighbridge precision); money keeps two. Do not route weight inputs through `amount-format.js`.
 21. Keep an existing screen's field layout unless the user asks to change it (e.g. the wheat purchase slip mirrors the mill's paper slip).
+22a. Document forms: number + date live in the `page_header` `fields` slot (never in the form body); every party picker carries the balance chip (`party-balance.js`); Save goes straight to the list with a success message, no confirm modal. Details in `docs/UI_SYSTEM.md` → DOCUMENT FORM.
 22. User-facing wording uses the business term (e.g. "Category", not "Class"; "Impurities", not `khoot`) even when the model name differs.
 
 ## Data and Business Rules

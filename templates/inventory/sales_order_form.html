@@ -1,7 +1,13 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'inventory:sales_order_list' as cancel_url %}
-{% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}
+{% component "ui/page_header" title=title back=True back_url=cancel_url %}
+  {% slot fields %}
+    <div class="head-no">{% include "components/forms/control.html" with id="order-no" label="Order No" value=next_order_no readonly=True extra="strong num" only %}</div>
+    {% firstof posted.order_date today|date:"Y-m-d" as order_date_value %}
+    {% include "components/forms/control.html" with type="date" name="order_date" id="order_date" label="Order Date" value=order_date_value required=True form_id="so-form" only %}
+  {% endslot %}
+{% endcomponent %}
 
 <form method="post" id="so-form" class="card card-rail" x-data="salesOrderForm()">{% csrf_token %}
   <div class="card-body form-grid form-grid--cols-4">
@@ -12,9 +18,6 @@
       {% endcomponent %}
       <p id="customer-balance" class="bal-chip mt-1 hidden"></p>
     </div>
-    {% include "components/forms/control.html" with id="order-no" label="Order #" value=next_order_no readonly=True extra="strong num" only %}
-    {% firstof posted.order_date today|date:"Y-m-d" as order_date_value %}
-    {% include "components/forms/control.html" with type="date" name="order_date" id="order_date" label="Order date" value=order_date_value required=True only %}
     {% include "components/forms/control.html" with type="date" name="expected_date" id="expected_date" label="Promised by" value=posted.expected_date only %}
     {% include "components/forms/control.html" with name="customer_ref" id="customer_ref" label="Customer's reference" value=posted.customer_ref wrap="span-2" only %}
     {% include "components/forms/control.html" with name="remarks" id="remarks" label="Narration" value=posted.remarks wrap="span-2" only %}

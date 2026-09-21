@@ -136,6 +136,9 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 ### DOCUMENT FORM
 
 - `page_header` with back, header field grid, `line_items`, `totals_panel`, `submit_bar` (Cancel, Save & Print, Save), `floating` on long forms, one page without vertical scroll.
+- Document number (read-only, `strong num`, in `.head-no`) and document date sit in the `page_header` `fields` slot beside the title, never in the form body. The date carries `form_id` (or a `form=` widget attr) because the header is outside the `<form>`.
+- Every party picker (supplier, customer, account) shows a balance chip under it: `select[data-balance-chip="<chip id>"]` with `data-balance-owed` / `data-balance-credit` labels, each `<option data-balance>`, `<p class="bal-chip hidden">`; `static/js/party-balance.js` paints it on load and change. Supplier lists come from `suppliers_with_balance()` / `customers_with_balance()` (`apps/inventory/views.py`), balances from the ledger account (`finance.services._party_balances`), never from the master's opening figure alone.
+- Save posts and returns to the document's list with a `messages.success`; no confirm/preview modal before save.
 
 ### DETAIL
 
@@ -148,7 +151,7 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 ### Adjustments from `docs/UI_AUDIT.md`
 
 - Item Categories and Units of Measure stay two-pane screens (`class_list.html`, `uom_list.html`); they are outside MASTER LIST. Their edit panes follow MASTER FORM field rules.
-- The wheat purchase slip (`wheat_purchase_form.html`) mirrors the paper slip (CLAUDE.md rule 21) and is outside DOCUMENT FORM.
+- The wheat purchase slip (`wheat_purchase_form.html`) mirrors the paper slip (CLAUDE.md rule 21) and is outside DOCUMENT FORM for its body layout; the header (number + date in `page_header`), balance chip and direct save still apply.
 - Documents that post on save (purchase return, account voucher) may label the submit bar Cancel, Save Draft, Save & Post in place of Save & Print.
 - Salary Items has no status field: no tiles, no switch, no badge; the rest of MASTER LIST applies.
 - Until a list is converted to `ColumnSet`, the browser column picker in `filter_bar.html` satisfies the column-picker rule; new lists use `ColumnSet`. Suppliers, Customers, Products and the purchase boards are on `ColumnSet`.

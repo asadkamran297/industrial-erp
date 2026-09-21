@@ -2,7 +2,12 @@
 {% block content %}
 
 <div class="wp-wrap">
-  {% include "components/ui/page_header.html" with title="Purchase Invoice" back=True back_url=list_url only %}
+  {% component "ui/page_header" title="Purchase Invoice" back=True back_url=list_url %}
+    {% slot fields %}
+      <div class="head-no">{% include "components/forms/control.html" with id="voucher_no" label="Invoice No" value=next_voucher_no readonly=True extra="strong num" only %}</div>
+      {% include "components/forms/control.html" with type="date" id="voucher_date" name="voucher_date" label="Date" value=today|date:'Y-m-d' form_id="wp-form" only %}
+    {% endslot %}
+  {% endcomponent %}
 
   <form id="wp-form" class="mt-3" autocomplete="off" novalidate data-own-keys>
     {% csrf_token %}
@@ -10,14 +15,6 @@
     <section class="card wp-slip">
       <div class="card-body">
         <div class="wp-row">
-          <div class="wp-f w-28">
-            <label>V. No.</label>
-            <div class="wp-out justify-start" id="voucher_no">{{ next_voucher_no }}</div>
-          </div>
-          <div class="wp-f">
-            <label for="voucher_date">Date</label>
-            {% include "components/forms/control.html" with type="date" id="voucher_date" name="voucher_date" value=today|date:'Y-m-d' extra="wp-in control--date" only %}
-          </div>
           <div class="wp-f wp-f--grow">
             <label for="supplier">Sender</label>
             {% component "forms/control" type="select" id="supplier" name="supplier" extra="wp-in" searchable=True required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}

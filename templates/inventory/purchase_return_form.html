@@ -5,15 +5,18 @@
 {{ posted_lines|json_script:"prf-posted-lines" }}
 
 <section class="form-stack" x-data="purchaseReturnForm()" x-init="init()">
-  {% include "components/ui/page_header.html" with title="Purchase Return" back=True back_url=list_url only %}
+  {% component "ui/page_header" title="Purchase Return" back=True back_url=list_url %}
+    {% slot fields %}
+      <div class="head-no">{% include "components/forms/control.html" with id="return-no" label="Return No" value=next_number readonly=True extra="strong num" only %}</div>
+      {% firstof posted.return_date today|date:"Y-m-d" as return_date_value %}
+      {% include "components/forms/control.html" with type="date" id="return_date" name="return_date" label="Return Date" value=return_date_value required=True form_id="return-form" only %}
+    {% endslot %}
+  {% endcomponent %}
 
-  <form method="post" class="split-layout" x-ref="form">{% csrf_token %}
+  <form method="post" id="return-form" class="split-layout" x-ref="form">{% csrf_token %}
     <div class="form-stack">
       {% component "ui/card" %}
         <div class="form-grid form-grid--cols-4">
-          {% include "components/forms/control.html" with id="return-no" label="Return No" value=next_number readonly=True extra="strong num" only %}
-          {% firstof posted.return_date today|date:"Y-m-d" as return_date_value %}
-          {% include "components/forms/control.html" with type="date" id="return_date" name="return_date" label="Return Date" value=return_date_value required=True only %}
           {% component "forms/control" type="select" id="supplier" name="supplier" label="Supplier" required=True searchable=True attrs='x-ref="supplier" @change="supplierChanged($event.target.value)" data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
             <option value=""></option>
             {% for supplier in suppliers %}<option value="{{ supplier.pk }}" data-balance="{{ supplier.balance }}" {% if posted.supplier == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier.name }}</option>{% endfor %}

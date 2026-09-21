@@ -36,7 +36,7 @@ class GrindingVoucherForm(forms.ModelForm):
             "description",
         ]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "date": forms.DateInput(attrs={"type": "date", "form": "grinding-form"}),
             "production_from": forms.TimeInput(attrs={"type": "time"}),
             "production_to": forms.TimeInput(attrs={"type": "time"}),
             "issue_area": forms.TextInput(attrs={"placeholder": "Silo / hodi / godown"}),
@@ -58,7 +58,7 @@ class ProductConversionForm(forms.ModelForm):
         model = ProductConversion
         fields = ["date", "source_product", "source_quantity", "godown", "description"]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
+            "date": forms.DateInput(attrs={"type": "date", "form": "conversion-form"}),
             "description": forms.Textarea(attrs={"rows": 2}),
         }
 
