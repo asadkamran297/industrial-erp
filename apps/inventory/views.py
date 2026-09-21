@@ -28,7 +28,7 @@ from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.core.views import SaveAndNewMixin, MasterDetailView
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_customer_opening_balance, sync_supplier_opening_balance
+from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, customer_receivable_balances, supplier_payable_balances, sync_customer_opening_balance, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
@@ -80,6 +80,25 @@ def broker_options():
         .filter(is_group=False, status=STATUS_ACTIVE, parent__title=GL_BROKERS_GROUP_TITLE)
         .order_by("title")
     )
+
+
+
+def suppliers_with_balance():
+    """Active suppliers, each carrying what is currently owed to it."""
+    balances = supplier_payable_balances()
+    rows = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"))
+    for row in rows:
+        row.balance = balances.get(row.pk, Decimal("0.00"))
+    return rows
+
+
+def customers_with_balance():
+    """Active customers, each carrying what it currently owes."""
+    balances = customer_receivable_balances()
+    rows = list(Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"))
+    for row in rows:
+        row.balance = balances.get(row.pk, Decimal("0.00"))
+    return rows
 
 
 def wheat_product_options():
@@ -1528,7 +1547,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
         context = {
             "title": "Purchase Invoice",
             "next_invoice_no": next_purchase_invoice_number(),
-            "suppliers": self._suppliers_with_balance(),
+            "suppliers": suppliers_with_balance(),
             "layout": get_layout(FORM_PURCHASE_INVOICE),
             "extra_field_types": EXTRA_FIELD_TYPES,
             "settings_url": reverse_lazy("inventory:purchase_invoice_form_settings"),
@@ -1566,21 +1585,6 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
         context["posted_lines_json"] = json.dumps(rows)
         context.update(extra)
         return context
-
-    @staticmethod
-    def _suppliers_with_balance():
-        """Active suppliers, each carrying what is currently owed to it.
-
-        Hung on the object rather than passed as a second map, so the template
-        prints it beside the name it belongs to without a lookup filter.
-        """
-        from apps.finance.services import supplier_payable_balances
-
-        balances = supplier_payable_balances()
-        rows = list(Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"))
-        for row in rows:
-            row.balance = balances.get(row.pk, Decimal("0.00"))
-        return rows
 
     @staticmethod
     def _posted_lines(posted):
@@ -2946,7 +2950,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             "extra_field_types": EXTRA_FIELD_TYPES,
             "can_edit": user_has_permission(self.request.user, f"{self.page}.edit"),
             "next_order_no": next_purchase_order_number(),
-            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "suppliers": suppliers_with_balance(),
             "units": UOM.objects.order_by("title"),
             "godowns": godown_options(),
             "brokers": broker_options(),
@@ -3904,7 +3908,7 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
         context = {
             "title": "Sale Invoice",
             "next_invoice_no": next_sale_invoice_number(),
-            "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
+            "customers": customers_with_balance(),
             "units": UOM.objects.order_by("title"),
             "product_units": PRD_UNIT_CHOICES,
             "today": timezone.localdate(),
@@ -4116,7 +4120,7 @@ class SalesOrderCreateView(InventoryManageMixin, View):
         context = {
             "title": "Sales Order",
             "next_order_no": next_sales_order_number(),
-            "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
+            "customers": customers_with_balance(),
             "units": UOM.objects.order_by("title"),
             "product_units": PRD_UNIT_CHOICES,
             "today": timezone.localdate(),
@@ -4764,7 +4768,7 @@ class PurchaseReturnCreateView(InventoryManageMixin, View):
 
     def _render(self, request, posted, posted_lines=None, status=200):
         return render(request, self.template_name, {
-            "suppliers": Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name"),
+            "suppliers": suppliers_with_balance(),
             "next_number": next_purchase_return_number(),
             "today": timezone.localdate(),
             "posted": posted,
@@ -5068,7 +5072,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         setting = SystemSetting.get_solo()
         wheat = wheat_product_options()
         bardana = list(bardana_product_options())
-        suppliers = PurchaseInvoiceCreateView._suppliers_with_balance()
+        suppliers = suppliers_with_balance()
         from apps.products.selectors import raw_bardana_map
 
         bag_links = raw_bardana_map()

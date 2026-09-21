@@ -14,10 +14,11 @@
           {% include "components/forms/control.html" with id="return-no" label="Return No" value=next_number readonly=True extra="strong num" only %}
           {% firstof posted.return_date today|date:"Y-m-d" as return_date_value %}
           {% include "components/forms/control.html" with type="date" id="return_date" name="return_date" label="Return Date" value=return_date_value required=True only %}
-          {% component "forms/control" type="select" id="supplier" name="supplier" label="Supplier" required=True searchable=True attrs='x-ref="supplier" @change="supplierChanged($event.target.value)"' only %}
+          {% component "forms/control" type="select" id="supplier" name="supplier" label="Supplier" required=True searchable=True attrs='x-ref="supplier" @change="supplierChanged($event.target.value)" data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
             <option value=""></option>
-            {% for supplier in suppliers %}<option value="{{ supplier.pk }}" {% if posted.supplier == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier.name }}</option>{% endfor %}
+            {% for supplier in suppliers %}<option value="{{ supplier.pk }}" data-balance="{{ supplier.balance }}" {% if posted.supplier == supplier.pk|stringformat:'s' %}selected{% endif %}>{{ supplier.name }}</option>{% endfor %}
           {% endcomponent %}
+          <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
           <div class="field">
             <span class="field__label">Purchase Invoice</span>
             <input type="hidden" name="purchase_invoice" :value="invoice ? invoice.id : ''" value="{{ posted.purchase_invoice|default:'' }}">

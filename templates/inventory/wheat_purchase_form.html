@@ -20,14 +20,11 @@
           </div>
           <div class="wp-f wp-f--grow">
             <label for="supplier">Sender</label>
-            {% component "forms/control" type="select" id="supplier" name="supplier" extra="wp-in" searchable=True required=True only %}
+            {% component "forms/control" type="select" id="supplier" name="supplier" extra="wp-in" searchable=True required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
               <option value="">Select an Account</option>
-              {% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
+              {% for s in suppliers %}<option value="{{ s.pk }}" data-balance="{{ s.balance }}">{{ s.name }}</option>{% endfor %}
             {% endcomponent %}
-          </div>
-          <div class="wp-f wp-f--grow wp-f--calc">
-            <label>Balance</label>
-            <div class="wp-out justify-start" id="supplier-balance"></div>
+            <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
           </div>
         </div>
         <div class="wp-row">
@@ -305,16 +302,6 @@
       if (!sel.value) sel.value = String(fallback);
     });
     refreshPickers();
-  });
-
-  el('supplier').addEventListener('change', () => {
-    const row = SUPPLIERS.find(s => String(s.id) === el('supplier').value);
-    const box = el('supplier-balance');
-    if (!row) { box.textContent = ''; return; }
-    const bal = row.balance || 0;
-    box.textContent = Math.abs(bal) < 0.005
-      ? 'nil'
-      : fmt(Math.abs(bal)) + (bal > 0 ? ' payable' : ' advance');
   });
 
   const partyNet = () => val('party_load') - val('party_tare');

@@ -5,10 +5,13 @@
 
 <form method="post" id="so-form" class="card card-rail" x-data="salesOrderForm()">{% csrf_token %}
   <div class="card-body form-grid form-grid--cols-4">
-    {% component "forms/control" type="select" name="customer" id="customer" label="Customer" required=True only %}
-      <option value=""></option>
-      {% for row in customers %}<option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
-    {% endcomponent %}
+    <div>
+      {% component "forms/control" type="select" name="customer" id="customer" label="Customer" required=True attrs='data-balance-chip="customer-balance" data-balance-owed="Receivable" data-balance-credit="Advance"' only %}
+        <option value=""></option>
+        {% for row in customers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
+      {% endcomponent %}
+      <p id="customer-balance" class="bal-chip mt-1 hidden"></p>
+    </div>
     {% include "components/forms/control.html" with id="order-no" label="Order #" value=next_order_no readonly=True extra="strong num" only %}
     {% firstof posted.order_date today|date:"Y-m-d" as order_date_value %}
     {% include "components/forms/control.html" with type="date" name="order_date" id="order_date" label="Order date" value=order_date_value required=True only %}

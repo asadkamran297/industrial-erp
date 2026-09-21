@@ -497,41 +497,44 @@ def create_supplier_payable_account(*, supplier, user=None):
     return node
 
 
-def supplier_payable_balances():
-    """What is owed to each supplier now, keyed by supplier id.
+def _party_balances(rows):
+    """Closing balance of each party's ledger account, keyed by party id.
 
-    Read off the payable accounts rather than off the invoices, because a
-    supplier is also paid by vouchers entered on the payments screen; adding up
-    invoices would show a debt that was settled last week.
-
-    Positive means owed. A credit balance on a liability is the normal side, so
-    the sign is turned round here rather than in every caller.
+    ``rows`` is ``(id, account title, opening_balance)``. Read off
+    ``account_balances`` so the account's own opening and every voucher count;
+    a party with no account yet only has the opening typed on its master.
+    Positive means the normal side: owed to a supplier, due from a customer.
     """
-    from apps.inventory.models import Supplier  # lazy: inventory imports finance
-
-    payables = get_payables_group()
-    accounts = dict(
-        ChartOfAccount.objects.filter(parent=payables, is_group=False)
+    rows = list(rows)
+    if not rows:
+        return {}
+    codes = dict(
+        ChartOfAccount.objects.filter(title__in=[name for _, name, _ in rows], is_group=False)
         .values_list("title", "code")
     )
-    if not accounts:
-        return {}
+    balances = account_balances()
+    result = {}
+    for party_id, name, opening in rows:
+        code = codes.get(name)
+        if code:
+            result[party_id] = (balances.get(code) or {}).get("closing") or Decimal("0.00")
+        else:
+            result[party_id] = opening or Decimal("0.00")
+    return result
 
-    movement = {
-        row["account_no"]: (row["credit"] or Decimal("0.00")) - (row["debit"] or Decimal("0.00"))
-        for row in AccountVoucherLine.objects
-        .filter(account_no__in=accounts.values())
-        .values("account_no")
-        .annotate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
-    }
 
-    balances = {}
-    for supplier_id, name, opening in Supplier.objects.values_list("id", "name", "opening_balance"):
-        code = accounts.get(name)
-        balances[supplier_id] = (
-            movement.get(code, Decimal("0.00")) if code else (opening or Decimal("0.00"))
-        )
-    return balances
+def supplier_payable_balances():
+    """What is owed to each supplier now, keyed by supplier id."""
+    from apps.inventory.models import Supplier  # lazy: inventory imports finance
+
+    return _party_balances(Supplier.objects.values_list("id", "name", "opening_balance"))
+
+
+def customer_receivable_balances():
+    """What each customer owes now, keyed by customer id."""
+    from apps.inventory.models import Customer  # lazy: inventory imports finance
+
+    return _party_balances(Customer.objects.values_list("id", "customer_name", "opening_balance"))
 
 
 def _post_voucher(*, source_ref, voucher_type, voucher_date, account_no, entries, remarks,

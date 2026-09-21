@@ -16,9 +16,9 @@
       <div class="head-fields__wide">
         <div class="notch-field notch-field--action notch-field--tint">
           <label class="notch-label" for="supplier">Supplier <span class="req">*</span></label>
-          {% component "forms/control" type="select" name="supplier" id="supplier" required=True only %}
+          {% component "forms/control" type="select" name="supplier" id="supplier" required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
             <option value=""></option>
-            {% for row in suppliers %}<option value="{{ row.pk }}" data-balance="{{ row.opening_balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>{% endfor %}
+            {% for row in suppliers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>{% endfor %}
           {% endcomponent %}
           {% include "components/ui/icon_button.html" with id="add-supplier" icon="plus" title="New supplier" extra="notch-action" only %}
         </div>
@@ -475,14 +475,6 @@
   });
 
   const supplier = document.getElementById('supplier');
-  const supplierBalance = document.getElementById('supplier-balance');
-  supplier.addEventListener('change', () => {
-    const option = supplier.options[supplier.selectedIndex];
-    const balance = option ? option.dataset.balance : '';
-    const show = Boolean(supplier.value && balance);
-    supplierBalance.classList.toggle('hidden', !show);
-    if (show) supplierBalance.textContent = 'BAL: ' + money(balance);
-  });
 
   // ----- add a supplier or an item without leaving the bill -----
   // The master screen is opened in a frame; it messages back what it saved and

@@ -8,12 +8,13 @@
     <div class="w-full max-w-md">
       <div class="notch-field notch-field--action">
         <label class="notch-label" for="customer">Customer <span class="req">*</span></label>
-        {% component "forms/control" type="select" name="customer" id="customer" required=True only %}
+        {% component "forms/control" type="select" name="customer" id="customer" required=True attrs='data-balance-chip="customer-balance" data-balance-owed="Receivable" data-balance-credit="Advance"' only %}
           <option value=""></option>
-          {% for row in customers %}<option value="{{ row.pk }}" {% if posted.customer == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
+          {% for row in customers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.customer == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
         {% endcomponent %}
         {% include "components/ui/icon_button.html" with id="add-customer" icon="plus" title="New customer" extra="notch-action" only %}
       </div>
+      <p id="customer-balance" class="bal-chip mt-1 hidden"></p>
     </div>
     <div class="doc-head-fields ml-auto">
       <div class="w-40">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
@@ -319,8 +320,6 @@
     document.getElementById(id).addEventListener('input', recalc)
   );
 
-  // A customer carries no opening balance on the master record, so there is no
-  // running figure to show beside the picker the way the purchase screen does.
   const customer = document.getElementById('customer');
 
   // ----- add a customer or an item without leaving the sale -----

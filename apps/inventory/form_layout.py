@@ -82,7 +82,6 @@ INVOICE_OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
     OptionalField("line_uom", "Unit column", "Lines",
                   "Off, every line is written in the item's own unit."),
     OptionalField("line_stock", "Stock in hand chip", "Lines"),
-    OptionalField("supplier_balance", "Supplier balance", "Header"),
     OptionalField("remarks", "Narration", "Money"),
     OptionalField("discount_amount", "Discount", "Money"),
     OptionalField("freight_amount", "Freight", "Money"),
