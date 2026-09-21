@@ -1,0 +1,72 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="form-stack">
+  {% component "ui/detail_header" kind="Godown" number=godown.code party=godown.name status=godown.get_status_display status_tone=godown.status back=True back_url=list_url %}
+    {% slot actions %}
+      {% if can_edit %}{% url 'godowns:godown_update' godown.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" only %}{% endif %}
+    {% endslot %}
+  {% endcomponent %}
+
+  {% component "ui/card" flush=True %}
+    <div class="card-body">
+      {% component "ui/detail_grid" cols=4 %}
+        {% include "components/ui/detail_item.html" with label="Type" value=godown.get_godown_type_display only %}
+        {% include "components/ui/detail_item.html" with label="Location" value=godown.location|default:"—" only %}
+        {% include "components/ui/detail_item.html" with label="Incharge" value=godown.incharge|default:"—" only %}
+        {% include "components/ui/detail_item.html" with label="Remarks" value=godown.remarks|default:"—" only %}
+      {% endcomponent %}
+    </div>
+  {% endcomponent %}
+
+  {% if stock_totals %}
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    {% for t in stock_totals %}{% capture as v %}{{ t.quantity|qty }} {{ t.unit }}{% endcapture %}{% include "components/ui/stat_card.html" with label="In Stock" value=v icon="box" only %}{% endfor %}
+  </div>
+  {% endif %}
+
+  {% component "ui/card" flush=True title="Stock by Product" %}
+    <div class="overflow-x-auto">
+      <table class="data-table doc-table">
+        <thead><tr><th>Code</th><th>Product</th><th>Unit</th><th class="num">Received</th><th class="num">Issued</th><th class="num">Balance</th></tr></thead>
+        <tbody>
+          {% for line in stock_lines %}
+          <tr>
+            <td class="muted">{{ line.code }}</td>
+            <td class="strong">{{ line.name }}</td>
+            <td>{{ line.unit }}</td>
+            <td class="num">{{ line.total_in|qty }}</td>
+            <td class="num">{{ line.total_out|qty }}</td>
+            <td class="num strong">{{ line.quantity|qty }}</td>
+          </tr>
+          {% empty %}
+          {% include "components/table/empty_row.html" with span=6 label="No stock in this godown." only %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcomponent %}
+
+  {% component "ui/card" flush=True title="Movements" %}
+    <div class="overflow-x-auto">
+      <table class="data-table doc-table">
+        <thead><tr><th>Date</th><th>Product</th><th>Source</th><th>Reference</th><th class="num">In</th><th class="num">Out</th><th>Remarks</th></tr></thead>
+        <tbody>
+          {% for m in movements %}
+          <tr>
+            <td>{{ m.entry_date|dmy }}</td>
+            <td class="strong">{{ m.product.name }}</td>
+            <td>{{ m.get_source_display }}</td>
+            <td class="muted">{{ m.reference|default:"—" }}</td>
+            <td class="num">{% if m.quantity > 0 %}{{ m.quantity|qty }}{% endif %}</td>
+            <td class="num">{% if m.quantity < 0 %}{{ m.out_quantity|qty }}{% endif %}</td>
+            <td class="muted truncate">{{ m.remarks|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          {% include "components/table/empty_row.html" with span=7 label="No movements yet." only %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endcomponent %}
+</section>
+{% endblock %}

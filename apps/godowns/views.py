@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import GODOWN_STATUS_CHOICES, GODOWN_TYPE_CHOICES
 from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin
@@ -42,7 +42,31 @@ class GodownListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, L
         context = super().get_context_data(**kwargs)
         context["title"] = "Godowns"
         context["create_url"] = reverse("godowns:godown_create")
+        stock = selectors.stock_by_godown(row.pk for row in context["rows"])
+        for row in context["rows"]:
+            row.stock_lines = stock.get(row.pk, [])
+            row.stock_totals = selectors.stock_totals(row.stock_lines)
         context["breadcrumbs"] = _crumbs()
+        return context
+
+
+class GodownDetailView(PagePermissionRequiredMixin, DetailView):
+    page = PAGE
+    model = Godown
+    template_name = "godowns/godown_detail.html"
+    context_object_name = "godown"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lines = selectors.godown_stock_lines(self.object)
+        context["stock_lines"] = lines
+        context["stock_totals"] = selectors.stock_totals(lines)
+        movements = list(selectors.godown_movements(self.object))
+        for row in movements:
+            row.out_quantity = -row.quantity
+        context["movements"] = movements
+        context["list_url"] = reverse("godowns:godown_list")
+        context["breadcrumbs"] = _crumbs((self.object.code, ""))
         return context
 
 

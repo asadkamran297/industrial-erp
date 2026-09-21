@@ -2,21 +2,23 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
 {% component "table/board" title=title add_url=add_url add_label="Godown" table_id="godown-table" search_placeholder="Search godowns" %}
-  <thead><tr><th>Code</th><th>Godown</th><th>Type</th><th>Location</th><th>Incharge</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <thead><tr><th>Code</th><th>Godown</th><th>Type</th><th>Location</th><th>Incharge</th><th>Current Stock</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
   <tbody>
     {% for row in rows %}
+    {% url 'godowns:godown_detail' row.pk as view_url %}
     <tr{% if row.status != "active" %} class="row--void"{% endif %}>
-      <td class="strong">{{ row.code }}</td>
+      <td class="strong"><a href="{{ view_url }}" class="doc-num">{{ row.code }}</a></td>
       <td class="strong">{{ row.name }}</td>
       <td>{{ row.get_godown_type_display }}</td>
       <td class="muted truncate">{{ row.location|default:"—" }}</td>
       <td class="muted">{{ row.incharge|default:"—" }}</td>
+      <td class="stock-cell">{% for t in row.stock_totals %}<span class="stock-total"><b>{{ t.quantity|qty }}</b> {{ t.unit }}</span>{% empty %}<span class="muted">—</span>{% endfor %}</td>
       <td>{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}</td>
       <td class="actions-col">
-        {% if can_edit %}
         {% url 'godowns:godown_update' row.pk as edit_url %}
         {% url 'godowns:godown_status_toggle' row.pk as toggle_url %}
-        {% component "table/actions" edit_url=edit_url %}
+        {% if can_edit %}
+        {% component "table/actions" view_url=view_url edit_url=edit_url %}
           {% slot end %}
             {% if row.status == "active" %}
             {% include "components/ui/icon_button.html" with icon="deactivate" title="Deactivate" tone="danger" confirm="Deactivate this godown?" post=toggle_url only %}
@@ -25,11 +27,13 @@
             {% endif %}
           {% endslot %}
         {% endcomponent %}
+        {% else %}
+        {% component "table/actions" view_url=view_url %}{% endcomponent %}
         {% endif %}
       </td>
     </tr>
     {% empty %}
-    {% include "components/table/empty_row.html" with span=7 label="No godowns." only %}
+    {% include "components/table/empty_row.html" with span=8 label="No godowns." only %}
     {% endfor %}
   </tbody>
 {% endcomponent %}

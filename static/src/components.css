@@ -1583,6 +1583,10 @@ main table { border-collapse: separate; border-spacing: 0; }
 .expand-btn:hover { background: var(--surface-sunk); }
 .lines-row:hover { background: transparent !important; }
 .lines-cell { background: var(--surface-alt); padding: var(--gap-3) var(--gap-4) var(--gap-4) 2.5rem !important; }
+.stock-cell { white-space: normal !important; }
+.stock-total { white-space: nowrap; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.stock-total b { font-weight: 600; }
+.stock-total + .stock-total::before { content: "\00b7"; margin: 0 .5rem; color: var(--text-faint); }
 .lines-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
 .lines-table thead th {
   position: static;
