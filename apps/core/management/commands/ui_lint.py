@@ -10,7 +10,7 @@ RAW_CONTROL_RE = re.compile(r"<(input|button|select|textarea)\b([^>]*)>", re.I)
 HIDDEN_RE = re.compile(r"""type\s*=\s*["']?hidden""", re.I)
 HEX_RE = re.compile(r"(?<![&\w])#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b(?!;)")
 TABLE_RE = re.compile(
-    r"<table\b(?![^>]*class=[\"'][^\"']*\b(?:board-table|data-table|li-table|lines-table|doc-table|order-pick-lines|wp-tbl|wp-eff)\b)",
+    r"<table\b(?![^>]*class=[\"'][^\"']*\b(?:board-table|data-table|li-table|lines-table|doc-table|order-pick-lines|wp-tbl)\b)",
     re.I,
 )
 MULTILINE_COMMENT_RE = re.compile(r"\{#(?:(?!#\}).)*\n", re.S)

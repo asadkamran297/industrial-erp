@@ -188,26 +188,6 @@
   </form>
 </div>
 
-<div class="wp-modal" id="wp-confirm" role="dialog" aria-modal="true" aria-labelledby="wp-confirm-title">
-  <div class="modal modal--lg">
-    <div class="modal__head"><h2 class="modal__title" id="wp-confirm-title">This entry will create</h2></div>
-    <div class="modal__body">
-      <table class="wp-eff"><tbody id="wp-vouchers"></tbody></table>
-      <h3 class="section__title">Stock in</h3>
-      <table class="wp-eff"><tbody id="wp-stock"></tbody></table>
-      <div class="wp-bill">
-        <span class="wp-bill-label" id="wp-net-label">Net effect</span>
-        <span class="wp-bill-value text-2xl" id="wp-net-value">0</span>
-      </div>
-      <div class="wp-errors field-errors" id="wp-save-error"></div>
-    </div>
-    <div class="modal__foot">
-      {% include "components/ui/button.html" with type="button" id="wp-back" label="Go Back" variant="ghost" only %}
-      {% include "components/ui/button.html" with type="button" id="wp-commit" label="Confirm & Save" icon="check" variant="primary" only %}
-    </div>
-  </div>
-</div>
-
 <script id="wp-wheat-data" type="application/json">{{ wheat_json|safe }}</script>
 <script id="wp-bardana-data" type="application/json">{{ bardana_json|safe }}</script>
 <script id="wp-supplier-data" type="application/json">{{ supplier_json|safe }}</script>
@@ -384,65 +364,23 @@
     return problems;
   }
 
-  function buildPreview() {
-    const t = recalc();
-    const supplier = SUPPLIERS.find(s => String(s.id) === el('supplier').value);
-    const wheat = WHEAT.find(w => String(w.id) === el('wheat_product').value);
-    const name = supplier ? supplier.name : 'the sender';
-    const freight = val('freight');
+  const errors = el('wp-errors');
+  const save = el('wp-save');
+  const SAVE_URL = '{% url "inventory:purchase_invoice_create" %}';
+  const LIST_URL = '{{ list_url }}';
+  const csrf = form.querySelector('[name="csrfmiddlewaretoken"]').value;
 
-    const lines = [['WP', 'Wheat purchase', t.total, 'Dr Inventory / Cr ' + name]];
-    if (freight) lines.push(['FRT', 'Freight', freight, 'Dr ' + name + ' / Cr Cash in Hand']);
-
-    el('wp-vouchers').innerHTML = lines.map(l =>
-      '<tr><td class="code">' + l[0] + '</td><td>' + l[1] + '</td>' +
-      '<td class="num">' + fmt(l[2]) + '</td><td class="post">' + l[3] + '</td></tr>'
-    ).join('');
-
-    const stock = [];
-    if (wheat) stock.push([fmt(t.credit, 3) + ' kg', wheat.name]);
-    rowsBox.querySelectorAll('tr').forEach(tr => {
-      const qty = num(tr.querySelector('.b-qty').value);
-      const bag = BAGS.find(b => String(b.id) === tr.querySelector('.b-bag').value);
-      if (qty && bag) stock.push([fmt(qty, 0) + ' pcs', bag.name]);
-    });
-    el('wp-stock').innerHTML = stock.length
-      ? stock.map(s => '<tr><td class="num w-40">' + s[0] + '</td><td>' + s[1] + '</td></tr>').join('')
-      : '<tr><td class="post">Nothing goes into stock.</td></tr>';
-
-    const net = t.total - freight;
-    el('wp-net-label').textContent = 'Net effect on ' + name;
-    el('wp-net-value').textContent = fmt(Math.abs(net)) + (net >= 0 ? ' credit' : ' debit');
+  function showErrors(messages) {
+    errors.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
+    errors.dataset.open = 'true';
+    errors.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
-  const modal = el('wp-confirm');
-  const errors = el('wp-errors');
-
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    const problems = problemsWithEntry();
-    if (problems.length) {
-      errors.innerHTML = problems.map(p => '<div>' + p + '</div>').join('');
-      errors.dataset.open = 'true';
-      errors.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      return;
-    }
-    errors.dataset.open = 'false';
-    el('wp-save-error').dataset.open = 'false';
-    buildPreview();
-    modal.dataset.open = 'true';
-    el('wp-commit').focus();
-  });
-
-  el('wp-back').addEventListener('click', () => { modal.dataset.open = 'false'; });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && modal.dataset.open === 'true') modal.dataset.open = 'false';
-  });
-
-  // Nothing reloads on failure: the typed slip stays and the button becomes Retry.
-  const SAVE_URL = '{% url "inventory:purchase_invoice_create" %}';
-  const csrf = form.querySelector('[name="csrfmiddlewaretoken"]').value;
-  const commit = el('wp-commit');
+  function saveFailed(messages, retryable) {
+    showErrors(messages);
+    save.disabled = false;
+    save.textContent = retryable ? 'Retry' : 'Save';
+  }
 
   function payload() {
     return {
@@ -475,18 +413,15 @@
     };
   }
 
-  function saveFailed(messages, retryable) {
-    const box = el('wp-save-error');
-    box.dataset.open = 'true';
-    box.innerHTML = messages.map(m => '<div>' + m + '</div>').join('');
-    commit.disabled = false;
-    commit.textContent = retryable ? 'Retry' : 'Confirm & Save';
-  }
-
-  commit.addEventListener('click', () => {
-    el('wp-save-error').dataset.open = 'false';
-    commit.disabled = true;
-    commit.textContent = 'Saving...';
+  // Nothing reloads on failure: the typed slip stays and the button becomes Retry.
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    if (save.disabled) return;
+    const problems = problemsWithEntry();
+    if (problems.length) { showErrors(problems); return; }
+    errors.dataset.open = 'false';
+    save.disabled = true;
+    save.textContent = 'Saving...';
     fetch(SAVE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
@@ -497,7 +432,7 @@
           saveFailed(result.body.errors || ['The entry was not saved.'], false);
           return;
         }
-        window.location.href = result.body.detail_url;
+        window.location.href = LIST_URL;
       })
       .catch(() => saveFailed(
         ['The connection dropped before the entry was saved. Nothing was written, '
@@ -507,8 +442,7 @@
   document.addEventListener('keydown', e => {
     if (!(e.ctrlKey || e.metaKey) || (e.key !== 's' && e.key !== 'S')) return;
     e.preventDefault();
-    if (modal.dataset.open === 'true') el('wp-commit').click();
-    else form.requestSubmit();
+    form.requestSubmit();
   });
 
   enhanceWeights(document);

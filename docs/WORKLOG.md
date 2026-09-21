@@ -26,6 +26,7 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   - Item masters tabs gained "Mill Products" → `/products/`.
   - `seed_demo` now seeds 50 atta/bran sales through `create_direct_sale`; `ProductSaleTests` (5) added.
 - Local Postgres flushed and reseeded (dump kept in the session scratchpad before the flush).
+- Wheat purchase slip saves straight from the Save button (no "This entry will create" confirm modal) and returns to the purchase invoice list with a success message; `.wp-modal/.wp-eff/.wp-bill` CSS dropped.
 - Party balance chip on every entry form (wheat purchase, purchase order, purchase return, sale invoice, sales order; purchase invoice had it): `static/js/party-balance.js` reads `data-balance` off the picked option and paints `.bal-chip` on load and on change (`data-balance-chip`/`-owed`/`-credit` on the select). `suppliers_with_balance()` / `customers_with_balance()` in `apps/inventory/views.py`; `finance.services._party_balances` reads the ledger account's closing via `account_balances` (the old `supplier_payable_balances` summed voucher lines only, dropping the account's opening balance, and the PO form showed the master's opening figure instead of the ledger). `supplier_balance` optional-field toggle removed from the purchase invoice layout; the wheat slip's separate Balance box became the chip under Sender.
 
 ### Live

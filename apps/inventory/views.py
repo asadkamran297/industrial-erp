@@ -5062,6 +5062,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         except ValidationError as exc:
             return JsonResponse({"errors": list(exc.messages)}, status=400)
 
+        messages.success(request, f"Purchase invoice {invoice.invoice_num} saved.")
         return JsonResponse({
             "invoice_num": invoice.invoice_num,
             "detail_url": reverse("inventory:purchase_invoice_detail", args=[invoice.pk]),

@@ -1959,22 +1959,12 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
   color: var(--text-body);
 }
 .wp-out--key { font-weight: 800; color: var(--text); }
-.wp-bill { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--gap-3); margin-top: var(--gap-4); border-top: 2px solid var(--border); padding-top: var(--gap-4); }
-.wp-bill-label { font-size: var(--fs-md); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
-.wp-bill-value { font-size: 2.25rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
 .wp-tbl { width: 100%; border-collapse: collapse; }
 .wp-tbl th { padding: 0 var(--gap-2) .25rem 0; text-align: left; font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; color: var(--text-soft); }
 .wp-tbl td { padding: 0 var(--gap-2) var(--gap-2) 0; vertical-align: middle; }
 .wp-tbl-scroll { overflow-x: auto; }
-.wp-eff { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.wp-eff td { border-bottom: 1px solid var(--border-soft); padding: .375rem var(--gap-2); }
-.wp-eff .num { font-weight: 700; }
-.wp-eff .code { font-weight: 700; letter-spacing: .04em; }
-.wp-eff .post { font-size: var(--fs-xs); color: var(--text-muted); }
 .wp-errors { display: none; }
 .wp-errors[data-open="true"] { display: block; }
-.wp-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: var(--gap-4); background: var(--overlay); }
-.wp-modal[data-open="true"] { display: flex; }
 
 /* ==================================================================== *
  * Tree — chart of accounts, opening balances, balance sheet
