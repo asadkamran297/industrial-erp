@@ -38,6 +38,7 @@ UI system: read `docs/UI_SYSTEM.md` before touching templates; `python manage.py
 23. Posted documents are never deleted. Correct them by reversal (mirror entries); anything referenced elsewhere can only be deactivated.
 24. Purchase and sales are two documents: optional order (no ledger, no stock) and mandatory invoice (the only stock-in/financial event). Read `docs/TWO_DOCUMENT_REFACTOR.md` before changing this flow.
 25. `apps.products` (flour-mill products: wheat, bardana, atta) has its own `ProductLedger`. Never post mill stock through `inventory.ItemLedger`; the only door in is `apps.products.services.post_movement`.
+25a. Purchase Return (`/inventory/purchase-returns/`) is stores-only: it returns `InventoryItem` lines through `ItemLedger`. Wheat/bardana invoices show in the picker greyed with a "Wheat / bardana" pill and cannot be chosen; that is by design, not a bug. A mill-product return would be a separate `ProductLedger` movement (`purchase_return`) that does not exist yet.
 26. Values that drive reported figures (unit weight, rates, credit weight, yield) are snapshotted on the document when saved. Never re-derive them from masters at read time.
 27. Document numbers come from per-series sequences in services (`PO-`, `PI-`, `SAL-`, ...). Never hand-type or share counters between series.
 28. Any `select_for_update()` combined with `select_related()` over a nullable FK must pass `of=("self",)`.

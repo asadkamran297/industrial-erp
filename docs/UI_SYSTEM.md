@@ -152,6 +152,7 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 
 - Item Categories and Units of Measure stay two-pane screens (`class_list.html`, `uom_list.html`); they are outside MASTER LIST. Their edit panes follow MASTER FORM field rules.
 - The wheat purchase slip (`wheat_purchase_form.html`) mirrors the paper slip (CLAUDE.md rule 21) and is outside DOCUMENT FORM for its body layout; the header (number + date in `page_header`), balance chip and direct save still apply.
+- Purchase return invoice picker: wheat/bardana-only invoices and fully returned ones stay listed but greyed (`row--off`) with a pill naming the reason ("Wheat / bardana", "Fully returned"); a disabled row does not open. Purchase returns are stores-only (CLAUDE.md 25a).
 - Documents that post on save (purchase return, account voucher) may label the submit bar Cancel, Save Draft, Save & Post in place of Save & Print.
 - Salary Items has no status field: no tiles, no switch, no badge; the rest of MASTER LIST applies.
 - Until a list is converted to `ColumnSet`, the browser column picker in `filter_bar.html` satisfies the column-picker rule; new lists use `ColumnSet`. Suppliers, Customers, Products and the purchase boards are on `ColumnSet`.

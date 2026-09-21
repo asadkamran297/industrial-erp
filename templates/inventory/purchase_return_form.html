@@ -91,7 +91,7 @@
     </div>
     <div class="modal__scroll">
       <table class="data-table">
-        <thead><tr><th>Invoice #</th><th>Date</th><th>PO #</th><th class="num">Lines</th><th class="num">Total</th></tr></thead>
+        <thead><tr><th>Invoice #</th><th>Date</th><th>PO #</th><th class="num">Lines</th><th class="num">Total</th><th></th></tr></thead>
         <tbody>
           <template x-for="row in invoices" :key="row.id">
             <tr class="row-link" :class="{ 'row--off': row.disabled }" :aria-disabled="row.disabled ? 'true' : 'false'" :title="row.mill_only ? 'Wheat / bardana only' : (row.disabled ? 'Nothing left to return' : '')" @click="!row.disabled && chooseInvoice(row.id)">
@@ -100,9 +100,10 @@
               <td x-text="row.order || '—'"></td>
               <td class="num" x-text="row.lines"></td>
               <td class="num" x-text="money(row.total)"></td>
+              <td><span class="pill pill--closed" x-show="row.disabled" x-text="row.mill_only ? 'Wheat / bardana' : 'Fully returned'"></span></td>
             </tr>
           </template>
-          <tr x-show="!invoices.length"><td colspan="5" class="empty-note" x-text="loading ? '…' : 'No posted invoices.'"></td></tr>
+          <tr x-show="!invoices.length"><td colspan="6" class="empty-note" x-text="loading ? '…' : 'No posted invoices.'"></td></tr>
         </tbody>
       </table>
     </div>

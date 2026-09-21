@@ -1,5 +1,21 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'payroll:payroll_list' as cancel_url %}
-{% include "components/forms/crud_form.html" with title=page_title form=form cancel_url=cancel_url cols=3 narrow=True %}
+<form method="post" id="payroll-form" class="form-stack max-w-3xl">{% csrf_token %}
+  {% component "ui/page_header" title=page_title back=True back_url=cancel_url %}
+    {% slot fields %}
+      <div class="w-24">{% include "components/forms/field.html" with field=form.month only %}</div>
+      <div class="w-28">{% include "components/forms/field.html" with field=form.year only %}</div>
+    {% endslot %}
+  {% endcomponent %}
+  <section class="card">
+    <div class="card-body form-stack">
+      {% include "components/forms/form_errors.html" with form=form only %}
+      <div class="form-grid form-grid--cols-3">
+        {% for field in form.visible_fields %}{% if field.name != "month" and field.name != "year" %}{% include "components/forms/field.html" with field=field only %}{% endif %}{% endfor %}
+      </div>
+    </div>
+    {% include "components/forms/submit_bar.html" with cancel_url=cancel_url only %}
+  </section>
+</form>
 {% endblock %}
