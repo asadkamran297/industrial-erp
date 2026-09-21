@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from apps.core.constants import (
@@ -75,6 +77,8 @@ class ProductForm(StyledModelForm):
         self.fields["parent"].queryset = selectors.sub_groups()
         self.fields["quick_code"].required = False
         self.fields["color"].required = False
+        for name in ("unit_weight", "fix_weight", "actual_weight"):
+            self.fields[name].required = False
         self.fields["unit"].required = True
         self.fields["specification"].required = True
         if not self.instance.pk:
@@ -91,6 +95,9 @@ class ProductForm(StyledModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        for name in ("unit_weight", "fix_weight", "actual_weight"):
+            if cleaned.get(name) is None:
+                cleaned[name] = Decimal("0")
         parent = cleaned.get("parent")
         self.instance.level = PRD_LEVEL_ITEM
         if parent and not self.instance.pk:
