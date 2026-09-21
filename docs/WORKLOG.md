@@ -9,6 +9,8 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ### Local
 
+- `components/forms/crud_form.html` was never committed; ten form screens (products, godowns, fiscal year, masters, permissions…) 500'd. Created it. Product weights optional (blank → 0).
+- Columns picker on every board: server `ColumnSet` now on Products too; all other boards get a generic browser-side picker (`data-column-menu` in `filter_bar.html`, `ui.js`), saved in localStorage, `data-default-off` on a `<th>` hides by default, `no_columns=True` opts out.
 - Seed data rebuilt for the flour mill; the generic industrial set (steel/textile orgs, TVs, cement, 55 mixed suppliers, 46 inventory classes) is gone.
   - `seed`: one organization `ZFM` (Zafaran Flour Mills) with mill, head office and two sales depots; 30 suppliers split into wheat arhtis / bardana traders / stores vendors (`WHEAT_SUPPLIER_CODES` etc. in `apps/inventory/seeders/suppliers.py`); 18 stores classes (roller-mill spares, sieves, belts, lubricants, lab, fumigation, PPE); 65 stores items; 21 UOMs incl. `MUND`; product tree widened to 40 items (more Atta/Maida/Fine/Suji brands, bran 49 kg, refraction, dalia) with finish-bardana links for each. Bags live only on the product tree — no stores item duplicates a sack.
   - `seed` order now includes `finance` (chart of accounts via `seed_chart_of_accounts`) before `products`, so product account links get their expense accounts on a fresh database. The sample grinding run left `seed`; masters only.
