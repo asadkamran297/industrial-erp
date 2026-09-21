@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'fix\\(deploy\\): filter shell banner out of eval in reseed script *)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(curl -sS -m 30 -o /dev/null -w \"%{http_code}\\\\n\" https://flourorbit.com/accounts/login/)"
     ]
   }
 }
