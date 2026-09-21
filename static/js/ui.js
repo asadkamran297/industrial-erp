@@ -346,4 +346,19 @@
       if (first && document.activeElement === document.body) first.focus();
     }, 60);
   });
+
+  // Sidebar keeps its scroll position between pages; first visit lands on the current item.
+  document.addEventListener("DOMContentLoaded", () => {
+    const nav = document.querySelector("[data-nav-scroll]");
+    if (!nav) return;
+    const key = "portal-nav-scroll";
+    const saved = Number(sessionStorage.getItem(key));
+    const current = nav.querySelector("[aria-current=page]");
+    if (saved > 0) nav.scrollTop = saved;
+    if (current) {
+      const top = current.getBoundingClientRect().top - nav.getBoundingClientRect().top;
+      if (top < 0 || top + current.offsetHeight > nav.clientHeight) current.scrollIntoView({ block: "center" });
+    }
+    nav.addEventListener("scroll", () => sessionStorage.setItem(key, String(nav.scrollTop)), { passive: true });
+  });
 })();

@@ -84,23 +84,23 @@ def build_navigation_item(
 def get_nav_item_class(depth: int, has_children: bool, is_active: bool, on_active_path: bool = False) -> str:
     base = "flex w-full items-center text-left text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--primary-color)]/30"
     if depth == 0:
-        size = "min-h-10 gap-3 rounded-lg px-3 font-semibold"
+        size = "min-h-9 gap-2.5 rounded-lg px-2.5 font-semibold"
         active = "bg-[var(--primary-color)] text-white shadow-sm shadow-blue-900/10"
         on_path = "bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)]"
         inactive = "text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
     else:
-        size = "min-h-9 gap-2 rounded-lg px-3"
+        size = "min-h-8 gap-2 rounded-lg px-2.5"
         active = "bg-[var(--primary-color)] font-semibold text-white shadow-sm shadow-blue-900/10"
         on_path = "font-semibold text-[var(--primary-color)] dark:text-white"
         inactive = "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
     if depth >= 2 and not has_children:
-        size = "min-h-9 rounded-md px-3"
+        size = "min-h-8 rounded-md px-2.5"
     state = active if is_active else (on_path if on_active_path else inactive)
     return f"{base} {size} {state}"
 
 
 def get_nav_icon_class(is_active: bool, on_active_path: bool = False) -> str:
-    base = "grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-bold"
+    base = "grid h-6 w-6 shrink-0 place-items-center rounded-md text-xs font-bold"
     active = "bg-white/15 text-white"
     on_path = "bg-[color-mix(in_srgb,var(--primary-color)_12%,transparent)] text-[var(--primary-color)] dark:bg-[color-mix(in_srgb,var(--primary-color)_28%,transparent)]"
     inactive = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"

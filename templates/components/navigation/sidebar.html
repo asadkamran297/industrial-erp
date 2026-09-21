@@ -1,11 +1,11 @@
-<nav class="portal-sidebar-scroll mt-5 max-h-[calc(100vh-7rem)] space-y-4 overflow-y-auto pr-1" aria-label="Main menu">
+<nav class="portal-sidebar-scroll mt-3 max-h-[calc(100vh-5.5rem)] space-y-3 overflow-y-auto pr-1" data-nav-scroll aria-label="Main menu">
   {% regroup portal_navigation by section as nav_sections %}
   {% for section in nav_sections %}
     <div>
       {% if section.grouper != "main" %}
-        <p class="mb-2 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500" x-show="!sidebarCollapsed" x-transition.opacity>{{ section.grouper }}</p>
+        <p class="mb-1 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500" x-show="!sidebarCollapsed" x-transition.opacity>{{ section.grouper }}</p>
       {% endif %}
-      <div class="space-y-1">
+      <div class="space-y-0.5">
         {% for item in section.list %}
           {% include "components/navigation/nav_item.html" with item=item %}
         {% endfor %}
