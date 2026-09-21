@@ -25,20 +25,9 @@
               {% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
             {% endcomponent %}
           </div>
-          <div class="wp-f w-28">
-            <label for="withholding_rate">WHT/40kg</label>
-            {% include "components/forms/control.html" with id="withholding_rate" name="withholding_rate" value=default_withholding_rate|floatformat:2 kind="money" extra="wp-in wp-in--num" only %}
-          </div>
-          <div class="wp-f wp-f--grow">
-            <label for="broker">Broker</label>
-            {% component "forms/control" type="select" id="broker" name="broker" extra="wp-in" searchable=True only %}
-              <option value="">Select an Account</option>
-              {% for b in brokers %}<option value="{{ b.pk }}">{{ b.title }}</option>{% endfor %}
-            {% endcomponent %}
-          </div>
-          <div class="wp-f w-28">
-            <label for="brokerage_rate">Brokerage/100kg</label>
-            {% include "components/forms/control.html" with id="brokerage_rate" name="brokerage_rate" value=default_brokerage_rate|floatformat:2 kind="money" extra="wp-in wp-in--num" only %}
+          <div class="wp-f wp-f--grow wp-f--calc">
+            <label>Balance</label>
+            <div class="wp-out justify-start" id="supplier-balance"></div>
           </div>
         </div>
         <div class="wp-row">
@@ -59,10 +48,6 @@
           <div class="wp-f w-80">
             <label for="remark">Manual Remark</label>
             {% include "components/forms/control.html" with id="remark" name="remark" placeholder="Manual Ref#" extra="wp-in" attrs='data-no-amount' only %}
-          </div>
-          <div class="wp-f wp-f--grow wp-f--calc">
-            <label>Balance</label>
-            <div class="wp-out justify-start" id="supplier-balance"></div>
           </div>
         </div>
 
@@ -417,16 +402,10 @@
     const supplier = SUPPLIERS.find(s => String(s.id) === el('supplier').value);
     const wheat = WHEAT.find(w => String(w.id) === el('wheat_product').value);
     const name = supplier ? supplier.name : 'the sender';
-    const wht = t.credit / 40 * val('withholding_rate');
-    const brokerage = t.credit / 100 * val('brokerage_rate');
     const freight = val('freight');
-    const brokerPick = el('broker').selectedOptions[0];
-    const brokerName = el('broker').value && brokerPick ? brokerPick.text : 'Broker';
 
     const lines = [['WP', 'Wheat purchase', t.total, 'Dr Inventory / Cr ' + name]];
-    if (wht) lines.push(['WHT', 'Withholding tax', wht, 'Cr Tax withheld, off ' + name + "'s credit"]);
     if (freight) lines.push(['FRT', 'Freight', freight, 'Dr ' + name + ' / Cr Cash in Hand']);
-    if (brokerage) lines.push(['COM', 'Brokerage', brokerage, 'Dr ' + name + ' / Cr ' + brokerName]);
 
     el('wp-vouchers').innerHTML = lines.map(l =>
       '<tr><td class="code">' + l[0] + '</td><td>' + l[1] + '</td>' +
@@ -444,7 +423,7 @@
       ? stock.map(s => '<tr><td class="num w-40">' + s[0] + '</td><td>' + s[1] + '</td></tr>').join('')
       : '<tr><td class="post">Nothing goes into stock.</td></tr>';
 
-    const net = t.total - wht - freight - brokerage;
+    const net = t.total - freight;
     el('wp-net-label').textContent = 'Net effect on ' + name;
     el('wp-net-value').textContent = fmt(Math.abs(net)) + (net >= 0 ? ' credit' : ' debit');
   }
@@ -484,10 +463,7 @@
       supplier: el('supplier').value,
       wheat_product: el('wheat_product').value,
       godown: el('godown').value,
-      broker: el('broker').value,
       remark: el('remark').value,
-      withholding_rate: el('withholding_rate').value,
-      brokerage_rate: el('brokerage_rate').value,
       party_load: el('party_load').value,
       party_tare: el('party_tare').value,
       mill_load: el('mill_load').value,
