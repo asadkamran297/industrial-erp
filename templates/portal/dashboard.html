@@ -10,11 +10,14 @@
 
   <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
     {% for kpi in kpis %}
-      <div class="kpi kpi--{{ kpi.key }}{% if kpi.signed and kpi.value < 0 %} is-loss{% endif %}">
+      <div class="kpi kpi--{{ kpi.key }}{% if kpi.signed and kpi.value < 0 %} is-loss{% endif %}" x-data="{ show: localStorage.getItem('kpi-show-{{ kpi.key }}') === '1', toggle() { this.show = !this.show; localStorage.setItem('kpi-show-{{ kpi.key }}', this.show ? '1' : '0'); } }">
         <div class="kpi-rule"></div>
         <p class="kpi-label">{{ kpi.label }}</p>
-        <p class="kpi-value{% if kpi.signed and kpi.value < 0 %} is-negative{% endif %}">{{ kpi.value|amount }}</p>
-        <p class="kpi-note">{{ kpi.note }}</p>
+        {% include "components/ui/icon_button.html" with type="button" icon="view" title="Show / hide" extra="kpi-eye" attrs='@click="toggle()" x-show="!show"' only %}
+        {% include "components/ui/icon_button.html" with type="button" icon="view-off" title="Show / hide" extra="kpi-eye" attrs='@click="toggle()" x-show="show" x-cloak' only %}
+        <p class="kpi-value{% if kpi.signed and kpi.value < 0 %} is-negative{% endif %}"><span x-show="show" x-cloak>{{ kpi.value|amount }}</span><span x-show="!show">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span></p>
+        <p class="kpi-note" x-show="show" x-cloak>{{ kpi.note }}</p>
+        <p class="kpi-note" x-show="!show">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</p>
       </div>
     {% endfor %}
   </section>
