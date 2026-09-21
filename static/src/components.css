@@ -1492,6 +1492,7 @@ main table { border-collapse: separate; border-spacing: 0; }
   padding: .375rem var(--gap-3);
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
+  white-space: nowrap;
 }
 .board-table tbody tr:hover,
 .data-table tbody tr:hover { background: var(--surface-alt); }
@@ -1508,8 +1509,6 @@ main table { border-collapse: separate; border-spacing: 0; }
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.board-table td:first-child,
-.board-table th:first-child { white-space: nowrap; }
 .board-table .num,
 .data-table .num { text-align: right; }
 .board-table .truncate,
@@ -1561,7 +1560,7 @@ main table { border-collapse: separate; border-spacing: 0; }
   white-space: nowrap;
   color: var(--text-muted);
 }
-.lines-table tbody td { height: auto; padding: .375rem var(--gap-2); border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.lines-table tbody td { height: auto; padding: .375rem var(--gap-2); border-bottom: 1px solid var(--border-soft); vertical-align: top; white-space: normal; }
 .lines-table tbody tr:last-child td { border-bottom: 0; }
 .lines-table tfoot td { position: static; height: auto; border-top: 2px solid var(--border); padding: var(--gap-2); background: transparent; }
 .lines-foot-label { font-weight: 700; color: var(--text-soft); }
