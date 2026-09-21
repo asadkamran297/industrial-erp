@@ -27,9 +27,12 @@
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
       <div class="flex h-14 items-center gap-2 px-4">
         <button type="button" class="icon-btn icon-btn--bordered lg:hidden" @click="sidebarOpen = true" title="Open menu" aria-label="Open menu">{% icon "menu" %}</button>
-        <div class="hidden min-w-0 sm:block">
+        <div class="hidden shrink-0 sm:block">
           {% include "components/ui/search_box.html" with placeholder="Search records, reports..." %}
         </div>
+        <nav class="fav-bar" data-fav-bar data-toggle-url="{% url 'portal:favourite_toggle' %}" aria-label="Favourites">
+          {% for fav in portal_favourites %}<a href="{{ fav.href }}" class="fav-chip{% if fav.is_current %} is-current{% endif %}" data-href="{{ fav.href }}">{% icon "star" size="sm" %}<span>{{ fav.label }}</span></a>{% endfor %}
+        </nav>
 
         <div class="ml-auto flex items-center gap-2">
           {% url 'inventory:pos_create' as sale_url %}{% include "components/ui/button.html" with label="Sale" href=sale_url icon="plus" variant="primary" size="sm" only %}

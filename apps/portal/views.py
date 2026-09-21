@@ -1,8 +1,13 @@
 from datetime import date
 from decimal import Decimal
 
+import json
+
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Sum
+from django.http import JsonResponse
 from django.utils import timezone
+from django.views import View
 from django.views.generic import TemplateView
 
 from apps.core.constants import STATUS_POSTED
@@ -17,6 +22,8 @@ from apps.finance.services import (
 from apps.hr.models import Employee
 from apps.inventory.models import POSDetail, POSMaster, PurchaseInvoice
 from apps.payroll.models import Payroll
+
+from .services import toggle_favourite
 
 ZERO = Decimal("0.00")
 TREND_MONTHS = 12
@@ -156,3 +163,14 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         context["integrity"] = ledger_integrity()
         context["breadcrumbs"] = [("Dashboard", "")]
         return context
+
+
+class FavouriteToggleView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        try:
+            href = (json.loads(request.body or b"{}").get("href") or "").strip()
+        except ValueError:
+            href = ""
+        if not href.startswith("/") or len(href) > 255:
+            return JsonResponse({"errors": ["Invalid menu link."]}, status=400)
+        return JsonResponse({"on": toggle_favourite(request.user, href)})

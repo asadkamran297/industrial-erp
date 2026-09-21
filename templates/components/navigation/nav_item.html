@@ -12,8 +12,11 @@
     </div>
   </div>
 {% else %}
-  <a href="{{ item.href }}" class="{{ item.item_class }}"{% if item.is_current %} aria-current="page"{% endif %}>
-    {% if item.depth == 0 %}<span class="{{ item.icon_class }}">{{ item.icon }}</span>{% endif %}
-    <span class="truncate" x-show="!sidebarCollapsed || item.depth > 0" x-transition.opacity>{{ item.label }}</span>
-  </a>
+  <div class="nav-leaf{% if item.is_favourite %} is-fav{% endif %}" data-nav-leaf data-href="{{ item.href }}" data-label="{{ item.label }}">
+    <a href="{{ item.href }}" class="{{ item.item_class }}"{% if item.is_current %} aria-current="page"{% endif %}>
+      {% if item.depth == 0 %}<span class="{{ item.icon_class }}">{{ item.icon }}</span>{% endif %}
+      <span class="truncate" x-show="!sidebarCollapsed || item.depth > 0" x-transition.opacity>{{ item.label }}</span>
+    </a>
+    <button type="button" class="nav-fav" data-fav-toggle title="Favourite" aria-label="Favourite" x-show="!sidebarCollapsed || item.depth > 0">{% icon "star" size="sm" %}</button>
+  </div>
 {% endif %}

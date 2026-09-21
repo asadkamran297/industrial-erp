@@ -7,6 +7,7 @@ from django.urls import reverse
 from apps.access_control.selectors import get_user_permission_codes
 
 from .constants import NAV_ITEMS, NavigationItem
+from .models import NavFavourite
 
 
 def resolve_nav_href(item: NavigationItem) -> str:
@@ -42,11 +43,12 @@ def build_navigation_item(
     current_path: str,
     depth: int = 0,
     current_query: str = "",
+    favourites: frozenset[str] = frozenset(),
 ) -> dict[str, Any] | None:
     children = [
         child
         for child in (
-            build_navigation_item(child_item, permission_codes, current_path, depth + 1, current_query)
+            build_navigation_item(child_item, permission_codes, current_path, depth + 1, current_query, favourites)
             for child_item in item.children
         )
         if child is not None
@@ -76,6 +78,7 @@ def build_navigation_item(
         "is_active": is_active or has_active_child,
         "is_current": is_active,
         "is_open": has_active_child,
+        "is_favourite": href in favourites,
         "item_class": get_nav_item_class(depth, bool(children), is_active, has_active_child),
         "icon_class": get_nav_icon_class(is_active, has_active_child),
     }
@@ -111,11 +114,29 @@ def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:
     permission_codes = get_user_permission_codes(request.user)
     current_path = request.path
     current_query = getattr(request, "nav_query", "") or request.GET.urlencode()
+    favourite_hrefs = list(NavFavourite.objects.filter(user=request.user).values_list("href", flat=True))
+    favourites = frozenset(favourite_hrefs)
     navigation = []
 
     for item in NAV_ITEMS:
-        nav_item = build_navigation_item(item, permission_codes, current_path, current_query=current_query)
+        nav_item = build_navigation_item(item, permission_codes, current_path, current_query=current_query, favourites=favourites)
         if nav_item is not None:
             navigation.append(nav_item)
 
+    request.portal_favourites = _collect_favourites(navigation, favourite_hrefs)
     return navigation
+
+
+def _collect_favourites(navigation: list[dict[str, Any]], ordered_hrefs: list[str]) -> list[dict[str, Any]]:
+    """Favourite leaves in saved order; items the user can no longer see are skipped."""
+    leaves: dict[str, dict[str, Any]] = {}
+
+    def walk(items):
+        for item in items:
+            if item["has_children"]:
+                walk(item["children"])
+            elif item["is_favourite"] and item["href"] not in leaves:
+                leaves[item["href"]] = item
+
+    walk(navigation)
+    return [leaves[href] for href in ordered_hrefs if href in leaves]

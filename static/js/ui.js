@@ -361,4 +361,44 @@
     }
     nav.addEventListener("scroll", () => sessionStorage.setItem(key, String(nav.scrollTop)), { passive: true });
   });
+
+  // Sidebar star toggles a favourite; the header bar updates in place.
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-fav-toggle]");
+    if (!btn) return;
+    event.preventDefault();
+    const leaf = btn.closest("[data-nav-leaf]");
+    const bar = document.querySelector("[data-fav-bar]");
+    if (!leaf || !bar || btn.disabled) return;
+    btn.disabled = true;
+    fetch(bar.dataset.toggleUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify({ href: leaf.dataset.href }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(({ on }) => {
+        leaf.classList.toggle("is-fav", on);
+        const chip = bar.querySelector(`[data-href="${CSS.escape(leaf.dataset.href)}"]`);
+        if (!on) { if (chip) chip.remove(); return; }
+        if (chip) return;
+        const a = document.createElement("a");
+        a.href = leaf.dataset.href;
+        a.className = "fav-chip" + (leaf.querySelector("[aria-current=page]") ? " is-current" : "");
+        a.dataset.href = leaf.dataset.href;
+        a.innerHTML = btn.querySelector("svg").outerHTML + "<span></span>";
+        a.querySelector("span").textContent = leaf.dataset.label;
+        bar.appendChild(a);
+      })
+      .catch(() => {})
+      .finally(() => { btn.disabled = false; });
+  });
+
+  // Mouse wheel scrolls the favourites bar sideways.
+  document.addEventListener("wheel", (event) => {
+    const bar = event.target.closest("[data-fav-bar]");
+    if (!bar || bar.scrollWidth <= bar.clientWidth || event.deltaY === 0) return;
+    event.preventDefault();
+    bar.scrollLeft += event.deltaY;
+  }, { passive: false });
 })();
