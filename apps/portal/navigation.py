@@ -45,6 +45,8 @@ def build_navigation_item(
     current_query: str = "",
     favourites: frozenset[str] = frozenset(),
 ) -> dict[str, Any] | None:
+    if item.hidden:
+        return None
     children = [
         child
         for child in (

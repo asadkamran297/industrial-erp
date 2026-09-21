@@ -14,6 +14,7 @@ class NavigationItem:
     children: tuple["NavigationItem", ...] = ()
     query: str = ""
     match_paths: tuple[str, ...] = ()
+    hidden: bool = False
 
 
 SECTION_WORKSPACE = "Workspace"
@@ -115,12 +116,12 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Units of Measure", permission="inventory.uoms.index", url_name="inventory:uom_list"),
         NavigationItem("UOM Conversions", permission="inventory.uom_conversions.index", url_name="inventory:conversion_list"),
         NavigationItem("Godowns", permission="godowns.godowns.index", url_name="godowns:godown_list"),
-        NavigationItem("Departments", permission="configurations.departments.index", href="/masters/departments/"),
-        NavigationItem("Designations", permission="configurations.designations.index", href="/masters/designations/"),
-        NavigationItem("Job Types", permission="configurations.job_types.index", href="/masters/job-types/"),
-        NavigationItem("Cities", permission="configurations.cities.index", href="/masters/cities/"),
-        NavigationItem("Banks", permission="configurations.banks.index", href="/masters/banks/"),
-        NavigationItem("Allowances & Deductions", permission="configurations.allowance_deductions.index", href="/masters/allowance-deductions/"),
+        NavigationItem("Departments", permission="configurations.departments.index", href="/masters/departments/", hidden=True),
+        NavigationItem("Designations", permission="configurations.designations.index", href="/masters/designations/", hidden=True),
+        NavigationItem("Job Types", permission="configurations.job_types.index", href="/masters/job-types/", hidden=True),
+        NavigationItem("Cities", permission="configurations.cities.index", href="/masters/cities/", hidden=True),
+        NavigationItem("Banks", permission="configurations.banks.index", href="/masters/banks/", hidden=True),
+        NavigationItem("Allowances & Deductions", permission="configurations.allowance_deductions.index", href="/masters/allowance-deductions/", hidden=True),
     )),
     NavigationItem("Company", permission=None, section=SECTION_SETUP, icon="O", children=(
         NavigationItem("Organizations", permission="organizations.organizations.index", url_name="organizations:organization_list"),
