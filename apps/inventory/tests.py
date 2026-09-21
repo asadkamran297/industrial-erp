@@ -631,3 +631,112 @@ class WheatPurchaseScreenTests(TestCase):
         response = self._post(self._entry(katla="80,000"))
         self.assertEqual(response.status_code, 400)
         self.assertIn("deductions", response.json()["errors"][0])
+
+
+class ProductSaleTests(TestCase):
+    """Mill products sold on the same documents as stores items, out of their own ledger."""
+
+    def setUp(self):
+        from apps.core.constants import (PRD_LEVEL_GROUP, PRD_LEVEL_ITEM, PRD_LEVEL_SUB_GROUP,
+                                         PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE)
+        from apps.products.models import ProductNode
+        from apps.products.services import set_opening_balance
+
+        self.user = get_user_model().objects.create_superuser(username="depot", password="pass12345")
+        self.customer = Customer.objects.create(customer_code="CUST001", customer_name="Haji Karim Atta Dealer",
+                                                status=STATUS_ACTIVE)
+        group = ProductNode.objects.create(level=PRD_LEVEL_GROUP, code_segment="02", name="Finish")
+        sub = ProductNode.objects.create(parent=group, level=PRD_LEVEL_SUB_GROUP, code_segment="01", name="Atta")
+        self.atta = ProductNode.objects.create(
+            parent=sub, level=PRD_LEVEL_ITEM, code_segment="003", name="Atta Zafaran 15 kg",
+            specification=PRD_SPEC_FINISH_ITEM, unit=PRD_UNIT_PIECE, unit_weight=Decimal("15"),
+            starting_date=timezone.localdate(),
+        )
+        set_opening_balance(self.atta, Decimal("500"), rate=Decimal("1900"), user=self.user)
+
+    def test_direct_sale_of_a_product_leaves_the_product_ledger(self):
+        from apps.core.constants import PRD_LEDGER_SALE
+        from apps.products.models import ProductLedger
+        from apps.products.selectors import product_stock
+
+        from .services import create_direct_sale
+
+        sale, net = create_direct_sale(
+            customer=self.customer, sale_date=timezone.localdate(),
+            lines=[{"product": self.atta, "quantity": Decimal("120"), "price": Decimal("2050")}],
+            paid_amount=Decimal("100000"), user=self.user,
+        )
+        line = sale.items.get()
+        self.assertEqual(line.item_name, "Atta Zafaran 15 kg")
+        self.assertEqual(line.item_code, "02-01-003")
+        self.assertIsNone(line.inventory_item)
+        self.assertEqual(net, Decimal("246000.00"))
+        self.assertEqual(product_stock(self.atta), Decimal("380"))
+        movement = ProductLedger.objects.get(product=self.atta, source=PRD_LEDGER_SALE)
+        self.assertEqual(movement.quantity, Decimal("-120"))
+        self.assertEqual(movement.reference, sale.sale_num)
+        self.assertTrue(sale.journal_ref)
+
+    def test_a_sale_cannot_take_more_than_the_mill_holds(self):
+        from .services import create_direct_sale
+
+        with self.assertRaises(ValidationError):
+            create_direct_sale(
+                customer=self.customer, sale_date=timezone.localdate(),
+                lines=[{"product": self.atta, "quantity": Decimal("501"), "price": Decimal("2050")}],
+                user=self.user,
+            )
+
+    def test_sales_order_with_a_product_line_is_invoiced_against(self):
+        from .services import create_direct_sale, create_sales_order, submit_sales_order
+
+        order, total = create_sales_order(
+            customer=self.customer,
+            lines=[{"product": self.atta, "quantity": Decimal("200"), "rate": Decimal("2000")}],
+            user=self.user,
+        )
+        submit_sales_order(order=order, user=self.user)
+        self.assertEqual(total, Decimal("400000.00"))
+        order_line = order.items.get()
+        self.assertEqual(order_line.descr, "Atta Zafaran 15 kg")
+
+        create_direct_sale(
+            customer=self.customer, sale_date=timezone.localdate(),
+            lines=[{"product": self.atta, "quantity": Decimal("80"), "price": Decimal("2000"),
+                    "order_item": order_line}],
+            user=self.user,
+        )
+        order_line.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(order_line.qty_pending, Decimal("120"))
+        self.assertEqual(order.status, STATUS_PARTIALLY_INVOICED)
+
+    def test_sale_return_puts_the_product_back(self):
+        from apps.core.constants import PRD_LEDGER_SALE_RETURN
+        from apps.products.models import ProductLedger
+        from apps.products.selectors import product_stock
+
+        from .services import create_direct_sale
+
+        sale, _net = create_direct_sale(
+            customer=self.customer, sale_date=timezone.localdate(),
+            lines=[{"product": self.atta, "quantity": Decimal("50"), "price": Decimal("2050")}],
+            user=self.user,
+        )
+        sale_return = POSReturnMaster.objects.create(
+            transaction_id=generate_transaction_id("SRT", POSReturnMaster), pos_master=sale,
+            sale_transaction_id=sale.transaction_id, sale_num=sale.sale_num, customer=self.customer,
+            created_by=self.user, updated_by=self.user,
+        )
+        POSReturnDetail.objects.create(pos_return_master=sale_return, pos_detail=sale.items.get(),
+                                       quantity=Decimal("10"), created_by=self.user, updated_by=self.user)
+        post_sale_return(sale_return=sale_return, user=self.user)
+        self.assertEqual(product_stock(self.atta), Decimal("460"))
+        self.assertEqual(ProductLedger.objects.filter(product=self.atta, source=PRD_LEDGER_SALE_RETURN).count(), 1)
+
+    def test_the_sale_invoice_screen_offers_products_beside_items(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("inventory:sale_invoice_create"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'"id": "p:{self.atta.pk}"')
+        self.assertContains(response, "Atta Zafaran 15 kg")

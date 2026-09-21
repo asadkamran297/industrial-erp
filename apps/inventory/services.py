@@ -42,7 +42,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, PRD_LEDGER_REVERSAL, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
+from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, PRD_LEDGER_REVERSAL, PRD_LEDGER_SALE, PRD_LEDGER_SALE_RETURN, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
 
 TWO_DP = Decimal("0.01")
 FOUR_DP = Decimal("0.0001")
@@ -51,6 +51,7 @@ BROKERAGE_KG = Decimal(BROKERAGE_WEIGHT_UNIT_KG)
 WITHHOLDING_KG = Decimal(WITHHOLDING_WEIGHT_UNIT_KG)
 
 from apps.products import services as product_services
+from apps.products import selectors as product_selectors
 
 from .models import (
     ItemLedger,
@@ -386,7 +387,7 @@ def open_sales_order_lines(*, customer=None, sales_order=None):
     """Order lines still open to be invoiced."""
     rows = (
         SalesOrderItem.objects
-        .select_related("sales_order__customer", "inventory_item", "uom")
+        .select_related("sales_order__customer", "inventory_item__uom", "product", "uom")
         .filter(sales_order__status__in=INV_ORDER_OPEN_STATUSES)
     )
     if customer is not None:
@@ -412,6 +413,12 @@ def customer_has_open_orders(*, customer):
 
 
 @transaction.atomic
+def _sellable(product):
+    if not product.can_sell:
+        raise ValidationError(f"{product.name} is not a product the mill sells.")
+    return product
+
+
 def create_sales_order(*, customer, order_date=None, lines, expected_date=None,
                        customer_ref="", remarks="", status=STATUS_DRAFT, user):
     """Raise an order on a customer. Nothing is committed to the books by it."""
@@ -420,7 +427,7 @@ def create_sales_order(*, customer, order_date=None, lines, expected_date=None,
 
     clean = [
         line for line in lines
-        if line.get("inventory_item") and Decimal(line.get("quantity") or 0) > 0
+        if (line.get("inventory_item") or line.get("product")) and Decimal(line.get("quantity") or 0) > 0
     ]
     if not clean:
         raise ValidationError("Add at least one item with a quantity.")
@@ -429,8 +436,6 @@ def create_sales_order(*, customer, order_date=None, lines, expected_date=None,
         customer=customer,
         order_date=order_date or timezone.localdate(),
         expected_date=expected_date or None,
-        godown=godown,
-        broker=broker,
         customer_ref=(customer_ref or "").strip(),
         status=status,
         remarks=remarks or "",
@@ -440,19 +445,28 @@ def create_sales_order(*, customer, order_date=None, lines, expected_date=None,
 
     total = Decimal("0.00")
     for seq, line in enumerate(clean, start=1):
-        item = line["inventory_item"]
-        quantity, rate = to_base_unit(
-            item=item, uom=line.get("uom"),
-            quantity=Decimal(line["quantity"]), rate=Decimal(line.get("rate") or 0),
-        )
+        product = line.get("product")
+        if product is not None:
+            _sellable(product)
+            item, uom = None, None
+            quantity, rate = Decimal(line["quantity"]), Decimal(line.get("rate") or 0)
+            descr = product.name
+        else:
+            item = line["inventory_item"]
+            quantity, rate = to_base_unit(
+                item=item, uom=line.get("uom"),
+                quantity=Decimal(line["quantity"]), rate=Decimal(line.get("rate") or 0),
+            )
+            uom, descr = item.uom, item.item_name
         SalesOrderItem.objects.create(
             sales_order=order,
             seq_num=seq,
             inventory_item=item,
-            descr=(line.get("descr") or item.item_name)[:255],
+            product=product,
+            descr=(line.get("descr") or descr)[:255],
             quantity=quantity,
             rate=rate,
-            uom=item.uom,
+            uom=uom,
             tax_perc=Decimal(line.get("tax_perc") or 0),
             discount_amount=Decimal(line.get("discount_amount") or 0),
             created_by=user,
@@ -524,7 +538,10 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     if not customer:
         raise ValidationError("Pick a customer.")
 
-    clean_lines = [line for line in lines if line.get("inventory_item") and line.get("quantity")]
+    clean_lines = [
+        line for line in lines
+        if (line.get("inventory_item") or line.get("product")) and line.get("quantity")
+    ]
     if not clean_lines:
         raise ValidationError("Add at least one item with a quantity.")
 
@@ -565,12 +582,17 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
         if quantity <= 0:
             raise ValidationError("Every line needs a quantity greater than zero.")
 
-        item = line["inventory_item"]
-        quantity, price = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=price)
+        product = line.get("product")
+        item = None if product is not None else line["inventory_item"]
+        if product is not None:
+            _sellable(product)
+        else:
+            quantity, price = to_base_unit(item=item, uom=line.get("uom"), quantity=quantity, rate=price)
         POSDetail.objects.create(
             pos_master=sale,
             seq_num=seq,
             inventory_item=item,
+            product=product,
             quantity=quantity,
             price=price,
             created_by=user,
@@ -601,10 +623,13 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
         order_item = line.get("_locked_order_item")
         if order_item is None:
             continue
-        quantity, _rate = to_base_unit(
-            item=line["inventory_item"], uom=line.get("uom"),
-            quantity=Decimal(line["quantity"]), rate=Decimal(line.get("price") or 0),
-        )
+        if line.get("product") is not None:
+            quantity = Decimal(line["quantity"])
+        else:
+            quantity, _rate = to_base_unit(
+                item=line["inventory_item"], uom=line.get("uom"),
+                quantity=Decimal(line["quantity"]), rate=Decimal(line.get("price") or 0),
+            )
         order_item.qty_invoiced = (order_item.qty_invoiced or Decimal("0")) + quantity
         order_item.updated_by = user
         order_item.save()
@@ -623,7 +648,7 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
 
 @transaction.atomic
 def post_sale(*, sale, user):
-    sale = POSMaster.objects.select_for_update().prefetch_related("items__inventory_item").get(pk=sale.pk)
+    sale = POSMaster.objects.select_for_update().prefetch_related("items__inventory_item", "items__product").get(pk=sale.pk)
     if sale.posted == YES:
         raise ValidationError("Posted sale cannot be edited or posted again.")
     if not sale.items.exists():
@@ -633,7 +658,22 @@ def post_sale(*, sale, user):
     tax_total = Decimal("0.00")
     discount_total = Decimal("0.00")
     cost_total = Decimal("0.00")
+    product_rates = product_selectors.current_rate_map()
     for item in sale.items.all():
+        if item.is_product_line:
+            on_hand = product_selectors.product_stock(item.product)
+            if item.quantity > on_hand:
+                raise ValidationError(f"Insufficient stock for {item.item_name}: {on_hand} on hand.")
+            cost_total += item.quantity * (product_rates.get(item.product_id) or Decimal("0.00"))
+            product_services.post_movement(
+                item.product, -item.quantity, PRD_LEDGER_SALE,
+                entry_date=sale.sale_date, reference=sale.sale_num, rate=item.price,
+                remarks=sale.remarks, user=user,
+            )
+            total += item.total_price
+            tax_total += item.tax_amount
+            discount_total += item.discount_amount
+            continue
         stock = Stock.objects.select_for_update().get(inventory_item=item.inventory_item)
         if item.quantity > stock.current_quantity:
             raise ValidationError(f"Insufficient stock for {item.item_name}.")
@@ -666,16 +706,26 @@ def post_sale(*, sale, user):
 
 @transaction.atomic
 def post_sale_return(*, sale_return, user):
-    sale_return = POSReturnMaster.objects.select_for_update().select_related("pos_master").prefetch_related("items__inventory_item", "items__pos_detail").get(pk=sale_return.pk)
+    sale_return = POSReturnMaster.objects.select_for_update(of=("self",)).select_related("pos_master").prefetch_related("items__inventory_item", "items__product", "items__pos_detail").get(pk=sale_return.pk)
     if sale_return.posted == YES:
         raise ValidationError("Posted return cannot be changed.")
     total_return = Decimal("0.00")
     cost_total = Decimal("0.00")
+    product_rates = product_selectors.current_rate_map()
     for item in sale_return.items.all():
         already_returned = sale_return.pos_master.returns.filter(posted=YES).exclude(pk=sale_return.pk).filter(items__pos_detail=item.pos_detail).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
         allowed = item.pos_detail.quantity - already_returned
         if item.quantity > allowed:
             raise ValidationError(f"Return quantity exceeds sold quantity for {item.item_name}.")
+        if item.is_product_line:
+            product_services.post_movement(
+                item.product, item.quantity, PRD_LEDGER_SALE_RETURN,
+                entry_date=sale_return.return_date, reference=sale_return.return_num, rate=item.price,
+                remarks=f"Sale Return {sale_return.return_num} against {sale_return.sale_num}", user=user,
+            )
+            total_return += item.net_total
+            cost_total += item.quantity * (product_rates.get(item.product_id) or Decimal("0.00"))
+            continue
         stock = Stock.objects.select_for_update().get(inventory_item=item.inventory_item)
         old_quantity = stock.current_quantity
         old_price = stock.current_price

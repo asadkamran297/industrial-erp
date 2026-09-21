@@ -1,6 +1,7 @@
 <div class="filter-bar">
   <form method="get" class="filter-bar__form">
     <input type="hidden" name="q" value="{{ request.GET.q }}">
+    {% for name, value in keep_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
     {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}"><input type="hidden" name="dir" value="{{ request.GET.dir }}">{% endif %}
 
@@ -85,6 +86,7 @@
   {% if no_search %}<span class="ml-auto"></span>{% else %}
   <form method="get" class="filter-search{% if not column_menu and not per_page_options %} ml-auto{% endif %}" role="search">
     {% if current_tab %}<input type="hidden" name="tab" value="{{ current_tab }}">{% endif %}
+    {% for name, value in keep_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     {% for spec in filter_specs %}<input type="hidden" name="{{ spec.name }}" value="{{ spec.value }}">{% endfor %}
     {% if date_filters_enabled %}<input type="hidden" name="date_from" value="{{ request.GET.date_from }}"><input type="hidden" name="date_to" value="{{ request.GET.date_to }}">{% endif %}
     {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}

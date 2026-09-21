@@ -23,6 +23,7 @@ from apps.inventory.seeders.demo_customers import seed_demo_customers
 from apps.inventory.seeders.demo_transactions import (
     seed_demo_bardana_purchases,
     seed_demo_purchase_invoices,
+    seed_demo_product_sales,
     seed_demo_purchase_orders,
     seed_demo_stores_purchases,
     seed_demo_wheat_purchases,
@@ -78,6 +79,7 @@ class Command(BaseCommand):
             ("invoices against orders", lambda: seed_demo_purchase_invoices(count, user=user)),
             ("direct stores purchases", lambda: seed_demo_stores_purchases(count, user=user)),
             ("grinding runs", lambda: seed_grinding(count // 2 or 1, user=user)),
+            ("atta and bran sales", lambda: seed_demo_product_sales(count, user=user)),
             ("vouchers", lambda: seed_demo_vouchers(count, user=user)),
         ]
 

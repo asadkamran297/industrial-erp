@@ -955,7 +955,10 @@ class SalesOrderItem(BaseModel):
     sales_order = models.ForeignKey(SalesOrder, related_name="items", on_delete=models.CASCADE,
                                     db_column="inv_sales_order_id")
     seq_num = models.PositiveIntegerField()
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
+                                       on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="sales_order_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
     descr = models.CharField(max_length=255)
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
     rate = models.DecimalField(max_digits=18, decimal_places=2)
@@ -969,6 +972,22 @@ class SalesOrderItem(BaseModel):
         db_table = "inv_sales_order_items"
         ordering = ["sales_order", "seq_num"]
         unique_together = (("sales_order", "seq_num"),)
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_so_line_one_item_kind",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["product", "-id"], name="inv_so_line_product_idx"),
+        ]
+
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
 
     @property
     def qty_ordered(self):
@@ -997,7 +1016,7 @@ class SalesOrderItem(BaseModel):
             )
             self.seq_num = last + 1
         if not self.descr:
-            self.descr = self.inventory_item.item_name
+            self.descr = self.product.name if self.is_product_line else self.inventory_item.item_name
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -1058,7 +1077,10 @@ class POSDetail(BaseModel):
     transaction_id = models.CharField(max_length=60)
     sale_num = models.CharField(max_length=40)
     seq_num = models.PositiveIntegerField()
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
+                                       on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="sale_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
@@ -1075,6 +1097,22 @@ class POSDetail(BaseModel):
         db_table = "inv_pos_details"
         ordering = ["pos_master", "seq_num"]
         unique_together = (("pos_master", "seq_num"),)
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_pos_line_one_item_kind",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["product", "-id"], name="inv_pos_line_product_idx"),
+        ]
+
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -1082,8 +1120,12 @@ class POSDetail(BaseModel):
             self.seq_num = last + 1
         self.transaction_id = self.pos_master.transaction_id
         self.sale_num = self.pos_master.sale_num
-        self.item_code = self.inventory_item.code
-        self.item_name = self.inventory_item.item_name
+        if self.is_product_line:
+            self.item_code = self.product.complete_code
+            self.item_name = self.product.name
+        else:
+            self.item_code = self.inventory_item.code
+            self.item_name = self.inventory_item.item_name
         self.total_price = ((self.quantity or 0) * (self.price or 0)).quantize(TWO_DP)
         self.tax_amount = (self.tax_amount or Decimal("0.00")).quantize(TWO_DP)
         self.discount_amount = (self.discount_amount or Decimal("0.00")).quantize(TWO_DP)
@@ -1140,7 +1182,10 @@ class POSReturnDetail(BaseModel):
     transaction_id = models.CharField(max_length=60)
     return_num = models.CharField(max_length=40)
     seq_num = models.PositiveIntegerField()
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True,
+                                       on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="sale_return_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)
     quantity = models.DecimalField(max_digits=18, decimal_places=4)
@@ -1154,6 +1199,19 @@ class POSReturnDetail(BaseModel):
     class Meta:
         db_table = "inv_pos_return_details"
         ordering = ["pos_return_master", "seq_num"]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_pos_ret_line_one_item_kind",
+            ),
+        ]
+
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
 
     def save(self, *args, **kwargs):
         if not self.seq_num:
@@ -1163,6 +1221,7 @@ class POSReturnDetail(BaseModel):
         self.return_num = self.pos_return_master.return_num
         self.pos_master = self.pos_return_master.pos_master
         self.inventory_item = self.pos_detail.inventory_item
+        self.product = self.pos_detail.product
         self.item_code = self.pos_detail.item_code
         self.item_name = self.pos_detail.item_name
         self.price = self.pos_detail.price

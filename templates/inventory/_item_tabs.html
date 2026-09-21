@@ -4,6 +4,8 @@
   {% include "components/ui/tab.html" with href=tab_href label="Products" on=tab_on only %}
   {% capture as tab_href %}{{ items_url }}?kind={{ service_value|default:'S' }}{% endcapture %}{% capture as tab_on %}{% if active_tab == 'services' %}1{% endif %}{% endcapture %}
   {% include "components/ui/tab.html" with href=tab_href label="Services" on=tab_on only %}
+  {% url 'products:product_list' as tab_href %}{% capture as tab_on %}{% if active_tab == 'mill' %}1{% endif %}{% endcapture %}
+  {% include "components/ui/tab.html" with href=tab_href label="Mill Products" on=tab_on only %}
   {% url 'inventory:class_list' as tab_href %}{% capture as tab_on %}{% if active_tab == 'category' %}1{% endif %}{% endcapture %}
   {% include "components/ui/tab.html" with href=tab_href label="Category" on=tab_on only %}
   {% url 'inventory:uom_list' as tab_href %}{% capture as tab_on %}{% if active_tab == 'units' %}1{% endif %}{% endcapture %}

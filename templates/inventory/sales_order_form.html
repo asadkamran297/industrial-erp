@@ -36,6 +36,7 @@
                 {% component "forms/control" type="select" name="line_uom" cell=True attrs='x-model="row.uom" aria-label="Unit"' only %}
                   <option value="">&mdash;</option>
                   {% for unit in units %}<option value="{{ unit.pk }}">{{ unit.title }}</option>{% endfor %}
+                  {% for code, label in product_units %}<option value="p:{{ code }}">{{ label }}</option>{% endfor %}
                 {% endcomponent %}
               </td>
               <td>{% include "components/forms/control.html" with name="rate" cell=True kind="num" attrs='x-model="row.rate" inputmode="decimal" data-no-amount aria-label="Rate"' only %}</td>

@@ -20,7 +20,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
+from apps.core.constants import PRD_UNIT_CHOICES, INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.models import SystemSetting
 from apps.core.table_export import TableExportView
@@ -109,6 +109,67 @@ def picked(posted, name, queryset):
     if not raw.isdigit():
         return None
     return queryset.filter(pk=raw).first()
+
+
+PRODUCT_ID_PREFIX = "p:"
+
+
+def sellable_product_options():
+    """Mill products a sale line may name, with their live stock and current rate."""
+    from apps.products.selectors import current_rate_map, items_with_stock
+
+    rates = current_rate_map()
+    rows = []
+    for product in items_with_stock().filter(status=STATUS_ACTIVE):
+        if not product.can_sell:
+            continue
+        rows.append({
+            "id": f"{PRODUCT_ID_PREFIX}{product.pk}",
+            "name": product.name,
+            "code": product.complete_code,
+            "kind": "product",
+            "uom": f"{PRODUCT_ID_PREFIX}{product.unit}",
+            "rate": float(rates.get(product.pk) or 0),
+            "stock": float(product.stock or 0),
+            "stocked": True,
+            "unit": product.get_unit_display(),
+            "units": [{"id": f"{PRODUCT_ID_PREFIX}{product.unit}", "name": product.get_unit_display(), "factor": 1}],
+        })
+    return rows
+
+
+def sale_item_options(items):
+    """Stores items and mill products on one picker; a product's id carries the prefix."""
+    rows = [
+        {
+            "id": item.pk,
+            "name": item.item_name,
+            "code": item.code,
+            "kind": "item",
+            "uom": item.uom_id or "",
+            "rate": float(item.price or 0),
+            "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
+            "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
+            "unit": uom_title(item),
+            "units": item_unit_options(item),
+        }
+        for item in items
+    ]
+    return sorted(rows + sellable_product_options(), key=lambda row: row["name"].lower())
+
+
+def line_item_of(raw_id):
+    """The stores item or mill product a posted line names, as a service line dict."""
+    from apps.products.models import ProductNode
+
+    raw = (raw_id or "").strip()
+    if raw.startswith(PRODUCT_ID_PREFIX) and raw[len(PRODUCT_ID_PREFIX):].isdigit():
+        product = ProductNode.objects.filter(pk=raw[len(PRODUCT_ID_PREFIX):]).first()
+        return ({"product": product}, product.name) if product else (None, "")
+    if raw.isdigit():
+        item = InventoryItem.objects.filter(pk=raw).first()
+        return ({"inventory_item": item}, item.item_name) if item else (None, "")
+    return None, ""
 
 
 def item_unit_options(item):
@@ -1734,24 +1795,134 @@ class ItemUpdateView(ItemCreateView, UpdateView):
     success_message = "Item updated."
 
 
-class LedgerListView(InventoryListMixin, ListView):
+LEDGER_BOOK_STORES = "stores"
+LEDGER_BOOK_MILL = "mill"
+
+
+class LedgerBookMixin(InventoryListMixin):
+    """One ledger screen over two books.
+
+    Stores items move through ``ItemLedger``; wheat, bardana and flour move
+    through the product ledger. ``?book=mill`` swaps the queryset, the filters
+    and the row shape so the same table reads either one.
+    """
+
     page = "inventory.item_ledger"
-    template_name = "inventory/ledger_list.html"
     context_object_name = "ledgers"
-    queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
-    search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no", "transaction_type", "transaction_date", "old_quantity", "quantity", "new_quantity")
-    filter_fields = {"item": "inventory_item_id", "type": "transaction_type"}
-    date_filters = [{"field": "transaction_date", "label": "Transaction date"}]
+    stores_search = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no", "transaction_type")
+    mill_search = ("reference", "product__name", "product__complete_code", "source", "remarks")
+
+    def book(self):
+        return LEDGER_BOOK_MILL if self.request.GET.get("book") == LEDGER_BOOK_MILL else LEDGER_BOOK_STORES
+
+    @property
+    def is_mill(self):
+        return self.book() == LEDGER_BOOK_MILL
+
+    @property
+    def search_fields(self):
+        return self.mill_search if self.is_mill else self.stores_search
+
+    @property
+    def filter_fields(self):
+        if self.is_mill:
+            return {"item": "product_id", "type": "source", "godown": "godown_id"}
+        return {"item": "inventory_item_id", "type": "transaction_type"}
+
+    @property
+    def date_filters(self):
+        field = "entry_date" if self.is_mill else "transaction_date"
+        return [{"field": field, "label": "Transaction date"}]
+
+    def get_queryset(self):
+        from django.db.models import F, Sum, Window
+        from django.db.models.functions import Coalesce
+
+        from apps.products.models import ProductLedger
+
+        if self.is_mill:
+            self.model = ProductLedger
+            self.queryset = (
+                ProductLedger.objects.select_related("product", "godown")
+                .annotate(closing=Window(
+                    expression=Sum("quantity"), partition_by=[F("product_id")],
+                    order_by=[F("entry_date").asc(), F("id").asc()],
+                ))
+                .annotate(opening=F("closing") - F("quantity"))
+                .order_by("-entry_date", "-id")
+            )
+        else:
+            self.model = ItemLedger
+            self.queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
+        return super().get_queryset()
 
     def get_filter_specs(self):
+        from apps.core.constants import PRD_LEDGER_SOURCE_CHOICES
+        from apps.godowns.models import Godown
+        from apps.products.selectors import items as product_items
+
+        if self.is_mill:
+            item_choices = list(product_items().order_by("complete_code").values_list("id", "name"))
+            godown_choices = list(Godown.objects.order_by("code").values_list("id", "name"))
+            return [
+                {"name": "type", "label": "All sources", "choices": PRD_LEDGER_SOURCE_CHOICES, "value": self.request.GET.get("type", "")},
+                {"name": "item", "label": "All products", "choices": item_choices, "value": self.request.GET.get("item", "")},
+                {"name": "godown", "label": "All godowns", "choices": godown_choices, "value": self.request.GET.get("godown", "")},
+            ]
         item_choices = list(InventoryItem.objects.order_by("item_name").values_list("id", "item_name"))
         return [
             {"name": "type", "label": "All types", "choices": INV_TRANSACTION_TYPE_CHOICES, "value": self.request.GET.get("type", "")},
             {"name": "item", "label": "All items", "choices": item_choices, "value": self.request.GET.get("item", "")},
         ]
 
+    def get_book_tiles(self):
+        from apps.products.models import ProductLedger
+
+        params = self.request.GET.copy()
+        for key in ("book", "page", "item", "type", "godown"):
+            params.pop(key, None)
+        base = params.urlencode()
+        prefix = f"{base}&" if base else ""
+        return [
+            {"label": "Stores", "value": ItemLedger.objects.count(), "tone": "violet", "icon": "layers",
+             "href": f"?{base}", "on": not self.is_mill},
+            {"label": "Mill Products", "value": ProductLedger.objects.count(), "tone": "amber", "icon": "wheat",
+             "href": f"?{prefix}book={LEDGER_BOOK_MILL}", "on": self.is_mill},
+        ]
+
+    @staticmethod
+    def shape_mill_rows(rows):
+        for row in rows:
+            row.transaction_date = row.entry_date
+            row.transaction_type_label = row.get_source_display()
+            row.item_name = row.product.name
+            row.item_code = row.product.complete_code
+            row.old_quantity = row.opening
+            row.new_quantity = row.closing
+            row.ref_no = row.reference
+            row.ref_url = None
+        return rows
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["board_tiles"] = self.get_book_tiles()
+        context["is_mill_book"] = self.is_mill
+        context["keep_params"] = [("book", LEDGER_BOOK_MILL)] if self.is_mill else []
+        if self.is_mill:
+            self.shape_mill_rows(list(context["ledgers"]))
+        else:
+            for row in context["ledgers"]:
+                row.transaction_type_label = row.get_transaction_type_display()
+        return context
+
+
+class LedgerListView(LedgerBookMixin, ListView):
+    template_name = "inventory/ledger_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.is_mill:
+            return context
         rows = list(context["ledgers"])
 
         sale_ids = [r.ref_id for r in rows if r.ref_table == "inv_pos_details"]
@@ -1787,13 +1958,9 @@ class CustomerLedgerListView(InventoryListMixin, ListView):
         return [{"name": "customer", "label": "All customers", "choices": customer_choices, "value": self.request.GET.get("customer", "")}]
 
 
-class LedgerPrintView(PrintContextMixin, InventoryListMixin, ListView):
-    page = "inventory.item_ledger"
+class LedgerPrintView(PrintContextMixin, LedgerBookMixin, ListView):
     action = "view"
     template_name = "inventory/ledger_print.html"
-    context_object_name = "ledgers"
-    queryset = ItemLedger.objects.select_related("inventory_item").order_by("-transaction_date", "-id")
-    search_fields = ("transaction_id", "transaction_no", "item_code", "item_name", "ref_no")
     paginate_by = None
 
     def get_context_data(self, **kwargs):
@@ -3276,7 +3443,7 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
     queryset = (
         POSMaster.objects
         .select_related("customer", "created_by")
-        .prefetch_related("items__inventory_item__uom")
+        .prefetch_related("items__inventory_item__uom", "items__product")
         .order_by("-sale_date", "-id")
     )
     search_fields = ("sale_num", "customer__customer_name", "invoice_num", "remarks")
@@ -3447,21 +3614,9 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
             "next_invoice_no": next_sale_invoice_number(),
             "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
             "units": UOM.objects.order_by("title"),
+            "product_units": PRD_UNIT_CHOICES,
             "today": timezone.localdate(),
-            "items_json": json.dumps([
-                {
-                    "id": item.pk,
-                    "name": item.item_name,
-                    "code": item.code,
-                    "uom": item.uom_id or "",
-                    "rate": float(item.price or 0),
-                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
-                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
-                    "unit": uom_title(item),
-                    "units": item_unit_options(item),
-                }
-                for item in items
-            ]),
+            "items_json": json.dumps(sale_item_options(items)),
         }
         context.update(extra)
         return context
@@ -3490,21 +3645,19 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
         prices = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
         for index, raw_id in enumerate(item_ids):
-            if not (raw_id or "").strip().isdigit():
-                continue
-            item = InventoryItem.objects.filter(pk=raw_id).first()
-            if not item:
+            line, name = line_item_of(raw_id)
+            if line is None:
                 continue
             try:
                 quantity = decimal_of(quantities[index] if index < len(quantities) else "")
                 price = decimal_of(prices[index] if index < len(prices) else "")
             except (InvalidOperation, ValueError):
-                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                messages.error(request, f"Check the quantity and price on the {name} line.")
                 return render(request, self.template_name, self._context(posted=posted))
             if quantity > 0:
                 raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
-                lines.append({"inventory_item": item, "quantity": quantity, "price": price, "uom": uom})
+                lines.append({**line, "quantity": quantity, "price": price, "uom": uom})
 
         order_item_ids = posted.getlist("row_order_item")
         picked = {
@@ -3582,15 +3735,23 @@ class CustomerSalesOrderOptionsView(InventoryListMixin, View):
             amount = (pending * rate).quantize(TWO_DP)
             held["quantity"] += pending
             held["value"] += amount
+            if line.is_product_line:
+                item_id = f"{PRODUCT_ID_PREFIX}{line.product_id}"
+                uom_id, unit = f"{PRODUCT_ID_PREFIX}{line.product.unit}", line.product.get_unit_display()
+            else:
+                item_id = line.inventory_item_id
+                uom_id = line.uom_id or line.inventory_item.uom_id or ""
+                unit = line.uom.title if line.uom else (
+                    line.inventory_item.uom.title if line.inventory_item.uom else "")
             held["lines"].append({
                 "order_item_id": line.pk,
-                "item_id": line.inventory_item_id,
+                "item_id": item_id,
+                "kind": "product" if line.is_product_line else "item",
                 "name": line.descr,
                 "quantity": float(pending),
                 "ordered": float(line.quantity or 0),
-                "uom_id": line.uom_id or line.inventory_item.uom_id or "",
-                "unit": line.uom.title if line.uom else (
-                    line.inventory_item.uom.title if line.inventory_item.uom else ""),
+                "uom_id": uom_id,
+                "unit": unit,
                 "rate": float(rate),
                 "amount": float(amount),
             })
@@ -3665,21 +3826,9 @@ class SalesOrderCreateView(InventoryManageMixin, View):
             "next_order_no": next_sales_order_number(),
             "customers": Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name"),
             "units": UOM.objects.order_by("title"),
+            "product_units": PRD_UNIT_CHOICES,
             "today": timezone.localdate(),
-            "items_json": json.dumps([
-                {
-                    "id": item.pk,
-                    "name": item.item_name,
-                    "code": item.code,
-                    "uom": item.uom_id or "",
-                    "rate": float(item.price or 0),
-                    "stock": float(getattr(item.stock, "current_quantity", 0) or 0),
-                    "stocked": item.item_kind == INVENTORY_KIND_PRODUCT,
-                    "unit": uom_title(item),
-                    "units": item_unit_options(item),
-                }
-                for item in items
-            ]),
+            "items_json": json.dumps(sale_item_options(items)),
         }
         context.update(extra)
         return context
@@ -3698,21 +3847,19 @@ class SalesOrderCreateView(InventoryManageMixin, View):
         rates = posted.getlist("rate")
         uom_ids = posted.getlist("line_uom")
         for index, raw_id in enumerate(item_ids):
-            if not (raw_id or "").strip().isdigit():
-                continue
-            item = InventoryItem.objects.filter(pk=raw_id).first()
-            if not item:
+            line, name = line_item_of(raw_id)
+            if line is None:
                 continue
             try:
                 quantity = decimal_of(quantities[index] if index < len(quantities) else "")
                 rate = decimal_of(rates[index] if index < len(rates) else "")
             except (InvalidOperation, ValueError):
-                messages.error(request, f"Check the quantity and price on the {item.item_name} line.")
+                messages.error(request, f"Check the quantity and price on the {name} line.")
                 return render(request, self.template_name, self._context(posted=posted))
             if quantity > 0:
                 raw_uom = (uom_ids[index] if index < len(uom_ids) else "") or ""
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
-                lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
+                lines.append({**line, "quantity": quantity, "rate": rate, "uom": uom})
 
         try:
             order, total = create_sales_order(
@@ -3768,7 +3915,11 @@ class POSListView(InventoryManageMixin, View):
         items = [
             {"id": s.inventory_item_id, "name": s.item_name, "price": float(s.current_price or 0), "stock": float(s.current_quantity or 0)}
             for s in Stock.objects.filter(status=STATUS_ACTIVE, current_quantity__gt=0).order_by("item_name")
+        ] + [
+            {"id": row["id"], "name": row["name"], "price": row["rate"], "stock": row["stock"]}
+            for row in sellable_product_options() if row["stock"] > 0
         ]
+        items.sort(key=lambda row: row["name"].lower())
         context = {
             "master_form": POSMasterForm(),
             "items_json": items,
@@ -3788,28 +3939,35 @@ class POSCheckoutView(InventoryManageMixin, View):
 
         lines = []
         for idx, item_id in enumerate(item_ids):
-            if not item_id:
+            line, _name = line_item_of(item_id)
+            if line is None:
                 continue
             qty = Decimal(qtys[idx] or "0").quantize(Decimal("0.01"))
             if qty <= 0:
                 continue
             price = Decimal(prices[idx] or "0").quantize(Decimal("0.01"))
             discount = Decimal(discounts[idx] or "0").quantize(Decimal("0.01"))
-            lines.append((int(item_id), qty, price, discount))
+            lines.append((line, qty, price, discount))
 
         if not lines:
             messages.error(request, "Add at least one item with quantity before posting.")
             return redirect("inventory:pos_list")
 
         needed = {}
-        for item_id, qty, _price, _disc in lines:
-            needed[item_id] = needed.get(item_id, Decimal("0")) + qty
+        for line, qty, _price, _disc in lines:
+            item = line.get("inventory_item")
+            if item is not None:
+                needed[item.pk] = needed.get(item.pk, Decimal("0")) + qty
         for stock in Stock.objects.filter(inventory_item_id__in=needed):
             if needed[stock.inventory_item_id] > (stock.current_quantity or Decimal("0")):
                 messages.error(request, f"Insufficient stock for {stock.item_name} (available {stock.current_quantity}).")
                 return redirect("inventory:pos_list")
 
-        return self._checkout(request, lines)
+        try:
+            return self._checkout(request, lines)
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+            return redirect("inventory:pos_list")
 
     @transaction.atomic
     def _checkout(self, request, lines):
@@ -3822,10 +3980,11 @@ class POSCheckoutView(InventoryManageMixin, View):
             created_by=request.user,
             updated_by=request.user,
         )
-        for item_id, qty, price, discount in lines:
+        for line, qty, price, discount in lines:
             POSDetail.objects.create(
                 pos_master=sale,
-                inventory_item_id=item_id,
+                inventory_item=line.get("inventory_item"),
+                product=line.get("product"),
                 quantity=qty,
                 price=price,
                 discount_amount=discount,

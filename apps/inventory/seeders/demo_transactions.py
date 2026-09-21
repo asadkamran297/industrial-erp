@@ -24,7 +24,7 @@ from apps.core.constants import (
 from apps.finance.models import ChartOfAccount
 from apps.finance.services import gl_account
 from apps.godowns.models import Godown
-from apps.inventory.models import InventoryItem, PurchaseInvoice, PurchaseOrder, Supplier
+from apps.inventory.models import Customer, InventoryItem, POSMaster, PurchaseInvoice, PurchaseOrder, Supplier
 from apps.inventory.seeders.suppliers import (
     BARDANA_SUPPLIER_CODES,
     STORES_SUPPLIER_CODES,
@@ -42,6 +42,7 @@ INVOICE_MARKER = "DEMO-INV-%03d"
 STORES_MARKER = "DEMO-STR-%03d"
 BARDANA_MARKER = "DEMO-BRD-%03d"
 WHEAT_REMARK = "DEMO-WHT-%03d"
+SALE_MARKER = "DEMO-SALE-%03d"
 
 BROKERS = ("Haji Sadiq Broker", "Mian Aslam Commission Agent", "Ch. Riaz Broker")
 WHEAT_CODES = ("01-01-001", "01-01-002", "01-02-001")
@@ -346,6 +347,59 @@ def seed_demo_stores_purchases(count: int = 50, *, user=None) -> int:
             lines=lines,
             paid_amount=paid,
             remarks=f"Cash memo {index}",
+            user=user,
+        )
+        created_count += 1
+
+    return created_count
+
+
+def seed_demo_product_sales(count: int = 50, *, user=None) -> int:
+    """Atta, maida, fine and bran sold to the dealers out of what the runs produced."""
+    from apps.inventory.services import create_direct_sale
+    from apps.products.selectors import current_rate_map, stock_by_product
+
+    customers = list(Customer.objects.filter(customer_code__startswith="CUST").order_by("pk"))
+    if not customers:
+        return 0
+
+    rates = current_rate_map()
+    today = timezone.localdate()
+    created_count = 0
+    for index in range(1, count + 1):
+        marker = SALE_MARKER % index
+        if POSMaster.all_objects.filter(remarks=marker).exists():
+            continue
+
+        stock = stock_by_product()
+        sellable = [
+            product for product in ProductNode.objects.filter(pk__in=[pk for pk, qty in stock.items() if qty > 20])
+            .order_by("complete_code")
+            if product.can_sell and product.can_produce
+        ]
+        if not sellable:
+            break
+
+        lines = []
+        for offset in range((index % 2) + 1):
+            product = sellable[(index + offset) % len(sellable)]
+            quantity = (stock[product.pk] / Decimal("8")).quantize(Decimal("1"))
+            if quantity <= 0:
+                continue
+            unit_kg = product.effective_unit_weight or Decimal("1")
+            price = rates.get(product.pk) or (unit_kg * Decimal("135") + Decimal(index % 7) * 5)
+            lines.append({"product": product, "quantity": quantity, "price": price.quantize(Decimal("0.01"))})
+        if not lines:
+            continue
+
+        goods = sum((line["quantity"] * line["price"] for line in lines), Decimal("0"))
+        paid = goods if index % 3 == 0 else (goods / 2).quantize(Decimal("0.01"))
+        create_direct_sale(
+            customer=customers[(index - 1) % len(customers)],
+            sale_date=today - timedelta(days=(count - index) // 5),
+            lines=lines,
+            paid_amount=paid,
+            remarks=marker,
             user=user,
         )
         created_count += 1

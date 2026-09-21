@@ -13,6 +13,13 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   - `seed`: one organization `ZFM` (Zafaran Flour Mills) with mill, head office and two sales depots; 30 suppliers split into wheat arhtis / bardana traders / stores vendors (`WHEAT_SUPPLIER_CODES` etc. in `apps/inventory/seeders/suppliers.py`); 18 stores classes (roller-mill spares, sieves, belts, lubricants, lab, fumigation, PPE); 65 stores items; 21 UOMs incl. `MUND`; product tree widened to 40 items (more Atta/Maida/Fine/Suji brands, bran 49 kg, refraction, dalia) with finish-bardana links for each. Bags live only on the product tree — no stores item duplicates a sack.
   - `seed` order now includes `finance` (chart of accounts via `seed_chart_of_accounts`) before `products`, so product account links get their expense accounts on a fresh database. The sample grinding run left `seed`; masters only.
   - `seed_demo`: 40 named customers (dealers, bakeries, tandoors, feed mills), mill staff by role (operators, helpers, store keeper, QC, gate), 50 wheat slips through `create_purchase_invoice` (weights, katla/moisture, mill/party/returnable sacks, freight, broker, WHT 0.60/40 kg, dates spread over 50 days), 25 bardana lots, 50 stores POs + invoices against them + 50 direct stores bills, 25 grinding runs `WG-0001..` through `save_grinding_voucher`, 50 vouchers. No demo sales: there is no product sale service yet.
+- Mill products now sell on the same documents as stores items ("product & inventory union", screens only; ledgers stay separate per rule 25).
+  - `SalesOrderItem`, `POSDetail`, `POSReturnDetail` gained a nullable `product` FK beside a now-nullable `inventory_item`, with check constraints `inv_so_line_one_item_kind`, `inv_pos_line_one_item_kind`, `inv_pos_ret_line_one_item_kind` (migration inventory 0056).
+  - `create_sales_order`, `create_direct_sale`, `post_sale`, `post_sale_return` post product lines through `products.services.post_movement` (`sale` / `sale_return`), stock-checked against the product ledger, COGS from the current product rate. Fixed `create_sales_order` passing undefined `godown`/`broker` (NameError on every sales order since 97a895c).
+  - Sale invoice, sales order and POS pickers list stores items and sellable mill products together; a product's picker id is `p:<pk>` (`line_item_of()` in views). Sales order unit select carries product units.
+  - Item Ledger board has two books: Stores (`ItemLedger`) and Mill Products (`ProductLedger`, running opening/closing via window sum), `?book=mill`; filter bar carries `keep_params`. Print follows.
+  - Item masters tabs gained "Mill Products" → `/products/`.
+  - `seed_demo` now seeds 50 atta/bran sales through `create_direct_sale`; `ProductSaleTests` (5) added.
 - Local Postgres flushed and reseeded (dump kept in the session scratchpad before the flush).
 
 ### Live
@@ -21,7 +28,8 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ### Open
 
-- Product sales service, then demo sales of atta/bran.
+- Purchase report "item" filter lists stores items only; product lines are on the invoice but not filterable there yet.
+- Stock check on a product sale is against today's stock, not stock as of the sale date.
 - `seed_roles` reports permission assignments as "created" on every run (cosmetic, pre-existing).
 
 ---

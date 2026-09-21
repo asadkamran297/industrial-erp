@@ -69,7 +69,7 @@
             <td class="muted">{{ forloop.counter }}</td>
             <td><span class="strong">{{ line.item_name }}</span>{% if line.item_code %}<span class="sub">{{ line.item_code }}</span>{% endif %}</td>
             <td class="num">{{ line.quantity|qty }}</td>
-            <td>{{ line.inventory_item.uom.title|default:"—" }}</td>
+            <td>{% if line.product %}{{ line.product.get_unit_display }}{% else %}{{ line.inventory_item.uom.title|default:"—" }}{% endif %}</td>
             <td class="num">{{ line.price|amount }}</td>
             <td class="num">{{ line.discount_amount|amount }}</td>
             <td class="num strong">{{ line.net_total|amount }}</td>
