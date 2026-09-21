@@ -210,7 +210,7 @@
     table.querySelectorAll("tr").forEach((row) => {
       if (row.closest("[hidden]") || row.offsetParent === null) return;
       const cells = Array.from(row.querySelectorAll(":scope > th, :scope > td"))
-        .filter((cell) => !cell.classList.contains("print-hide") && !cell.classList.contains("actions-col") && !cell.querySelector(".row-actions"))
+        .filter((cell) => !cell.hidden && !cell.classList.contains("print-hide") && !cell.classList.contains("actions-col") && !cell.querySelector(".row-actions"))
         .map((cell) => cell.innerText.replace(/\s+/g, " ").trim());
       if (cells.length) rows.push(cells);
     });
@@ -272,6 +272,77 @@
       sheet.addEventListener("load", () => sheet.print());
     }
   });
+
+  // Column picker for boards without a server-side column set; choice kept per browser.
+  const LOCKED_HEAD = ".actions-col, .expand-col, .print-hide, .select-col, [data-locked]";
+  function columnKey(tableId) { return `columns:${location.pathname}:${tableId}`; }
+  function headCells(table) {
+    const rows = Array.from(table.tHead ? table.tHead.rows : []);
+    return rows.length ? Array.from(rows[rows.length - 1].cells) : [];
+  }
+  function applyColumns(table, hidden) {
+    Array.from(table.rows).forEach((row) => {
+      let col = 0;
+      Array.from(row.cells).forEach((cell) => {
+        if (cell.dataset.span === undefined) cell.dataset.span = String(cell.colSpan);
+        const span = Number(cell.dataset.span);
+        let shown = 0;
+        for (let i = col; i < col + span; i += 1) if (!hidden.has(i)) shown += 1;
+        cell.hidden = shown === 0;
+        if (shown > 0) cell.colSpan = shown;
+        col += span;
+      });
+    });
+  }
+  function initColumnMenu(menu) {
+    const tableId = menu.dataset.columnMenu;
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const heads = headCells(table);
+    if (heads.length < 2) return;
+    const key = columnKey(tableId);
+    const defaults = new Set(heads.map((th, i) => (th.hasAttribute("data-default-off") ? i : -1)).filter((i) => i >= 0));
+    let hidden = new Set(defaults);
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "null");
+      if (Array.isArray(stored)) hidden = new Set(stored.filter((i) => i < heads.length));
+    } catch (e) { /* storage unavailable */ }
+    const save = () => { try { localStorage.setItem(key, JSON.stringify(Array.from(hidden))); } catch (e) { /* storage unavailable */ } };
+    const render = () => {
+      menu.innerHTML = "";
+      heads.forEach((th, i) => {
+        const label = th.innerText.replace(/\s+/g, " ").trim();
+        const locked = !label || th.matches(LOCKED_HEAD);
+        const row = document.createElement("label");
+        row.className = "settings-check-row" + (locked ? " is-locked" : "");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.className = "check";
+        box.checked = !hidden.has(i);
+        box.disabled = locked;
+        box.addEventListener("change", () => {
+          if (box.checked) hidden.delete(i); else hidden.add(i);
+          save();
+          applyColumns(table, hidden);
+        });
+        const text = document.createElement("span");
+        text.textContent = label || "Actions";
+        row.append(box, text);
+        menu.appendChild(row);
+      });
+    };
+    const reset = menu.parentElement.querySelector("[data-column-reset]");
+    if (reset) reset.addEventListener("click", () => {
+      hidden = new Set(defaults);
+      try { localStorage.removeItem(key); } catch (e) { /* storage unavailable */ }
+      render();
+      applyColumns(table, hidden);
+    });
+    render();
+    applyColumns(table, hidden);
+    document.addEventListener("htmx:afterSwap", (event) => { if (table.contains(event.target) || event.target === table) applyColumns(table, hidden); });
+  }
+  document.querySelectorAll("[data-column-menu]").forEach(initColumnMenu);
 
   // Expandable board rows.
   window.rowFold = function rowFold() {

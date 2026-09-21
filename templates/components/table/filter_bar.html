@@ -54,7 +54,7 @@
     {% endif %}
   </form>
 
-  {% if column_menu or per_page_options %}
+  {% if not no_columns %}
   <div class="settings-menu settings-menu--lead" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
     <button type="button" class="bar-btn" title="Columns and rows" aria-label="Columns and rows" :aria-expanded="open.toString()" @click="open = !open">{% icon "columns" %}</button>
     <div class="settings-panel" x-show="open" x-cloak x-transition.opacity role="menu">
@@ -72,6 +72,10 @@
         {% endfor %}
         <div class="settings-apply"><button type="submit" class="btn btn--primary btn--sm">Apply</button></div>
       </form>
+      {% elif not column_menu %}
+      <p class="settings-heading">Columns</p>
+      <div data-column-menu="{{ table_id|default:'board-table' }}"></div>
+      <div class="settings-apply"><button type="button" class="btn btn--ghost btn--sm" data-column-reset>Reset</button></div>
       {% endif %}
       {% if per_page_options %}
       <p class="settings-heading">Rows per page</p>
@@ -84,7 +88,7 @@
   {% endif %}
 
   {% if no_search %}<span class="ml-auto"></span>{% else %}
-  <form method="get" class="filter-search{% if not column_menu and not per_page_options %} ml-auto{% endif %}" role="search">
+  <form method="get" class="filter-search{% if no_columns and not per_page_options %} ml-auto{% endif %}" role="search">
     {% if current_tab %}<input type="hidden" name="tab" value="{{ current_tab }}">{% endif %}
     {% for name, value in keep_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     {% for spec in filter_specs %}<input type="hidden" name="{{ spec.name }}" value="{{ spec.value }}">{% endfor %}
