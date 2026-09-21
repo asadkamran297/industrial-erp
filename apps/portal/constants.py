@@ -73,7 +73,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
                        url_name="production:report_yield_trend"),
         NavigationItem("Production Summary", permission="production.reports.index",
                        url_name="production:report_production_summary"),
-        NavigationItem("Godowns", permission="godowns.godowns.index", url_name="godowns:godown_list"),
     )),
 
     NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=tuple(
@@ -115,6 +114,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Item Categories", permission="inventory.classes.index", url_name="inventory:class_list"),
         NavigationItem("Units of Measure", permission="inventory.uoms.index", url_name="inventory:uom_list"),
         NavigationItem("UOM Conversions", permission="inventory.uom_conversions.index", url_name="inventory:conversion_list"),
+        NavigationItem("Godowns", permission="godowns.godowns.index", url_name="godowns:godown_list"),
         NavigationItem("Departments", permission="configurations.departments.index", href="/masters/departments/"),
         NavigationItem("Designations", permission="configurations.designations.index", href="/masters/designations/"),
         NavigationItem("Job Types", permission="configurations.job_types.index", href="/masters/job-types/"),
