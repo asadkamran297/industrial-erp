@@ -1,9 +1,10 @@
-"""Seed a full book of demo data for walking the ERP end to end.
+"""Seed a full book of demo data for walking the flour mill end to end.
 
 Master data comes from ``seed``; this command adds the trading records on top:
-customers, employees with payroll, and purchase and sale documents built
-through the real services so stock, the item ledger and the general ledger all
-move the way they do on the screens.
+customers, mill staff with payroll, wheat slips, bardana and stores purchases,
+grinding runs and cash/bank vouchers, all built through the real services so
+the product ledger, item ledger and general ledger move the way they do on the
+screens.
 
 Idempotent: every record carries a marker, so a second run adds nothing.
 """
@@ -19,17 +20,19 @@ from apps.finance.seeders.demo_vouchers import (
 from apps.hr.seeders.demo_employees import seed_demo_employees
 from apps.inventory.seeders.demo_customers import seed_demo_customers
 from apps.inventory.seeders.demo_transactions import (
-    seed_demo_direct_purchases,
+    seed_demo_bardana_purchases,
     seed_demo_purchase_invoices,
     seed_demo_purchase_orders,
-    seed_demo_sales,
+    seed_demo_stores_purchases,
+    seed_demo_wheat_purchases,
 )
+from apps.production.seeders.grinding import seed_grinding
 
 DEFAULT_COUNT = 50
 
 
 class Command(BaseCommand):
-    help = "Seed demo customers, employees, purchase orders, bills, sales and vouchers."
+    help = "Seed demo customers, staff, wheat slips, bardana and stores purchases, grinding runs and vouchers."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -51,11 +54,13 @@ class Command(BaseCommand):
             ("chart of accounts", lambda: seed_demo_accounts()),
             ("fiscal year", lambda: seed_demo_fiscal_year()),
             ("customers", lambda: seed_demo_customers(count)),
-            ("employees, salaries and payroll", lambda: seed_demo_employees(count)),
-            ("purchase orders", lambda: seed_demo_purchase_orders(count, user=user)),
+            ("mill staff, salaries and payroll", lambda: seed_demo_employees(count)),
+            ("wheat purchase slips", lambda: seed_demo_wheat_purchases(count, user=user)),
+            ("bardana purchases", lambda: seed_demo_bardana_purchases(count // 2 or 1, user=user)),
+            ("stores purchase orders", lambda: seed_demo_purchase_orders(count, user=user)),
             ("invoices against orders", lambda: seed_demo_purchase_invoices(count, user=user)),
-            ("direct invoices", lambda: seed_demo_direct_purchases(count, user=user)),
-            ("sales", lambda: seed_demo_sales(count, user=user)),
+            ("direct stores purchases", lambda: seed_demo_stores_purchases(count, user=user)),
+            ("grinding runs", lambda: seed_grinding(count // 2 or 1, user=user)),
             ("vouchers", lambda: seed_demo_vouchers(count, user=user)),
         ]
 

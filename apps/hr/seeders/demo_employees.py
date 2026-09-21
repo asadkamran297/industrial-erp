@@ -1,4 +1,4 @@
-"""Demo employees, their salary components and a payroll run."""
+"""Demo mill staff, their salary components and a payroll run."""
 
 from decimal import Decimal
 
@@ -11,18 +11,34 @@ from apps.organizations.models import Branch, Organization
 from apps.payroll.models import EmployeeSalary, Payroll
 
 FIRST_NAMES = [
-    "Ahsan", "Maham", "Bilal", "Sana", "Usman", "Hira", "Danish", "Zoya",
-    "Faraz", "Ayesha", "Kashif", "Nimra", "Rehan", "Sadia", "Talha", "Uzma",
-    "Waleed", "Iqra", "Yousaf", "Mehwish", "Zeeshan", "Rabia", "Haris", "Anum",
-    "Salman",
+    "Muhammad Aslam", "Ghulam Rasool", "Allah Ditta", "Abdul Rehman", "Nasir", "Shafqat",
+    "Riaz", "Zafar", "Imtiaz", "Sajid", "Tariq", "Mushtaq", "Ramzan", "Irfan", "Shahid",
+    "Asif", "Waqas", "Naveed", "Amjad", "Rizwan", "Sultan", "Fayyaz", "Ilyas", "Qaiser",
+    "Saima", "Nabeela", "Kausar", "Farzana", "Rukhsana", "Bushra",
 ]
 LAST_NAMES = [
-    "Raza", "Khan", "Ahmed", "Iqbal", "Ali", "Nawaz", "Malik", "Sheikh",
-    "Butt", "Chaudhry",
+    "Gondal", "Cheema", "Bhatti", "Awan", "Malik", "Ranjha", "Tarar", "Sial",
+    "Baloch", "Arain",
 ]
-DEPARTMENT_CODES = ["PROD", "FIN", "HR", "IT", "STORE", "QA"]
-DESIGNATION_CODES = ["MANAGER", "OFFICER", "SUPERVISOR", "OPERATOR", "ACCOUNTANT"]
-SALARY_STEPS = [Decimal("95000"), Decimal("145000"), Decimal("160000"), Decimal("185000"), Decimal("260000")]
+
+# (department, designation, salary) — the mill's floor, gate, store and office
+ROLES = [
+    ("PROD", "OPERATOR", Decimal("42000")),
+    ("PROD", "HELPER", Decimal("32000")),
+    ("PROD", "OPERATOR", Decimal("45000")),
+    ("PROD", "SUPERVISOR", Decimal("65000")),
+    ("PROD", "HELPER", Decimal("32000")),
+    ("STORE", "STORE_KEEPER", Decimal("48000")),
+    ("STORE", "HELPER", Decimal("32000")),
+    ("MAINT", "TECHNICIAN", Decimal("55000")),
+    ("MAINT", "HELPER", Decimal("33000")),
+    ("QC", "OFFICER", Decimal("58000")),
+    ("FIN", "ACCOUNTANT", Decimal("70000")),
+    ("SALES", "OFFICER", Decimal("60000")),
+    ("SEC", "SECURITY_GUARD", Decimal("35000")),
+    ("ADMIN", "MANAGER", Decimal("145000")),
+    ("PROD", "MANAGER", Decimal("160000")),
+]
 
 
 def seed_demo_employees(count: int = 50) -> int:
@@ -32,8 +48,8 @@ def seed_demo_employees(count: int = 50) -> int:
 
     organization = Organization.objects.order_by("pk").first()
     branches = list(Branch.objects.order_by("pk"))
-    departments = {item.code: item for item in Department.objects.filter(code__in=DEPARTMENT_CODES)}
-    designations = {item.code: item for item in Designation.objects.filter(code__in=DESIGNATION_CODES)}
+    departments = {item.code: item for item in Department.objects.all()}
+    designations = {item.code: item for item in Designation.objects.all()}
     job_type = JobType.objects.filter(code="PERMANENT").first()
     bank = Bank.objects.filter(code="HBL").first() or Bank.objects.order_by("pk").first()
     house_rent = AllowanceDeduction.objects.filter(code="HOUSE_RENT").first()
@@ -43,21 +59,21 @@ def seed_demo_employees(count: int = 50) -> int:
     for index in range(1, count + 1):
         first = FIRST_NAMES[(index - 1) % len(FIRST_NAMES)]
         last = LAST_NAMES[(index - 1) % len(LAST_NAMES)]
-        salary = SALARY_STEPS[(index - 1) % len(SALARY_STEPS)]
+        department_code, designation_code, salary = ROLES[(index - 1) % len(ROLES)]
         employee, created = Employee.objects.update_or_create(
             cnic=f"35202-{2000000 + index}-{index % 10}",
             defaults={
                 "organization": organization,
                 "branch": branches[index % len(branches)] if branches else None,
-                "department": departments.get(DEPARTMENT_CODES[(index - 1) % len(DEPARTMENT_CODES)]),
-                "designation": designations.get(DESIGNATION_CODES[(index - 1) % len(DESIGNATION_CODES)]),
+                "department": departments.get(department_code),
+                "designation": designations.get(designation_code),
                 "job_type": job_type,
                 "first_name": first,
                 "last_name": last,
                 "full_name": f"{first} {last}",
-                "email": f"{first.lower()}.{last.lower()}{index}@industrial-erp.test",
+                "email": f"{first.split()[0].lower()}.{last.lower()}{index}@zafaranflour.test",
                 "contact": f"+92-301-{5000000 + index}",
-                "father_husband_name": "Muhammad Aslam",
+                "father_husband_name": f"{FIRST_NAMES[index % len(FIRST_NAMES)]} {last}",
                 "dob": today.replace(year=today.year - 30),
                 "doj": joined,
                 "joining_date": joined,

@@ -36,14 +36,14 @@ ACCOUNTS = [
 ]
 
 NARRATIONS = [
-    "Receipt from local customer",
-    "Utilities and plant maintenance",
-    "Cash sales counter collection",
-    "Monthly admin expenses",
-    "Freight paid to transporter",
-    "Advance received against order",
-    "Office rent for the month",
-    "Fuel and vehicle running",
+    "Cash received from atta dealer",
+    "Electricity bill — WAPDA industrial connection",
+    "Cash sale of bran at mill gate",
+    "Diesel for generator",
+    "Freight paid to wheat carrier",
+    "Advance received from flour agency",
+    "Labour wages — loading and unloading",
+    "Roller mill repair and maintenance",
 ]
 
 
@@ -147,7 +147,7 @@ def seed_demo_vouchers(count: int = 50, *, user=None) -> int:
                     "credit_amount": line_credit,
                     "remarks": narration,
                     "person_organization": "Trading partner",
-                    "person_organization_title": f"Demo partner {index}",
+                    "person_organization_title": f"Mill party {index}",
                     "created_by": user,
                     "updated_by": user,
                 },

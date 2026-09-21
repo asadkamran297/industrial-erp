@@ -5,6 +5,27 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-09-21
+
+### Local
+
+- Seed data rebuilt for the flour mill; the generic industrial set (steel/textile orgs, TVs, cement, 55 mixed suppliers, 46 inventory classes) is gone.
+  - `seed`: one organization `ZFM` (Zafaran Flour Mills) with mill, head office and two sales depots; 30 suppliers split into wheat arhtis / bardana traders / stores vendors (`WHEAT_SUPPLIER_CODES` etc. in `apps/inventory/seeders/suppliers.py`); 18 stores classes (roller-mill spares, sieves, belts, lubricants, lab, fumigation, PPE); 65 stores items; 21 UOMs incl. `MUND`; product tree widened to 40 items (more Atta/Maida/Fine/Suji brands, bran 49 kg, refraction, dalia) with finish-bardana links for each. Bags live only on the product tree — no stores item duplicates a sack.
+  - `seed` order now includes `finance` (chart of accounts via `seed_chart_of_accounts`) before `products`, so product account links get their expense accounts on a fresh database. The sample grinding run left `seed`; masters only.
+  - `seed_demo`: 40 named customers (dealers, bakeries, tandoors, feed mills), mill staff by role (operators, helpers, store keeper, QC, gate), 50 wheat slips through `create_purchase_invoice` (weights, katla/moisture, mill/party/returnable sacks, freight, broker, WHT 0.60/40 kg, dates spread over 50 days), 25 bardana lots, 50 stores POs + invoices against them + 50 direct stores bills, 25 grinding runs `WG-0001..` through `save_grinding_voucher`, 50 vouchers. No demo sales: there is no product sale service yet.
+- Local Postgres flushed and reseeded (dump kept in the session scratchpad before the flush).
+
+### Live
+
+- Nothing deployed. On next deploy: `migrate products` + `seed` (masters only; seeders are idempotent). Do not run `seed_demo` on live.
+
+### Open
+
+- Product sales service, then demo sales of atta/bran.
+- `seed_roles` reports permission assignments as "created" on every run (cosmetic, pre-existing).
+
+---
+
 ## 2026-09-20
 
 ### Local

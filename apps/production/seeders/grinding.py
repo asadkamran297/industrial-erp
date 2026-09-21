@@ -1,157 +1,104 @@
-"""WG-62, the mill's own sample run, and the products it needed.
+"""Demo grinding runs over the wheat the demo purchases brought in.
 
-The wheat and the sacks are opened into stock first: a grinding voucher that
-consumed stock nobody had would leave the ledger negative on the day the module
-was installed, and every stock screen would open on a number that needs
-explaining.
+Each run goes through ``save_grinding_voucher`` so the product ledger moves the
+way it does from the screen: wheat and sacks out of the godown, atta, maida,
+fine, suji and bran in.
 
-Re-runnable: the voucher is matched on its number, so seeding twice leaves one.
+Re-runnable: a run is matched on its number, so seeding twice leaves one.
 """
 
-from datetime import date, time
+from datetime import time, timedelta
 from decimal import Decimal
 
-from apps.core.constants import (
-    PRD_LEDGER_OPENING,
-    PRD_LEVEL_ITEM,
-    PRD_SPEC_BYPRODUCT,
-    PRD_SPEC_FINISH_ITEM,
-    PRD_UNIT_KG,
-    PRD_UNIT_PIECE,
-    STATUS_ACTIVE,
-)
+from django.utils import timezone
+
+from apps.core.constants import GODOWN_TYPE_MILL
 from apps.godowns.models import Godown
-from apps.products.models import FinishBardanaLink, ProductLedger, ProductNode
+from apps.products.models import ProductNode
 
 from .. import services
 from ..models import GrindingVoucher
 
-VOUCHER_NO = "WG-0062"
-VOUCHER_DATE = date(2026, 8, 31)
+WHEAT_CODES = ("01-01-001", "01-01-002", "01-02-001")
+BAG_FOR_WHEAT = {"01-01-001": "03-01-001", "01-01-002": "03-01-002", "01-02-001": "03-01-003"}
 
-EXTRA_ITEMS = (
-    ("02-01-003", "Atta Zafaran 15 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 15, "03-02-003"),
-    ("02-01-004", "Atta Diamond 20 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 20, "03-02-004"),
-    ("02-04-001", "Fine Diamond 80 kg", PRD_SPEC_FINISH_ITEM, PRD_UNIT_PIECE, 80, "03-02-008"),
+# (product, share of the disposal wheat that comes out as this product, bag)
+OUTPUT_MIX = (
+    ("02-01-003", Decimal("0.28"), "03-02-003"),
+    ("02-01-044", Decimal("0.12"), "03-02-002"),
+    ("02-01-004", Decimal("0.10"), "03-02-004"),
+    ("02-03-012", Decimal("0.14"), "03-02-007"),
+    ("02-03-013", Decimal("0.04"), None),
+    ("02-04-001", Decimal("0.08"), "03-02-008"),
+    ("02-05-001", Decimal("0.02"), "03-02-007"),
+    ("02-06-001", Decimal("0.16"), "03-02-009"),
+    ("02-06-002", Decimal("0.03"), "03-02-011"),
+    ("02-07-001", Decimal("0.01"), None),
 )
 
-OUTPUT_LINES = (
-    ("02-01-003", Decimal("1752"), "03-02-003"),
-    ("02-01-004", Decimal("320"), "03-02-004"),
-    ("02-03-012", Decimal("1218"), "03-02-007"),
-    ("02-03-013", Decimal("28200"), None),
-    ("02-04-001", Decimal("244"), "03-02-008"),
-    ("02-06-002", Decimal("104"), "03-02-011"),
-)
-
-WHEAT_CODE = "01-01-001"
-BAG_CODE = "03-01-001"
-DISPOSAL_WHEAT = Decimal("254166")
-DISPOSAL_BAGS = Decimal("5000")
+SHIFTS = ((time(6, 0), time(14, 0)), (time(14, 0), time(22, 0)), (time(8, 0), time(20, 0)))
+DISPOSAL_STEPS = (Decimal("48000"), Decimal("60000"), Decimal("72000"), Decimal("54000"), Decimal("66000"))
 
 
 def _node(code: str) -> ProductNode | None:
     return ProductNode.objects.filter(complete_code=code).first()
 
 
-def _ensure_extra_items() -> int:
+def seed_grinding(count: int = 50, *, user=None) -> int:
+    godown = Godown.objects.filter(godown_type=GODOWN_TYPE_MILL).first() or Godown.objects.first()
+    wheats = [w for w in (_node(code) for code in WHEAT_CODES) if w is not None]
+    if godown is None or not wheats:
+        return 0
+
+    for wheat in wheats:
+        if not wheat.standard_yield_percent:
+            wheat.standard_yield_percent = Decimal("98.00")
+            wheat.save(update_fields=["standard_yield_percent", "updated_at"])
+
+    today = timezone.localdate()
     created = 0
-    for code, name, specification, unit, unit_weight, bag_code in EXTRA_ITEMS:
-        group_segment, sub_segment, item_segment = code.split("-")
-        parent = _node(f"{group_segment}-{sub_segment}")
-        if parent is None:
+    for index in range(1, count + 1):
+        voucher_no = f"WG-{index:04d}"
+        if GrindingVoucher.all_objects.filter(voucher_no=voucher_no).exists():
             continue
-        node, made = ProductNode.objects.get_or_create(
-            complete_code=code,
-            defaults={
-                "parent": parent,
-                "level": PRD_LEVEL_ITEM,
-                "code_segment": item_segment,
-                "name": name,
-                "specification": specification,
-                "unit": unit,
-                "unit_weight": unit_weight,
-                "status": STATUS_ACTIVE,
-                "starting_date": VOUCHER_DATE,
-            },
+
+        wheat = wheats[(index - 1) % len(wheats)]
+        bag = _node(BAG_FOR_WHEAT[wheat.complete_code])
+        disposal = DISPOSAL_STEPS[(index - 1) % len(DISPOSAL_STEPS)]
+        shift_from, shift_to = SHIFTS[(index - 1) % len(SHIFTS)]
+        run_date = today - timedelta(days=count - index)
+
+        voucher = GrindingVoucher(
+            seq_num=index,
+            voucher_no=voucher_no,
+            date=run_date,
+            production_from=shift_from,
+            production_to=shift_to,
+            wheat_item=wheat,
+            disposal_wheat=disposal,
+            bag_item=bag,
+            disposal_bag_qty=(disposal / Decimal("100")).quantize(Decimal("1")),
+            godown=godown,
+            issue_area=godown.name,
+            description=f"Shift {((index - 1) % len(SHIFTS)) + 1}",
         )
-        created += int(made)
-        bag = _node(bag_code)
-        if bag:
-            _, linked = FinishBardanaLink.objects.get_or_create(finish_item=node, defaults={"bag_item": bag})
-            created += int(linked)
-    return created
-
-
-def _open_stock(product: ProductNode, quantity: Decimal, godown: Godown) -> int:
-    """Enough on hand the day before the run for the run to be possible."""
-    if product is None:
-        return 0
-    existing = ProductLedger.objects.filter(product=product, source=PRD_LEDGER_OPENING).first()
-    if existing:
-        return 0
-    ProductLedger.objects.create(
-        product=product,
-        entry_date=VOUCHER_DATE,
-        source=PRD_LEDGER_OPENING,
-        reference="OPENING",
-        quantity=quantity,
-        remarks="Seeded opening for the sample grinding run",
-        godown=godown,
-        bardana_item=_node(BAG_CODE) if product.complete_code == WHEAT_CODE else None,
-    )
-    return 1
-
-
-def seed_grinding() -> int:
-    created = _ensure_extra_items()
-
-    godown = Godown.objects.filter(code="MG").first() or Godown.objects.first()
-    wheat, bag = _node(WHEAT_CODE), _node(BAG_CODE)
-    if godown is None or wheat is None or bag is None:
-        return created
-
-    if not wheat.standard_yield_percent:
-        wheat.standard_yield_percent = Decimal("98.00")
-        wheat.save(update_fields=["standard_yield_percent", "updated_at"])
-
-    created += _open_stock(wheat, DISPOSAL_WHEAT, godown)
-    created += _open_stock(bag, DISPOSAL_BAGS, godown)
-    for _, quantity, pack_code in OUTPUT_LINES:
-        if pack_code:
-            created += _open_stock(_node(pack_code), quantity, godown)
-
-    if GrindingVoucher.all_objects.filter(voucher_no=VOUCHER_NO).exists():
-        return created
-
-    voucher = GrindingVoucher(
-        seq_num=62,
-        voucher_no=VOUCHER_NO,
-        date=VOUCHER_DATE,
-        production_from=time(10, 49),
-        production_to=time(10, 49),
-        wheat_item=wheat,
-        disposal_wheat=DISPOSAL_WHEAT,
-        bag_item=bag,
-        disposal_bag_qty=DISPOSAL_BAGS,
-        godown=godown,
-        issue_area="Main Godown",
-        description="Seeded sample run.",
-    )
-    lines = []
-    for product_code, quantity, pack_code in OUTPUT_LINES:
-        product = _node(product_code)
-        if product is None:
-            continue
-        pack = _node(pack_code) if pack_code else None
-        lines.append(
-            {
+        lines = []
+        for product_code, share, pack_code in OUTPUT_MIX:
+            product = _node(product_code)
+            if product is None:
+                continue
+            unit_weight = product.effective_unit_weight or Decimal("1")
+            quantity = (disposal * share / unit_weight).quantize(Decimal("1"))
+            if quantity <= 0:
+                continue
+            pack = _node(pack_code) if pack_code else None
+            lines.append({
                 "product": product,
                 "quantity": quantity,
-                "unit_weight": product.effective_unit_weight,
+                "unit_weight": unit_weight,
                 "pack_product": pack,
                 "pack_qty": quantity if pack else Decimal("0"),
-            }
-        )
-    services.save_grinding_voucher(voucher, lines)
-    return created + 1
+            })
+        services.save_grinding_voucher(voucher, lines, user=user)
+        created += 1
+    return created

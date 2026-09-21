@@ -1,9 +1,13 @@
+import io
+
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.access_control.seeders.permissions import seed_permissions
 from apps.access_control.seeders.roles import seed_roles
 from apps.configurations.seeders.configurations import seed_configurations
 from apps.core.seeders import seed_system_settings
+from apps.finance.models import ChartOfAccount
 from apps.inventory.seeders.customers import seed_customers
 from apps.inventory.seeders.inventory_classes import seed_inventory_classes
 from apps.inventory.seeders.items import seed_items
@@ -13,7 +17,12 @@ from apps.organizations.seeders.organizations import seed_organizations
 from apps.products.seeders.account_links import seed_account_links
 from apps.products.seeders.products import seed_products
 from apps.godowns.seeders.godowns import seed_godowns
-from apps.production.seeders.grinding import seed_grinding
+
+
+def seed_chart_of_accounts() -> int:
+    before = ChartOfAccount.objects.count()
+    call_command("seed_chart_of_accounts", stdout=io.StringIO())
+    return ChartOfAccount.objects.count() - before
 
 
 SEEDERS = {
@@ -24,13 +33,13 @@ SEEDERS = {
         ("roles", seed_roles),
     ],
     "organizations": [("organizations", seed_organizations)],
+    "finance": [("chart of accounts", seed_chart_of_accounts)],
     "products": [("product tree", seed_products), ("product account links", seed_account_links)],
     "godowns": [("godowns", seed_godowns)],
-    "production": [("sample grinding run", seed_grinding)],
     "inventory": [("units of measure", seed_uoms), ("inventory classes", seed_inventory_classes), ("suppliers", seed_suppliers), ("items", seed_items), ("customers", seed_customers)],
 }
 
-DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "inventory", "products", "godowns", "production"]
+DEFAULT_ORDER = ["core", "configurations", "access_control", "organizations", "finance", "inventory", "products", "godowns"]
 
 
 class Command(BaseCommand):
@@ -40,7 +49,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "modules",
             nargs="*",
-            help="Optional module names: core, configurations, access_control, organizations, all.",
+            help="Optional module names: core, configurations, access_control, organizations, finance, inventory, products, godowns, all.",
         )
 
     def handle(self, *args, **options):
