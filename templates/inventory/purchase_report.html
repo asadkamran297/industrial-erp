@@ -11,7 +11,7 @@
       <td class="muted">{{ forloop.counter }}</td>
       <td><a class="doc-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a></td>
       <td class="truncate">{{ order.supplier.name }}</td>
-      <td>{{ order.purchase_date|dmy }}</td>
+      <td class="date">{{ order.purchase_date|dmy }}</td>
       <td>{{ order.quot_num|default:"—" }}</td>
       <td>
         {% if order.status == "draft" %}<span class="pill pill--draft">{{ order.get_status_display }}</span>

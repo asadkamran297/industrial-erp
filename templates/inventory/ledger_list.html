@@ -11,7 +11,7 @@
     {% for row in ledgers %}
     <tr>
       <td class="muted">{{ row.pk }}</td>
-      <td>{{ row.transaction_date|dmy }}</td>
+      <td class="date">{{ row.transaction_date|dmy }}</td>
       <td>{{ row.transaction_type_label }}</td>
       <td class="truncate strong" title="{{ row.item_name }}">{{ row.item_name }}</td>
       <td class="num">{{ row.old_quantity|qty }}</td>

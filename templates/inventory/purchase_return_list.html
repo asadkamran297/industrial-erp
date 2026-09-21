@@ -36,7 +36,7 @@
     <tr{% if row.status == "reversed" %} class="row--void"{% endif %}>
       {% include "components/table/expand_toggle.html" with pk=row.pk only %}
       <td><a class="doc-num" href="{% url 'inventory:purchase_return_detail' row.pk %}">{{ row.return_num|default:"—" }}</a></td>
-      {% if "return_date" in columns %}<td>{{ row.return_date|dmy }}</td>{% endif %}
+      {% if "return_date" in columns %}<td class="date">{{ row.return_date|dmy }}</td>{% endif %}
       {% if "supplier" in columns %}<td class="truncate strong" title="{{ row.supplier.name }}">{{ row.supplier.name }}</td>{% endif %}
       {% if "invoice" in columns %}<td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.purchase_invoice_id %}">{{ row.purchase_invoice.invoice_num }}</a></td>{% endif %}
       {% if "order" in columns %}<td>{% if row.purchase_order_id %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' row.purchase_order_id %}">{{ row.purchase_order.purchase_num }}</a>{% else %}<span class="muted">&mdash;</span>{% endif %}</td>{% endif %}

@@ -21,7 +21,7 @@
     <tr>
       {% include "components/table/expand_toggle.html" with pk=order.pk only %}
       <td><a class="doc-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a></td>
-      <td>{{ order.purchase_date|dmy }}</td>
+      <td class="date">{{ order.purchase_date|dmy }}</td>
       <td>{{ order.godown.name|default:"—" }}</td>
       <td{% if order.days_late %} class="fig-bad"{% endif %}>{{ order.expected_date|dmy|default:"—" }}{% if order.days_late %} &middot; {{ order.days_late }} day{{ order.days_late|pluralize }} late{% endif %}</td>
       <td class="num strong">{{ order.pending_value|amount }}</td>

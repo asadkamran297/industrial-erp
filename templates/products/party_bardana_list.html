@@ -23,7 +23,7 @@
       <td class="num">{{ row.qty_in|floatformat:0 }}</td>
       <td class="num">{{ row.qty_out|floatformat:0 }}</td>
       <td class="num strong">{{ row.balance|floatformat:0 }}</td>
-      <td>{{ row.last_date|dmy }}</td>
+      <td class="date">{{ row.last_date|dmy }}</td>
     </tr>
     {% empty %}
     {% include "components/table/empty_row.html" with span=6 label="No party bardana held." only %}

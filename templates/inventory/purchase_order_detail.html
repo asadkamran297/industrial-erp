@@ -171,7 +171,7 @@
       <tr class="note-row">
         {% include "components/table/expand_toggle.html" with pk=forloop.counter only %}
         <td><span class="doc-num">{{ note.number }}</span></td>
-        <td>{{ note.date|dmy }}</td>
+        <td class="date">{{ note.date|dmy }}</td>
         <td class="num muted">{{ note.lines|length }}</td>
         <td class="num">{{ note.ordered|qty }}</td>
         <td class="num fig-in">{{ note.quantity|qty }}</td>
@@ -219,7 +219,7 @@
       {% for row in order_invoices %}
       <tr{% if row.reversed %} class="row--void"{% endif %}>
         <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.invoice.pk %}">{{ row.invoice.invoice_num }}</a>{% if row.reversed %} <span class="pill pill--reversed">Reversed</span>{% endif %}</td>
-        <td>{{ row.invoice.invoice_date|dmy }}</td>
+        <td class="date">{{ row.invoice.invoice_date|dmy }}</td>
         <td>{{ row.invoice.supplier_invoice_num|default:"—" }}</td>
         <td>{{ row.invoice.vehicle_no|default:"—" }}</td>
         <td class="num">{{ row.quantity|qty }}</td>

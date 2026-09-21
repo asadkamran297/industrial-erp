@@ -40,10 +40,10 @@
     <tr{% if order.status == "cancelled" %} class="row--void"{% endif %}>
       {% include "components/table/expand_toggle.html" with pk=order.pk only %}
       <td><a class="doc-num" href="{% url 'inventory:purchase_order_detail' order.pk %}">{{ order.purchase_num }}</a></td>
-      {% if "purchase_date" in columns %}<td>{{ order.purchase_date|dmy }}</td>{% endif %}
+      {% if "purchase_date" in columns %}<td class="date">{{ order.purchase_date|dmy }}</td>{% endif %}
       {% if "supplier" in columns %}<td class="truncate strong" title="{{ order.supplier.name }}">{{ order.supplier.name }}</td>{% endif %}
       {% if "buyer" in columns %}<td>{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>{% endif %}
-      {% if "expected" in columns %}<td>{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
+      {% if "expected" in columns %}<td class="date">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
       {% if "value" in columns %}<td class="num strong">{{ order.total_amount|amount }}</td>{% endif %}
       {% if "received" in columns %}
       <td>

@@ -61,7 +61,7 @@
         <td><a class="doc-num" href="{% url 'inventory:pos_return_detail' row.pk %}">{{ row.return_num }}</a></td>
         <td>{{ row.sale_num }}</td>
         <td>{{ row.customer.customer_name|default:"—" }}</td>
-        <td>{{ row.return_date|dmy }}</td>
+        <td class="date">{{ row.return_date|dmy }}</td>
         <td class="num">{{ row.returned_amount|amount }}</td>
         <td class="actions-col">
           {% url 'inventory:pos_return_detail' row.pk as view_url %}{% url 'inventory:pos_return_receipt' row.pk as print_url %}

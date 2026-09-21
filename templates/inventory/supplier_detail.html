@@ -45,7 +45,7 @@
       {% if ledger %}<tr class="note-row"><td colspan="5" class="strong">Opening Balance</td><td class="num strong">{{ ledger.opening|amount }}</td></tr>{% endif %}
       {% for row in ledger.rows %}
       <tr>
-        <td>{{ row.line.voucher_date|dmy }}</td>
+        <td class="date">{{ row.line.voucher_date|dmy }}</td>
         <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.line.voucher_no }}</a></td>
         <td class="muted truncate">{{ row.line.remarks|default:"—" }}</td>
         <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>
@@ -65,7 +65,7 @@
       {% for invoice in recent_invoices %}
       <tr>
         <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a></td>
-        <td>{{ invoice.invoice_date|dmy }}</td>
+        <td class="date">{{ invoice.invoice_date|dmy }}</td>
         <td class="num strong">{{ invoice.total_amount|amount }}</td>
         <td class="actions-col">{% url 'inventory:purchase_invoice_detail' invoice.pk as view_url %}{% include "components/table/actions.html" with view_url=view_url only %}</td>
       </tr>

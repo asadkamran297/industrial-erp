@@ -13,7 +13,7 @@
   <thead><tr><th>Date</th><th class="num">Wheat Kg</th><th class="num">Output Kg</th><th class="num">Yield %</th></tr></thead>
   <tbody>
     {% for row in daily %}
-    <tr><td>{{ row.period|dmy }}</td><td class="num">{{ row.wheat|floatformat:0|intcomma }}</td><td class="num">{{ row.output|floatformat:0|intcomma }}</td><td class="num strong">{{ row.yield_percent|floatformat:2 }}</td></tr>
+    <tr><td class="date">{{ row.period|dmy }}</td><td class="num">{{ row.wheat|floatformat:0|intcomma }}</td><td class="num">{{ row.output|floatformat:0|intcomma }}</td><td class="num strong">{{ row.yield_percent|floatformat:2 }}</td></tr>
     {% empty %}
     {% include "components/table/empty_row.html" with span=4 label="No runs in this period." only %}
     {% endfor %}

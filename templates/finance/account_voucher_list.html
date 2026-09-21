@@ -34,7 +34,7 @@
   <tbody>
     {% for voucher in vouchers %}
     <tr>
-      <td>{{ voucher.voucher_date|dmy }}</td>
+      <td class="date">{{ voucher.voucher_date|dmy }}</td>
       <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' voucher.pk %}">{{ voucher.voucher_no }}</a></td>
       <td class="truncate" title="{{ voucher.from_account_title }}">{{ voucher.from_account_title }}</td>
       <td class="truncate" title="{{ voucher.to_account_title }}">{{ voucher.to_account_title|default:"—" }}</td>

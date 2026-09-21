@@ -10,7 +10,7 @@
     {% for row in rows %}
     <tr>
       <td><a class="doc-num" href="{% url 'production:conversion_detail' row.pk %}">{{ row.voucher_no }}</a></td>
-      <td>{{ row.date|dmy }}</td>
+      <td class="date">{{ row.date|dmy }}</td>
       <td class="truncate">{{ row.source_product.name }}</td>
       <td class="num">{{ row.source_quantity|floatformat:0|intcomma }}</td>
       <td class="num">{{ row.total_output_kg|floatformat:0|intcomma }}</td>

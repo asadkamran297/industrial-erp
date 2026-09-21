@@ -37,7 +37,7 @@
         <a class="doc-num" href="{% url 'inventory:pos_detail' invoice.pk %}">{{ invoice.sale_num }}</a>
         {% if invoice.invoice_num %}<span class="sub">{{ invoice.invoice_num }}</span>{% endif %}
       </td>
-      <td>{{ invoice.sale_date|dmy }}</td>
+      <td class="date">{{ invoice.sale_date|dmy }}</td>
       <td class="truncate">{% if invoice.customer %}<span class="strong">{{ invoice.customer.customer_name }}</span>{% else %}<span class="muted">Walk-in</span>{% endif %}</td>
       <td class="num muted">{{ invoice.line_count }}</td>
       <td class="num">{{ invoice.qty_total|qty }}</td>

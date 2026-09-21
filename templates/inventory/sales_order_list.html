@@ -20,7 +20,7 @@
     <tr{% if order.status == "cancelled" %} class="row--void"{% endif %}>
       {% include "components/table/expand_toggle.html" with pk=order.pk only %}
       <td><span class="doc-num">{{ order.order_num }}</span>{% if order.customer_ref %}<span class="sub">{{ order.customer_ref }}</span>{% endif %}</td>
-      <td>{{ order.order_date|dmy }}</td>
+      <td class="date">{{ order.order_date|dmy }}</td>
       <td class="truncate strong" title="{{ order.customer.customer_name }}">{{ order.customer.customer_name }}</td>
       <td>
         {% if order.status == "fully_invoiced" %}<span class="pill pill--posted">Fully invoiced</span>

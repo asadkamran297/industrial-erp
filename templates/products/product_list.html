@@ -24,7 +24,7 @@
     </tr>
     {% else %}
     <tr>
-      <td>{{ node.starting_date|dmy|default:"—" }}</td>
+      <td class="date">{{ node.starting_date|dmy|default:"—" }}</td>
       <td class="muted">{{ node.display_code }}</td>
       <td class="pl-12"><span class="strong">{{ node.name }}</span> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
       <td class="num">{{ node.stock|floatformat:3 }} <span class="muted">{{ node.get_unit_display|lower }}</span></td>

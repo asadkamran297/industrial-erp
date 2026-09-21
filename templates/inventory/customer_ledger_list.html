@@ -8,7 +8,7 @@
     {% for row in ledgers %}
     <tr>
       <td class="muted">{{ row.pk }}</td>
-      <td>{{ row.transaction_date|dmy }}</td>
+      <td class="date">{{ row.transaction_date|dmy }}</td>
       <td class="doc-num">{{ row.transaction_no }}</td>
       <td class="truncate">{{ row.customer.customer_name }}</td>
       <td>{{ row.get_transaction_type_display }}</td>

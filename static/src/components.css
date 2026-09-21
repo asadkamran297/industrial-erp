@@ -44,6 +44,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
 .is-hidden { display: none !important; }
 .num { text-align: right; white-space: nowrap; }
+.date { white-space: nowrap; }
 .strong { font-weight: 700; }
 .muted { color: var(--text-faint); }
 .sub { display: block; margin-top: .125rem; font-size: var(--fs-xs); color: var(--text-faint); }

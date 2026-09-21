@@ -47,7 +47,7 @@
       {% include "components/table/expand_toggle.html" with pk=invoice.pk only %}
       <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a></td>
       {% if "supplier_ref" in columns %}<td>{{ invoice.supplier_invoice_num|default:"—" }}</td>{% endif %}
-      {% if "invoice_date" in columns %}<td>{{ invoice.invoice_date|dmy }}</td>{% endif %}
+      {% if "invoice_date" in columns %}<td class="date">{{ invoice.invoice_date|dmy }}</td>{% endif %}
       {% if "supplier" in columns %}<td class="truncate strong" title="{{ invoice.supplier.name }}">{{ invoice.supplier.name }}</td>{% endif %}
       {% if "buyer" in columns %}<td>{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</td>{% endif %}
       {% if "lines" in columns %}<td class="num muted">{{ invoice.line_count }}</td>{% endif %}

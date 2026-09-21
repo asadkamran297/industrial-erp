@@ -26,7 +26,7 @@
     <tr class="note-row"><td colspan="5" class="strong">Opening Balance</td><td class="num strong">{{ ledger.opening|amount }}</td></tr>
     {% for row in ledger.rows %}
     <tr>
-      <td>{{ row.line.voucher_date|dmy }}</td>
+      <td class="date">{{ row.line.voucher_date|dmy }}</td>
       <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.line.voucher_no }}</a></td>
       <td class="muted truncate" title="{{ row.line.remarks }}">{{ row.line.remarks|default:"—" }}</td>
       <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>

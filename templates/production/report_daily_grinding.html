@@ -7,7 +7,7 @@
   <tbody>
     {% for row in rows %}
     <tr>
-      <td>{{ row.date|dmy }}</td>
+      <td class="date">{{ row.date|dmy }}</td>
       <td><a class="doc-num" href="{% url 'production:grinding_detail' row.pk %}">{{ row.voucher_no }}</a></td>
       <td class="truncate">{{ row.wheat_item.name }}</td>
       <td class="num">{{ row.disposal_wheat|floatformat:0|intcomma }}</td>

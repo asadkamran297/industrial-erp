@@ -67,7 +67,7 @@
         <tbody>
           {% for row in supplier.ledger_rows %}
           <tr>
-            <td>{{ row.line.voucher_date|dmy }}</td>
+            <td class="date">{{ row.line.voucher_date|dmy }}</td>
             <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.line.voucher_id %}">{{ row.line.voucher_no }}</a></td>
             <td class="muted">{{ row.line.remarks|default:"—" }}</td>
             <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>

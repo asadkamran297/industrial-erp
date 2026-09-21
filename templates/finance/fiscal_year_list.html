@@ -9,8 +9,8 @@
       {% include "components/table/expand_toggle.html" with pk=item.pk title="Periods" only %}
       <td class="strong">{{ item.title }}</td>
       <td>{{ item.code }}</td>
-      <td>{{ item.start_date|dmy }}</td>
-      <td>{{ item.end_date|dmy }}</td>
+      <td class="date">{{ item.start_date|dmy }}</td>
+      <td class="date">{{ item.end_date|dmy }}</td>
       <td class="num">{{ item.month_period_count }}</td>
       <td>
         {% if can_edit %}{% url 'finance:fiscal_year_toggle_active' item.pk as toggle_url %}{% capture as is_on %}{% if item.status == "active" %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}

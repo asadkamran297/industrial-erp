@@ -65,7 +65,7 @@
       {% for s in recent_sales %}
       <tr>
         <td><a class="doc-num" href="{% url 'inventory:pos_detail' s.pk %}">{{ s.sale_num }}</a></td>
-        <td>{{ s.sale_date|dmy }}</td>
+        <td class="date">{{ s.sale_date|dmy }}</td>
         <td>{{ s.customer|default:"Walk-in" }}</td>
         <td class="num">{{ s.net_amount|amount }}</td>
         <td class="actions-col">
