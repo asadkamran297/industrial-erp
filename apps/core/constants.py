@@ -572,6 +572,7 @@ PRD_LEDGER_PRODUCTION_IN: Final = "production_in"
 PRD_LEDGER_PRODUCTION_OUT: Final = "production_out"
 PRD_LEDGER_PACKING_OUT: Final = "packing_out"
 PRD_LEDGER_ADJUSTMENT: Final = "adjustment"
+PRD_LEDGER_REVERSAL: Final = "reversal"
 
 PRD_LEDGER_SOURCE_CHOICES: Final[StatusChoices] = (
     (PRD_LEDGER_OPENING, "Opening Balance"),
@@ -583,6 +584,7 @@ PRD_LEDGER_SOURCE_CHOICES: Final[StatusChoices] = (
     (PRD_LEDGER_PRODUCTION_OUT, "Grinding Issue"),
     (PRD_LEDGER_PACKING_OUT, "Packing Consumption"),
     (PRD_LEDGER_ADJUSTMENT, "Stock Adjustment"),
+    (PRD_LEDGER_REVERSAL, "Reversal"),
 )
 
 

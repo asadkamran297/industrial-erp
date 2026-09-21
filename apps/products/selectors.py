@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from django.db.models import DecimalField, Q, QuerySet, Sum, Value
+from django.db.models import DecimalField, Max, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
@@ -18,7 +18,7 @@ from apps.core.constants import (
     STATUS_ACTIVE,
 )
 
-from .models import ProductLedger, ProductNode
+from .models import PartyBardanaLedger, ProductLedger, ProductNode, RawBardanaLink
 
 QUANTITY_FIELD = DecimalField(max_digits=14, decimal_places=3)
 
@@ -214,3 +214,23 @@ def open_stock_packing_item():
         specification=PRD_SPEC_FINISH_PACKING,
         name__iexact=PRODUCTION_OPEN_STOCK_PACK_NAME,
     ).first()
+
+
+def party_bardana_balance_queryset() -> QuerySet:
+    """One row per party and sack with in, out and balance."""
+    return (
+        PartyBardanaLedger.objects
+        .values("party_id", "party__name", "bardana_item_id", "bardana_item__name", "bardana_item__complete_code")
+        .annotate(
+            qty_in=Coalesce(Sum("quantity", filter=Q(quantity__gt=0)), Value(Decimal("0")), output_field=QUANTITY_FIELD),
+            qty_out=Coalesce(Sum("quantity", filter=Q(quantity__lt=0)), Value(Decimal("0")), output_field=QUANTITY_FIELD),
+            balance=Coalesce(Sum("quantity"), Value(Decimal("0")), output_field=QUANTITY_FIELD),
+            last_date=Max("entry_date"),
+        )
+        .order_by("party__name", "bardana_item__complete_code")
+    )
+
+
+def raw_bardana_map() -> dict[int, int]:
+    """wheat item id -> linked bardana item id."""
+    return dict(RawBardanaLink.objects.values_list("wheat_item_id", "bardana_item_id"))

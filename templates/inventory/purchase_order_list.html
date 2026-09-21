@@ -84,7 +84,7 @@
           {% elif order.next_action == "reopen" %}
             {% include "components/ui/icon_button.html" with href=view_url icon="refresh" title="Re-open" only %}
           {% elif order.next_action == "bill" %}
-            {% url 'inventory:purchase_invoice_create' as bill_base %}
+            {% url 'inventory:stores_purchase_create' as bill_base %}
             {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
             {% include "components/ui/icon_button.html" with href=bill_url icon="receipt" title="Enter invoice" tone="go" only %}
           {% endif %}

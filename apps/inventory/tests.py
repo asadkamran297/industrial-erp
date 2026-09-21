@@ -10,7 +10,7 @@ from apps.configurations.models import City
 from apps.core.constants import STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_SUBMITTED, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED
 
 from .models import ItemLedger, Customer, InventoryClass, InventoryItem, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, UOM, Supplier, PurchaseInvoice
-from .services import create_purchase_return, purchase_return_lines, reverse_purchase_return, create_purchase_order, create_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
+from .services import create_purchase_return, purchase_return_lines, reverse_purchase_return, create_purchase_order, create_purchase_invoice, reverse_purchase_invoice, generate_transaction_id, post_purchase_return, post_sale, post_sale_return
 
 
 class InventoryFlowTests(TestCase):
@@ -228,13 +228,13 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(second.over_invoiced[0]["excess"], Decimal("180.0000"))
 
     def test_party_bardana_is_counted_in_but_not_bought(self):
-        """The party's sacks reach the ledger and nothing reaches the bill."""
+        """Mill sacks go to mill stock, party sacks to the party ledger, nothing reaches the bill."""
         from django.db.models import Sum
 
         from apps.core.constants import (
             INV_BARDANA_MILL, INV_BARDANA_PARTY, PRD_LEVEL_ITEM, PRD_SPEC_RAW_PACKING, PRD_UNIT_KG,
         )
-        from apps.products.models import ProductLedger, ProductNode
+        from apps.products.models import PartyBardanaLedger, ProductLedger, ProductNode
 
         group = ProductNode.objects.create(
             level=1, code_segment="93", name="Probe Packing", complete_code="93-000-000",
@@ -265,10 +265,16 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(mill_line.amount, Decimal("27000.00"))
         self.assertEqual(party_line.amount, Decimal("0.00"))
         self.assertEqual(invoice.goods_amount, Decimal("27000.00"))
-        self.assertEqual(
-            ProductLedger.objects.filter(product=bag).aggregate(q=Sum("quantity"))["q"],
-            Decimal("350.000"),
-        )
+        mill_stock = lambda: ProductLedger.objects.filter(product=bag).aggregate(q=Sum("quantity"))["q"]
+        party_stock = lambda: PartyBardanaLedger.objects.filter(
+            party=self.supplier, bardana_item=bag
+        ).aggregate(q=Sum("quantity"))["q"]
+        self.assertEqual(mill_stock(), Decimal("300.000"))
+        self.assertEqual(party_stock(), Decimal("50.000"))
+
+        reverse_purchase_invoice(invoice=invoice, reason="entered_in_error", user=self.user)
+        self.assertEqual(mill_stock(), Decimal("0.000"))
+        self.assertEqual(party_stock(), Decimal("0.000"))
 
     def test_weight_charges_leave_the_supplier_credited_net_of_withholding(self):
         """Brokerage is owed to the broker; withholding is kept back."""
@@ -569,13 +575,13 @@ class WheatPurchaseScreenTests(TestCase):
 
         self.client.force_login(self.user)
         return self.client.post(
-            reverse("inventory:wheat_purchase_create"),
+            reverse("inventory:purchase_invoice_create"),
             data=json.dumps(payload), content_type="application/json",
         )
 
     def test_the_screen_renders_its_calculated_boxes_as_read_only(self):
         self.client.force_login(self.user)
-        response = self.client.get(reverse("inventory:wheat_purchase_create"))
+        response = self.client.get(reverse("inventory:purchase_invoice_create"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="credit_weight"')
         self.assertContains(response, 'id="total_bill"')

@@ -8,12 +8,13 @@ from apps.core.constants import (
     PRD_SPECIFICATION_CHOICES,
     PRD_STATUS_CHOICES,
 )
-from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
 
 from . import selectors, services
 from .forms import ProductForm
 from .models import (
     FinishBardanaLink,
+    PartyBardanaLedger,
     ProductAccountLink,
     ProductNode,
     ProductOpeningBalance,
@@ -329,3 +330,50 @@ class RateUpdateView(PagePermissionRequiredMixin, View):
             saved += 1
         messages.success(request, f"{saved} rate(s) saved.")
         return redirect(request.path)
+
+
+class PartyBardanaListView(PagePermissionRequiredMixin, SortableListMixin, SearchFilterPaginationMixin, ListView):
+    """Sacks held for each party: one row per party and bag."""
+
+    page = "products.party_bardana"
+    template_name = "products/party_bardana_list.html"
+    context_object_name = "rows"
+    paginate_by = 50
+    search_fields = ("party__name", "bardana_item__name", "bardana_item__complete_code")
+    filter_fields = {"party": "party_id", "item": "bardana_item_id"}
+    sort_fields = {"party__name": ("party__name", "bardana_item__complete_code"), "balance": "balance", "last_date": "last_date"}
+    default_sort = "party__name"
+
+    def get_queryset(self):
+        self.model = PartyBardanaLedger
+        self.queryset = selectors.party_bardana_balance_queryset()
+        return super().get_queryset()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = list(self.object_list)
+        context["title"] = "Party Bardana"
+        context["breadcrumbs"] = _crumbs(("Party Bardana", ""))
+        context["party_count"] = len({row["party_id"] for row in rows})
+        context["sacks_held"] = sum((row["balance"] for row in rows), 0)
+        context["page_total"] = sum((row["balance"] for row in context["rows"]), 0)
+        return context
+
+    def get_filter_specs(self):
+        from apps.inventory.models import Supplier
+
+        parties = Supplier.objects.filter(bardana_ledger_entries__isnull=False).distinct().order_by("name")
+        return [
+            {
+                "name": "party",
+                "label": "All parties",
+                "choices": [(str(p.pk), p.name) for p in parties],
+                "value": self.request.GET.get("party", ""),
+            },
+            {
+                "name": "item",
+                "label": "All bags",
+                "choices": [(str(i.pk), i.name) for i in selectors.raw_packing_items()],
+                "value": self.request.GET.get("item", ""),
+            },
+        ]

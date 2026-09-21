@@ -1,0 +1,34 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "table/board" title=title table_id="party-bardana-table" search_placeholder="Search party or bag" %}
+  {% slot tiles %}
+    {% include "components/table/tile.html" with tone="violet" icon="users" value=party_count label="Parties" only %}
+    {% include "components/table/tile.html" with tone="teal" icon="layers" value=sacks_held|floatformat:0 label="Sacks held" only %}
+  {% endslot %}
+  <thead>
+    <tr>
+      {% include "components/table/sort_header.html" with label="Party" field="party__name" %}
+      <th>Bag</th>
+      <th class="num">In</th>
+      <th class="num">Out</th>
+      {% include "components/table/sort_header.html" with label="Balance" field="balance" %}
+      {% include "components/table/sort_header.html" with label="Last movement" field="last_date" %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="strong">{{ row.party__name }}</td>
+      <td><span class="muted">{{ row.bardana_item__complete_code }}</span> {{ row.bardana_item__name }}</td>
+      <td class="num">{{ row.qty_in|floatformat:0 }}</td>
+      <td class="num">{{ row.qty_out|floatformat:0 }}</td>
+      <td class="num strong">{{ row.balance|floatformat:0 }}</td>
+      <td>{{ row.last_date|dmy }}</td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=6 label="No party bardana held." only %}
+    {% endfor %}
+  </tbody>
+  {% if rows %}{% include "components/table/table_footer.html" with lead=4 value=page_total|floatformat:0 tail=1 only %}{% endif %}
+{% endcomponent %}
+{% endblock %}

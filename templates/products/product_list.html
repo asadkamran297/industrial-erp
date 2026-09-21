@@ -8,6 +8,7 @@
     {% url 'products:finish_bardana_linking' as u %}{% include "components/ui/button.html" with label="Finish Bardana" href=u icon="layers" size="sm" only %}
     {% url 'products:opening_balance' as u %}{% include "components/ui/button.html" with label="Opening Balance" href=u icon="box" size="sm" only %}
     {% url 'products:rate_update' as u %}{% include "components/ui/button.html" with label="Rate Update" href=u icon="cash" size="sm" only %}
+    {% url 'products:party_bardana' as u %}{% include "components/ui/button.html" with label="Party Bardana" href=u icon="users" size="sm" only %}
   {% endslot %}
   <thead>
     <tr><th>Starting Date</th><th>Complete Code</th><th>Product</th><th class="num">Qty</th><th class="num">Stock (Kg)</th><th>Status</th><th class="actions-col">Actions</th></tr>

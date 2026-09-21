@@ -246,7 +246,7 @@ def export_columns(session):
 
 PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
     Column("invoice_num", "Invoice #", locked=True, export=lambda o: o.invoice_num),
-    Column("supplier_ref", "Supplier ref", export=lambda o: o.supplier_invoice_num or ""),
+    Column("supplier_ref", "Supplier ref", default=False, export=lambda o: o.supplier_invoice_num or ""),
     Column("invoice_date", "Date", export=lambda o: o.invoice_date),
     Column("supplier", "Supplier", export=lambda o: o.supplier.name),
     Column("buyer", "Entered by", export=lambda o: (
@@ -255,6 +255,8 @@ PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
     Column("quantity", "Quantity", export=lambda o: o.qty_total),
     Column("order", "Order", export=lambda o: (
         o.purchase_order.purchase_num if o.purchase_order_id else "Direct")),
+    Column("vehicle", "Vehicle", export=lambda o: o.vehicle_no or ""),
+    Column("godown", "Godown", default=False, export=lambda o: o.godown.name if o.godown_id else ""),
     Column("status", "Status", export=lambda o: o.get_status_display()),
     Column("value", "Amount", export=lambda o: o.total_amount),
 ))

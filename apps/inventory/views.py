@@ -1643,7 +1643,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
                 f"Taken in and paid for. Tell the buyer if this was not agreed.",
             )
         if "save_and_new" in posted:
-            return redirect("inventory:purchase_invoice_create")
+            return redirect("inventory:stores_purchase_create")
         return redirect("inventory:purchase_invoice_detail", pk=invoice.pk)
 
 
@@ -2162,6 +2162,12 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         context["tile_query"] = kept.urlencode()
         context["tiles"] = self.tiles()
         context["export_url"] = reverse_lazy("inventory:purchase_invoice_export")
+        columns = PURCHASE_INVOICE_COLUMNS.visible(self.request.session)
+        context["columns"] = columns
+        context["row_span"] = len(columns) + 2
+        context["foot_lead"] = len(columns)
+        context["column_menu"] = PURCHASE_INVOICE_COLUMNS.menu(self.request.session)
+        context["columns_url"] = reverse_lazy("inventory:purchase_invoice_columns")
         page_total = Decimal("0.00")
         for invoice in context["invoices"]:
             lines = list(invoice.items.all())
@@ -2171,6 +2177,20 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
         return context
+
+
+class PurchaseInvoiceColumnsView(InventoryListMixin, View):
+    page = "inventory.purchase_orders"
+
+    def post(self, request, *args, **kwargs):
+        PURCHASE_INVOICE_COLUMNS.choose(request.session, request.POST.getlist("columns"))
+        carried = request.POST.get("back", "")
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
+            if key in ("q", "state", "supplier", "date_from", "date_to", "per_page", "page", "sort", "dir")
+        ])
+        target = reverse_lazy("inventory:purchase_invoice_list")
+        return redirect(f"{target}?{query}" if query else str(target))
 
 
 class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
@@ -2765,7 +2785,7 @@ class PurchaseInvoiceFormSettingsView(PurchaseOrderFormSettingsView):
     """The same menu, configuring the invoice form instead."""
 
     form_key = FORM_PURCHASE_INVOICE
-    redirect_to = "inventory:purchase_invoice_create"
+    redirect_to = "inventory:stores_purchase_create"
 
 
 class PurchaseOrderUpdateView(InventoryManageMixin, View):
@@ -4594,8 +4614,11 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         wheat = wheat_product_options()
         bardana = list(bardana_product_options())
         suppliers = PurchaseInvoiceCreateView._suppliers_with_balance()
+        from apps.products.selectors import raw_bardana_map
+
+        bag_links = raw_bardana_map()
         return {
-            "title": "Wheat Purchase",
+            "title": "Purchase Invoice",
             "list_url": reverse_lazy("inventory:purchase_invoice_list"),
             "next_voucher_no": next_purchase_invoice_number(),
             "today": timezone.localdate(),
@@ -4613,6 +4636,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
                     "code": row.complete_code,
                     "name": row.name,
                     "spec": row.specification or "",
+                    "bag": bag_links.get(row.pk),
                 }
                 for row in wheat
             ]),

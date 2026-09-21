@@ -10,7 +10,7 @@
       {% url 'inventory:purchase_order_print' order.pk as print_url %}
       {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
       {% if order.unbilled_value and can_edit %}
-        {% url 'inventory:purchase_invoice_create' as bill_base %}
+        {% url 'inventory:stores_purchase_create' as bill_base %}
         {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
         {% include "components/ui/button.html" with label="Enter invoice" href=bill_url icon="receipt" only %}
       {% endif %}

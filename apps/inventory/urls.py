@@ -1,7 +1,7 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from .views import WheatPurchaseEntryView, CustomerSalesOrderOptionsView, PurchaseInvoiceCreateView, PurchaseInvoiceFormSettingsView, PurchaseInvoiceReverseView, SalesOrderCloseView, SalesOrderCreateView, SalesOrderListView, CustomerCreateView, CustomerLedgerListView, LedgerPrintView, PurchaseReturnColumnsView, PurchaseReturnExportView, PurchaseReturnOptionsView, PurchaseReturnReverseView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SupplierPurchaseOrderOptionsView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PendingOrdersReportView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
+from .views import WheatPurchaseEntryView, CustomerSalesOrderOptionsView, PurchaseInvoiceCreateView, PurchaseInvoiceFormSettingsView, PurchaseInvoiceReverseView, SalesOrderCloseView, SalesOrderCreateView, SalesOrderListView, CustomerCreateView, CustomerLedgerListView, LedgerPrintView, PurchaseReturnColumnsView, PurchaseReturnExportView, PurchaseReturnOptionsView, PurchaseReturnReverseView, PurchaseReturnReceiptView, POSReturnQuickCreateView, POSReturnReceiptView, PurchaseOrderDraftFinalizeView, PurchaseOrderDraftInitView, PurchaseOrderColumnsView, PurchaseOrderExportView, PurchaseOrderFormSettingsView, PurchaseOrderRaiseView, PurchaseOrderCancelView, PurchaseOrderCloseShortView, PurchaseOrderReopenView, PurchaseApprovalLimitView, CustomerListView, CustomerUpdateView, CustomerToggleStatusView, CustomerToggleDefaultView, InventoryClassCreateView, InventoryClassListView, InventoryClassUpdateView, InventoryClassToggleStatusView, UOMToggleStatusView, ItemCreateView, ItemExportView, ItemImportSampleView, ItemImportView, ItemConversionOptionsView, ItemListView, ItemNextCodeView, ItemPrintView, ItemUpdateView, ItemToggleStatusView, LedgerListView, POSCheckoutView, POSCreateView, POSDetailView, POSListView, POSReceiptView, POSUpdateView, POSReturnCreateView, POSReturnDetailView, POSReturnItemCreateView, POSReturnListView, POSReturnPostView, PurchaseOrderCreateView, PurchaseOrderDetailView, ManualTransactionView, ManualTransactionAddView, ManualTransactionDeleteView, ManualTransactionToggleView, ManualTransactionSubmitView, ManualTransactionPrintView, PurchaseOrderItemCreateView, PurchaseOrderItemToggleStatusView, PurchaseOrderItemUpdateView, PurchaseOrderLinesUpdateView, PurchaseInvoiceColumnsView, PurchaseInvoiceDetailView, PurchaseInvoiceExportView, PurchaseInvoiceListView, SupplierPurchaseOrderOptionsView, SaleInvoiceCreateView, SaleInvoiceExportView, SaleInvoiceListView, PurchaseOrderListView, PurchaseOrderPrintView, PurchaseOrderQuickCreateView, PurchaseOrderUpdateView, PendingOrdersReportView, PurchaseReportView, PurchaseReturnCreateView, PurchaseReturnDetailView, PurchaseReturnListView, PurchaseReturnPostView, UOMConversionCreateView, UOMConversionListView, UOMConversionUpdateView, UOMConversionToggleStatusView, UOMCreateView, UOMListView, UOMUpdateView, SupplierCreateView, SupplierDetailView, SupplierListView, SupplierUpdateView, SupplierToggleStatusView
 
 app_name = "inventory"
 
@@ -37,7 +37,7 @@ urlpatterns = [
     path("ledger/print/", LedgerPrintView.as_view(), name="ledger_print"),
     path("customer-ledger/", CustomerLedgerListView.as_view(), name="customer_ledger_list"),
     path("purchase-orders/board/", PurchaseOrderListView.as_view(), name="purchase_order_board"),
-    path("purchase-orders/", RedirectView.as_view(pattern_name="inventory:purchase_invoice_create", permanent=False),
+    path("purchase-orders/", RedirectView.as_view(pattern_name="inventory:stores_purchase_create", permanent=False),
          name="purchase_order_list"),
     path("purchase-orders/new/", PurchaseOrderCreateView.as_view(), name="purchase_order_create"),
     path("purchase-orders/export/", PurchaseOrderExportView.as_view(), name="purchase_order_export"),
@@ -45,6 +45,7 @@ urlpatterns = [
     path("purchase-orders/form-settings/", PurchaseOrderFormSettingsView.as_view(), name="purchase_order_form_settings"),
     path("purchases/", PurchaseInvoiceListView.as_view(), name="purchase_invoice_list"),
     path("purchases/export/", PurchaseInvoiceExportView.as_view(), name="purchase_invoice_export"),
+    path("purchases/columns/", PurchaseInvoiceColumnsView.as_view(), name="purchase_invoice_columns"),
     path("purchases/<int:pk>/", PurchaseInvoiceDetailView.as_view(), name="purchase_invoice_detail"),
     path("sales/", SaleInvoiceListView.as_view(), name="sale_invoice_list"),
     path("sales/export/", SaleInvoiceExportView.as_view(), name="sale_invoice_export"),
@@ -53,8 +54,10 @@ urlpatterns = [
     path("sales-orders/", SalesOrderListView.as_view(), name="sales_order_list"),
     path("sales-orders/new/", SalesOrderCreateView.as_view(), name="sales_order_create"),
     path("sales-orders/<int:pk>/close/", SalesOrderCloseView.as_view(), name="sales_order_close"),
-    path("purchases/new/", PurchaseInvoiceCreateView.as_view(), name="purchase_invoice_create"),
-    path("purchases/wheat/new/", WheatPurchaseEntryView.as_view(), name="wheat_purchase_create"),
+    path("purchases/new/", WheatPurchaseEntryView.as_view(), name="purchase_invoice_create"),
+    path("purchases/wheat/new/", RedirectView.as_view(pattern_name="inventory:purchase_invoice_create", permanent=False),
+         name="wheat_purchase_create"),
+    path("purchases/stores/new/", PurchaseInvoiceCreateView.as_view(), name="stores_purchase_create"),
     path("purchases/form-settings/", PurchaseInvoiceFormSettingsView.as_view(), name="purchase_invoice_form_settings"),
     path("purchases/<int:pk>/reverse/", PurchaseInvoiceReverseView.as_view(), name="purchase_invoice_reverse"),
     path("purchases/po-options/", SupplierPurchaseOrderOptionsView.as_view(), name="supplier_po_options"),

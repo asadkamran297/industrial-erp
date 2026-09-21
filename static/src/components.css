@@ -1877,6 +1877,8 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
  * ==================================================================== */
 .wp-wrap { max-width: 100%; margin: 0 auto; }
 .wp-slip .card-body { padding: var(--gap-3) var(--gap-4); }
+.wp-slip .control--date { min-width: 10.5rem; width: 10.5rem; padding-right: .25rem; }
+.dark .wp-slip .control--date { min-width: 10.5rem; }
 .wp-rule { margin: var(--gap-3) 0; border: 0; border-top: 1px solid var(--border-strong); }
 .dark .wp-rule { border-top-color: var(--border); }
 .wp-title { margin: 0 0 var(--gap-2); font-size: var(--fs-lg); font-weight: 700; color: var(--text-strong); }

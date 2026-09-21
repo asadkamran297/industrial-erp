@@ -11,15 +11,20 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 - Wheat purchase slip (`/inventory/purchases/wheat/new/`) restyled to one flat card: header row, `<hr>` rules between Bardana Detail / Stock Details / Total Bill / Carrier, plain labels, no "(auto)" tags, no hints. Title now "Purchase Invoice".
 - Selected Wgt. is a Party / Mill select; the numeric weight is derived from the chosen net and posted as before. Weight gap, Bag Ded. and sender balance shown as figures.
-- `wp-*` CSS trimmed: `wp-row`, `wp-rule`, `wp-title`; `wp-grid`/`c2..c12`/`wp-legend`/`wp-hint` removed; controls at `--control-h`.
+- `wp-*` CSS trimmed: `wp-row`, `wp-rule`, `wp-title`; `wp-grid`/`c2..c12`/`wp-legend`/`wp-hint` removed; controls at `--control-h`; slip date box 10.5rem.
+- `/inventory/purchases/new/` now opens the slip (`purchase_invoice_create`); stores invoice moved to `/purchases/stores/new/` (`stores_purchase_create`), "Stores Invoice" button on the list. Old wheat URL redirects.
+- Party bardana custody: `products.PartyBardanaLedger` (migration products 0003, also adds `reversal` ledger source). Party/returnable sacks post there per supplier; mill sacks stay in `ProductLedger`. Board at `/products/party-bardana/` (page `products.party_bardana`, seeded).
+- `reverse_purchase_invoice` now mirrors product lines (mill and party ledgers); it used to crash on product-only invoices.
+- Slip Bag Type defaults from Raw Bardana Linking.
+- Purchase Invoices board: columns picker wired (`purchase_invoice_columns`); Vehicle, Godown, Status, Supplier ref toggleable.
 
 ### Live
 
-- Nothing deployed.
+- Nothing deployed. Live needs `migrate products` + `seed` on deploy.
 
 ### Open
 
-- `/inventory/purchases/new/` (stores invoice) untouched; decide whether the Purchase Invoices list should default to the wheat slip.
+- "Restore previous icon" and "stock figure after item title" deferred by user.
 
 ---
 

@@ -42,7 +42,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
+from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, PRD_LEDGER_REVERSAL, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
 
 TWO_DP = Decimal("0.01")
 FOUR_DP = Decimal("0.0001")
@@ -1478,13 +1478,8 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
             order_item.save()
 
         if row["product"] is not None:
-            if row["product"].keeps_stock:
-                product_services.post_movement(
-                    row["product"], row["quantity"], PRD_LEDGER_PURCHASE,
-                    entry_date=invoice.invoice_date, reference=invoice.invoice_num,
-                    rate=row["rate"], remarks=remarks or row["descr"],
-                    godown=invoice.godown, user=user,
-                )
+            _post_product_line(invoice, row["product"], row["quantity"], row["weights"].get("bardana_ownership"),
+                               PRD_LEDGER_PURCHASE, rate=row["rate"], remarks=remarks or row["descr"], user=user)
             continue
 
         if row["item"].item_kind != INVENTORY_KIND_PRODUCT:
@@ -1551,6 +1546,23 @@ def can_reverse_invoice(invoice):
 
 
 @transaction.atomic
+def _post_product_line(invoice, product, quantity, ownership, source, *, rate=0, remarks="", user=None):
+    """Party-owned sacks go to the party ledger; everything else is mill stock."""
+    if (ownership or "") in INV_BARDANA_NOT_PURCHASED:
+        product_services.post_party_bardana(
+            invoice.supplier, product, quantity, source,
+            entry_date=invoice.invoice_date, reference=invoice.invoice_num,
+            ownership=ownership, remarks=remarks, godown=invoice.godown, user=user,
+        )
+        return
+    if product.keeps_stock:
+        product_services.post_movement(
+            product, quantity, source,
+            entry_date=invoice.invoice_date, reference=invoice.invoice_num,
+            rate=rate, remarks=remarks, godown=invoice.godown, user=user,
+        )
+
+
 def reverse_purchase_invoice(*, invoice, reason, user):
     """Withdraw a posted invoice.
 
@@ -1578,7 +1590,7 @@ def reverse_purchase_invoice(*, invoice, reason, user):
     transaction_id = generate_transaction_id("PINVR", PurchaseInvoice)
     touched_orders = {}
 
-    for line in invoice.items.select_related("inventory_item", "purchase_order_item").all():
+    for line in invoice.items.select_related("inventory_item", "product", "purchase_order_item").all():
         order_item = line.purchase_order_item
         if order_item is not None:
             order_item = PurchaseOrderItem.objects.select_for_update(**lock_of("self")).select_related(
@@ -1590,6 +1602,12 @@ def reverse_purchase_invoice(*, invoice, reason, user):
             order_item.updated_by = user
             order_item.save()
             touched_orders[order_item.purchase_order_id] = order_item.purchase_order
+
+        if line.product_id is not None:
+            _post_product_line(invoice, line.product, -line.quantity, line.bardana_ownership,
+                               PRD_LEDGER_REVERSAL, rate=line.rate,
+                               remarks=f"Reversal of {invoice.invoice_num}", user=user)
+            continue
 
         if line.inventory_item.item_kind != INVENTORY_KIND_PRODUCT:
             continue

@@ -5,6 +5,7 @@ from .views import (
     CodePreviewView,
     FinishBardanaLinkView,
     OpeningBalanceView,
+    PartyBardanaListView,
     ProductCreateView,
     ProductListView,
     ProductStatusToggleView,
@@ -26,4 +27,5 @@ urlpatterns = [
     path("finish-bardana-linking/", FinishBardanaLinkView.as_view(), name="finish_bardana_linking"),
     path("opening-balance/", OpeningBalanceView.as_view(), name="opening_balance"),
     path("rate-update/", RateUpdateView.as_view(), name="rate_update"),
+    path("party-bardana/", PartyBardanaListView.as_view(), name="party_bardana"),
 ]

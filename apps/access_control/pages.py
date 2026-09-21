@@ -63,6 +63,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("products.finish_bardana", "Finish Bardana Linking", "Products", MASTER_NO_DELETE),
     Page("products.opening_balances", "Product Opening Balance", "Products", MASTER_NO_DELETE),
     Page("products.rates", "Product Rate Update", "Products", MASTER_NO_DELETE),
+    Page("products.party_bardana", "Party Bardana", "Products", LIST_ONLY),
     Page("godowns.godowns", "Godowns", "Godowns", MASTER_NO_DELETE),
     Page("production.grinding", "Grinding", "Production", CRUD),
     Page("production.conversions", "Products Conversion", "Production", CRUD),

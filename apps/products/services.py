@@ -15,6 +15,7 @@ from apps.core.constants import (
 
 from .models import (
     FinishBardanaLink,
+    PartyBardanaLedger,
     ProductAccountLink,
     ProductLedger,
     ProductNode,
@@ -174,6 +175,26 @@ def post_movement(product: ProductNode, quantity, source: str, entry_date=None, 
         remarks=remarks,
         godown=godown,
         bardana_item=bardana_item,
+    )
+    _stamp(entry, user)
+    entry.save()
+    return entry
+
+
+@transaction.atomic
+def post_party_bardana(party, bardana_item: ProductNode, quantity, source: str, entry_date=None,
+                       reference="", ownership="", remarks="", godown=None, user=None):
+    """The one door into the party bardana ledger. Signed quantity: in positive, out negative."""
+    entry = PartyBardanaLedger(
+        party=party,
+        bardana_item=bardana_item,
+        entry_date=entry_date or timezone.localdate(),
+        source=source,
+        reference=reference,
+        quantity=Decimal(quantity),
+        ownership=ownership,
+        remarks=remarks,
+        godown=godown,
     )
     _stamp(entry, user)
     entry.save()

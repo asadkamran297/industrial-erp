@@ -1,9 +1,9 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% if can_add %}{% url 'inventory:purchase_invoice_create' as create_url %}{% endif %}
-{% component "table/board" title="Purchase Invoices" add_url=create_url add_label="Purchase Invoice" table_id="invoice-table" search_placeholder="Search" date_filters_enabled=True %}
+{% component "table/board" title="Purchase Invoices" add_url=create_url add_label="Purchase Invoice" table_id="invoice-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
   {% slot actions %}
-    {% if can_add %}{% url 'inventory:wheat_purchase_create' as wheat_url %}{% include "components/ui/button.html" with label="Wheat Purchase" href=wheat_url icon="wheat" only %}{% endif %}
+    {% if can_add %}{% url 'inventory:stores_purchase_create' as stores_url %}{% include "components/ui/button.html" with label="Stores Invoice" href=stores_url icon="box" only %}{% endif %}
   {% endslot %}
   {% slot tiles %}
     {% capture as all_on %}{% if not state and not request.GET.date_from %}1{% endif %}{% endcapture %}
@@ -27,14 +27,17 @@
     <tr>
       <th class="print-hide expand-col"></th>
       {% include "components/table/sort_header.html" with label="Invoice #" field="invoice_num" %}
-      {% include "components/table/sort_header.html" with label="Date" field="invoice_date" %}
-      {% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}
-      <th>Entered by</th>
-      <th class="num">Items</th>
-      <th class="num">Quantity</th>
-      <th>Order</th>
-      <th>Vehicle</th>
-      <th class="num">Amount</th>
+      {% if "supplier_ref" in columns %}<th>Supplier ref</th>{% endif %}
+      {% if "invoice_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="invoice_date" %}{% endif %}
+      {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
+      {% if "buyer" in columns %}<th>Entered by</th>{% endif %}
+      {% if "lines" in columns %}<th class="num">Items</th>{% endif %}
+      {% if "quantity" in columns %}<th class="num">Quantity</th>{% endif %}
+      {% if "order" in columns %}<th>Order</th>{% endif %}
+      {% if "vehicle" in columns %}<th>Vehicle</th>{% endif %}
+      {% if "godown" in columns %}<th>Godown</th>{% endif %}
+      {% if "status" in columns %}<th>Status</th>{% endif %}
+      {% if "value" in columns %}<th class="num">Amount</th>{% endif %}
       <th class="print-hide actions-col">Actions</th>
     </tr>
   </thead>
@@ -42,27 +45,27 @@
     {% for invoice in invoices %}
     <tr>
       {% include "components/table/expand_toggle.html" with pk=invoice.pk only %}
-      <td>
-        <a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a>
-        {% if invoice.supplier_invoice_num %}<span class="sub">{{ invoice.supplier_invoice_num }}</span>{% endif %}
-      </td>
-      <td>{{ invoice.invoice_date|dmy }}</td>
-      <td class="truncate strong" title="{{ invoice.supplier.name }}">{{ invoice.supplier.name }}</td>
-      <td>{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</td>
-      <td class="num muted">{{ invoice.line_count }}</td>
-      <td class="num">{{ invoice.qty_total|qty }}</td>
-      <td>
+      <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a></td>
+      {% if "supplier_ref" in columns %}<td>{{ invoice.supplier_invoice_num|default:"—" }}</td>{% endif %}
+      {% if "invoice_date" in columns %}<td>{{ invoice.invoice_date|dmy }}</td>{% endif %}
+      {% if "supplier" in columns %}<td class="truncate strong" title="{{ invoice.supplier.name }}">{{ invoice.supplier.name }}</td>{% endif %}
+      {% if "buyer" in columns %}<td>{{ invoice.created_by.get_full_name|default:invoice.created_by.username|default:"—" }}</td>{% endif %}
+      {% if "lines" in columns %}<td class="num muted">{{ invoice.line_count }}</td>{% endif %}
+      {% if "quantity" in columns %}<td class="num">{{ invoice.qty_total|qty }}</td>{% endif %}
+      {% if "order" in columns %}<td>
         {% if invoice.purchase_order %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' invoice.purchase_order.pk %}">{{ invoice.purchase_order.purchase_num }}</a>
         {% else %}<span class="pill pill--closed">Direct</span>{% endif %}
-      </td>
-      <td>{% if invoice.vehicle_no %}{{ invoice.vehicle_no }}{% if invoice.godown %}<span class="sub">{{ invoice.godown.name }}</span>{% endif %}{% elif invoice.godown %}{{ invoice.godown.name }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
-      <td class="num strong">{{ invoice.total_amount|amount }}</td>
+      </td>{% endif %}
+      {% if "vehicle" in columns %}<td>{{ invoice.vehicle_no|default:"—" }}</td>{% endif %}
+      {% if "godown" in columns %}<td>{% if invoice.godown %}{{ invoice.godown.name }}{% else %}—{% endif %}</td>{% endif %}
+      {% if "status" in columns %}<td>{% include "components/table/status_badge.html" with status=invoice.status label=invoice.get_status_display only %}</td>{% endif %}
+      {% if "value" in columns %}<td class="num strong">{{ invoice.total_amount|amount }}</td>{% endif %}
       <td class="print-hide actions-col">
         {% url 'inventory:purchase_invoice_detail' invoice.pk as view_url %}
         {% include "components/table/actions.html" with view_url=view_url only %}
       </td>
     </tr>
-    {% component "table/lines_row" pk=invoice.pk span=11 %}
+    {% component "table/lines_row" pk=invoice.pk span=row_span %}
       {% with line_list=invoice.items.all %}
       {% if line_list %}
       <table class="lines-table">
@@ -89,9 +92,9 @@
       {% endwith %}
     {% endcomponent %}
     {% empty %}
-    {% include "components/table/empty_row.html" with span=11 label="No purchase invoices." only %}
+    {% include "components/table/empty_row.html" with span=row_span label="No purchase invoices." only %}
     {% endfor %}
   </tbody>
-  {% if invoices %}{% include "components/table/table_footer.html" with lead=9 value=page_total|amount tail=1 only %}{% endif %}
+  {% if invoices %}{% include "components/table/table_footer.html" with lead=foot_lead value=page_total|amount tail=1 only %}{% endif %}
 {% endcomponent %}
 {% endblock %}

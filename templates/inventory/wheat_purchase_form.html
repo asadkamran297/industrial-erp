@@ -305,6 +305,7 @@
 
   function defaultBagId() {
     const wheat = WHEAT.find(w => String(w.id) === el('wheat_product').value);
+    if (wheat && wheat.bag) return wheat.bag;
     if (wheat && wheat.spec) {
       const match = BAGS.find(b => b.spec === wheat.spec);
       if (match) return match.id;
@@ -473,7 +474,7 @@
   });
 
   // Nothing reloads on failure: the typed slip stays and the button becomes Retry.
-  const SAVE_URL = '{% url "inventory:wheat_purchase_create" %}';
+  const SAVE_URL = '{% url "inventory:purchase_invoice_create" %}';
   const csrf = form.querySelector('[name="csrfmiddlewaretoken"]').value;
   const commit = el('wp-commit');
 

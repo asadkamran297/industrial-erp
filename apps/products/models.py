@@ -388,3 +388,43 @@ class ProductLedger(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.product.name} {self.quantity} on {self.entry_date}"
+
+
+class PartyBardanaLedger(BaseModel):
+    """Sacks the mill holds for a party. Signed quantity: in positive, out negative."""
+
+    party = models.ForeignKey(
+        "inventory.Supplier",
+        related_name="bardana_ledger_entries",
+        on_delete=models.PROTECT,
+    )
+    bardana_item = models.ForeignKey(
+        ProductNode,
+        related_name="party_ledger_entries",
+        on_delete=models.PROTECT,
+    )
+    entry_date = models.DateField()
+    source = models.CharField(max_length=30, choices=PRD_LEDGER_SOURCE_CHOICES)
+    reference = models.CharField(max_length=60, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    ownership = models.CharField(max_length=20, blank=True)
+    remarks = models.CharField(max_length=240, blank=True)
+    godown = models.ForeignKey(
+        "godowns.Godown",
+        null=True,
+        blank=True,
+        related_name="party_bardana_entries",
+        on_delete=models.PROTECT,
+    )
+
+    class Meta:
+        db_table = "prod_party_bardana_ledgers"
+        ordering = ["-entry_date", "-id"]
+        indexes = [
+            models.Index(fields=["party", "bardana_item", "-entry_date"], name="prod_pbl_party_item_date_idx"),
+            models.Index(fields=["bardana_item", "-entry_date"], name="prod_pbl_item_date_idx"),
+            models.Index(fields=["reference"], name="prod_pbl_reference_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.party} {self.bardana_item.name} {self.quantity} on {self.entry_date}"
