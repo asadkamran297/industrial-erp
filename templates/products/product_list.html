@@ -11,34 +11,53 @@
     {% url 'products:party_bardana' as u %}{% include "components/ui/button.html" with label="Party Bardana" href=u icon="users" size="sm" only %}
   {% endslot %}
   <thead>
-    <tr><th>Starting Date</th><th>Complete Code</th><th>Product</th><th class="num">Qty</th><th class="num">Stock (Kg)</th><th>Status</th><th class="actions-col">Actions</th></tr>
+    <tr>
+      {% if "starting_date" in columns %}<th>Starting Date</th>{% endif %}
+      <th>Complete Code</th><th>Product</th>
+      {% if "quick_code" in columns %}<th>Quick Code</th>{% endif %}
+      {% if "unit" in columns %}<th>Unit</th>{% endif %}
+      {% if "unit_weight" in columns %}<th class="num">Unit Weight</th>{% endif %}
+      {% if "fix_weight" in columns %}<th class="num">Fix Weight</th>{% endif %}
+      {% if "actual_weight" in columns %}<th class="num">Actual Weight</th>{% endif %}
+      {% if "color" in columns %}<th>Color</th>{% endif %}
+      {% if "qty" in columns %}<th class="num">Qty</th>{% endif %}
+      {% if "stock_kg" in columns %}<th class="num">Stock (Kg)</th>{% endif %}
+      {% if "status" in columns %}<th>Status</th>{% endif %}
+      <th class="actions-col">Actions</th>
+    </tr>
   </thead>
   <tbody>
     {% for node in tree_rows %}
     {% if node.is_heading %}
     <tr class="note-row">
-      <td class="muted">&mdash;</td>
+      {% if "starting_date" in columns %}<td class="muted">&mdash;</td>{% endif %}
       <td class="strong">{{ node.display_code }}</td>
       <td class="strong uppercase{% if node.level != 1 %} pl-8{% endif %}">{{ node.name }}</td>
-      <td colspan="4"></td>
+      <td colspan="{{ heading_span }}"></td>
     </tr>
     {% else %}
     <tr>
-      <td class="date">{{ node.starting_date|dmy|default:"—" }}</td>
+      {% if "starting_date" in columns %}<td class="date">{{ node.starting_date|dmy|default:"—" }}</td>{% endif %}
       <td class="muted">{{ node.display_code }}</td>
-      <td class="pl-12"><span class="strong">{{ node.name }}</span> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
-      <td class="num">{{ node.stock|floatformat:3 }} <span class="muted">{{ node.get_unit_display|lower }}</span></td>
-      <td class="num">{% if node.keeps_stock %}{{ node.stock_kg|floatformat:3 }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
-      <td>
+      <td class="pl-12"><span class="strong">{{ node.name }}</span> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code and "quick_code" not in columns %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
+      {% if "quick_code" in columns %}<td>{{ node.quick_code|default:"—" }}</td>{% endif %}
+      {% if "unit" in columns %}<td>{{ node.get_unit_display }}</td>{% endif %}
+      {% if "unit_weight" in columns %}<td class="num">{{ node.unit_weight|floatformat:3 }}</td>{% endif %}
+      {% if "fix_weight" in columns %}<td class="num">{{ node.fix_weight|floatformat:3 }}</td>{% endif %}
+      {% if "actual_weight" in columns %}<td class="num">{{ node.actual_weight|floatformat:3 }}</td>{% endif %}
+      {% if "color" in columns %}<td>{{ node.color|default:"—" }}</td>{% endif %}
+      {% if "qty" in columns %}<td class="num">{{ node.stock|floatformat:3 }} <span class="muted">{{ node.get_unit_display|lower }}</span></td>{% endif %}
+      {% if "stock_kg" in columns %}<td class="num">{% if node.keeps_stock %}{{ node.stock_kg|floatformat:3 }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>{% endif %}
+      {% if "status" in columns %}<td>
         {% if node.status == 'closed' %}<span class="pill pill--reversed">Closed</span>
         {% elif can_edit %}{% url 'products:product_status_toggle' node.pk as toggle_url %}{% capture as is_on %}{% if node.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}
         {% else %}{% include "components/table/status_badge.html" with status=node.status label=node.get_status_display only %}{% endif %}
-      </td>
+      </td>{% endif %}
       <td class="actions-col">{% capture as edit_url %}{% if can_edit %}{% url 'products:product_update' node.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with edit_url=edit_url only %}</td>
     </tr>
     {% endif %}
     {% empty %}
-    {% include "components/table/empty_row.html" with span=7 label="No products." only %}
+    {% include "components/table/empty_row.html" with span=row_span label="No products." only %}
     {% endfor %}
   </tbody>
 {% endcomponent %}

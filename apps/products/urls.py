@@ -6,6 +6,7 @@ from .views import (
     FinishBardanaLinkView,
     OpeningBalanceView,
     PartyBardanaListView,
+    ProductColumnsView,
     ProductCreateView,
     ProductListView,
     ProductStatusToggleView,
@@ -19,6 +20,7 @@ app_name = "products"
 urlpatterns = [
     path("", ProductListView.as_view(), name="product_list"),
     path("new/", ProductCreateView.as_view(), name="product_create"),
+    path("columns/", ProductColumnsView.as_view(), name="product_columns"),
     path("code-preview/", CodePreviewView.as_view(), name="code_preview"),
     path("<int:pk>/edit/", ProductUpdateView.as_view(), name="product_update"),
     path("<int:pk>/toggle-status/", ProductStatusToggleView.as_view(), name="product_status_toggle"),

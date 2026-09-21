@@ -3,12 +3,14 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
+from urllib.parse import parse_qsl, urlencode
 
 from apps.core.constants import (
     PRD_SPECIFICATION_CHOICES,
     PRD_STATUS_CHOICES,
 )
 from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
+from apps.core.table_columns import Column, ColumnSet
 
 from . import selectors, services
 from .forms import ProductForm
@@ -22,6 +24,22 @@ from .models import (
     RawBardanaLink,
 )
 from apps.finance.models import ChartOfAccount
+
+
+PRODUCT_COLUMNS = ColumnSet("products.products", (
+    Column("starting_date", "Starting Date"),
+    Column("code", "Complete Code", locked=True),
+    Column("name", "Product", locked=True),
+    Column("quick_code", "Quick Code", default=False),
+    Column("unit", "Unit", default=False),
+    Column("unit_weight", "Unit Weight", default=False),
+    Column("fix_weight", "Fix Weight", default=False),
+    Column("actual_weight", "Actual Weight", default=False),
+    Column("color", "Color", default=False),
+    Column("qty", "Qty"),
+    Column("stock_kg", "Stock (Kg)"),
+    Column("status", "Status"),
+))
 
 
 def _crumbs(*trail):
@@ -54,6 +72,12 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
         context["create_url"] = reverse("products:product_create")
         context["breadcrumbs"] = _crumbs()
         context["item_count"] = selectors.items().count()
+        columns = PRODUCT_COLUMNS.visible(self.request.session)
+        context["columns"] = columns
+        context["row_span"] = len(columns) + 1
+        context["heading_span"] = len(columns) - 2
+        context["column_menu"] = PRODUCT_COLUMNS.menu(self.request.session)
+        context["columns_url"] = reverse_lazy("products:product_columns")
         return context
 
     def get_filter_specs(self):
@@ -80,6 +104,19 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
                 "value": self.request.GET.get("account", ""),
             },
         ]
+
+
+class ProductColumnsView(PagePermissionRequiredMixin, View):
+    page = "products.products"
+
+    def post(self, request):
+        PRODUCT_COLUMNS.choose(request.session, request.POST.getlist("columns"))
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(request.POST.get("back", ""), keep_blank_values=False)
+            if key in ("q", "specification", "status", "code", "account", "per_page", "page", "sort", "dir")
+        ])
+        target = reverse("products:product_list")
+        return redirect(f"{target}?{query}" if query else target)
 
 
 class ProductCreateView(PagePermissionRequiredMixin, CreateView):
