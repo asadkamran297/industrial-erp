@@ -104,19 +104,13 @@
       <p id="save-flash" class="alert hidden"></p>
     </div>
 
-    <div class="submit-bar">
-      <p class="submit-bar__meta">Prepared by <b>{{ request.user.get_full_name|default:request.user.username }}</b></p>
-      <div class="submit-bar__actions">
-        {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
-        {% if object %}
-        {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
-        {% include "components/ui/button.html" with id="save-btn" label="Update Voucher" icon="save" variant="primary" data="save" extra="btn--wide" only %}
-        {% else %}
-        {% include "components/ui/button.html" with id="save-print-btn" label="Save & Print" icon="print" only %}
-        {% include "components/ui/button.html" with id="save-btn" label="Save Voucher" icon="save" variant="primary" data="save" extra="btn--wide" only %}
-        {% endif %}
-      </div>
-    </div>
+    {% if object %}
+    {% component "forms/submit_bar" cancel_url=cancel_url label="Update Voucher" save_id="save-btn" prepared_by=request.user %}
+      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
+    {% endcomponent %}
+    {% else %}
+    {% component "forms/submit_bar" cancel_url=cancel_url label="Save Voucher" save_id="save-btn" show_print=True print_id="save-print-btn" prepared_by=request.user %}{% endcomponent %}
+    {% endif %}
   </section>
 </form>
 

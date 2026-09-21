@@ -23,8 +23,8 @@ from apps.core.constants import (
 CRUD = (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT, ACTION_DELETE)
 LIST_ONLY = (ACTION_INDEX,)
 READ_ONLY = (ACTION_INDEX, ACTION_VIEW)
-MASTER = (ACTION_INDEX, ACTION_ADD, ACTION_EDIT, ACTION_DELETE)
-MASTER_NO_DELETE = (ACTION_INDEX, ACTION_ADD, ACTION_EDIT)
+MASTER_NO_DELETE = (ACTION_INDEX, ACTION_VIEW, ACTION_ADD, ACTION_EDIT)
+MASTER = MASTER_NO_DELETE
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("finance.cash_flow", "Cash Flow", "Finance", LIST_ONLY),
     Page("finance.period_close", "Period Close", "Finance", (ACTION_INDEX, ACTION_ADD)),
     Page("finance.inventory_valuation", "Inventory Valuation", "Finance", (ACTION_INDEX, ACTION_ADD)),
-    Page("hr.employees", "Employees", "Workforce", CRUD),
+    Page("hr.employees", "Employees", "Workforce", MASTER_NO_DELETE),
     Page("payroll.salary_items", "Salary Items", "Workforce", MASTER),
     Page("payroll.runs", "Payroll Runs", "Workforce", MASTER),
     Page("organizations.organizations", "Organizations", "Setup", MASTER),

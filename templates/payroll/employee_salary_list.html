@@ -1,20 +1,27 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'payroll:employee_salary_create' %}{% endif %}{% endcapture %}
-{% component "table/board" title="Salary Items" add_url=add_url add_label="Salary Item" table_id="salary-item-table" search_placeholder="Search" %}
-  <thead><tr><th>Employee</th><th class="num">Profile Basic Salary</th><th>Element</th><th>Type</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+{% component "table/board" title="Salary Items" add_url=add_url add_label="Salary Item" table_id="salary-item-table" search_placeholder="Search salary items" %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Employee" field="employee" %}
+    {% include "components/table/sort_header.html" with label="Profile Basic Salary" field="salary" align="right" %}
+    {% include "components/table/sort_header.html" with label="Element" field="element" %}
+    {% include "components/table/sort_header.html" with label="Type" field="type" %}
+    {% include "components/table/sort_header.html" with label="Amount" field="amount" align="right" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for item in salary_items %}
     <tr>
-      <td class="strong">{{ item.employee }}</td>
+      <td class="strong"><a class="doc-num" href="{% url 'payroll:employee_salary_detail' item.pk %}">{{ item.employee }}</a></td>
       <td class="num">{{ item.employee.salary|amount }}</td>
       <td>{{ item.allowance_deduction }}</td>
       <td>{{ item.get_allowance_deduction_type_display }}</td>
       <td class="num strong">{{ item.amount|amount }}</td>
       <td class="actions-col">
         {% capture as edit_url %}{% if can_edit %}{% url 'payroll:employee_salary_update' item.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'payroll:employee_salary_delete' item.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this salary item?" only %}
+        {% url 'payroll:employee_salary_detail' item.pk as view_url %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}

@@ -1,8 +1,15 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'hr:employee_create' %}{% endif %}{% endcapture %}
-{% component "table/board" title="Team Directory" add_url=add_url add_label="Employee" table_id="employee-table" search_placeholder="Search employees" %}
-  <thead><tr><th>Employee</th><th>Department / Role</th><th>Contact</th><th>Joined</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+{% component "table/board" title="Employees" add_url=add_url add_label="Employee" table_id="employee-table" search_placeholder="Search employees" %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Employee" field="name" %}
+    {% include "components/table/sort_header.html" with label="Department / Role" field="department" %}
+    <th>Contact</th>
+    {% include "components/table/sort_header.html" with label="Joined" field="joined" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for emp in employees %}
     <tr>
@@ -15,13 +22,11 @@
       <td><span class="strong">{{ emp.department|default:"—" }}</span><span class="sub">{{ emp.designation|default:"" }}</span></td>
       <td>{{ emp.contact|default:"—" }}<span class="sub">{{ emp.email|default:"" }}</span></td>
       <td>{% if emp.doj %}{{ emp.doj|dmy }}{% elif emp.joining_date %}{{ emp.joining_date|dmy }}{% else %}&mdash;{% endif %}</td>
-      <td>{% include "components/table/status_badge.html" with status=emp.status label=emp.get_status_display only %}</td>
+      <td>{% if can_edit %}{% url 'hr:employee_toggle_status' emp.pk as toggle_url %}{% capture as is_on %}{% if emp.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=emp.status label=emp.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
         {% url 'hr:employee_detail' emp.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url 'hr:employee_update' emp.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'hr:employee_delete' emp.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_confirm %}Delete {{ emp.full_name }}?{% endcapture %}
-        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url delete_url=delete_url delete_confirm=delete_confirm only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}

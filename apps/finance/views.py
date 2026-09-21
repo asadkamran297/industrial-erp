@@ -17,7 +17,8 @@ from django.views.generic import CreateView, DetailView, ListView, TemplateView,
 from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_RECEIPT_UPLOAD_TYPES, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_HEADERLESS_TYPES, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
 from apps.core.formatting import format_date
-from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin, report_sort
+from apps.core.views import SaveAndNewMixin, MasterDetailView, ToggleStatusView
 
 from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
@@ -49,9 +50,13 @@ class AuditSaveMixin:
         return super().form_valid(form)
 
 
-class FiscalYearListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class FiscalYearListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "finance.fiscal_years"
+    model = FiscalYear
     template_name = "finance/fiscal_year_list.html"
+    sort_fields = {"title": "title", "code": "code", "start": "start_date", "end": "end_date", "periods": "month_period_count", "status": ("status", "-start_date")}
+    default_sort = "start"
+    default_sort_dir = "desc"
     context_object_name = "fiscal_years"
     queryset = (
         FiscalYear.objects.prefetch_related("periods")
@@ -70,7 +75,7 @@ class FiscalYearListView(SearchFilterPaginationMixin, PagePermissionRequiredMixi
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class FiscalYearCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+class FiscalYearCreateView(SaveAndNewMixin, AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
     page = "finance.fiscal_years"
     model = FiscalYear
     form_class = FiscalYearForm
@@ -119,13 +124,16 @@ class FiscalPeriodSetActiveView(PagePermissionRequiredMixin, View):
         return redirect("finance:fiscal_year_list")
 
 
-class AccountConfigurationListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class AccountConfigurationListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "finance.accounts"
+    model = AccountConfiguration
     template_name = "finance/account_configuration_list.html"
     context_object_name = "accounts"
     queryset = AccountConfiguration.objects.select_related("post_to_account").order_by("account_no")
     search_fields = ("title", "code", "account_no")
     filter_fields = {"status": "status", "account_ledger": "account_ledger", "account_type": "account_type"}
+    sort_fields = {"title": "title", "account_no": "account_no", "type": ("account_type", "account_no"), "ledger": ("account_ledger", "account_no"), "post_to": "post_to_account__title", "nature": ("account_nature", "account_no"), "status": ("status", "account_no")}
+    default_sort = "account_no"
 
     def get_filter_specs(self):
         return [
@@ -135,7 +143,7 @@ class AccountConfigurationListView(SearchFilterPaginationMixin, PagePermissionRe
         ]
 
 
-class AccountConfigurationCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+class AccountConfigurationCreateView(SaveAndNewMixin, AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
     page = "finance.accounts"
     model = AccountConfiguration
     form_class = AccountConfigurationForm
@@ -148,14 +156,54 @@ class AccountConfigurationUpdateView(AccountConfigurationCreateView, UpdateView)
     success_message = "Account updated."
 
 
-class AccountVoucherListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class AccountConfigurationToggleStatusView(ToggleStatusView):
+    page = "finance.accounts"
+    model = AccountConfiguration
+    success_url_name = "finance:account_configuration_list"
+
+
+class AccountConfigurationDetailView(MasterDetailView):
+    page = "finance.accounts"
+    model = AccountConfiguration
+    kind = "Account"
+    subtitle_attr = "account_no"
+    list_url_name = "finance:account_configuration_list"
+    edit_url_name = "finance:account_configuration_update"
+    detail_fields = (
+        ("Code", "code"), ("Account No", "account_no"), ("Type", "account_type"), ("Nature", "nature"),
+        ("Ledger", "account_ledger"), ("Balance / Income", "balance_income"), ("Post To", "post_to_account"), ("Account Nature", "account_nature"),
+        ("Status", "status"),
+    )
+
+
+class FiscalYearDetailView(MasterDetailView):
+    page = "finance.fiscal_years"
+    model = FiscalYear
+    kind = "Fiscal Year"
+    subtitle_attr = "code"
+    list_url_name = "finance:fiscal_year_list"
+    edit_url_name = "finance:fiscal_year_update"
+    template_name = "finance/fiscal_year_detail.html"
+    detail_fields = (("Code", "code"), ("Start", "start_date"), ("End", "end_date"), ("Status", "status"))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["periods"] = self.object.periods.order_by("code")
+        return context
+
+
+class AccountVoucherListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "finance.vouchers"
+    model = AccountVoucher
     template_name = "finance/account_voucher_list.html"
     context_object_name = "vouchers"
     queryset = AccountVoucher.objects.select_related("payment_method").order_by("-voucher_date", "-id")
     search_fields = ("voucher_no", "account_no", "remarks")
     filter_fields = {"status": "status", "voucher_type": "voucher_type", "posted": "posted"}
     date_filters = [{"field": "voucher_date", "label": "Voucher date"}]
+    sort_fields = {"date": ("voucher_date", "id"), "ref": "voucher_no", "amount": "debit_amount", "status": ("posted", "status", "-voucher_date")}
+    default_sort = "date"
+    default_sort_dir = "desc"
 
     PERIODS = ("this_month", "last_month", "this_year", "all")
 
@@ -829,6 +877,12 @@ class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
             })
             for key in totals:
                 totals[key] += rows[-1][key]
+        rows, sort_context = report_sort(
+            self.request, rows,
+            {"code": "code", "title": "title", "opening_dr": "opening_dr", "opening_cr": "opening_cr", "movement_dr": "movement_dr", "movement_cr": "movement_cr", "closing_dr": "closing_dr", "closing_cr": "closing_cr"},
+            default="code",
+        )
+        context.update(sort_context)
         context["rows"] = rows
         context["totals"] = totals
         context["integrity"] = ledger_integrity()
@@ -952,6 +1006,12 @@ class InventoryValuationView(PagePermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(inventory_valuation())
+        rows, sort_context = report_sort(
+            self.request, list(context.get("rows") or []),
+            {"code": "item_code", "item": "item_name", "quantity": "quantity", "cost": "cost", "value": "value"}, default="code",
+        )
+        context["rows"] = rows
+        context.update(sort_context)
         context["adjustment_date"] = timezone.localdate()
         context["reasons"] = INVENTORY_ADJUSTMENT_REASONS
         return context

@@ -1,0 +1,14 @@
+{% extends "core/master_detail.html" %}
+{% block related %}
+{% component "table/board" title="" table_id="role-permissions" no_filters=True no_pagination=True %}
+  {% slot bar %}<div class="section__head"><h2 class="section__title">Permissions</h2></div>{% endslot %}
+  <thead><tr><th>Title</th><th>Code</th></tr></thead>
+  <tbody>
+    {% for permission in permissions %}
+    <tr><td class="strong">{{ permission.title }}</td><td class="muted">{{ permission.code }}</td></tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=2 label="No permissions." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
+{% endblock %}

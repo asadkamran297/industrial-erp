@@ -1,10 +1,12 @@
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, ListView, UpdateView, View
+from django.views.generic import CreateView, ListView, UpdateView
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
+from apps.core.views import SaveAndNewMixin, MasterDetailView, ToggleStatusView
+from django.db.models import Count
 from apps.organizations.models import Organization
 
 from .forms import PermissionForm, RoleForm, UserAssignmentForm
@@ -20,26 +22,16 @@ class AuditSaveMixin:
         return super().form_valid(form)
 
 
-class SoftDeleteView(PagePermissionRequiredMixin, View):
-    model = None
-    success_url = None
-    success_message = "Record deleted."
-
-    def post(self, request, pk):
-        record = self.model.objects.get(pk=pk)
-        record.soft_delete(request.user)
-        messages.success(request, self.success_message)
-        return redirect(self.success_url)
-
-
-class RoleListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class RoleListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "access_control.roles"
     model = Role
     template_name = "access_control/role_list.html"
     context_object_name = "roles"
-    queryset = Role.objects.prefetch_related("permission_links__permission").order_by("title")
+    queryset = Role.objects.annotate(permission_count=Count("permission_links")).order_by("title")
     search_fields = ("title",)
     filter_fields = {"status": "status"}
+    sort_fields = {"title": "title", "permissions": "permission_count", "status": ("status", "title")}
+    default_sort = "title"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -50,7 +42,7 @@ class RoleListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, Lis
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class RoleCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+class RoleCreateView(SaveAndNewMixin, AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
     page = "access_control.roles"
     model = Role
     form_class = RoleForm
@@ -80,15 +72,10 @@ class RoleUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateView):
         return context
 
 
-class RoleDeleteView(SoftDeleteView):
-    page = "access_control.roles"
-    action = "delete"
-    model = Role
-    success_url = reverse_lazy("access_control:role_list")
-    success_message = "Role deleted."
 
 
-class PermissionListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+
+class PermissionListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "access_control.permissions"
     model = Permission
     template_name = "access_control/permission_list.html"
@@ -96,6 +83,8 @@ class PermissionListView(SearchFilterPaginationMixin, PagePermissionRequiredMixi
     queryset = Permission.objects.order_by("seq", "title")
     search_fields = ("title", "code")
     filter_fields = {"status": "status"}
+    sort_fields = {"title": "title", "code": "code", "seq": ("seq", "title"), "status": ("status", "title")}
+    default_sort = "seq"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -106,7 +95,7 @@ class PermissionListView(SearchFilterPaginationMixin, PagePermissionRequiredMixi
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
 
-class PermissionCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+class PermissionCreateView(SaveAndNewMixin, AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
     page = "access_control.permissions"
     model = Permission
     form_class = PermissionForm
@@ -136,21 +125,19 @@ class PermissionUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, UpdateVi
         return context
 
 
-class PermissionDeleteView(SoftDeleteView):
-    page = "access_control.permissions"
-    action = "delete"
-    model = Permission
-    success_url = reverse_lazy("access_control:permission_list")
-    success_message = "Permission deleted."
 
 
-class UserAssignmentListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+
+class UserAssignmentListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "access_control.user_assignments"
+    model = UserAssignment
     template_name = "access_control/user_assignment_list.html"
     context_object_name = "assignments"
     queryset = UserAssignment.objects.select_related("user", "role", "organization", "branch")
     search_fields = ("user__username", "user__name", "user__email", "role__title", "organization__title", "branch__title")
     filter_fields = {"status": "status", "role": "role_id", "organization": "organization_id"}
+    sort_fields = {"user": "user__name", "role": "role__title", "organization": "organization__title", "branch": "branch__title", "primary": "-is_primary", "status": ("status", "user__name")}
+    default_sort = "user"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -170,7 +157,7 @@ class UserAssignmentListView(SearchFilterPaginationMixin, PagePermissionRequired
         ]
 
 
-class UserAssignmentCreateView(AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
+class UserAssignmentCreateView(SaveAndNewMixin, AuditSaveMixin, PagePermissionRequiredMixin, CreateView):
     page = "access_control.user_assignments"
     model = UserAssignment
     form_class = UserAssignmentForm
@@ -200,9 +187,59 @@ class UserAssignmentUpdateView(AuditSaveMixin, PagePermissionRequiredMixin, Upda
         return context
 
 
-class UserAssignmentDeleteView(SoftDeleteView):
+
+
+class RoleToggleStatusView(ToggleStatusView):
+    page = "access_control.roles"
+    model = Role
+    success_url_name = "access_control:role_list"
+
+
+class RoleDetailView(MasterDetailView):
+    page = "access_control.roles"
+    model = Role
+    kind = "Role"
+    list_url_name = "access_control:role_list"
+    edit_url_name = "access_control:role_update"
+    detail_fields = (("Title", "title"), ("Status", "status"))
+    template_name = "access_control/role_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["permissions"] = Permission.objects.filter(role_links__role=self.object).order_by("seq", "title")
+        return context
+
+
+class PermissionToggleStatusView(ToggleStatusView):
+    page = "access_control.permissions"
+    model = Permission
+    success_url_name = "access_control:permission_list"
+
+
+class PermissionDetailView(MasterDetailView):
+    page = "access_control.permissions"
+    model = Permission
+    kind = "Permission"
+    list_url_name = "access_control:permission_list"
+    edit_url_name = "access_control:permission_update"
+    detail_fields = (("Title", "title"), ("Code", "code"), ("Sequence", "seq"), ("Status", "status"))
+
+
+class UserAssignmentToggleStatusView(ToggleStatusView):
     page = "access_control.user_assignments"
-    action = "delete"
     model = UserAssignment
-    success_url = reverse_lazy("access_control:user_assignment_list")
-    success_message = "User assignment deleted."
+    success_url_name = "access_control:user_assignment_list"
+
+
+class UserAssignmentDetailView(MasterDetailView):
+    page = "access_control.user_assignments"
+    model = UserAssignment
+    kind = "User Assignment"
+    title_attr = "user.display_name"
+    subtitle_attr = "role.title"
+    list_url_name = "access_control:user_assignment_list"
+    edit_url_name = "access_control:user_assignment_update"
+    detail_fields = (
+        ("User", "user.display_name"), ("Role", "role"), ("Organization", "organization"), ("Branch", "branch"),
+        ("Start Date", "start_date"), ("End Date", "end_date"), ("Primary", "is_primary"), ("Status", "status"),
+    )

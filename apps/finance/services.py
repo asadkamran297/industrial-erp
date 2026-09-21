@@ -1422,3 +1422,24 @@ def sync_supplier_opening_balance(*, supplier, user=None):
         account.updated_by = user
         account.save(update_fields=["opening_balance", "updated_by", "updated_at"])
     return account
+
+
+@transaction.atomic
+def sync_customer_opening_balance(*, customer, user=None):
+    """Carry a customer's opening balance onto their receivable account.
+
+    Mirror of ``sync_supplier_opening_balance``: the account is created when
+    the customer first gets a balance, and its opening set to match. Returns
+    the account, or None when there is nothing to record.
+    """
+    amount = customer.opening_balance or Decimal("0.00")
+    account = ChartOfAccount.objects.filter(title=customer.customer_name, is_group=False).first()
+    if account is None:
+        if not amount:
+            return None
+        account = create_customer_receivable_account(customer=customer, user=user)
+    if account.opening_balance != amount:
+        account.opening_balance = amount
+        account.updated_by = user
+        account.save(update_fields=["opening_balance", "updated_by", "updated_at"])
+    return account

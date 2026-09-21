@@ -1,22 +1,29 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'configurations:master_create' master_config.slug %}{% endif %}{% endcapture %}
-{% component "table/board" title=master_config.label add_url=add_url add_label="Record" table_id="master-table" search_placeholder="Search" %}
-  <thead><tr><th>Title</th><th>Code</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+{% capture as search_placeholder %}Search {{ master_config.label|lower }}{% endcapture %}
+{% capture as empty_label %}No {{ master_config.label|lower }}.{% endcapture %}
+{% component "table/board" title=master_config.label add_url=add_url add_label=master_config.singular table_id="master-table" search_placeholder=search_placeholder %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Title" field="title" %}
+    {% include "components/table/sort_header.html" with label="Code" field="code" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for record in records %}
     <tr>
-      <td class="strong">{{ record.title }}</td>
+      <td class="strong"><a class="doc-num" href="{% url 'configurations:master_detail' master_config.slug record.pk %}">{{ record.title }}</a></td>
       <td>{{ record.code|default:"—" }}</td>
-      <td>{% include "components/table/status_badge.html" with status=record.status label=record.get_status_display only %}</td>
+      <td>{% if can_edit %}{% url 'configurations:master_toggle_status' master_config.slug record.pk as toggle_url %}{% capture as is_on %}{% if record.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=record.status label=record.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
-        {% url 'configurations:master_update' master_config.slug record.pk as edit_url %}
-        {% url 'configurations:master_delete' master_config.slug record.pk as delete_url %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url only %}
+        {% url 'configurations:master_detail' master_config.slug record.pk as view_url %}
+        {% capture as edit_url %}{% if can_edit %}{% url 'configurations:master_update' master_config.slug record.pk %}{% endif %}{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}
-    {% include "components/table/empty_row.html" with span=4 only %}
+    {% include "components/table/empty_row.html" with span=4 label=empty_label only %}
     {% endfor %}
   </tbody>
 {% endcomponent %}

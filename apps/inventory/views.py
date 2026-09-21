@@ -23,10 +23,12 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from apps.core.constants import PRD_UNIT_CHOICES, INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.models import SystemSetting
+from apps.core.table_columns import Column, ColumnSet
 from apps.core.table_export import TableExportView
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
+from apps.core.views import SaveAndNewMixin, MasterDetailView
 from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_supplier_opening_balance
+from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, sync_customer_opening_balance, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
@@ -461,7 +463,7 @@ class UOMToggleStatusView(InventoryManageMixin, View):
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:uom_list"))
 
 
-class InventoryClassCreateView(InventoryManageMixin, CreateView):
+class InventoryClassCreateView(SaveAndNewMixin, InventoryManageMixin, CreateView):
     page = "inventory.classes"
     model = InventoryClass
     form_class = InventoryClassForm
@@ -695,7 +697,7 @@ class UOMListView(BaseSimpleListView):
         return context
 
 
-class UOMCreateView(InventoryManageMixin, CreateView):
+class UOMCreateView(SaveAndNewMixin, InventoryManageMixin, CreateView):
     page = "inventory.uoms"
     model = UOM
     form_class = UOMForm
@@ -709,13 +711,20 @@ class UOMUpdateView(UOMCreateView, UpdateView):
     success_message = "UOM updated."
 
 
-class UOMConversionListView(BaseSimpleListView):
+class UOMConversionListView(SortableListMixin, BaseSimpleListView):
     page = "inventory.uom_conversions"
     model = UOMConversion
     queryset = UOMConversion.objects.select_related("uom_from", "uom_to").order_by("uom_from__title")
     search_fields = ("uom_from__title", "uom_to__title")
     filter_fields = {"status": "status"}
-    extra_context = {"title": "UOM Conversions", "create_url": reverse_lazy("inventory:conversion_create"), "edit_url_name": "inventory:conversion_update", "status_toggle_url_name": "inventory:conversion_toggle_status", "columns": [("From", "uom_from"), ("To", "uom_to"), ("Factor", "conversion_factor"), ("Status", "status_toggle")]}
+    sort_fields = {"uom_from": ("uom_from__title", "uom_to__title"), "uom_to": ("uom_to__title", "uom_from__title"), "conversion_factor": "conversion_factor", "status_toggle": ("status", "uom_from__title")}
+    default_sort = "uom_from"
+    extra_context = {
+        "title": "UOM Conversions", "add_label": "UOM Conversion", "search_placeholder": "Search UOM conversions", "empty_label": "No UOM conversions.",
+        "create_url": reverse_lazy("inventory:conversion_create"), "edit_url_name": "inventory:conversion_update", "detail_url_name": "inventory:conversion_detail",
+        "status_toggle_url_name": "inventory:conversion_toggle_status",
+        "columns": [("From", "uom_from"), ("To", "uom_to"), ("Factor", "conversion_factor"), ("Status", "status_toggle")],
+    }
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
@@ -734,7 +743,7 @@ class UOMConversionToggleStatusView(InventoryManageMixin, View):
         return redirect(request.META.get("HTTP_REFERER") or reverse_lazy("inventory:conversion_list"))
 
 
-class UOMConversionCreateView(InventoryManageMixin, CreateView):
+class UOMConversionCreateView(SaveAndNewMixin, InventoryManageMixin, CreateView):
     page = "inventory.uom_conversions"
     model = UOMConversion
     form_class = UOMConversionForm
@@ -748,7 +757,84 @@ class UOMConversionUpdateView(UOMConversionCreateView, UpdateView):
     success_message = "UOM conversion updated."
 
 
-class SupplierListView(SortableListMixin, BaseSimpleListView):
+class UOMConversionDetailView(MasterDetailView):
+    page = "inventory.uom_conversions"
+    model = UOMConversion
+    kind = "UOM Conversion"
+    title_attr = "__str__"
+    list_url_name = "inventory:conversion_list"
+    edit_url_name = "inventory:conversion_update"
+    detail_fields = (("From", "uom_from"), ("To", "uom_to"), ("Factor", "conversion_factor"), ("Status", "status"))
+
+    def get_queryset(self):
+        return UOMConversion.objects.select_related("uom_from", "uom_to")
+
+
+def _fmt_amount(value):
+    return f"{value or Decimal('0.00'):.2f}"
+
+
+SUPPLIER_COLUMNS = ColumnSet("inventory.suppliers", (
+    Column("name", "Supplier", locked=True, export=lambda s: s.name),
+    Column("code", "Code", default=False, export=lambda s: s.code),
+    Column("city", "City", default=False, export=lambda s: str(s.city or "")),
+    Column("phone", "Phone", default=False, export=lambda s: s.tel1),
+    Column("email", "Email", default=False, export=lambda s: s.email),
+    Column("payable", "Payable", export=lambda s: _fmt_amount(s.payable_balance)),
+    Column("status", "Status", export=lambda s: s.get_status_display()),
+))
+
+CUSTOMER_COLUMNS = ColumnSet("inventory.customers", (
+    Column("name", "Customer", locked=True, export=lambda c: c.customer_name),
+    Column("code", "Code", default=False, export=lambda c: c.customer_code or ""),
+    Column("city", "City", default=False, export=lambda c: str(c.city or "")),
+    Column("phone", "Phone", default=False, export=lambda c: c.customer_cell_no),
+    Column("email", "Email", default=False, export=lambda c: c.customer_email),
+    Column("receivable", "Receivable", export=lambda c: _fmt_amount(c.receivable_balance)),
+    Column("status", "Status", export=lambda c: c.get_status_display()),
+    Column("default", "Default Customer", export=lambda c: "Yes" if c.is_default else "No"),
+))
+
+PARTY_COLUMN_PARAMS = ("q", "status", "per_page", "page", "sort", "dir")
+
+
+class PartyColumnsMixin:
+    """Column picker state for a party list; ``column_set`` and ``list_url_name`` per screen."""
+
+    column_set = None
+    list_url_name = ""
+
+    def party_column_context(self, context):
+        columns = self.column_set.visible(self.request.session)
+        keys = [column.key for column in self.column_set.columns if column.key in columns]
+        context["columns"] = columns
+        context["column_menu"] = self.column_set.menu(self.request.session)
+        context["columns_url"] = reverse(f"inventory:{self.list_url_name}_columns")
+        context["export_url"] = reverse(f"inventory:{self.list_url_name}_export")
+        context["row_span"] = len(keys) + 2
+        money_key = "payable" if "payable" in self.column_set.keys else "receivable"
+        if money_key in keys:
+            lead = keys.index(money_key) + 1
+            context["footer_lead"] = lead
+            context["footer_tail"] = len(keys) - lead
+        return context
+
+
+class PartyColumnsView(PagePermissionRequiredMixin, View):
+    column_set = None
+    list_url_name = ""
+
+    def post(self, request, *args, **kwargs):
+        self.column_set.choose(request.session, request.POST.getlist("columns"))
+        query = urlencode([
+            (key, value) for key, value in parse_qsl(request.POST.get("back", ""), keep_blank_values=False)
+            if key in PARTY_COLUMN_PARAMS
+        ])
+        target = reverse(f"inventory:{self.list_url_name}")
+        return redirect(f"{target}?{query}" if query else target)
+
+
+class SupplierListView(PartyColumnsMixin, SortableListMixin, BaseSimpleListView):
     """Suppliers, each row opening onto what the business has bought from them."""
 
     page = "inventory.suppliers"
@@ -760,17 +846,17 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
     python_sort_fields = {"payable": "payable_balance"}
     default_sort = "added"
     filter_fields = {"status": "status"}
+    column_set = SUPPLIER_COLUMNS
+    list_url_name = "supplier_list"
     extra_context = {"title": "Suppliers", "create_url": reverse_lazy("inventory:supplier_create"), "edit_url_name": "inventory:supplier_update", "status_toggle_url_name": "inventory:supplier_toggle_status"}
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        suppliers = list(context.get("records") or [])
+    def decorate(self, suppliers):
+        """Attach dealings, payable balance and the last few ledger rows to each supplier in one pass."""
         if not suppliers:
-            return context
-
+            return suppliers
         zero = Decimal("0.00")
         purchases = {
             row["supplier_id"]: row
@@ -789,31 +875,11 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
             for row in PurchaseOrder.objects.filter(supplier__in=suppliers).values("supplier_id").annotate(count=Count("id"))
         }
         payable_codes = dict(
-            ChartOfAccount.objects.filter(title__in=[supplier.name for supplier in suppliers])
+            ChartOfAccount.objects.filter(title__in=[supplier.name for supplier in suppliers], is_group=False)
             .values_list("title", "code")
         )
         balances = account_balances()
-
-        entries = {}
-        if payable_codes:
-            lines = (
-                AccountVoucherLine.objects.filter(account_no__in=payable_codes.values())
-                .select_related("voucher")
-                .order_by("voucher_date", "voucher_no", "line_number")
-            )
-            for line in lines:
-                entries.setdefault(line.account_no, []).append(line)
-
-        def ledger_rows(code):
-            """Payables are credit-natured: a purchase raises the balance, a payment lowers it."""
-            running = (balances.get(code) or {}).get("opening") or zero
-            rows = []
-            for line in entries.get(code, []):
-                debit = line.debit_amount or zero
-                credit = line.credit_amount or zero
-                running += credit - debit
-                rows.append({"line": line, "debit": debit, "credit": credit, "balance": running})
-            return rows[::-1][:8]  # newest first, the last few dealings
+        entries = _ledger_entries(payable_codes.values())
 
         for supplier in suppliers:
             bought = purchases.get(supplier.id) or {}
@@ -825,9 +891,17 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
             supplier.order_count = orders.get(supplier.id, 0)
             supplier.payable_code = payable_codes.get(supplier.name, "")
             supplier.payable_balance = (balances.get(supplier.payable_code) or {}).get("closing") or zero
-            supplier.ledger_rows = ledger_rows(supplier.payable_code) if supplier.payable_code else []
+            supplier.ledger_rows = _recent_ledger_rows(entries, balances, supplier.payable_code, credit_natured=True) if supplier.payable_code else []
+        return suppliers
 
-        context["records"] = self.sort_rows(suppliers)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        self.party_column_context(context)
+        suppliers = list(context.get("records") or [])
+        if not suppliers:
+            return context
+        zero = Decimal("0.00")
+        context["records"] = self.sort_rows(self.decorate(suppliers))
         all_suppliers = self.get_queryset()
         context["supplier_count"] = all_suppliers.count()
         context["purchased_total"] = (
@@ -837,8 +911,56 @@ class SupplierListView(SortableListMixin, BaseSimpleListView):
         all_codes = ChartOfAccount.objects.filter(
             title__in=all_suppliers.values_list("name", flat=True), is_group=False
         ).values_list("code", flat=True)
+        balances = account_balances()
         context["payable_total"] = sum(((balances.get(code) or {}).get("closing") or zero for code in all_codes), zero)
         return context
+
+
+def _ledger_entries(codes):
+    """Voucher lines for the given account codes, grouped by account, oldest first."""
+    codes = list(codes)
+    entries = {}
+    if not codes:
+        return entries
+    lines = (
+        AccountVoucherLine.objects.filter(account_no__in=codes)
+        .select_related("voucher")
+        .order_by("voucher_date", "voucher_no", "line_number")
+    )
+    for line in lines:
+        entries.setdefault(line.account_no, []).append(line)
+    return entries
+
+
+def _recent_ledger_rows(entries, balances, code, *, credit_natured):
+    """Last eight ledger rows with a running balance; payables rise on credit, receivables on debit."""
+    zero = Decimal("0.00")
+    running = (balances.get(code) or {}).get("opening") or zero
+    rows = []
+    for line in entries.get(code, []):
+        debit = line.debit_amount or zero
+        credit = line.credit_amount or zero
+        running += (credit - debit) if credit_natured else (debit - credit)
+        rows.append({"line": line, "debit": debit, "credit": credit, "balance": running})
+    return rows[::-1][:8]
+
+
+class SupplierColumnsView(PartyColumnsView):
+    page = "inventory.suppliers"
+    action = "index"
+    column_set = SUPPLIER_COLUMNS
+    list_url_name = "supplier_list"
+
+
+class SupplierExportView(InventoryListMixin, TableExportView):
+    page = "inventory.suppliers"
+    columns = SUPPLIER_COLUMNS
+    filename = "suppliers"
+    title = "Suppliers"
+
+    def get_rows(self):
+        listing = SupplierListView(request=self.request, kwargs={}, args=())
+        return listing.decorate(list(listing.get_queryset()))
 
 
 class SupplierDetailView(PagePermissionRequiredMixin, DetailView):
@@ -1009,13 +1131,20 @@ class ItemStockListMixin(InventoryListMixin):
         return context
 
 
-class ItemListView(ItemStockListMixin, ListView):
+class ItemListView(SortableListMixin, ItemStockListMixin, ListView):
     template_name = "inventory/item_list.html"
+    sort_fields = {
+        "name": "item_name", "code": "code", "category": ("item_class__title", "item_name"), "unit": ("uom__title", "item_name"),
+        "qty": "stock__current_quantity", "price": "stock__current_price", "last_price": "stock__last_price", "status": ("status", "item_name"),
+    }
+    python_sort_fields = {"value": "stock_value"}
+    default_sort = "name"
 
     def get_context_data(self, **kwargs):
         from apps.finance.services import inventory_control_summary  # lazy: finance imports inventory
 
         context = super().get_context_data(**kwargs)
+        context["records"] = self.sort_rows(list(context["records"]))
         context["title"] = "Services" if context["is_service_tab"] else "Inventory Items"
         context["create_url"] = reverse_lazy("inventory:item_create")
         context["control_account"] = None if context["is_service_tab"] else inventory_control_summary()
@@ -1738,7 +1867,7 @@ class ItemConversionOptionsView(InventoryManageMixin, View):
         })
 
 
-class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
+class ItemCreateView(SaveAndNewMixin, EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     page = "inventory.items"
     model = InventoryItem
     form_class = InventoryItemForm
@@ -1789,6 +1918,36 @@ class ItemCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
         if "save_and_new" in self.request.POST:
             return reverse_lazy("inventory:item_create")
         return reverse_lazy("inventory:item_update", kwargs={"pk": self.object.pk})
+
+
+class ItemDetailView(MasterDetailView):
+    page = "inventory.items"
+    model = InventoryItem
+    kind = "Item"
+    title_attr = "item_name"
+    subtitle_attr = "code"
+    list_url_name = "inventory:item_list"
+    edit_url_name = "inventory:item_update"
+    template_name = "inventory/item_detail.html"
+    detail_fields = (
+        ("Code", "code"), ("Category", "item_class"), ("Unit", "uom"), ("Secondary Unit", "secondary_uom"),
+        ("Barcode", "item_bar_code"), ("Kind", "item_kind"), ("Type", "inventory"), ("Imported", "imported"),
+        ("Sale Price", "price", "money"), ("Purchase Price", "purchase_price", "money"),
+        ("Stock Qty", "stock.current_quantity", "weight"), ("Stock Value", "stock_value", "money"), ("Status", "status"),
+    )
+
+    def get_queryset(self):
+        return InventoryItem.objects.select_related("uom", "secondary_uom", "item_class", "stock")
+
+    def get_object(self, queryset=None):
+        item = super().get_object(queryset)
+        ItemStockListMixin._decorate([item])
+        return item
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["movements"] = ItemLedger.objects.filter(inventory_item=self.object).order_by("-transaction_date", "-id")[:10]
+        return context
 
 
 class ItemUpdateView(ItemCreateView, UpdateView):
@@ -2614,14 +2773,19 @@ class PurchaseOrderColumnsView(InventoryListMixin, View):
         return redirect(f"{target}?{query}" if query else str(target))
 
 
-class PurchaseReportView(InventoryListMixin, ListView):
+class PurchaseReportView(SortableListMixin, InventoryListMixin, ListView):
     page = "inventory.purchase_report"
+    model = PurchaseOrder
     template_name = "inventory/purchase_report.html"
     context_object_name = "orders"
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related("items").order_by("-purchase_date", "-id")
     search_fields = ("purchase_num", "supplier__name", "quot_num")
     filter_fields = {"status": "status", "supplier": "supplier_id", "item": "items__inventory_item_id"}
     date_filters = [{"field": "purchase_date", "label": "Purchase date"}]
+    sort_fields = {"number": "purchase_num", "supplier": ("supplier__name", "-purchase_date"), "date": ("purchase_date", "id"), "quotation": "quot_num", "status": ("status", "-purchase_date")}
+    python_sort_fields = {"total": "po_total"}
+    default_sort = "date"
+    default_sort_dir = "desc"
 
     def get_queryset(self):
         return super().get_queryset().distinct()
@@ -2637,13 +2801,14 @@ class PurchaseReportView(InventoryListMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["orders"] = list(context["orders"])
         for order in context["orders"]:
             items = list(order.items.all())
             order.po_total = sum(i.total_amount for i in items)
         return context
 
 
-class PendingOrdersReportView(InventoryListMixin, ListView):
+class PendingOrdersReportView(SortableListMixin, InventoryListMixin, ListView):
     """What is still to come in, by supplier. The owner's morning question.
 
     Only orders that are live: raised, or part invoiced with a balance still
@@ -2658,9 +2823,12 @@ class PendingOrdersReportView(InventoryListMixin, ListView):
     """
 
     page = "inventory.purchase_report"
+    model = PurchaseOrder
     template_name = "inventory/pending_orders_report.html"
     context_object_name = "orders"
     paginate_by = 25
+    sort_fields = {"number": ("supplier__name", "purchase_num"), "date": ("supplier__name", "purchase_date", "id"), "godown": ("supplier__name", "godown__name", "purchase_date"), "expected": ("supplier__name", "expected_date", "purchase_date")}
+    default_sort = "date"
     queryset = (
         PurchaseOrder.objects
         .filter(status__in=[STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED])
@@ -3356,16 +3524,134 @@ class ManualTransactionPrintView(InventoryManageMixin, PrintContextMixin, View):
         return render(request, self.template_name, context)
 
 
-class CustomerListView(BaseSimpleListView):
+class CustomerListView(PartyColumnsMixin, SortableListMixin, BaseSimpleListView):
+    """Customers, each row opening onto what the business has sold to them."""
+
     page = "inventory.customers"
     model = Customer
-    queryset = Customer.objects.select_related("city").order_by("customer_name")
-    search_fields = ("customer_name", "customer_code", "customer_cell_no")
+    template_name = "inventory/customer_list.html"
+    queryset = Customer.objects.select_related("city").order_by("-id")
+    search_fields = ("customer_name", "customer_code", "customer_cell_no", "customer_email")
+    sort_fields = {"name": "customer_name", "code": "customer_code", "city": "city__title", "status": ("status", "customer_name"), "added": "-id"}
+    python_sort_fields = {"receivable": "receivable_balance"}
+    default_sort = "added"
     filter_fields = {"status": "status"}
-    extra_context = {"title": "Customers", "create_url": reverse_lazy("inventory:customer_create"), "edit_url_name": "inventory:customer_update", "status_toggle_url_name": "inventory:customer_toggle_status", "default_toggle_url_name": "inventory:customer_toggle_default", "columns": [("Name", "customer_name"), ("Code", "customer_code"), ("Cell", "customer_cell_no"), ("Status", "status_toggle"), ("Default Customer", "default_toggle")]}
+    column_set = CUSTOMER_COLUMNS
+    list_url_name = "customer_list"
+    extra_context = {"title": "Customers", "create_url": reverse_lazy("inventory:customer_create"), "edit_url_name": "inventory:customer_update", "status_toggle_url_name": "inventory:customer_toggle_status", "default_toggle_url_name": "inventory:customer_toggle_default"}
 
     def get_filter_specs(self):
-        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}] 
+        return [{"name": "status", "label": "All statuses", "choices": RECORD_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]
+
+    def decorate(self, customers):
+        """Attach dealings, receivable balance and the last few ledger rows to each customer in one pass."""
+        if not customers:
+            return customers
+        zero = Decimal("0.00")
+        sales = {
+            row["customer_id"]: row
+            for row in POSMaster.objects.filter(customer__in=customers, posted=YES)
+            .values("customer_id")
+            .annotate(total=Sum("net_amount"), count=Count("id"))
+        }
+        returns = {
+            row["customer_id"]: row
+            for row in POSReturnMaster.objects.filter(customer__in=customers)
+            .values("customer_id")
+            .annotate(total=Sum("returned_amount"), count=Count("id"))
+        }
+        orders = {
+            row["customer_id"]: row["count"]
+            for row in SalesOrder.objects.filter(customer__in=customers).values("customer_id").annotate(count=Count("id"))
+        }
+        receivable_codes = dict(
+            ChartOfAccount.objects.filter(title__in=[customer.customer_name for customer in customers], is_group=False)
+            .values_list("title", "code")
+        )
+        balances = account_balances()
+        entries = _ledger_entries(receivable_codes.values())
+
+        for customer in customers:
+            sold = sales.get(customer.id) or {}
+            sent_back = returns.get(customer.id) or {}
+            customer.sale_total = sold.get("total") or zero
+            customer.sale_count = sold.get("count") or 0
+            customer.return_total = sent_back.get("total") or zero
+            customer.return_count = sent_back.get("count") or 0
+            customer.order_count = orders.get(customer.id, 0)
+            customer.receivable_code = receivable_codes.get(customer.customer_name, "")
+            customer.receivable_balance = (balances.get(customer.receivable_code) or {}).get("closing") or zero
+            customer.ledger_rows = _recent_ledger_rows(entries, balances, customer.receivable_code, credit_natured=False) if customer.receivable_code else []
+        return customers
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        self.party_column_context(context)
+        customers = list(context.get("records") or [])
+        if not customers:
+            return context
+        zero = Decimal("0.00")
+        context["records"] = self.sort_rows(self.decorate(customers))
+        all_customers = self.get_queryset()
+        context["customer_count"] = all_customers.count()
+        context["sold_total"] = (
+            POSMaster.objects.filter(customer__in=all_customers, posted=YES)
+            .aggregate(total=Sum("net_amount"))["total"] or zero
+        )
+        all_codes = ChartOfAccount.objects.filter(
+            title__in=all_customers.values_list("customer_name", flat=True), is_group=False
+        ).values_list("code", flat=True)
+        balances = account_balances()
+        context["receivable_total"] = sum(((balances.get(code) or {}).get("closing") or zero for code in all_codes), zero)
+        return context
+
+
+class CustomerColumnsView(PartyColumnsView):
+    page = "inventory.customers"
+    action = "index"
+    column_set = CUSTOMER_COLUMNS
+    list_url_name = "customer_list"
+
+
+class CustomerExportView(InventoryListMixin, TableExportView):
+    page = "inventory.customers"
+    columns = CUSTOMER_COLUMNS
+    filename = "customers"
+    title = "Customers"
+
+    def get_rows(self):
+        listing = CustomerListView(request=self.request, kwargs={}, args=())
+        return listing.decorate(list(listing.get_queryset()))
+
+
+class CustomerDetailView(PagePermissionRequiredMixin, DetailView):
+    """Everything on file for one customer, with their ledger underneath."""
+
+    page = "inventory.customers"
+    model = Customer
+    template_name = "inventory/customer_detail.html"
+    context_object_name = "customer"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        customer = self.object
+        zero = Decimal("0.00")
+
+        sold = POSMaster.objects.filter(customer=customer, posted=YES).aggregate(total=Sum("net_amount"), count=Count("id"))
+        sent_back = POSReturnMaster.objects.filter(customer=customer).aggregate(total=Sum("returned_amount"), count=Count("id"))
+        context["sale_total"] = sold["total"] or zero
+        context["sale_count"] = sold["count"] or 0
+        context["return_total"] = sent_back["total"] or zero
+        context["return_count"] = sent_back["count"] or 0
+        context["order_count"] = SalesOrder.objects.filter(customer=customer).count()
+        context["recent_invoices"] = POSMaster.objects.filter(customer=customer, posted=YES).order_by("-sale_date", "-id")[:10]
+
+        account = ChartOfAccount.objects.filter(title=customer.customer_name, is_group=False).first()
+        context["receivable_code"] = account.code if account else ""
+        ledger = account_ledger(account.code) if account else None
+        context["ledger"] = ledger
+        context["receivable_balance"] = ledger["closing"] if ledger else zero
+        return context
 
 
 class CustomerToggleStatusView(InventoryManageMixin, View):
@@ -3401,27 +3687,33 @@ class CustomerCreateView(EmbeddedCreateMixin, InventoryManageMixin, CreateView):
     page = "inventory.customers"
     model = Customer
     form_class = CustomerForm
-    template_name = "inventory/simple_form.html"
+    template_name = "inventory/customer_form.html"
     success_url = reverse_lazy("inventory:customer_list")
     success_message = "Customer saved."
     embed_message_type = "customer:saved"
-    extra_context = {"title": "Customer"}
+    extra_context = {
+        "title": "Customer",
+        "registration_fields": ("customer_code", "ntn_number", "sale_tax_num"),
+        "extra_fields": ("is_default", "status", "remarks"),
+    }
 
     def embed_payload(self, obj):
-        return {"id": obj.pk, "name": obj.customer_name}
+        return {"id": obj.pk, "name": obj.customer_name, "balance": str(obj.opening_balance or "")}
 
     def form_valid(self, form):
         creating = self.object is None  # None on create, set on update
         response = super().form_valid(form)
         if creating:
-            node = create_customer_receivable_account(customer=self.object, user=self.request.user)
-            opening_balance = form.cleaned_data.get("opening_balance")
-            if node and opening_balance:
-                node.opening_balance = opening_balance
-                node.save(update_fields=["opening_balance", "updated_at"])
+            create_customer_receivable_account(customer=self.object, user=self.request.user)
+        sync_customer_opening_balance(customer=self.object, user=self.request.user)
         if self.is_embedded():
             return self.embed_saved_response()
         return response
+
+    def get_success_url(self):
+        if "save_and_new" in self.request.POST:
+            return reverse_lazy("inventory:customer_create")
+        return super().get_success_url()
 
 
 class CustomerUpdateView(CustomerCreateView, UpdateView):
@@ -4139,13 +4431,17 @@ class POSReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
         return context
 
 
-class POSReturnListView(InventoryListMixin, ListView):
+class POSReturnListView(SortableListMixin, InventoryListMixin, ListView):
     page = "inventory.pos_returns"
+    model = POSReturnMaster
     template_name = "inventory/pos_return_list.html"
     context_object_name = "returns"
     queryset = POSReturnMaster.objects.select_related("pos_master", "customer").filter(posted=YES).order_by("-return_date", "-id")
     search_fields = ("return_num", "transaction_id", "sale_num")
     date_filters = [{"field": "return_date", "label": "Return date"}]
+    sort_fields = {"number": "return_num", "sale": "sale_num", "customer": ("customer__customer_name", "-return_date"), "date": ("return_date", "id"), "amount": "returned_amount"}
+    default_sort = "date"
+    default_sort_dir = "desc"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

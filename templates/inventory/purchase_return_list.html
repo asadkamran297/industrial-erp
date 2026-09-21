@@ -44,10 +44,8 @@
       {% if "quantity" in columns %}<td class="num">{{ row.qty_total|qty }}</td>{% endif %}
       {% if "status" in columns %}
       <td>
-        {% if row.status == "posted" %}<span class="pill pill--posted">Posted</span>
-        {% elif row.status == "reversed" %}<span class="pill pill--reversed">Reversed</span>
-        {% elif row.status in draft_statuses %}<span class="pill pill--draft">Draft</span>
-        {% else %}<span class="pill pill--closed">{{ row.get_status_display }}</span>{% endif %}
+        {% if row.status in draft_statuses %}{% include "components/table/status_badge.html" with status="draft" label="Draft" only %}
+        {% else %}{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}{% endif %}
       </td>
       {% endif %}
       <td class="num strong">{{ row.returned_amount|amount }}</td>

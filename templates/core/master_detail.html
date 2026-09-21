@@ -1,0 +1,16 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="form-stack">
+  {% component "ui/detail_header" kind=kind number=title date=subtitle status=status_label status_tone=status_tone back=True back_url=list_url %}
+    {% slot actions %}
+      {% if edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" variant="primary" only %}{% endif %}
+    {% endslot %}
+  {% endcomponent %}
+  {% component "ui/card" %}
+    {% component "ui/detail_grid" cols=4 %}
+      {% for item in detail_items %}{% include "components/ui/detail_item.html" with label=item.label value=item.value num=item.num wide=item.wide only %}{% endfor %}
+    {% endcomponent %}
+  {% endcomponent %}
+  {% block related %}{% endblock %}
+</section>
+{% endblock %}

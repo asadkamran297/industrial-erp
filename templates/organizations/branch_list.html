@@ -2,20 +2,28 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'organizations:branch_create' %}{% endif %}{% endcapture %}
 {% component "table/board" title="Branches" add_url=add_url add_label="Branch" table_id="branch-table" search_placeholder="Search branches" %}
-  <thead><tr><th>Title</th><th>Code</th><th>Organization</th><th>City</th><th>Phone</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Title" field="title" %}
+    {% include "components/table/sort_header.html" with label="Code" field="code" %}
+    {% include "components/table/sort_header.html" with label="Organization" field="organization" %}
+    {% include "components/table/sort_header.html" with label="City" field="city" %}
+    <th>Phone</th>
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for branch in branches %}
     <tr>
-      <td class="strong">{{ branch.title }}</td>
+      <td class="strong"><a class="doc-num" href="{% url 'organizations:branch_detail' branch.pk %}">{{ branch.title }}</a></td>
       <td>{{ branch.code }}</td>
       <td>{{ branch.organization }}</td>
       <td>{{ branch.city|default:"—" }}</td>
       <td>{{ branch.phone|default:"—" }}</td>
-      <td>{% include "components/table/status_badge.html" with status=branch.status label=branch.get_status_display only %}</td>
+      <td>{% if can_edit %}{% url 'organizations:branch_toggle_status' branch.pk as toggle_url %}{% capture as is_on %}{% if branch.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=branch.status label=branch.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
+        {% url 'organizations:branch_detail' branch.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url 'organizations:branch_update' branch.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'organizations:branch_delete' branch.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this branch?" only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}

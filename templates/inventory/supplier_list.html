@@ -12,8 +12,12 @@
     <tr>
       <th class="print-hide expand-col"></th>
       {% include "components/table/sort_header.html" with label="Supplier" field="name" %}
-      {% include "components/table/sort_header.html" with label="Payable" field="payable" align="right" %}
-      {% include "components/table/sort_header.html" with label="Status" field="status" %}
+      {% if "code" in columns %}{% include "components/table/sort_header.html" with label="Code" field="code" %}{% endif %}
+      {% if "city" in columns %}{% include "components/table/sort_header.html" with label="City" field="city" %}{% endif %}
+      {% if "phone" in columns %}<th>Phone</th>{% endif %}
+      {% if "email" in columns %}<th>Email</th>{% endif %}
+      {% if "payable" in columns %}{% include "components/table/sort_header.html" with label="Payable" field="payable" align="right" %}{% endif %}
+      {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
       <th class="actions-col">Actions</th>
     </tr>
   </thead>
@@ -22,8 +26,12 @@
     <tr>
       {% include "components/table/expand_toggle.html" with pk=supplier.pk title="Details" only %}
       <td class="strong"><a class="doc-num" href="{% url 'inventory:supplier_detail' supplier.pk %}">{{ supplier.name }}</a></td>
-      <td class="num strong{% if supplier.payable_balance > 0 %} fig-bad{% endif %}">{{ supplier.payable_balance|amount }}</td>
-      <td>{% url status_toggle_url_name supplier.pk as toggle_url %}{% capture as is_on %}{% if supplier.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}</td>
+      {% if "code" in columns %}<td>{{ supplier.code }}</td>{% endif %}
+      {% if "city" in columns %}<td>{{ supplier.city|default:"—" }}</td>{% endif %}
+      {% if "phone" in columns %}<td>{{ supplier.tel1|default:"—" }}</td>{% endif %}
+      {% if "email" in columns %}<td>{{ supplier.email|default:"—" }}</td>{% endif %}
+      {% if "payable" in columns %}<td class="num strong{% if supplier.payable_balance > 0 %} fig-bad{% endif %}">{{ supplier.payable_balance|amount }}</td>{% endif %}
+      {% if "status" in columns %}<td>{% if can_edit %}{% url status_toggle_url_name supplier.pk as toggle_url %}{% capture as is_on %}{% if supplier.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=supplier.status label=supplier.get_status_display only %}{% endif %}</td>{% endif %}
       <td class="actions-col">
         {% url 'inventory:supplier_detail' supplier.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url edit_url_name supplier.pk %}{% endif %}{% endcapture %}
@@ -32,7 +40,7 @@
         {% endcomponent %}
       </td>
     </tr>
-    {% component "table/lines_row" pk=supplier.pk span=5 %}
+    {% component "table/lines_row" pk=supplier.pk span=row_span %}
       <div class="grid gap-4 lg:grid-cols-2">
         {% component "ui/card" title="Contact" %}
           {% component "ui/detail_grid" cols=2 %}
@@ -62,28 +70,12 @@
           </div>
         {% endcomponent %}
       </div>
-      <table class="lines-table mt-3">
-        <thead><tr><th>Date</th><th>Voucher</th><th>Particulars</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
-        <tbody>
-          {% for row in supplier.ledger_rows %}
-          <tr>
-            <td class="date">{{ row.line.voucher_date|dmy }}</td>
-            <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.line.voucher_id %}">{{ row.line.voucher_no }}</a></td>
-            <td class="muted">{{ row.line.remarks|default:"—" }}</td>
-            <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>
-            <td class="num">{% if row.credit %}{{ row.credit|amount }}{% endif %}</td>
-            <td class="num strong">{{ row.balance|amount }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="empty-note">No ledger entries.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% include "inventory/_party_ledger_rows.html" with rows=supplier.ledger_rows only %}
     {% endcomponent %}
     {% empty %}
-    {% include "components/table/empty_row.html" with span=5 label="No suppliers." only %}
+    {% include "components/table/empty_row.html" with span=row_span label="No suppliers." only %}
     {% endfor %}
   </tbody>
-  {% if records %}{% include "components/table/table_footer.html" with lead=2 value=payable_total|amount tail=2 label="Total payable" only %}{% endif %}
+  {% if records and footer_lead %}{% include "components/table/table_footer.html" with lead=footer_lead value=payable_total|amount tail=footer_tail|add:1 label="Total payable" only %}{% endif %}
 {% endcomponent %}
 {% endblock %}

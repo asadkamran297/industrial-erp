@@ -1,8 +1,17 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% component "table/board" title="Purchase Orders Report" table_id="po-report-table" search_placeholder="Search" %}
+{% component "table/board" title="Purchase Orders Report" table_id="po-report-table" search_placeholder="Search purchase orders" %}
   <thead>
-    <tr><th class="print-hide expand-col"></th><th>#</th><th>PO #</th><th>Supplier</th><th>Date</th><th>Quotation</th><th>Status</th><th class="num">Total amount</th><th class="actions-col">Actions</th></tr>
+    <tr>
+      <th class="print-hide expand-col"></th><th>#</th>
+      {% include "components/table/sort_header.html" with label="PO #" field="number" %}
+      {% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}
+      {% include "components/table/sort_header.html" with label="Date" field="date" %}
+      {% include "components/table/sort_header.html" with label="Quotation" field="quotation" %}
+      {% include "components/table/sort_header.html" with label="Status" field="status" %}
+      {% include "components/table/sort_header.html" with label="Total amount" field="total" align="right" %}
+      <th class="actions-col">Actions</th>
+    </tr>
   </thead>
   <tbody>
     {% for order in orders %}
@@ -13,14 +22,7 @@
       <td class="truncate">{{ order.supplier.name }}</td>
       <td class="date">{{ order.purchase_date|dmy }}</td>
       <td>{{ order.quot_num|default:"—" }}</td>
-      <td>
-        {% if order.status == "draft" %}<span class="pill pill--draft">{{ order.get_status_display }}</span>
-        {% elif order.status == "cancelled" %}<span class="pill pill--reversed">{{ order.get_status_display }}</span>
-        {% elif order.status == "closed" %}<span class="pill pill--closed">{{ order.get_status_display }}</span>
-        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">{{ order.get_status_display }}</span>
-        {% elif order.status == "fully_invoiced" %}<span class="pill pill--posted">{{ order.get_status_display }}</span>
-        {% else %}<span class="pill pill--pending">{{ order.get_status_display }}</span>{% endif %}
-      </td>
+      <td>{% include "components/table/status_badge.html" with status=order.status label=order.get_status_display only %}</td>
       <td class="num strong">{{ order.po_total|amount }}</td>
       <td class="actions-col">
         {% url 'inventory:purchase_order_detail' order.pk as view_url %}{% url 'inventory:purchase_order_print' order.pk as print_url %}

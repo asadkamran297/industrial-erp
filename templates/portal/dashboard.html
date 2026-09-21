@@ -8,17 +8,11 @@
     <a href="{% url 'finance:trial_balance' %}" class="alert alert--danger block"><b>Figures exclude unaccounted entries.</b> Trial balance</a>
   {% endif %}
 
-  <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  <section class="tiles">
     {% for kpi in kpis %}
-      <div class="kpi kpi--{{ kpi.key }}{% if kpi.signed and kpi.value < 0 %} is-loss{% endif %}" x-data="{ show: localStorage.getItem('kpi-show-{{ kpi.key }}') === '1', toggle() { this.show = !this.show; localStorage.setItem('kpi-show-{{ kpi.key }}', this.show ? '1' : '0'); } }">
-        <div class="kpi-rule"></div>
-        <p class="kpi-label">{{ kpi.label }}</p>
-        {% include "components/ui/icon_button.html" with type="button" icon="view" title="Show / hide" extra="kpi-eye" attrs='@click="toggle()" x-show="!show"' only %}
-        {% include "components/ui/icon_button.html" with type="button" icon="view-off" title="Show / hide" extra="kpi-eye" attrs='@click="toggle()" x-show="show" x-cloak' only %}
-        <p class="kpi-value{% if kpi.signed and kpi.value < 0 %} is-negative{% endif %}"><span x-show="show" x-cloak>{{ kpi.value|amount }}</span><span x-show="!show">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span></p>
-        <p class="kpi-note" x-show="show" x-cloak>{{ kpi.note }}</p>
-        <p class="kpi-note" x-show="!show">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</p>
-      </div>
+      {% capture as mask_key %}kpi-show-{{ kpi.key }}{% endcapture %}
+      {% capture as negative %}{% if kpi.signed and kpi.value < 0 %}1{% endif %}{% endcapture %}
+      {% include "components/ui/stat_card.html" with tone=kpi.tone icon=kpi.icon label=kpi.label value=kpi.value|amount hint=kpi.note mask_key=mask_key negative=negative only %}
     {% endfor %}
   </section>
 
@@ -138,7 +132,7 @@
   <section class="tiles">
     {% for stat in secondary %}
       {% capture as stat_value %}{% if stat.money %}{{ stat.value|amount }}{% else %}{{ stat.value }}{% endif %}{% endcapture %}
-      {% include "components/table/tile.html" with tone="slate" value=stat_value label=stat.label only %}
+      {% include "components/ui/stat_card.html" with tone="slate" icon=stat.icon value=stat_value label=stat.label only %}
     {% endfor %}
   </section>
 </div>

@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'products:product_list' as cancel_url %}
-{% component "forms/crud_form" title=title form=form cancel_url=cancel_url narrow=True %}
+{% component "forms/crud_form" title=title form=form cancel_url=cancel_url narrow=True show_new=True %}
   <div class="detail-head">
     <span class="field__label">Complete Code</span>
     <span id="code-preview" class="detail-head__no">{{ form.preview_code }}</span>

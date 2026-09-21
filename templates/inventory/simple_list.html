@@ -2,32 +2,34 @@
 {% load inventory_extras %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
-{% component "table/board" title=title add_url=add_url table_id="master-table" %}
+{% component "table/board" title=title add_url=add_url add_label=add_label table_id="master-table" search_placeholder=search_placeholder %}
   {% slot above %}
     {% if active_tab %}{% include "inventory/_item_tabs.html" %}{% endif %}
     {% if control_account %}{% include "components/ui/control_account_banner.html" %}{% endif %}
   {% endslot %}
   <thead>
-    <tr>{% for label, key in columns %}<th>{{ label }}</th>{% endfor %}<th class="actions-col">Actions</th></tr>
+    <tr>{% for label, key in columns %}{% include "components/table/sort_header.html" with label=label field=key %}{% endfor %}<th class="actions-col">Actions</th></tr>
   </thead>
   <tbody>
     {% for row in records %}
     <tr>
       {% for label, key in columns %}
-      <td>
+      <td{% if forloop.first %} class="strong"{% endif %}>
         {% if key == 'get_status_display' %}{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}
-        {% elif key == 'status_toggle' %}{% url status_toggle_url_name row.pk as toggle_url %}{% capture as is_on %}{% if row.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}
+        {% elif key == 'status_toggle' %}{% if can_edit %}{% url status_toggle_url_name row.pk as toggle_url %}{% capture as is_on %}{% if row.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}{% endif %}
         {% elif key == 'default_toggle' %}{% url default_toggle_url_name row.pk as toggle_url %}{% capture as is_on %}{% if row.is_default %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Default" %}
+        {% elif forloop.first and detail_url_name %}<a class="doc-num" href="{% url detail_url_name row.pk %}">{{ row|attr:key }}</a>
         {% else %}{{ row|attr:key }}{% endif %}
       </td>
       {% endfor %}
       <td class="actions-col">
+        {% capture as view_url %}{% if detail_url_name %}{% url detail_url_name row.pk %}{% endif %}{% endcapture %}
         {% capture as edit_url %}{% if can_edit %}{% url edit_url_name row.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}
-    {% include "components/table/empty_row.html" with span=columns|length|add:1 only %}
+    {% include "components/table/empty_row.html" with span=columns|length|add:1 label=empty_label only %}
     {% endfor %}
   </tbody>
 {% endcomponent %}

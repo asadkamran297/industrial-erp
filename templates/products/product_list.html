@@ -39,7 +39,7 @@
     <tr>
       {% if "starting_date" in columns %}<td class="date">{{ node.starting_date|dmy|default:"—" }}</td>{% endif %}
       <td class="muted">{{ node.display_code }}</td>
-      <td class="pl-12"><span class="strong">{{ node.name }}</span> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code and "quick_code" not in columns %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
+      <td class="pl-12"><a class="doc-num" href="{% url 'products:product_detail' node.pk %}">{{ node.name }}</a> <span class="muted">{{ node.get_specification_display }}</span>{% if node.quick_code and "quick_code" not in columns %} <span class="chip">{{ node.quick_code }}</span>{% endif %}</td>
       {% if "quick_code" in columns %}<td>{{ node.quick_code|default:"—" }}</td>{% endif %}
       {% if "unit" in columns %}<td>{{ node.get_unit_display }}</td>{% endif %}
       {% if "unit_weight" in columns %}<td class="num">{{ node.unit_weight|floatformat:3 }}</td>{% endif %}
@@ -49,11 +49,11 @@
       {% if "qty" in columns %}<td class="num">{{ node.stock|floatformat:3 }} <span class="muted">{{ node.get_unit_display|lower }}</span></td>{% endif %}
       {% if "stock_kg" in columns %}<td class="num">{% if node.keeps_stock %}{{ node.stock_kg|floatformat:3 }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>{% endif %}
       {% if "status" in columns %}<td>
-        {% if node.status == 'closed' %}<span class="pill pill--reversed">Closed</span>
+        {% if node.status == 'closed' %}{% include "components/table/status_badge.html" with status="closed" tone="reversed" label="Closed" only %}
         {% elif can_edit %}{% url 'products:product_status_toggle' node.pk as toggle_url %}{% capture as is_on %}{% if node.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}
         {% else %}{% include "components/table/status_badge.html" with status=node.status label=node.get_status_display only %}{% endif %}
       </td>{% endif %}
-      <td class="actions-col">{% capture as edit_url %}{% if can_edit %}{% url 'products:product_update' node.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with edit_url=edit_url only %}</td>
+      <td class="actions-col">{% url 'products:product_detail' node.pk as view_url %}{% capture as edit_url %}{% if can_edit %}{% url 'products:product_update' node.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}</td>
     </tr>
     {% endif %}
     {% empty %}

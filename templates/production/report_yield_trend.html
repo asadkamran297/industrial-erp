@@ -10,7 +10,12 @@
     {% capture as v %}{{ average.shortage_kg|floatformat:0|intcomma }} kg{% endcapture %}{% capture as n %}{{ average.shortage_percent|floatformat:2 }}%{% endcapture %}{% include "components/table/tile.html" with tone="rose" icon="minus" value=v label="Shortage" note=n only %}
   {% endslot %}
   {% slot bar %}<div class="section__head"><h2 class="section__title">By Day</h2></div>{% endslot %}
-  <thead><tr><th>Date</th><th class="num">Wheat Kg</th><th class="num">Output Kg</th><th class="num">Yield %</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Date" field="date" %}
+    {% include "components/table/sort_header.html" with label="Wheat Kg" field="wheat" align="right" %}
+    {% include "components/table/sort_header.html" with label="Output Kg" field="output" align="right" %}
+    {% include "components/table/sort_header.html" with label="Yield %" field="yield" align="right" %}
+  </tr></thead>
   <tbody>
     {% for row in daily %}
     <tr><td class="date">{{ row.period|dmy }}</td><td class="num">{{ row.wheat|floatformat:0|intcomma }}</td><td class="num">{{ row.output|floatformat:0|intcomma }}</td><td class="num strong">{{ row.yield_percent|floatformat:2 }}</td></tr>

@@ -52,9 +52,16 @@
     <div id="return-hidden-inputs"></div>
   </form>
 
-  {% component "table/board" title="" table_id="pos-return-table" date_filters_enabled=True search_placeholder="Search" %}
+  {% component "table/board" title="" table_id="pos-return-table" date_filters_enabled=True search_placeholder="Search returns" %}
     {% slot bar %}<div class="section__head"><h2 class="section__title">Posted returns</h2></div>{% endslot %}
-    <thead><tr><th>Return #</th><th>Against sale</th><th>Customer</th><th>Date</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+    <thead><tr>
+      {% include "components/table/sort_header.html" with label="Return #" field="number" %}
+      {% include "components/table/sort_header.html" with label="Against sale" field="sale" %}
+      {% include "components/table/sort_header.html" with label="Customer" field="customer" %}
+      {% include "components/table/sort_header.html" with label="Date" field="date" %}
+      {% include "components/table/sort_header.html" with label="Amount" field="amount" align="right" %}
+      <th class="actions-col">Actions</th>
+    </tr></thead>
     <tbody>
       {% for row in returns %}
       <tr>

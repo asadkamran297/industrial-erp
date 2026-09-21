@@ -11,6 +11,7 @@ from apps.core.constants import (
 )
 from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.core.table_columns import Column, ColumnSet
+from apps.core.views import SaveAndNewMixin, MasterDetailView
 
 from . import selectors, services
 from .forms import ProductForm
@@ -18,6 +19,7 @@ from .models import (
     FinishBardanaLink,
     PartyBardanaLedger,
     ProductAccountLink,
+    ProductLedger,
     ProductNode,
     ProductOpeningBalance,
     ProductRate,
@@ -119,7 +121,7 @@ class ProductColumnsView(PagePermissionRequiredMixin, View):
         return redirect(f"{target}?{query}" if query else target)
 
 
-class ProductCreateView(PagePermissionRequiredMixin, CreateView):
+class ProductCreateView(SaveAndNewMixin, PagePermissionRequiredMixin, CreateView):
     page = "products.products"
     model = ProductNode
     form_class = ProductForm
@@ -414,3 +416,27 @@ class PartyBardanaListView(PagePermissionRequiredMixin, SortableListMixin, Searc
                 "value": self.request.GET.get("item", ""),
             },
         ]
+
+
+class ProductDetailView(MasterDetailView):
+    page = "products.products"
+    model = ProductNode
+    kind = "Product"
+    title_attr = "name"
+    subtitle_attr = "complete_code"
+    list_url_name = "products:product_list"
+    edit_url_name = "products:product_update"
+    template_name = "products/product_detail.html"
+    detail_fields = (
+        ("Complete Code", "complete_code"), ("Quick Code", "quick_code"), ("Parent", "parent"), ("Specification", "specification"),
+        ("Unit", "unit"), ("Unit Weight", "unit_weight", "weight"), ("Fix Weight", "fix_weight", "weight"), ("Actual Weight", "actual_weight", "weight"),
+        ("Color", "color"), ("Starting Date", "starting_date"), ("Stock", "stock", "weight"), ("Status", "status"),
+    )
+
+    def get_queryset(self):
+        return selectors.items_with_stock().select_related("parent")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["movements"] = ProductLedger.objects.filter(product=self.object).select_related("godown").order_by("-entry_date", "-id")[:10]
+        return context

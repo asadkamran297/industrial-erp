@@ -317,3 +317,30 @@ class SortableListMixin:
             }
         )
         return context
+
+
+def report_sort(request, rows, fields, default, default_dir="asc"):
+    """Sort already-built report rows (dicts or objects) by ``?sort=&dir=`` and return
+    ``(rows, context)`` where context carries what ``sort_header.html`` needs.
+
+    ``fields`` maps a sort key to the row attribute or dict key it orders by.
+    """
+    key = (request.GET.get("sort") or default or "").strip()
+    if key not in fields:
+        key = default
+    direction = (request.GET.get("dir") or "").strip().lower()
+    if direction not in ("asc", "desc"):
+        direction = default_dir if key == default else "asc"
+    attribute = fields.get(key)
+
+    def value(row):
+        raw = row.get(attribute) if isinstance(row, dict) else getattr(row, attribute, None)
+        return (raw is None, raw if raw is not None else 0)
+
+    if attribute:
+        rows = sorted(rows, key=value, reverse=direction == "desc")
+    query = request.GET.copy()
+    for name in ("sort", "dir", "page"):
+        query.pop(name, None)
+    base = query.urlencode()
+    return rows, {"sort_key": key, "sort_dir": direction, "sort_base_query": f"{base}&" if base else ""}

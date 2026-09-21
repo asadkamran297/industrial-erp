@@ -10,6 +10,19 @@ class MasterConfig:
     model: type
     extra_fields: tuple[str, ...] = ()
 
+    @property
+    def singular(self) -> str:
+        label = self.label
+        if label.endswith("ies"):
+            return label[:-3] + "y"
+        if label.endswith("ses"):
+            return label[:-2]
+        return label[:-1] if label.endswith("s") else label
+
+    @property
+    def page_key(self) -> str:
+        return f"configurations.{self.slug.replace('-', '_')}"
+
 
 MASTER_CONFIGS: tuple[MasterConfig, ...] = (
     MasterConfig("departments", "Departments", models.Department),

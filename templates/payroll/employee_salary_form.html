@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'payroll:employee_salary_list' as cancel_url %}
-{% component "forms/crud_form" title=page_title form=form cancel_url=cancel_url narrow=True %}
+{% component "forms/crud_form" title=page_title form=form cancel_url=cancel_url narrow=True show_new=True %}
   <div class="tiles">
     {% include "components/table/tile.html" with tone="sky" icon="cash" value="0" value_id="profile-base-salary" label="Profile Base Salary" only %}
     {% include "components/table/tile.html" with tone="violet" icon="layers" value="-" value_id="selected-element-type" label="Element Type" only %}

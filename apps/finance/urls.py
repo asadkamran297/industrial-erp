@@ -2,6 +2,9 @@ from django.urls import path
 
 from .views import (
     AccountConfigurationCreateView,
+    AccountConfigurationDetailView,
+    AccountConfigurationToggleStatusView,
+    FiscalYearDetailView,
     AccountConfigurationListView,
     AccountConfigurationUpdateView,
     BalanceSheetView,
@@ -41,12 +44,15 @@ app_name = "finance"
 urlpatterns = [
     path("fiscal-years/", FiscalYearListView.as_view(), name="fiscal_year_list"),
     path("fiscal-years/new/", FiscalYearCreateView.as_view(), name="fiscal_year_create"),
+    path("fiscal-years/<int:pk>/", FiscalYearDetailView.as_view(), name="fiscal_year_detail"),
     path("fiscal-years/<int:pk>/edit/", FiscalYearUpdateView.as_view(), name="fiscal_year_update"),
     path("fiscal-years/<int:pk>/set-active-period/", FiscalPeriodSetActiveView.as_view(), name="fiscal_period_set_active"),
     path("fiscal-years/<int:pk>/toggle-active/", FiscalYearToggleActiveView.as_view(), name="fiscal_year_toggle_active"),
     path("accounts/", AccountConfigurationListView.as_view(), name="account_configuration_list"),
     path("accounts/new/", AccountConfigurationCreateView.as_view(), name="account_configuration_create"),
+    path("accounts/<int:pk>/", AccountConfigurationDetailView.as_view(), name="account_configuration_detail"),
     path("accounts/<int:pk>/edit/", AccountConfigurationUpdateView.as_view(), name="account_configuration_update"),
+    path("accounts/<int:pk>/toggle-status/", AccountConfigurationToggleStatusView.as_view(), name="account_configuration_toggle_status"),
     path("chart-of-accounts/", ChartOfAccountTreeView.as_view(), name="chart_of_accounts"),
     path("chart-of-accounts/create/", ChartOfAccountCreateView.as_view(), name="coa_create"),
     path("chart-of-accounts/reorder/", ChartOfAccountReorderView.as_view(), name="coa_reorder"),

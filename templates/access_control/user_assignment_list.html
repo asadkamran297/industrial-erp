@@ -2,20 +2,28 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'access_control:user_assignment_create' %}{% endif %}{% endcapture %}
 {% component "table/board" title="User Assignments" add_url=add_url add_label="Assignment" table_id="assignment-table" search_placeholder="Search assignments" %}
-  <thead><tr><th>User</th><th>Role</th><th>Organization</th><th>Branch</th><th>Primary</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="User" field="user" %}
+    {% include "components/table/sort_header.html" with label="Role" field="role" %}
+    {% include "components/table/sort_header.html" with label="Organization" field="organization" %}
+    {% include "components/table/sort_header.html" with label="Branch" field="branch" %}
+    {% include "components/table/sort_header.html" with label="Primary" field="primary" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for assignment in assignments %}
     <tr>
-      <td class="strong">{{ assignment.user.display_name }}</td>
+      <td class="strong"><a class="doc-num" href="{% url 'access_control:user_assignment_detail' assignment.pk %}">{{ assignment.user.display_name }}</a></td>
       <td>{{ assignment.role }}</td>
       <td>{{ assignment.organization|default:"—" }}</td>
       <td>{{ assignment.branch|default:"—" }}</td>
-      <td>{% if assignment.is_primary %}<span class="pill pill--posted">Yes</span>{% else %}<span class="muted">No</span>{% endif %}</td>
-      <td>{% include "components/table/status_badge.html" with status=assignment.status label=assignment.get_status_display only %}</td>
+      <td>{% if assignment.is_primary %}{% include "components/table/status_badge.html" with status="posted" label="Yes" only %}{% else %}<span class="muted">No</span>{% endif %}</td>
+      <td>{% if can_edit %}{% url 'access_control:user_assignment_toggle_status' assignment.pk as toggle_url %}{% capture as is_on %}{% if assignment.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=assignment.status label=assignment.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
+        {% url 'access_control:user_assignment_detail' assignment.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url 'access_control:user_assignment_update' assignment.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'access_control:user_assignment_delete' assignment.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this assignment?" only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}

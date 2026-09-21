@@ -23,12 +23,11 @@
       <td class="date">{{ order.order_date|dmy }}</td>
       <td class="truncate strong" title="{{ order.customer.customer_name }}">{{ order.customer.customer_name }}</td>
       <td>
-        {% if order.status == "fully_invoiced" %}<span class="pill pill--posted">Fully invoiced</span>
-        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">Partly invoiced</span>
-        {% elif order.status == "draft" %}<span class="pill pill--draft">Draft</span>
-        {% elif order.status == "cancelled" %}<span class="pill pill--reversed">{{ order.get_status_display }}</span>
-        {% elif order.status == "closed" %}<span class="pill pill--closed">{{ order.get_status_display }}</span>
-        {% else %}<span class="pill pill--pending">{{ order.get_status_display }}</span>{% endif %}
+        {% if order.status == "fully_invoiced" %}{% include "components/table/status_badge.html" with status="posted" label="Fully invoiced" only %}
+        {% elif order.status == "partially_invoiced" %}{% include "components/table/status_badge.html" with status="partial" label="Partly invoiced" only %}
+        {% elif order.status == "draft" %}{% include "components/table/status_badge.html" with status="draft" label="Draft" only %}
+        {% elif order.status == "cancelled" or order.status == "closed" %}{% include "components/table/status_badge.html" with status=order.status label=order.get_status_display only %}
+        {% else %}{% include "components/table/status_badge.html" with status="pending" label=order.get_status_display only %}{% endif %}
       </td>
       <td class="num muted">{{ order.line_count }}</td>
       <td class="num">{{ order.qty_total|qty }}</td>

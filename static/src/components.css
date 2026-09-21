@@ -2073,32 +2073,6 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 /* ==================================================================== *
  * Dashboard
  * ==================================================================== */
-.kpi {
-  --kpi-tone: var(--primary);
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--kpi-tone) 10%, transparent), transparent 55%), var(--surface);
-  padding: var(--gap-4);
-  box-shadow: var(--shadow-sm);
-  transition: transform .22s ease, box-shadow .22s ease;
-}
-.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.kpi--revenue { --kpi-tone: var(--series-sales); }
-.kpi--expense { --kpi-tone: var(--series-purchases); }
-.kpi--profit { --kpi-tone: var(--series-profit); }
-.kpi--profit.is-loss { --kpi-tone: var(--series-loss); }
-.kpi--cash { --kpi-tone: var(--series-cash); }
-.kpi .kpi-eye { position: absolute; top: var(--gap-3); right: var(--gap-3); color: var(--text-faint); }
-.dark .kpi .kpi-eye { color: var(--text-faint); }
-.kpi .kpi-eye:hover { color: var(--text); }
-.dark .kpi .kpi-eye:hover { color: var(--text); }
-.kpi-label { margin: 0; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
-.kpi-value { margin: var(--gap-2) 0 .2rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text); }
-.kpi-value.is-negative { color: var(--series-loss); }
-.kpi-note { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); }
-.kpi-rule { width: 44px; height: 4px; margin-bottom: var(--gap-3); border-radius: var(--radius-pill); background: var(--kpi-tone); }
 
 .panel { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-4); padding: var(--gap-3) var(--gap-4) var(--gap-1); }
@@ -2131,16 +2105,24 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
 .activity-value { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .stat-tile {
+  --tone: var(--primary);
+  --tone-soft: var(--primary-soft);
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--gap-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--primary-soft), transparent 60%), var(--surface);
+  background: linear-gradient(180deg, var(--tone-soft), transparent 60%), var(--surface);
   padding: var(--gap-3) var(--gap-4);
 }
-.stat-tile .stat-icon { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--primary); color: var(--on-primary); }
+.stat-tile .stat-icon { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius); background: var(--tone); color: var(--on-primary); }
+.stat-tile.is-negative .stat-value { color: var(--danger); }
+.dark .stat-tile.is-negative .stat-value { color: var(--danger); }
+.stat-tile .stat-eye { position: absolute; top: var(--gap-2); right: var(--gap-2); color: var(--text-faint); }
+.dark .stat-tile .stat-eye { color: var(--text-faint); }
+.stat-tile .stat-eye:hover { color: var(--text); }
+.dark .stat-tile .stat-eye:hover { color: var(--text); }
 .stat-tile .stat-value { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 .stat-tile .stat-label { font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
 

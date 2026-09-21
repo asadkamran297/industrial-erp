@@ -1,0 +1,21 @@
+{% extends "core/master_detail.html" %}
+{% block related %}
+{% component "table/board" title="" table_id="product-movements" no_filters=True no_pagination=True %}
+  {% slot bar %}<div class="section__head"><h2 class="section__title">Recent movements</h2></div>{% endslot %}
+  <thead><tr><th>Date</th><th>Source</th><th>Reference</th><th>Godown</th><th class="num">Quantity</th><th class="num">Rate</th></tr></thead>
+  <tbody>
+    {% for row in movements %}
+    <tr>
+      <td class="date">{{ row.entry_date|dmy }}</td>
+      <td>{{ row.get_source_display }}</td>
+      <td class="muted">{{ row.reference|default:"—" }}</td>
+      <td>{{ row.godown|default:"—" }}</td>
+      <td class="num">{{ row.quantity|floatformat:3 }}</td>
+      <td class="num">{{ row.rate|amount }}</td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=6 label="No movements." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
+{% endblock %}

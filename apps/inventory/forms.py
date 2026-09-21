@@ -368,13 +368,51 @@ class ManualTransactionForm(StyledModelForm):
 
 
 class CustomerForm(StyledModelForm):
-    opening_balance = forms.DecimalField(max_digits=14, decimal_places=2, required=False, initial=0, label="Opening Balance")
-
     class Meta:
         model = Customer
-        fields = ("customer_code", "customer_name", "customer_address", "customer_cell_no", "customer_email", "ntn_number", "sale_tax_num", "city", "is_default", "status", "remarks")
-        labels = {"is_default": "Set as default customer"}
-        widgets = {"remarks": forms.TextInput()}
+        fields = (
+            "customer_name", "customer_code", "customer_email", "ntn_number", "sale_tax_num",
+            "customer_address", "city", "customer_cell_no", "is_default", "status", "remarks",
+            "opening_balance", "opening_balance_date", "credit_limit", "credit_period_days",
+        )
+        widgets = {
+            "remarks": forms.TextInput(),
+            "opening_balance_date": forms.DateInput(attrs={"type": "date"}),
+        }
+        labels = {
+            "customer_name": "Name",
+            "customer_code": "Code",
+            "customer_email": "Email ID",
+            "customer_address": "Billing Address",
+            "customer_cell_no": "Phone Number",
+            "is_default": "Default customer",
+            "opening_balance": "Opening Balance",
+            "opening_balance_date": "As Of Date",
+            "credit_limit": "Credit Limit",
+            "credit_period_days": "Credit Period (days)",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["city"].required = False
+        self.fields["city"].empty_label = "-- Select city --"
+        self.fields["customer_code"].required = False
+        self.fields["customer_code"].disabled = True
+        self.fields["opening_balance"].required = False
+        self.fields["opening_balance_date"].required = False
+        if not self.instance.pk and not self.initial.get("opening_balance_date"):
+            self.initial["opening_balance_date"] = timezone.localdate()
+
+    def clean(self):
+        cleaned = super().clean()
+        opening = cleaned.get("opening_balance")
+        as_of = cleaned.get("opening_balance_date")
+        if opening and not as_of:
+            self.add_error("opening_balance_date", "Give the date this balance was true.")
+        limit = cleaned.get("credit_limit")
+        if limit is not None and limit < 0:
+            self.add_error("credit_limit", "Credit limit cannot be negative.")
+        return cleaned
 
 
 class POSMasterForm(StyledModelForm):

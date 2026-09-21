@@ -78,14 +78,15 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         margin = (statement["net_profit"] / revenue * 100) if revenue else None
 
         context["kpis"] = [
-            {"key": "revenue", "label": "Total Revenue", "value": revenue,
+            {"key": "revenue", "label": "Total Revenue", "value": revenue, "tone": "green", "icon": "sum",
              "note": "Net of discounts and returns"},
-            {"key": "expense", "label": "Total Expense", "value": statement["total_expense"],
+            {"key": "expense", "label": "Total Expense", "value": statement["total_expense"], "tone": "amber", "icon": "cash",
              "note": "Cost of sales and running costs"},
             {"key": "profit", "label": "Net Profit", "value": statement["net_profit"],
+             "tone": "rose" if statement["net_profit"] < 0 else "violet", "icon": "chart",
              "note": f"{margin:.1f}% margin" if margin is not None else "No revenue yet",
              "signed": True},
-            {"key": "cash", "label": "Cash & Bank", "value": cash_on_hand,
+            {"key": "cash", "label": "Cash & Bank", "value": cash_on_hand, "tone": "sky", "icon": "cash",
              "note": "Available balance"},
         ]
 
@@ -153,11 +154,11 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         context["recent_vouchers"] = AccountVoucher.objects.order_by("-voucher_date", "-id")[:5]
 
         context["secondary"] = [
-            {"label": "Active Employees", "value": Employee.objects.filter(status="active").count()},
+            {"label": "Active Employees", "value": Employee.objects.filter(status="active").count(), "icon": "users"},
             {"label": "Payroll Net", "value": Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO,
-             "money": True},
-            {"label": "Posted Vouchers", "value": AccountVoucher.objects.filter(posted="Y").count()},
-            {"label": "Sales Recorded", "value": POSMaster.objects.filter(status=STATUS_POSTED).count()},
+             "money": True, "icon": "cash"},
+            {"label": "Posted Vouchers", "value": AccountVoucher.objects.filter(posted="Y").count(), "icon": "file"},
+            {"label": "Sales Recorded", "value": POSMaster.objects.filter(status=STATUS_POSTED).count(), "icon": "layers"},
         ]
 
         context["integrity"] = ledger_integrity()

@@ -1,13 +1,5 @@
 {% extends embed_layout|default:"layouts/portal.html" %}
 {% block content %}
-<section class="form-stack">
-  {% if not embed %}{% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}{% endif %}
-  <form method="post" class="card">{% csrf_token %}
-    <div class="card-body form-stack">
-      {% include "components/forms/form_errors.html" with form=form only %}
-      {% include "components/forms/form_grid.html" with form=form cols=3 only %}
-    </div>
-    {% include "components/forms/submit_bar.html" with embed=embed cancel_url=cancel_url|default:request.META.HTTP_REFERER only %}
-  </form>
-</section>
+{% firstof cancel_url request.META.HTTP_REFERER "" as back_url %}
+{% include "components/forms/crud_form.html" with title=title form=form cancel_url=back_url cols=3 embed=embed show_new=show_new %}
 {% endblock %}

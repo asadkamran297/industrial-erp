@@ -1,10 +1,10 @@
 <section class="form-stack{% if narrow %} max-w-3xl{% endif %}">
-  {% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}
+  {% if not embed %}{% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}{% endif %}
   <form method="post" class="card"{% if multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}
     <div class="card-body form-stack">
       {% include "components/forms/form_errors.html" with form=form only %}
-      {% if slot %}{% for field in form.hidden_fields %}{{ field }}{% endfor %}{{ slot }}{% else %}{% include "components/forms/form_grid.html" with form=form cols=cols|default:2 only %}{% endif %}
+      {% if slot %}{% for field in form.hidden_fields %}{{ field }}{% endfor %}{{ slot }}{% else %}{% include "components/forms/form_grid.html" with form=form cols=cols|default:3 only %}{% endif %}
     </div>
-    {% include "components/forms/submit_bar.html" with cancel_url=cancel_url label=save_label only %}
+    {% if embed %}{% include "components/forms/submit_bar.html" with embed=True label=save_label only %}{% else %}{% include "components/forms/submit_bar.html" with cancel_url=cancel_url label=save_label show_new=show_new only %}{% endif %}
   </form>
 </section>

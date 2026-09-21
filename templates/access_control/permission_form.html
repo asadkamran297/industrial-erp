@@ -1,5 +1,5 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'access_control:permission_list' as cancel_url %}
-{% include "components/forms/crud_form.html" with title=page_title form=form cancel_url=cancel_url cols=2 narrow=True %}
+{% include "components/forms/crud_form.html" with title=page_title form=form cancel_url=cancel_url cols=3 narrow=True show_new=True %}
 {% endblock %}

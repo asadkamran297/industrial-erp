@@ -1,0 +1,14 @@
+{% extends "core/master_detail.html" %}
+{% block related %}
+{% component "table/board" title="" table_id="fiscal-periods" no_filters=True no_pagination=True %}
+  {% slot bar %}<div class="section__head"><h2 class="section__title">Periods</h2></div>{% endslot %}
+  <thead><tr><th>Period</th><th>Code</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for period in periods %}
+    <tr><td class="strong">{{ period.title }}</td><td class="muted">{{ period.code }}</td><td>{% include "components/table/status_badge.html" with status=period.status label=period.get_status_display only %}</td></tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=3 label="No periods." only %}
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
+{% endblock %}

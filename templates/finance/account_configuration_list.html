@@ -1,18 +1,30 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'finance:account_configuration_create' %}{% endif %}{% endcapture %}
-{% component "table/board" title="Account Configuration" add_url=add_url add_label="Account" table_id="account-config-table" search_placeholder="Search" %}
-  <thead><tr><th>Account</th><th>Type</th><th>Ledger</th><th>Post To</th><th>Nature</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+{% component "table/board" title="Accounts" add_url=add_url add_label="Account" table_id="account-config-table" search_placeholder="Search accounts" %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Account" field="title" %}
+    {% include "components/table/sort_header.html" with label="Type" field="type" %}
+    {% include "components/table/sort_header.html" with label="Ledger" field="ledger" %}
+    {% include "components/table/sort_header.html" with label="Post To" field="post_to" %}
+    {% include "components/table/sort_header.html" with label="Nature" field="nature" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for account in accounts %}
     <tr>
-      <td><span class="strong">{{ account.title }}</span><span class="sub">{{ account.account_no }} &middot; {{ account.code }}</span></td>
+      <td><a class="doc-num" href="{% url 'finance:account_configuration_detail' account.pk %}">{{ account.title }}</a><span class="sub">{{ account.account_no }} &middot; {{ account.code }}</span></td>
       <td>{{ account.get_account_type_display }}</td>
       <td>{{ account.get_account_ledger_display }}</td>
       <td>{{ account.post_to_account|default:"—" }}</td>
       <td>{{ account.get_account_nature_display }}</td>
-      <td>{% include "components/table/status_badge.html" with status=account.status label=account.get_status_display only %}</td>
-      <td class="actions-col">{% capture as edit_url %}{% if can_edit %}{% url 'finance:account_configuration_update' account.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with edit_url=edit_url only %}</td>
+      <td>{% if can_edit %}{% url 'finance:account_configuration_toggle_status' account.pk as toggle_url %}{% capture as is_on %}{% if account.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=account.status label=account.get_status_display only %}{% endif %}</td>
+      <td class="actions-col">
+        {% url 'finance:account_configuration_detail' account.pk as view_url %}
+        {% capture as edit_url %}{% if can_edit %}{% url 'finance:account_configuration_update' account.pk %}{% endif %}{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
+      </td>
     </tr>
     {% empty %}
     {% include "components/table/empty_row.html" with span=7 label="No accounts." only %}

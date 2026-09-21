@@ -1,5 +1,5 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'configurations:master_list' master_config.slug as cancel_url %}
-{% include "components/forms/crud_form.html" with title=master_config.label form=form cancel_url=cancel_url cols=2 narrow=True %}
+{% include "components/forms/crud_form.html" with title=master_config.singular form=form cancel_url=cancel_url cols=3 narrow=True show_new=True %}
 {% endblock %}

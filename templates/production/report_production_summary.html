@@ -4,7 +4,11 @@
 {% component "table/board" title=title table_id="summary-category-table" no_search=True no_pagination=True filters_active=False %}
   {% slot filters %}{% include "production/_report_filters.html" %}{% endslot %}
   {% slot bar %}<div class="section__head"><h2 class="section__title">By Category</h2></div>{% endslot %}
-  <thead><tr><th>Category</th><th class="num">Quantity</th><th class="num">Weight Kg</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Category" field="category" %}
+    {% include "components/table/sort_header.html" with label="Quantity" field="qty" align="right" %}
+    {% include "components/table/sort_header.html" with label="Weight Kg" field="weight" align="right" %}
+  </tr></thead>
   <tbody>
     {% for row in categories %}
     <tr><td class="strong">{{ row.category }}</td><td class="num">{{ row.total_qty|floatformat:0|intcomma }}</td><td class="num strong">{{ row.total_weight|floatformat:0|intcomma }}</td></tr>

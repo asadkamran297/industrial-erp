@@ -3,7 +3,17 @@
 {% block content %}
 {% component "table/board" title=title table_id="daily-grinding-table" no_search=True no_pagination=True filters_active=False %}
   {% slot filters %}{% include "production/_report_filters.html" with show_wheat=1 %}{% endslot %}
-  <thead><tr><th>Date</th><th>Voucher No</th><th>Wheat Item</th><th class="num">Disposal Kg</th><th class="num">Bags</th><th class="num">Output Kg</th><th class="num">Yield %</th><th>Issue Area</th><th>Prepared By</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Date" field="date" %}
+    {% include "components/table/sort_header.html" with label="Voucher No" field="voucher" %}
+    {% include "components/table/sort_header.html" with label="Wheat Item" field="wheat" %}
+    {% include "components/table/sort_header.html" with label="Disposal Kg" field="disposal" align="right" %}
+    {% include "components/table/sort_header.html" with label="Bags" field="bags" align="right" %}
+    {% include "components/table/sort_header.html" with label="Output Kg" field="output" align="right" %}
+    {% include "components/table/sort_header.html" with label="Yield %" field="yield" align="right" %}
+    {% include "components/table/sort_header.html" with label="Issue Area" field="area" %}
+    <th>Prepared By</th>
+  </tr></thead>
   <tbody>
     {% for row in rows %}
     <tr>

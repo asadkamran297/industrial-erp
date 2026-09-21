@@ -6,20 +6,24 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
 
 from apps.core.constants import ALLOWANCE_DEDUCTION_TYPE_CHOICES, WORKFLOW_STATUS_CHOICES
-from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
+from apps.core.views import SaveAndNewMixin, MasterDetailView
 
 from .forms import EmployeeSalaryForm, PayrollForm
 from .models import EmployeeSalary, Payroll
 from apps.hr.models import Employee
 
 
-class EmployeeSalaryListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class EmployeeSalaryListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "payroll.salary_items"
+    model = EmployeeSalary
     template_name = "payroll/employee_salary_list.html"
     context_object_name = "salary_items"
     queryset = EmployeeSalary.objects.select_related("employee", "allowance_deduction").order_by("employee__full_name")
     search_fields = ("employee__full_name", "allowance_deduction__title")
     filter_fields = {"type": "allowance_deduction_type"}
+    sort_fields = {"employee": "employee__full_name", "salary": "employee__salary", "element": "allowance_deduction__title", "type": ("allowance_deduction_type", "employee__full_name"), "amount": "amount"}
+    default_sort = "employee"
 
     def get_filter_specs(self):
         return [{"name": "type", "label": "All types", "choices": ALLOWANCE_DEDUCTION_TYPE_CHOICES, "value": self.request.GET.get("type", "")}]
@@ -31,7 +35,7 @@ class EmployeeSalaryListView(SearchFilterPaginationMixin, PagePermissionRequired
         return context
 
 
-class EmployeeSalaryCreateView(PagePermissionRequiredMixin, CreateView):
+class EmployeeSalaryCreateView(SaveAndNewMixin, PagePermissionRequiredMixin, CreateView):
     page = "payroll.salary_items"
     model = EmployeeSalary
     form_class = EmployeeSalaryForm
@@ -61,23 +65,28 @@ class EmployeeSalaryUpdateView(EmployeeSalaryCreateView, UpdateView):
         return super().form_valid(form)
 
 
-class EmployeeSalaryDeleteView(PagePermissionRequiredMixin, View):
+class EmployeeSalaryDetailView(MasterDetailView):
     page = "payroll.salary_items"
-    action = "delete"
+    model = EmployeeSalary
+    kind = "Salary Item"
+    title_attr = "allowance_deduction.title"
+    subtitle_attr = "employee.full_name"
+    list_url_name = "payroll:employee_salary_list"
+    edit_url_name = "payroll:employee_salary_update"
+    detail_fields = (("Employee", "employee"), ("Element", "allowance_deduction"), ("Type", "allowance_deduction_type"), ("Amount", "amount", "money"))
 
-    def post(self, request, pk):
-        EmployeeSalary.objects.get(pk=pk).soft_delete(request.user)
-        messages.success(request, "Salary item deleted.")
-        return redirect("payroll:employee_salary_list")
 
-
-class PayrollListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class PayrollListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "payroll.runs"
+    model = Payroll
     template_name = "payroll/payroll_list.html"
     context_object_name = "payrolls"
     queryset = Payroll.objects.select_related("employee").order_by("-year", "-month", "employee__full_name")
     search_fields = ("employee__full_name", "employee__cnic")
     filter_fields = {"status": "status", "month": "month", "year": "year"}
+    sort_fields = {"employee": "employee__full_name", "period": ("year", "month"), "base": "base_salary", "allowances": "total_allowances", "deductions": "total_deductions", "net": "net_salary", "status": ("status", "-year", "-month")}
+    default_sort = "period"
+    default_sort_dir = "desc"
 
     def get_filter_specs(self):
         return [{"name": "status", "label": "All statuses", "choices": WORKFLOW_STATUS_CHOICES, "value": self.request.GET.get("status", "")}]

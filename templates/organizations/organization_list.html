@@ -2,39 +2,34 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'organizations:organization_create' %}{% endif %}{% endcapture %}
 {% component "table/board" title="Organizations" add_url=add_url add_label="Organization" table_id="organization-table" search_placeholder="Search organizations" %}
-  <thead><tr><th>Logo</th><th>Title</th><th>Code</th><th>Phone / Cell</th><th>Email</th><th>Website</th><th>Parent</th><th class="num">Sub-Orgs</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <thead><tr>
+    <th>Logo</th>
+    {% include "components/table/sort_header.html" with label="Title" field="title" %}
+    {% include "components/table/sort_header.html" with label="Code" field="code" %}
+    <th>Phone / Cell</th><th>Email</th><th>Website</th>
+    {% include "components/table/sort_header.html" with label="Parent" field="parent" %}
+    {% include "components/table/sort_header.html" with label="Sub-Orgs" field="subs" align="right" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for organization in organizations %}
     <tr>
       <td>{% if organization.logo %}<img src="{{ organization.logo }}" alt="" class="h-8 w-auto max-w-[5rem] rounded object-contain">{% else %}<span class="chip">{{ organization.title|first|upper }}</span>{% endif %}</td>
-      <td><span class="strong">{{ organization.title }}</span>{% if organization.address %}<span class="sub">{{ organization.address|truncatechars:50 }}</span>{% endif %}</td>
+      <td><a class="doc-num" href="{% url 'organizations:organization_detail' organization.pk %}">{{ organization.title }}</a>{% if organization.address %}<span class="sub">{{ organization.address|truncatechars:50 }}</span>{% endif %}</td>
       <td class="muted">{{ organization.code }}</td>
       <td>{{ organization.phone|default:"—" }}{% if organization.cell %}<span class="sub">{{ organization.cell }}</span>{% endif %}</td>
       <td>{{ organization.email|default:"—" }}</td>
       <td>{% if organization.website %}<a href="{{ organization.website }}" target="_blank" class="doc-num">{{ organization.website|truncatechars:30 }}</a>{% else %}&mdash;{% endif %}</td>
       <td>{{ organization.parent|default:"—" }}</td>
-      <td class="num">{% with subs=organization.children.count %}{% if subs %}<span class="pill pill--info">{{ subs }}</span>{% else %}&mdash;{% endif %}{% endwith %}</td>
-      <td>{% include "components/table/status_badge.html" with status=organization.status label=organization.get_status_display only %}</td>
+      <td class="num">{% if organization.sub_count %}<span class="pill pill--info">{{ organization.sub_count }}</span>{% else %}&mdash;{% endif %}</td>
+      <td>{% if can_edit %}{% url 'organizations:organization_toggle_status' organization.pk as toggle_url %}{% capture as is_on %}{% if organization.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=organization.status label=organization.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
+        {% url 'organizations:organization_detail' organization.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url 'organizations:organization_update' organization.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'organizations:organization_delete' organization.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this organization?" only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
-    {% for sub in organization.children.all %}
-    <tr class="note-row">
-      <td class="pl-8">{% if sub.logo %}<img src="{{ sub.logo }}" alt="" class="h-6 w-auto max-w-[4rem] rounded object-contain">{% else %}<span class="chip">{{ sub.title|first|upper }}</span>{% endif %}</td>
-      <td class="pl-8">{% icon "chevron-right" size="sm" %} {{ sub.title }}</td>
-      <td class="muted">{{ sub.code }}</td>
-      <td>{{ sub.phone|default:"—" }}</td>
-      <td>{{ sub.email|default:"—" }}</td>
-      <td>&mdash;</td>
-      <td>{{ sub.parent.title }}</td>
-      <td class="num">&mdash;</td>
-      <td>{% include "components/table/status_badge.html" with status=sub.status label=sub.get_status_display only %}</td>
-      <td class="actions-col">{% capture as edit_url %}{% if can_edit %}{% url 'organizations:organization_update' sub.pk %}{% endif %}{% endcapture %}{% include "components/table/actions.html" with edit_url=edit_url only %}</td>
-    </tr>
-    {% endfor %}
     {% empty %}
     {% include "components/table/empty_row.html" with span=10 label="No organizations." only %}
     {% endfor %}

@@ -819,10 +819,17 @@ class Customer(BaseModel):
     is_default = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=RECORD_STATUS_CHOICES, default=STATUS_ACTIVE)
     remarks = models.TextField(blank=True)
+    opening_balance = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    opening_balance_date = models.DateField(null=True, blank=True)
+    credit_limit = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    credit_period_days = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "inv_customers"
         ordering = ["customer_name"]
+        indexes = [
+            models.Index(fields=["status", "customer_name"], name="inv_cust_status_name_idx"),
+        ]
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

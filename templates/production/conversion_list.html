@@ -2,9 +2,17 @@
 {% load humanize %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
-{% component "table/board" title=title add_url=add_url add_label="Conversion" table_id="conversion-table" search_placeholder="Voucher, product" %}
+{% component "table/board" title=title add_url=add_url add_label="Conversion" table_id="conversion-table" search_placeholder="Search conversions" %}
   <thead>
-    <tr><th>Voucher No</th><th>Date</th><th>Consumed</th><th class="num">Qty</th><th class="num">Output Kg</th><th>Godown</th><th>Prepared By</th><th class="actions-col">Actions</th></tr>
+    <tr>
+      {% include "components/table/sort_header.html" with label="Voucher No" field="voucher" %}
+      {% include "components/table/sort_header.html" with label="Date" field="date" %}
+      {% include "components/table/sort_header.html" with label="Consumed" field="consumed" %}
+      {% include "components/table/sort_header.html" with label="Qty" field="qty" align="right" %}
+      {% include "components/table/sort_header.html" with label="Output Kg" field="output" align="right" %}
+      {% include "components/table/sort_header.html" with label="Godown" field="godown" %}
+      <th>Prepared By</th><th class="actions-col">Actions</th>
+    </tr>
   </thead>
   <tbody>
     {% for row in rows %}

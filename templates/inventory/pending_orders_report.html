@@ -1,6 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% component "table/board" title="Pending Orders" table_id="pending-table" search_placeholder="Search" %}
+{% component "table/board" title="Pending Orders" table_id="pending-table" search_placeholder="Search pending orders" %}
   {% slot tiles %}
     {% include "components/table/tile.html" with tone="sky" icon="box" value=pending_value|amount label="Still to come" only %}
     {% include "components/table/tile.html" with tone="violet" icon="file" value=pending_orders label="Open orders" only %}
@@ -9,7 +9,14 @@
     {% include "components/table/tile.html" with tone=overdue_tone icon="clock" value=overdue_orders label="Past expected date" only %}
   {% endslot %}
   <thead>
-    <tr><th class="print-hide expand-col"></th><th>Order #</th><th>Date</th><th>Godown</th><th>Expected</th><th class="num">Pending value</th></tr>
+    <tr>
+      <th class="print-hide expand-col"></th>
+      {% include "components/table/sort_header.html" with label="Order #" field="number" %}
+      {% include "components/table/sort_header.html" with label="Date" field="date" %}
+      {% include "components/table/sort_header.html" with label="Godown" field="godown" %}
+      {% include "components/table/sort_header.html" with label="Expected" field="expected" %}
+      <th class="num">Pending value</th>
+    </tr>
   </thead>
   <tbody>
     {% for group in groups %}

@@ -57,7 +57,13 @@
 </div>
 
 {% component "table/board" title="" table_id="valuation-table" no_filters=True no_pagination=True %}
-  <thead><tr><th>Code</th><th>Item</th><th class="num">Quantity</th><th class="num">Unit cost</th><th class="num">Value</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Code" field="code" %}
+    {% include "components/table/sort_header.html" with label="Item" field="item" %}
+    {% include "components/table/sort_header.html" with label="Quantity" field="quantity" align="right" %}
+    {% include "components/table/sort_header.html" with label="Unit cost" field="cost" align="right" %}
+    {% include "components/table/sort_header.html" with label="Value" field="value" align="right" %}
+  </tr></thead>
   <tbody>
     {% for row in rows %}
     <tr><td class="muted">{{ row.item_code }}</td><td class="truncate">{{ row.item_name }}</td><td class="num">{{ row.quantity|qty }}</td><td class="num">{{ row.cost|amount }}</td><td class="num">{{ row.value|amount }}</td></tr>

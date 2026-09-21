@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'hr:employee_list' as cancel_url %}
-{% component "forms/crud_form" title=page_title form=form cancel_url=cancel_url multipart=True %}
+{% component "forms/crud_form" title=page_title form=form cancel_url=cancel_url multipart=True show_new=True %}
   <div class="form-grid form-grid--cols-3">
     {% for field in form %}{% if field.name == "address" %}{% include "components/forms/field.html" with field=field extra="span-full" only %}{% else %}{% include "components/forms/field.html" with field=field only %}{% endif %}{% endfor %}
   </div>

@@ -2,7 +2,7 @@
 {% block content %}
 {% capture as add_url %}{% if can_add and can_add_type %}{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}{% endif %}{% endcapture %}
 {% url 'finance:account_voucher_export' as export_csv_url %}
-{% component "table/board" title=list_title add_url=add_url add_label=add_label table_id="voucher-table" search_placeholder="Search" date_filters_enabled=True export_csv_url=export_csv_url %}
+{% component "table/board" title=list_title add_url=add_url add_label=add_label table_id="voucher-table" search_placeholder="Search vouchers" date_filters_enabled=True export_csv_url=export_csv_url %}
   {% slot tiles %}
     {% capture as posted_note %}Posted {{ posted_total|amount }}{% endcapture %}
     {% include "components/table/tile.html" with tone="green" icon="sum" value=voucher_total|amount label="Total" note=posted_note only %}
@@ -29,7 +29,14 @@
   {% slot carry %}<input type="hidden" name="period" value="{{ selected_period }}"><input type="hidden" name="money_mode" value="{{ selected_money_mode }}">{% endslot %}
 
   <thead>
-    <tr><th>Date</th><th>Ref No.</th><th>Account From</th><th>Paid To</th><th class="num">Amount</th><th>Status</th><th class="print-hide actions-col">Actions</th></tr>
+    <tr>
+      {% include "components/table/sort_header.html" with label="Date" field="date" %}
+      {% include "components/table/sort_header.html" with label="Ref No." field="ref" %}
+      <th>Account From</th><th>Paid To</th>
+      {% include "components/table/sort_header.html" with label="Amount" field="amount" align="right" %}
+      {% include "components/table/sort_header.html" with label="Status" field="status" %}
+      <th class="print-hide actions-col">Actions</th>
+    </tr>
   </thead>
   <tbody>
     {% for voucher in vouchers %}
@@ -39,11 +46,11 @@
       <td class="truncate" title="{{ voucher.from_account_title }}">{{ voucher.from_account_title }}</td>
       <td class="truncate" title="{{ voucher.to_account_title }}">{{ voucher.to_account_title|default:"—" }}</td>
       <td class="num strong">{{ voucher.debit_amount|amount }}</td>
-      <td>{% if voucher.posted == "Y" %}<span class="pill pill--posted">Posted</span>{% else %}<span class="pill pill--pending">{{ voucher.get_status_display }}</span>{% endif %}</td>
+      <td>{% if voucher.posted == "Y" %}{% include "components/table/status_badge.html" with status="posted" label="Posted" only %}{% else %}{% include "components/table/status_badge.html" with status=voucher.status label=voucher.get_status_display only %}{% endif %}</td>
       <td class="print-hide actions-col">
         {% url 'finance:account_voucher_detail' voucher.pk as view_url %}
         {% url 'finance:account_voucher_print' voucher.pk as print_url %}
-        {% capture as edit_url %}{% if can_edit %}{% url 'finance:account_voucher_update' voucher.pk %}{% endif %}{% endcapture %}
+        {% capture as edit_url %}{% if can_edit and voucher.posted != "Y" %}{% url 'finance:account_voucher_update' voucher.pk %}{% endif %}{% endcapture %}
         {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url print_url=print_url only %}
       </td>
     </tr>

@@ -1,8 +1,12 @@
-<div class="stat-tile">
+<div class="stat-tile{% if tone %} tile--{{ tone }}{% endif %}{% if negative %} is-negative{% endif %}"{% if mask_key %} x-data="{ show: localStorage.getItem('{{ mask_key }}') === '1', toggle() { this.show = !this.show; localStorage.setItem('{{ mask_key }}', this.show ? '1' : '0'); } }"{% endif %}>
   {% if icon %}<span class="stat-icon">{% icon icon %}</span>{% endif %}
   <div class="min-w-0">
     <p class="stat-label">{{ label }}</p>
-    <p class="stat-value">{{ value }}</p>
+    {% if mask_key %}<p class="stat-value"><span x-show="show" x-cloak>{{ value }}</span><span x-show="!show">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</span></p>{% else %}<p class="stat-value">{{ value }}</p>{% endif %}
     {% if hint %}<p class="tile-note">{{ hint }}</p>{% endif %}
   </div>
+  {% if mask_key %}
+  {% include "components/ui/icon_button.html" with type="button" icon="view" title="Show / hide" extra="stat-eye" attrs='@click="toggle()" x-show="!show"' only %}
+  {% include "components/ui/icon_button.html" with type="button" icon="view-off" title="Show / hide" extra="stat-eye" attrs='@click="toggle()" x-show="show" x-cloak' only %}
+  {% endif %}
 </div>

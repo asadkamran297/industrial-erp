@@ -1,5 +1,5 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'finance:account_configuration_list' as cancel_url %}
-{% include "components/forms/crud_form.html" with title="Account Configuration" form=form cancel_url=cancel_url cols=3 %}
+{% include "components/forms/crud_form.html" with title="Account Configuration" form=form cancel_url=cancel_url cols=3 show_new=True %}
 {% endblock %}

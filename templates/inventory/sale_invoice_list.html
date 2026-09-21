@@ -45,9 +45,9 @@
       <td class="num">{{ invoice.total_paid|amount }}</td>
       <td class="num {% if invoice.balance %}text-alert{% else %}muted{% endif %}">{{ invoice.balance|amount }}</td>
       <td>
-        {% if invoice.state == "draft" %}<span class="pill pill--draft">Not posted</span>
-        {% elif invoice.state == "owing" %}<span class="pill pill--pending">Owing</span>
-        {% else %}<span class="pill pill--posted">Settled</span>{% endif %}
+        {% if invoice.state == "draft" %}{% include "components/table/status_badge.html" with status="draft" label="Not posted" only %}
+        {% elif invoice.state == "owing" %}{% include "components/table/status_badge.html" with status="pending" label="Owing" only %}
+        {% else %}{% include "components/table/status_badge.html" with status="posted" label="Settled" only %}{% endif %}
       </td>
       <td class="num strong">{{ invoice.net_amount|amount }}</td>
       <td class="print-hide actions-col">

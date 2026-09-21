@@ -2,9 +2,9 @@
   {% if prepared_by %}<p class="submit-bar__meta">Prepared by <b>{{ prepared_by.get_full_name|default:prepared_by.username }}</b></p>{% endif %}
   <div class="submit-bar__actions">
     {% if embed %}{% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs="data-embed-cancel" only %}{% elif cancel_url %}{% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}{% endif %}
-    {% if show_print %}{% include "components/ui/button.html" with label="Save & Print" icon="print" name="save_and_print" value="1" variant="secondary" form_id=form_id only %}{% endif %}
+    {% if show_print %}{% include "components/ui/button.html" with label="Save & Print" icon="print" id=print_id name="save_and_print" value="1" variant="secondary" form_id=form_id only %}{% endif %}
     {% if show_new %}{% include "components/ui/button.html" with label="Save & New" name="save_and_new" value="1" variant="secondary" form_id=form_id only %}{% endif %}
     {{ slot }}
-    {% include "components/ui/button.html" with label=label|default:"Save" icon="save" variant="primary" extra="btn--wide" data="save" form_id=form_id disabled=disabled only %}
+    {% include "components/ui/button.html" with label=label|default:"Save" icon="save" variant="primary" extra="btn--wide" data="save" id=save_id name=save_name value=save_value attrs=save_attrs form_id=form_id disabled=disabled only %}
   </div>
 </div>

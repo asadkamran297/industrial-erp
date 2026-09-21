@@ -1,0 +1,77 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="form-stack">
+  {% url 'inventory:customer_list' as list_url %}
+  {% capture as customer_meta %}{{ customer.customer_code|default:"" }}{% if customer.city %} &middot; {{ customer.city }}{% endif %}{% endcapture %}
+  {% capture as status_tone %}{% if customer.status == "active" %}posted{% else %}closed{% endif %}{% endcapture %}
+  {% component "ui/detail_header" kind="Customer" number=customer.customer_name date=customer_meta status=customer.get_status_display status_tone=status_tone back=True back_url=list_url %}
+    {% slot actions %}
+      {% if receivable_code %}{% url 'finance:account_ledger' as ledger_base %}{% capture as ledger_url %}{{ ledger_base }}?account_no={{ receivable_code|urlencode }}{% endcapture %}{% include "components/ui/button.html" with label="Full ledger" href=ledger_url icon="ledger" only %}{% endif %}
+      {% if can_edit %}{% url 'inventory:customer_update' customer.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" variant="primary" only %}{% endif %}
+    {% endslot %}
+  {% endcomponent %}
+
+  {% component "ui/card" %}
+    {% component "ui/detail_grid" cols=4 %}
+      {% include "components/ui/detail_item.html" with label="Phone" value=customer.customer_cell_no only %}
+      {% include "components/ui/detail_item.html" with label="Email" value=customer.customer_email only %}
+      {% capture as default_label %}{% if customer.is_default %}Yes{% else %}No{% endif %}{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="Default Customer" value=default_label only %}
+      {% include "components/ui/detail_item.html" with label="City" value=customer.city only %}
+      {% include "components/ui/detail_item.html" with label="Address" value=customer.customer_address wide=True only %}
+      {% include "components/ui/detail_item.html" with label="NTN" value=customer.ntn_number only %}
+      {% include "components/ui/detail_item.html" with label="Sales Tax" value=customer.sale_tax_num only %}
+      {% capture as credit %}{% if customer.credit_limit %}{{ customer.credit_limit|amount }}{% if customer.credit_period_days %} &middot; {{ customer.credit_period_days }} days{% endif %}{% else %}None{% endif %}{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="Credit Limit" value=credit only %}
+      {% capture as opening %}{{ customer.opening_balance|amount }}{% if customer.opening_balance_date %} &middot; {{ customer.opening_balance_date|dmy }}{% endif %}{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="Opening Balance" value=opening num=True only %}
+      {% if customer.remarks %}{% include "components/ui/detail_item.html" with label="Remarks" value=customer.remarks wide=True only %}{% endif %}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  <div class="tiles">
+    {% capture as sold_note %}{{ sale_count }} invoice{{ sale_count|pluralize }} &middot; {{ order_count }} order{{ order_count|pluralize }}{% endcapture %}
+    {% include "components/table/tile.html" with tone="sky" icon="sum" value=sale_total|amount label="Sold" note=sold_note only %}
+    {% capture as return_note %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
+    {% include "components/table/tile.html" with tone="amber" icon="reverse" value=return_total|amount label="Returned" note=return_note only %}
+    {% include "components/table/tile.html" with tone="rose" icon="cash" value=receivable_balance|amount label="Receivable" note=receivable_code only %}
+  </div>
+
+  {% component "table/board" title="" table_id="customer-ledger" no_filters=True no_pagination=True %}
+    {% slot bar %}<div class="section__head"><h2 class="section__title">Ledger</h2></div>{% endslot %}
+    <thead><tr><th>Date</th><th>Voucher</th><th>Particulars</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+    <tbody>
+      {% if ledger %}<tr class="note-row"><td colspan="5" class="strong">Opening Balance</td><td class="num strong">{{ ledger.opening|amount }}</td></tr>{% endif %}
+      {% for row in ledger.rows %}
+      <tr>
+        <td class="date">{{ row.line.voucher_date|dmy }}</td>
+        <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.line.voucher_no }}</a></td>
+        <td class="muted truncate">{{ row.line.remarks|default:"—" }}</td>
+        <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>
+        <td class="num">{% if row.credit %}{{ row.credit|amount }}{% endif %}</td>
+        <td class="num strong">{{ row.balance|amount }}</td>
+      </tr>
+      {% empty %}
+      {% include "components/table/empty_row.html" with span=6 label="No ledger entries." only %}
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
+
+  {% component "table/board" title="" table_id="customer-invoices" no_filters=True no_pagination=True %}
+    {% slot bar %}<div class="section__head"><h2 class="section__title">Recent sale invoices</h2></div>{% endslot %}
+    <thead><tr><th>Invoice</th><th>Date</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
+    <tbody>
+      {% for invoice in recent_invoices %}
+      <tr>
+        <td><a class="doc-num" href="{% url 'inventory:pos_detail' invoice.pk %}">{{ invoice.sale_num }}</a></td>
+        <td class="date">{{ invoice.sale_date|dmy }}</td>
+        <td class="num strong">{{ invoice.net_amount|amount }}</td>
+        <td class="actions-col">{% url 'inventory:pos_detail' invoice.pk as view_url %}{% include "components/table/actions.html" with view_url=view_url only %}</td>
+      </tr>
+      {% empty %}
+      {% include "components/table/empty_row.html" with span=4 label="No sales." only %}
+      {% endfor %}
+    </tbody>
+  {% endcomponent %}
+</section>
+{% endblock %}

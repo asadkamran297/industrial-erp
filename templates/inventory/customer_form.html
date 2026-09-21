@@ -1,0 +1,5 @@
+{% extends embed_layout|default:"layouts/portal.html" %}
+{% block content %}
+{% url 'inventory:customer_list' as cancel_url %}
+{% component "forms/tabbed_form" title=title form=form cancel_url=cancel_url embed=embed name_field=form.customer_name phone_field=form.customer_cell_no email_field=form.customer_email city_field=form.city addr1_field=form.customer_address opening_field=form.opening_balance opening_date_field=form.opening_balance_date limit_field=form.credit_limit period_field=form.credit_period_days registration_fields=registration_fields extra_fields=extra_fields %}{% endcomponent %}
+{% endblock %}

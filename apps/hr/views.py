@@ -5,7 +5,8 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import RECORD_STATUS_CHOICES
-from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
+from apps.core.views import SaveAndNewMixin, ToggleStatusView
 from apps.organizations.models import Organization
 from apps.payroll.forms import EmployeeSalaryInlineForm
 from apps.payroll.models import EmployeeSalary, Payroll
@@ -14,13 +15,16 @@ from .forms import EmployeeExperienceForm, EmployeeForm, EmployeeQualificationFo
 from .models import Employee, EmployeeExperience, EmployeeQualification
 
 
-class EmployeeListView(SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
+class EmployeeListView(SortableListMixin, SearchFilterPaginationMixin, PagePermissionRequiredMixin, ListView):
     page = "hr.employees"
+    model = Employee
     template_name = "hr/employee_list.html"
     context_object_name = "employees"
     queryset = Employee.objects.select_related("organization", "branch", "department", "designation").order_by("full_name")
     search_fields = ("full_name", "cnic", "email", "contact", "department__title", "designation__title")
     filter_fields = {"status": "status", "organization": "organization_id"}
+    sort_fields = {"name": "full_name", "department": ("department__title", "full_name"), "joined": ("doj", "joining_date"), "status": ("status", "full_name")}
+    default_sort = "name"
 
     def get_filter_specs(self):
         return [
@@ -69,7 +73,7 @@ class EmployeeDetailView(PagePermissionRequiredMixin, DetailView):
         return context
 
 
-class EmployeeCreateView(PagePermissionRequiredMixin, CreateView):
+class EmployeeCreateView(SaveAndNewMixin, PagePermissionRequiredMixin, CreateView):
     page = "hr.employees"
     model = Employee
     form_class = EmployeeForm
@@ -101,14 +105,10 @@ class EmployeeUpdateView(EmployeeCreateView, UpdateView):
         return context
 
 
-class EmployeeDeleteView(PagePermissionRequiredMixin, View):
+class EmployeeToggleStatusView(ToggleStatusView):
     page = "hr.employees"
-    action = "delete"
-
-    def post(self, request, pk):
-        Employee.objects.get(pk=pk).soft_delete(request.user)
-        messages.success(request, "Employee deleted.")
-        return redirect("hr:employee_list")
+    model = Employee
+    success_url_name = "hr:employee_list"
 
 
 class EmployeeExperienceCreateView(PagePermissionRequiredMixin, View):

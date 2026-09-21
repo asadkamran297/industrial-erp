@@ -4,7 +4,8 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from apps.core.constants import GODOWN_STATUS_CHOICES, GODOWN_TYPE_CHOICES
-from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin
+from apps.core.views import SaveAndNewMixin
+from apps.core.mixins import PagePermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
 
 from . import selectors, services
 from .forms import GodownForm
@@ -17,7 +18,7 @@ def _crumbs(*trail):
     return [("Dashboard", reverse("portal:dashboard")), ("Godowns", reverse("godowns:godown_list")), *trail]
 
 
-class GodownListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, ListView):
+class GodownListView(SortableListMixin, PagePermissionRequiredMixin, SearchFilterPaginationMixin, ListView):
     page = PAGE
     model = Godown
     template_name = "godowns/godown_list.html"
@@ -25,6 +26,8 @@ class GodownListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, L
     paginate_by = 25
     search_fields = ("code", "name", "location", "incharge")
     filter_fields = {"godown_type": "godown_type", "status": "status"}
+    sort_fields = {"code": "code", "name": "name", "type": ("godown_type", "name"), "location": "location", "incharge": "incharge", "status": ("status", "name")}
+    default_sort = "name"
 
     def get_queryset(self):
         self.queryset = selectors.godowns()
@@ -70,7 +73,7 @@ class GodownDetailView(PagePermissionRequiredMixin, DetailView):
         return context
 
 
-class GodownCreateView(PagePermissionRequiredMixin, CreateView):
+class GodownCreateView(SaveAndNewMixin, PagePermissionRequiredMixin, CreateView):
     page = PAGE
     model = Godown
     form_class = GodownForm

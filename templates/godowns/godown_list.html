@@ -2,34 +2,30 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
 {% component "table/board" title=title add_url=add_url add_label="Godown" table_id="godown-table" search_placeholder="Search godowns" %}
-  <thead><tr><th>Code</th><th>Godown</th><th>Type</th><th>Location</th><th>Incharge</th><th>Current Stock</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Godown" field="name" %}
+    {% include "components/table/sort_header.html" with label="Code" field="code" %}
+    {% include "components/table/sort_header.html" with label="Type" field="type" %}
+    {% include "components/table/sort_header.html" with label="Location" field="location" %}
+    {% include "components/table/sort_header.html" with label="Incharge" field="incharge" %}
+    <th>Current Stock</th>
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for row in rows %}
     {% url 'godowns:godown_detail' row.pk as view_url %}
     <tr{% if row.status != "active" %} class="row--void"{% endif %}>
-      <td class="strong"><a href="{{ view_url }}" class="doc-num">{{ row.code }}</a></td>
-      <td class="strong">{{ row.name }}</td>
+      <td class="strong"><a href="{{ view_url }}" class="doc-num">{{ row.name }}</a></td>
+      <td class="muted">{{ row.code }}</td>
       <td>{{ row.get_godown_type_display }}</td>
       <td class="muted truncate">{{ row.location|default:"—" }}</td>
       <td class="muted">{{ row.incharge|default:"—" }}</td>
       <td class="stock-cell">{% for t in row.stock_totals %}<span class="stock-total"><b>{{ t.quantity|qty }}</b> {{ t.unit }}</span>{% empty %}<span class="muted">—</span>{% endfor %}</td>
-      <td>{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}</td>
+      <td>{% if can_edit %}{% url 'godowns:godown_status_toggle' row.pk as toggle_url %}{% capture as is_on %}{% if row.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=row.status label=row.get_status_display only %}{% endif %}</td>
       <td class="actions-col">
-        {% url 'godowns:godown_update' row.pk as edit_url %}
-        {% url 'godowns:godown_status_toggle' row.pk as toggle_url %}
-        {% if can_edit %}
-        {% component "table/actions" view_url=view_url edit_url=edit_url %}
-          {% slot end %}
-            {% if row.status == "active" %}
-            {% include "components/ui/icon_button.html" with icon="deactivate" title="Deactivate" tone="danger" confirm="Deactivate this godown?" post=toggle_url only %}
-            {% else %}
-            <form method="post" action="{{ toggle_url }}">{% csrf_token %}{% include "components/ui/icon_button.html" with type="submit" icon="refresh" title="Activate" tone="success" only %}</form>
-            {% endif %}
-          {% endslot %}
-        {% endcomponent %}
-        {% else %}
-        {% component "table/actions" view_url=view_url %}{% endcomponent %}
-        {% endif %}
+        {% capture as edit_url %}{% if can_edit %}{% url 'godowns:godown_update' row.pk %}{% endif %}{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
       </td>
     </tr>
     {% empty %}

@@ -54,7 +54,7 @@
       {% if "quantity" in columns %}<td class="num">{{ invoice.qty_total|qty }}</td>{% endif %}
       {% if "order" in columns %}<td>
         {% if invoice.purchase_order %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' invoice.purchase_order.pk %}">{{ invoice.purchase_order.purchase_num }}</a>
-        {% else %}<span class="pill pill--closed">Direct</span>{% endif %}
+        {% else %}{% include "components/table/status_badge.html" with status="closed" label="Direct" only %}{% endif %}
       </td>{% endif %}
       {% if "vehicle" in columns %}<td>{{ invoice.vehicle_no|default:"—" }}</td>{% endif %}
       {% if "godown" in columns %}<td>{% if invoice.godown %}{{ invoice.godown.name }}{% else %}—{% endif %}</td>{% endif %}

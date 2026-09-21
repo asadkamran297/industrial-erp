@@ -61,13 +61,13 @@
       {% endif %}
       {% if "status" in columns %}
       <td>
-        {% if order.status == "draft" %}<span class="pill pill--draft">Awaiting approval</span>
-        {% elif order.days_late %}<span class="pill pill--danger">Overdue</span>
-        {% elif order.status == "partially_invoiced" %}<span class="pill pill--partial">Partly invoiced</span>
-        {% elif order.status == "fully_invoiced" %}<span class="pill pill--posted">Fully invoiced</span>
-        {% elif order.status == "closed" %}<span class="pill pill--closed" title="{{ order.close_reason_label }}">Closed</span>
-        {% elif order.status == "cancelled" %}<span class="pill pill--reversed" title="{{ order.close_reason_label }}">Cancelled</span>
-        {% else %}<span class="pill pill--pending">Awaiting invoice</span>{% endif %}
+        {% if order.status == "draft" %}{% include "components/table/status_badge.html" with status="draft" label="Awaiting approval" only %}
+        {% elif order.days_late %}{% include "components/table/status_badge.html" with tone="danger" label="Overdue" only %}
+        {% elif order.status == "partially_invoiced" %}{% include "components/table/status_badge.html" with status="partial" label="Partly invoiced" only %}
+        {% elif order.status == "fully_invoiced" %}{% include "components/table/status_badge.html" with status="posted" label="Fully invoiced" only %}
+        {% elif order.status == "closed" %}{% include "components/table/status_badge.html" with status="closed" label="Closed" title=order.close_reason_label only %}
+        {% elif order.status == "cancelled" %}{% include "components/table/status_badge.html" with status="cancelled" label="Cancelled" title=order.close_reason_label only %}
+        {% else %}{% include "components/table/status_badge.html" with status="pending" label="Awaiting invoice" only %}{% endif %}
       </td>
       {% endif %}
       <td class="print-hide actions-col">

@@ -68,16 +68,14 @@
           <div class="kv kv--total"><dt>Net</dt><dd x-text="money(totalAmount())"></dd></div>
         </dl>
         {% include "components/forms/control.html" with type="textarea" id="remarks" name="remarks" label="Remarks" rows=3 value=posted.remarks only %}
-        <div class="flex flex-wrap justify-end gap-2">
-          {% url 'inventory:purchase_return_list' as cancel_url %}
-          {% include "components/ui/button.html" with label="Cancel" href=cancel_url variant="ghost" only %}
-          {% if can_post %}
+        {% url 'inventory:purchase_return_list' as cancel_url %}
+        {% if can_post %}
+        {% component "forms/submit_bar" cancel_url=cancel_url label="Save & Post" save_name="action" save_value="post" save_attrs=':disabled="!picked().length"' %}
           {% include "components/ui/button.html" with label="Save Draft" name="action" value="draft" attrs=':disabled="!picked().length"' only %}
-          {% include "components/ui/button.html" with label="Save & Post" name="action" value="post" icon="save" variant="primary" attrs=':disabled="!picked().length"' only %}
-          {% else %}
-          {% include "components/ui/button.html" with label="Save Draft" name="action" value="draft" icon="save" variant="primary" attrs=':disabled="!picked().length"' only %}
-          {% endif %}
-        </div>
+        {% endcomponent %}
+        {% else %}
+        {% component "forms/submit_bar" cancel_url=cancel_url label="Save Draft" save_name="action" save_value="draft" save_attrs=':disabled="!picked().length"' %}{% endcomponent %}
+        {% endif %}
       </div>
     </aside>
   </form>

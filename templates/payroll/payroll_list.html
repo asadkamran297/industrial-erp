@@ -1,8 +1,17 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{% url 'payroll:payroll_create' %}{% endif %}{% endcapture %}
-{% component "table/board" title="Payroll Runs" add_url=add_url add_label="Payroll" table_id="payroll-table" search_placeholder="Search" %}
-  <thead><tr><th>Employee</th><th>Period</th><th class="num">Base</th><th class="num">Allowances</th><th class="num">Deductions</th><th class="num">Net</th><th>Status</th><th class="actions-col">Actions</th></tr></thead>
+{% component "table/board" title="Payroll Runs" add_url=add_url add_label="Payroll" table_id="payroll-table" search_placeholder="Search payroll runs" %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Employee" field="employee" %}
+    {% include "components/table/sort_header.html" with label="Period" field="period" %}
+    {% include "components/table/sort_header.html" with label="Base" field="base" align="right" %}
+    {% include "components/table/sort_header.html" with label="Allowances" field="allowances" align="right" %}
+    {% include "components/table/sort_header.html" with label="Deductions" field="deductions" align="right" %}
+    {% include "components/table/sort_header.html" with label="Net" field="net" align="right" %}
+    {% include "components/table/sort_header.html" with label="Status" field="status" %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
   <tbody>
     {% for payroll in payrolls %}
     <tr>
@@ -14,8 +23,8 @@
       <td class="num strong">{{ payroll.net_salary|amount }}</td>
       <td>{% include "components/table/status_badge.html" with status=payroll.status label=payroll.get_status_display only %}</td>
       <td class="actions-col">
-        {% capture as edit_url %}{% if can_edit %}{% url 'payroll:payroll_update' payroll.pk %}{% endif %}{% endcapture %}
-        {% capture as delete_url %}{% if can_delete %}{% url 'payroll:payroll_delete' payroll.pk %}{% endif %}{% endcapture %}
+        {% capture as edit_url %}{% if can_edit and payroll.status == 'pending' %}{% url 'payroll:payroll_update' payroll.pk %}{% endif %}{% endcapture %}
+        {% capture as delete_url %}{% if can_delete and payroll.status == 'pending' %}{% url 'payroll:payroll_delete' payroll.pk %}{% endif %}{% endcapture %}
         {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this payroll?" only %}
       </td>
     </tr>
