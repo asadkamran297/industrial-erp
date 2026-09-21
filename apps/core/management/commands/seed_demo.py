@@ -9,8 +9,9 @@ screens.
 Idempotent: every record carries a marker, so a second run adds nothing.
 """
 
+from decouple import config
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from apps.finance.seeders.demo_vouchers import (
     seed_demo_accounts,
@@ -29,6 +30,23 @@ from apps.inventory.seeders.demo_transactions import (
 from apps.production.seeders.grinding import seed_grinding
 
 DEFAULT_COUNT = 50
+DEMO_ADMIN_USERNAME = "admin"
+DEMO_ADMIN_PASSWORD = "Admin@1234"
+
+
+def seed_demo_admin():
+    """The demo login: ``DJANGO_SUPERUSER_*`` from .env, else admin / Admin@1234."""
+    username = config("DJANGO_SUPERUSER_USERNAME", default=DEMO_ADMIN_USERNAME)
+    password = config("DJANGO_SUPERUSER_PASSWORD", default=DEMO_ADMIN_PASSWORD)
+    email = config("DJANGO_SUPERUSER_EMAIL", default=f"{username}@zafaranflour.test")
+    user, created = get_user_model().objects.get_or_create(
+        username=username,
+        defaults={"email": email, "is_superuser": True, "is_staff": True, "is_active": True},
+    )
+    user.set_password(password)
+    user.is_superuser = user.is_staff = user.is_active = True
+    user.save()
+    return user, int(created)
 
 
 class Command(BaseCommand):
@@ -44,11 +62,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         count = options["count"]
-        user = get_user_model().objects.filter(is_superuser=True).order_by("pk").first()
-        if user is None:
-            raise CommandError(
-                "No superuser found. Run `python manage.py ensure_superuser` first."
-            )
+        user, made = seed_demo_admin()
+        self.stdout.write(self.style.SUCCESS(
+            f"  admin login: {user.username} ({'created' if made else 'password reset'})"
+        ))
 
         steps = [
             ("chart of accounts", lambda: seed_demo_accounts()),
