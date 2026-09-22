@@ -418,20 +418,26 @@
     }, 60);
   });
 
-  // Sidebar keeps its scroll position between pages; first visit lands on the current item.
-  document.addEventListener("DOMContentLoaded", () => {
+  // Sidebar keeps its scroll position between pages and always lands on the current item.
+  // Runs after Alpine has collapsed the closed groups, otherwise the measured offsets are wrong.
+  function settleSidebar() {
     const nav = document.querySelector("[data-nav-scroll]");
-    if (!nav) return;
+    if (!nav || nav.dataset.settled) return;
+    nav.dataset.settled = "1";
     const key = "portal-nav-scroll";
     const saved = Number(sessionStorage.getItem(key));
-    const current = nav.querySelector("[aria-current=page]");
     if (saved > 0) nav.scrollTop = saved;
+    const current = nav.querySelector("[aria-current=page]");
     if (current) {
       const top = current.getBoundingClientRect().top - nav.getBoundingClientRect().top;
-      if (top < 0 || top + current.offsetHeight > nav.clientHeight) current.scrollIntoView({ block: "center" });
+      if (top < 0 || top + current.offsetHeight > nav.clientHeight) {
+        nav.scrollTop += top - nav.clientHeight / 2 + current.offsetHeight / 2;
+      }
     }
     nav.addEventListener("scroll", () => sessionStorage.setItem(key, String(nav.scrollTop)), { passive: true });
-  });
+  }
+  document.addEventListener("alpine:initialized", () => requestAnimationFrame(() => requestAnimationFrame(settleSidebar)));
+  document.addEventListener("DOMContentLoaded", () => setTimeout(settleSidebar, 400));
 
   // Sidebar star toggles a favourite; the header bar updates in place.
   document.addEventListener("click", (event) => {
