@@ -87,7 +87,7 @@
   </div>
   {% endif %}
 
-  {% if no_search %}<span class="ml-auto"></span>{% else %}
+  {% if no_search %}{% if no_columns %}<span class="ml-auto"></span>{% endif %}{% else %}
   <form method="get" class="filter-search{% if no_columns and not per_page_options %} ml-auto{% endif %}" role="search">
     {% if current_tab %}<input type="hidden" name="tab" value="{{ current_tab }}">{% endif %}
     {% for name, value in keep_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}

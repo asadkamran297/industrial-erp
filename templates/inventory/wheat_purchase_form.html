@@ -12,7 +12,7 @@
   <form id="wp-form" class="mt-3" autocomplete="off" novalidate data-own-keys>
     {% csrf_token %}
 
-    <section class="card wp-slip">
+    <section class="card card-rail wp-slip">
       <div class="card-body">
         <div class="wp-row">
           <div class="wp-f wp-f--grow">
@@ -23,23 +23,21 @@
             {% endcomponent %}
             <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
           </div>
-        </div>
-        <div class="wp-row">
-          <div class="wp-f w-72">
+          <div class="wp-f w-56">
             <label for="wheat_product">Wheat Item</label>
             {% component "forms/control" type="select" id="wheat_product" name="wheat_product" extra="wp-in" searchable=True required=True only %}
               <option value="">Select a Product</option>
               {% for p in wheat_products %}<option value="{{ p.pk }}">{{ p.complete_code }} &mdash; {{ p.name }}</option>{% endfor %}
             {% endcomponent %}
           </div>
-          <div class="wp-f w-72">
+          <div class="wp-f w-48">
             <label for="godown">Godown</label>
             {% component "forms/control" type="select" id="godown" name="godown" extra="wp-in" searchable=True only %}
               <option value="">Select a Godown</option>
               {% for g in godowns %}<option value="{{ g.pk }}">{{ g.code }} &mdash; {{ g.title }}</option>{% endfor %}
             {% endcomponent %}
           </div>
-          <div class="wp-f w-80">
+          <div class="wp-f w-44">
             <label for="remark">Manual Remark</label>
             {% include "components/forms/control.html" with id="remark" name="remark" placeholder="Manual Ref#" extra="wp-in" attrs='data-no-amount' only %}
           </div>

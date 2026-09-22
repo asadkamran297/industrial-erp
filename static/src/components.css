@@ -1941,7 +1941,7 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
 .wp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-2) var(--gap-3); }
 .wp-row + .wp-row { margin-top: var(--gap-2); }
 .wp-f { display: flex; flex-direction: column; flex: 0 0 auto; gap: .25rem; min-width: 0; }
-.wp-f--grow { flex: 1 1 14rem; }
+.wp-f--grow { flex: 1 1 18rem; }
 .wp-f > label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-soft); white-space: nowrap; }
 .wp-in {
   width: 100%;

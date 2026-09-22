@@ -3,7 +3,7 @@
 {% url 'access_control:role_list' as cancel_url %}
 <section class="form-stack">
   {% include "components/ui/page_header.html" with title=page_title back=True back_url=cancel_url only %}
-  <form method="post" class="card">{% csrf_token %}
+  <form method="post" class="card card-rail">{% csrf_token %}
     <div class="card-body form-stack">
       {% include "components/forms/form_errors.html" with form=form only %}
       <div class="form-grid form-grid--cols-2 max-w-3xl">

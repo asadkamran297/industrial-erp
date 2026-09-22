@@ -1,7 +1,7 @@
 <section class="form-stack">
   {% if not embed %}{% include "components/ui/page_header.html" with title=title back=True back_url=cancel_url only %}{% endif %}
 
-  <form method="post" x-data="{ tab: 'address' }" class="card">{% csrf_token %}
+  <form method="post" x-data="{ tab: 'address' }" class="card card-rail">{% csrf_token %}
     <div class="card-body form-stack">
       {% include "components/forms/form_errors.html" with form=form only %}
       {% for field in form.hidden_fields %}{{ field }}{% endfor %}
