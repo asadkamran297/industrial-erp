@@ -1,0 +1,9 @@
+{% for spec in report_filters %}
+<label class="filter-chip">
+  {{ spec.label }}
+  {% component "forms/control" type="select" name=spec.name cell=True searchable=spec.searchable attrs='onchange="this.form.submit()"' only %}
+    <option value="">All</option>
+    {% for value, label in spec.choices %}<option value="{{ value }}" {% if spec.value == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  {% endcomponent %}
+</label>
+{% endfor %}

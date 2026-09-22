@@ -1,0 +1,9 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id=table_id no_pagination=False %}
+  {% slot filters %}
+    <label class="filter-chip">Difference ≥ kg {% include "components/forms/control.html" with type="number" name="min_difference" value=extra.min_difference cell=True step="0.001" min="0" attrs='onchange="this.form.submit()" aria-label="Minimum difference"' only %}</label>
+  {% endslot %}
+  {% include "components/report/table.html" %}
+{% endcomponent %}
+{% endblock %}

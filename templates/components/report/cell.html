@@ -1,0 +1,13 @@
+{% load humanize %}{% spaceless %}{% with c=spec.column %}{% with v=row|get_item:c.key %}
+{% if c.kind == "money" %}<td class="num{% if c.tone_key and row|get_item:c.tone_key %} fig-bad{% endif %}">{% if v is not None %}{{ v|amount }}{% else %}—{% endif %}</td>
+{% elif c.kind == "qty" %}<td class="num">{{ v|floatformat:c.places|intcomma }}</td>
+{% elif c.kind == "pct" %}<td class="num{% if v is not None and v < 0 %} fig-bad{% endif %}">{% if v is not None %}{{ v|floatformat:2 }}{% else %}—{% endif %}</td>
+{% elif c.kind == "int" %}<td class="num">{{ v|default:0 }}</td>
+{% elif c.kind == "date" %}<td class="date">{% if v %}{{ v|dmy }}{% else %}—{% endif %}</td>
+{% elif c.kind == "time" %}<td class="date">{% if v %}{{ v|date:"H:i" }}{% else %}—{% endif %}</td>
+{% elif c.kind == "link" %}<td>{% if row|get_item:c.link_key %}<a class="doc-num" href="{% url c.link row|get_item:c.link_key %}">{{ v }}</a>{% else %}{{ v }}{% endif %}</td>
+{% elif c.kind == "status" %}<td>{% include "components/table/status_badge.html" with status=row.status label=v only %}</td>
+{% elif c.kind == "muted" %}<td class="muted">{{ v|default:"—" }}</td>
+{% else %}<td>{{ v|default:"" }}</td>
+{% endif %}
+{% endwith %}{% endwith %}{% endspaceless %}

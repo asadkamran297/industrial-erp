@@ -1,0 +1,6 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id=table_id no_pagination=False %}
+  {% include "components/report/table.html" %}
+{% endcomponent %}
+{% endblock %}

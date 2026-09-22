@@ -1,0 +1,78 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id="payables-aging-table" no_pagination=True %}
+  {% slot filters %}
+    <label class="filter-chip">
+      Supplier
+      {% component "forms/control" type="select" name="supplier" cell=True searchable=True attrs='onchange="this.form.submit()" aria-label="Supplier"' only %}
+        <option value="">All</option>
+        {% for option in supplier_options %}<option value="{{ option.pk }}" {% if filters.supplier == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    <label class="filter-chip">
+      Type
+      {% component "forms/control" type="select" name="kind" cell=True attrs='onchange="this.form.submit()" aria-label="Supplier type"' only %}
+        <option value="">All</option>
+        {% for value, label in kind_choices %}<option value="{{ value }}" {% if filters.kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+  {% endslot %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Supplier" field="party" %}
+    {% if "kind" in columns %}{% include "components/table/sort_header.html" with label="Type" field="kind" %}{% endif %}
+    {% if "city" in columns %}{% include "components/table/sort_header.html" with label="City" field="city" %}{% endif %}
+    {% if "phone" in columns %}<th>Phone</th>{% endif %}
+    {% if "invoices" in columns %}{% include "components/table/sort_header.html" with label="Invoices" field="invoices" align="right" %}{% endif %}
+    {% if "b0" in columns %}{% include "components/table/sort_header.html" with label="0-30" field="b0" align="right" %}{% endif %}
+    {% if "b1" in columns %}{% include "components/table/sort_header.html" with label="31-60" field="b1" align="right" %}{% endif %}
+    {% if "b2" in columns %}{% include "components/table/sort_header.html" with label="61-90" field="b2" align="right" %}{% endif %}
+    {% if "b3" in columns %}{% include "components/table/sort_header.html" with label="90+" field="b3" align="right" %}{% endif %}
+    {% include "components/table/sort_header.html" with label="Balance" field="balance" align="right" %}
+    {% if "oldest" in columns %}{% include "components/table/sort_header.html" with label="Oldest Unpaid" field="oldest" %}{% endif %}
+    {% if "last_invoice" in columns %}{% include "components/table/sort_header.html" with label="Last Invoice" field="last_invoice" %}{% endif %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a class="doc-num" href="{% url 'inventory:supplier_detail' row.party_id %}">{{ row.party }}</a></td>
+      {% if "kind" in columns %}<td class="muted">{{ row.kind|default:"—" }}</td>{% endif %}
+      {% if "city" in columns %}<td class="muted">{{ row.city }}</td>{% endif %}
+      {% if "phone" in columns %}<td class="muted">{{ row.phone }}</td>{% endif %}
+      {% if "invoices" in columns %}<td class="num">{{ row.invoices }}</td>{% endif %}
+      {% if "b0" in columns %}<td class="num">{{ row.b0|amount }}</td>{% endif %}
+      {% if "b1" in columns %}<td class="num">{{ row.b1|amount }}</td>{% endif %}
+      {% if "b2" in columns %}<td class="num{% if row.b2 %} fig-bad{% endif %}">{{ row.b2|amount }}</td>{% endif %}
+      {% if "b3" in columns %}<td class="num{% if row.b3 %} fig-bad{% endif %}">{{ row.b3|amount }}</td>{% endif %}
+      <td class="num strong">{{ row.balance|amount }}</td>
+      {% if "oldest" in columns %}<td class="date">{{ row.oldest|dmy|default:"—" }}</td>{% endif %}
+      {% if "last_invoice" in columns %}<td class="date">{{ row.last_invoice|dmy|default:"—" }}</td>{% endif %}
+      <td class="actions-col">
+        {% url 'inventory:supplier_detail' row.party_id as view_url %}
+        {% capture as ledger_url %}{% url 'inventory:purchase_invoice_list' %}?supplier={{ row.party_id }}{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url ledger_url=ledger_url only %}
+      </td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=row_span|add:1 label="Nothing outstanding." only %}
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot><tr class="board-foot">
+    <td>Total</td>
+    {% if "kind" in columns %}<td></td>{% endif %}
+    {% if "city" in columns %}<td></td>{% endif %}
+    {% if "phone" in columns %}<td></td>{% endif %}
+    {% if "invoices" in columns %}<td></td>{% endif %}
+    {% if "b0" in columns %}<td class="num">{{ totals.b0|amount }}</td>{% endif %}
+    {% if "b1" in columns %}<td class="num">{{ totals.b1|amount }}</td>{% endif %}
+    {% if "b2" in columns %}<td class="num">{{ totals.b2|amount }}</td>{% endif %}
+    {% if "b3" in columns %}<td class="num">{{ totals.b3|amount }}</td>{% endif %}
+    <td class="num">{{ totals.balance|amount }}</td>
+    {% if "oldest" in columns %}<td></td>{% endif %}
+    {% if "last_invoice" in columns %}<td></td>{% endif %}
+    <td></td>
+  </tr></tfoot>
+  {% endif %}
+{% endcomponent %}
+{% endblock %}

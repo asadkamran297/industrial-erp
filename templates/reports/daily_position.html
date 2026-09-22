@@ -1,0 +1,19 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id="daily-position-table" no_pagination=True %}
+  <thead><tr>
+    <th>Figure</th>
+    <th class="num">Value</th>
+    {% if "unit" in columns %}<th>Unit</th>{% endif %}
+  </tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.figure }}</td>
+      <td class="num strong">{{ row.value }}</td>
+      {% if "unit" in columns %}<td class="muted">{{ row.unit }}</td>{% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+{% endcomponent %}
+{% endblock %}

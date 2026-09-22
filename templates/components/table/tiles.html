@@ -1,1 +1,1 @@
-<div class="tiles">{% for tile in tiles %}{% include "components/table/tile.html" with href=tile.href tone=tile.tone icon=tile.icon value=tile.value label=tile.label note=tile.note alert=tile.alert on=tile.on only %}{% endfor %}</div>
+<div class="tiles">{% for tile in tiles %}{% include "components/table/tile.html" with href=tile.href tone=tile.tone icon=tile.icon value=tile.value label=tile.label note=tile.note alert=tile.alert on=tile.on delta=tile.delta delta_label=tile.delta_label only %}{% endfor %}</div>

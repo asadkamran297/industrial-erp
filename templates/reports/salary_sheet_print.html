@@ -1,0 +1,12 @@
+{% extends "reports/print.html" %}
+{% block report_body %}
+<style>.items th.sign, .items td.sign { min-width: 32mm; }</style>
+<table class="items">
+  <thead><tr>{% for label in header %}<th{% if forloop.counter0 in num_cols %} class="num"{% elif label == "Signature" %} class="sign"{% endif %}>{{ label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    {% for row in rows %}<tr>{% for cell in row %}<td{% if forloop.counter0 in num_cols %} class="num"{% elif forloop.last %} class="sign"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+    {% empty %}<tr><td colspan="{{ header|length }}">Nothing matches these filters.</td></tr>{% endfor %}
+  </tbody>
+  {% if footer %}<tfoot><tr>{% for cell in footer %}<td{% if forloop.counter0 in num_cols %} class="num"{% endif %}>{{ cell }}</td>{% endfor %}</tr></tfoot>{% endif %}
+</table>
+{% endblock %}

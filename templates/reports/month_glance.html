@@ -1,0 +1,50 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% component "report/shell" title=title table_id="month-glance-table" no_pagination=True %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Date" field="date" %}
+    {% if "purchase_kg" in columns %}{% include "components/table/sort_header.html" with label="Purchase Kg" field="purchase_kg" align="right" %}{% endif %}
+    {% if "purchase_mund" in columns %}<th class="num">Purchase Mund</th>{% endif %}
+    {% if "purchase_amount" in columns %}{% include "components/table/sort_header.html" with label="Purchase Rs" field="purchase_amount" align="right" %}{% endif %}
+    {% if "grinding_kg" in columns %}{% include "components/table/sort_header.html" with label="Grinding Kg" field="grinding_kg" align="right" %}{% endif %}
+    {% if "production_kg" in columns %}{% include "components/table/sort_header.html" with label="Production Kg" field="production_kg" align="right" %}{% endif %}
+    {% if "sales" in columns %}{% include "components/table/sort_header.html" with label="Sales Rs" field="sales" align="right" %}{% endif %}
+    {% if "cash_in" in columns %}{% include "components/table/sort_header.html" with label="Cash In" field="cash_in" align="right" %}{% endif %}
+    {% if "cash_out" in columns %}{% include "components/table/sort_header.html" with label="Cash Out" field="cash_out" align="right" %}{% endif %}
+    {% if "closing_cash" in columns %}{% include "components/table/sort_header.html" with label="Closing Cash" field="closing_cash" align="right" %}{% endif %}
+  </tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="date">{{ row.date|dmy }}</td>
+      {% if "purchase_kg" in columns %}<td class="num">{{ row.purchase_kg|floatformat:3|intcomma }}</td>{% endif %}
+      {% if "purchase_mund" in columns %}<td class="num">{{ row.purchase_kg|mund|floatformat:3|intcomma }}</td>{% endif %}
+      {% if "purchase_amount" in columns %}<td class="num">{{ row.purchase_amount|amount }}</td>{% endif %}
+      {% if "grinding_kg" in columns %}<td class="num">{{ row.grinding_kg|floatformat:3|intcomma }}</td>{% endif %}
+      {% if "production_kg" in columns %}<td class="num">{{ row.production_kg|floatformat:3|intcomma }}</td>{% endif %}
+      {% if "sales" in columns %}<td class="num">{{ row.sales|amount }}</td>{% endif %}
+      {% if "cash_in" in columns %}<td class="num fig-good">{{ row.cash_in|amount }}</td>{% endif %}
+      {% if "cash_out" in columns %}<td class="num fig-bad">{{ row.cash_out|amount }}</td>{% endif %}
+      {% if "closing_cash" in columns %}<td class="num strong">{{ row.closing_cash|amount }}</td>{% endif %}
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=row_span label="No days in this period." only %}
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot><tr class="board-foot">
+    <td>Total</td>
+    {% if "purchase_kg" in columns %}<td class="num">{{ totals.purchase_kg|floatformat:3|intcomma }}</td>{% endif %}
+    {% if "purchase_mund" in columns %}<td class="num">{{ totals.purchase_kg|mund|floatformat:3|intcomma }}</td>{% endif %}
+    {% if "purchase_amount" in columns %}<td class="num">{{ totals.purchase_amount|amount }}</td>{% endif %}
+    {% if "grinding_kg" in columns %}<td class="num">{{ totals.grinding_kg|floatformat:3|intcomma }}</td>{% endif %}
+    {% if "production_kg" in columns %}<td class="num">{{ totals.production_kg|floatformat:3|intcomma }}</td>{% endif %}
+    {% if "sales" in columns %}<td class="num">{{ totals.sales|amount }}</td>{% endif %}
+    {% if "cash_in" in columns %}<td class="num">{{ totals.cash_in|amount }}</td>{% endif %}
+    {% if "cash_out" in columns %}<td class="num">{{ totals.cash_out|amount }}</td>{% endif %}
+    {% if "closing_cash" in columns %}<td class="num">{{ totals.closing_cash|amount }}</td>{% endif %}
+  </tr></tfoot>
+  {% endif %}
+{% endcomponent %}
+{% endblock %}

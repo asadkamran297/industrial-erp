@@ -30,6 +30,13 @@ class Column:
     locked: bool = False
     default: bool = True
     export: Optional[Callable] = None
+    numeric: bool = False
+    kind: str = "text"
+    link: str = ""
+    link_key: str = "pk"
+    total: bool = False
+    places: int = 0
+    tone_key: str = ""
 
 
 class ColumnSet:
@@ -81,3 +88,36 @@ class ColumnSet:
         return len(self.visible(session) - self.locked_without_cells) + extra
 
     locked_without_cells: set = frozenset()
+
+
+def _exporter(key, kind, places):
+    from decimal import Decimal
+
+    from apps.core.formatting import format_amount
+
+    def get(row):
+        return row.get(key) if isinstance(row, dict) else getattr(row, key, None)
+
+    if kind == "money":
+        return lambda row: format_amount(get(row)) if get(row) is not None else ""
+    if kind == "qty":
+        return lambda row: f"{Decimal(get(row) or 0):,.{places}f}" if get(row) is not None else ""
+    if kind == "pct":
+        return lambda row: f"{Decimal(get(row)):.2f}" if get(row) is not None else ""
+    if kind == "int":
+        return lambda row: "" if get(row) is None else str(get(row))
+    if kind == "date":
+        return lambda row: f"{get(row):%d-%m-%Y}" if get(row) else ""
+    if kind == "time":
+        return lambda row: f"{get(row):%H:%M}" if get(row) else ""
+    if kind == "status":
+        return lambda row: (row.get("status_label") if isinstance(row, dict) else getattr(row, "status_label", "")) or ""
+    return lambda row: "" if get(row) is None else str(get(row))
+
+
+def col(key, label, kind="text", *, locked=False, default=True, total=False, places=0, link="", link_key="pk", tone_key="", export=None):
+    """A report column whose export and on-screen rendering follow from ``kind``."""
+    return Column(
+        key, label, locked=locked, default=default, export=export or _exporter(key, kind, places),
+        numeric=kind in ("money", "qty", "pct", "int"), kind=kind, link=link, link_key=link_key, total=total, places=places, tone_key=tone_key,
+    )

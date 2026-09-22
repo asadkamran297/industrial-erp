@@ -3,6 +3,7 @@
   {% if view_url %}{% include "components/ui/icon_button.html" with href=view_url icon="view" title="View" only %}{% endif %}
   {% if edit_url %}{% include "components/ui/icon_button.html" with href=edit_url icon="edit" title="Edit" only %}{% endif %}
   {% if print_url %}{% include "components/ui/icon_button.html" with href=print_url icon="print" title="Print" target="_blank" only %}{% endif %}
+  {% if ledger_url %}{% include "components/ui/icon_button.html" with href=ledger_url icon="ledger" title="Ledger" only %}{% endif %}
   {{ slots.end }}
   {% if reverse_url %}{% include "components/ui/icon_button.html" with icon="reverse" title=reverse_label|default:"Reverse" tone="danger" confirm=reverse_confirm|default:"Reverse this entry? Mirror entries will be posted." post=reverse_url reason=reverse_reason only %}{% endif %}
   {% if deactivate_url %}{% include "components/ui/icon_button.html" with icon="deactivate" title=deactivate_label|default:"Deactivate" tone="danger" confirm=deactivate_confirm|default:"Deactivate this record?" post=deactivate_url only %}{% endif %}

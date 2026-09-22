@@ -138,3 +138,15 @@
 .print-watermark span { transform: rotate(-32deg); border: .12em solid rgba(220, 38, 38, .13); border-radius: .15em; padding: .1em .35em; font-size: 9vw; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: rgba(220, 38, 38, .13); }
 .doc-title, .meta, .items, .totals, .sign-row, .footer, .org-header { position: relative; z-index: 1; }
 @media print { .print-watermark span { font-size: 1.5cm; } }
+
+  /* ── Reports ─────────────────────────────────────── */
+  .report-sub { text-align: center; font-size: 11px; color: #444; margin: -6px 0 10px; }
+  .report-sub b { color: #1e3a5f; }
+  table.items tfoot td { font-weight: 700; background: #f1f4f8; }
+  .report-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+  .report-tile { border: 1px solid #bbb; border-radius: 6px; padding: 8px 10px; }
+  .report-tile .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1e3a5f; font-weight: 700; }
+  .report-tile .val { font-size: 16px; font-weight: 800; margin-top: 2px; }
+  .report-tile .sub { font-size: 10px; color: #666; }
+  .report-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .report-page { counter-reset: page; }

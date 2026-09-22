@@ -1,0 +1,56 @@
+{% extends "layouts/portal.html" %}
+{% load humanize %}
+{% block content %}
+{% component "report/shell" title=title table_id="product-profit-table" no_pagination=True %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Product" field="product" %}
+    {% if "family" in columns %}{% include "components/table/sort_header.html" with label="Category" field="family" %}{% endif %}
+    {% if "invoices" in columns %}{% include "components/table/sort_header.html" with label="Invoices" field="invoices" align="right" %}{% endif %}
+    {% if "qty" in columns %}{% include "components/table/sort_header.html" with label="Qty Sold" field="qty" align="right" %}{% endif %}
+    {% if "kg" in columns %}{% include "components/table/sort_header.html" with label="Kg" field="kg" align="right" %}{% endif %}
+    {% if "net" in columns %}{% include "components/table/sort_header.html" with label="Sales Rs" field="net" align="right" %}{% endif %}
+    {% if "avg_rate" in columns %}{% include "components/table/sort_header.html" with label="Avg Rate" field="avg_rate" align="right" %}{% endif %}
+    {% if "cost_rate" in columns %}{% include "components/table/sort_header.html" with label="Cost Rate" field="cost_rate" align="right" %}{% endif %}
+    {% if "cogs" in columns %}{% include "components/table/sort_header.html" with label="COGS" field="cogs" align="right" %}{% endif %}
+    {% if "margin" in columns %}{% include "components/table/sort_header.html" with label="Gross Margin" field="margin" align="right" %}{% endif %}
+    {% if "margin_pct" in columns %}{% include "components/table/sort_header.html" with label="Margin %" field="margin_pct" align="right" %}{% endif %}
+    {% if "share" in columns %}{% include "components/table/sort_header.html" with label="Share %" field="share" align="right" %}{% endif %}
+  </tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a class="doc-num" href="{% url 'products:product_list' %}?q={{ row.product|urlencode }}">{{ row.product }}</a></td>
+      {% if "family" in columns %}<td class="muted">{{ row.family }}</td>{% endif %}
+      {% if "invoices" in columns %}<td class="num">{{ row.invoices }}</td>{% endif %}
+      {% if "qty" in columns %}<td class="num">{{ row.qty|floatformat:0|intcomma }}</td>{% endif %}
+      {% if "kg" in columns %}<td class="num">{{ row.kg|floatformat:3|intcomma }}</td>{% endif %}
+      {% if "net" in columns %}<td class="num">{{ row.net|amount }}</td>{% endif %}
+      {% if "avg_rate" in columns %}<td class="num">{{ row.avg_rate|amount }}</td>{% endif %}
+      {% if "cost_rate" in columns %}<td class="num" title="{% if row.cost_source == 'ledger' %}Weighted average of costed ledger receipts{% elif row.cost_source == 'list' %}Current list rate; no costed receipt in the ledger{% else %}No cost on record{% endif %}">{{ row.cost_rate|amount }}{% if row.cost_source == 'list' %} *{% endif %}</td>{% endif %}
+      {% if "cogs" in columns %}<td class="num">{{ row.cogs|amount }}</td>{% endif %}
+      {% if "margin" in columns %}<td class="num strong{% if row.margin < 0 %} fig-bad{% endif %}">{{ row.margin|amount }}</td>{% endif %}
+      {% if "margin_pct" in columns %}<td class="num{% if row.margin_pct < 0 %} fig-bad{% endif %}">{{ row.margin_pct|floatformat:2 }}</td>{% endif %}
+      {% if "share" in columns %}<td class="num">{{ row.share|floatformat:2 }}</td>{% endif %}
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=row_span label="No product sales in this period." only %}
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot><tr class="board-foot">
+    <td>Total</td>
+    {% if "family" in columns %}<td></td>{% endif %}
+    {% if "invoices" in columns %}<td></td>{% endif %}
+    {% if "qty" in columns %}<td class="num">{{ totals.qty|floatformat:0|intcomma }}</td>{% endif %}
+    {% if "kg" in columns %}<td class="num">{{ totals.kg|floatformat:3|intcomma }}</td>{% endif %}
+    {% if "net" in columns %}<td class="num">{{ totals.net|amount }}</td>{% endif %}
+    {% if "avg_rate" in columns %}<td></td>{% endif %}
+    {% if "cost_rate" in columns %}<td></td>{% endif %}
+    {% if "cogs" in columns %}<td class="num">{{ totals.cogs|amount }}</td>{% endif %}
+    {% if "margin" in columns %}<td class="num">{{ totals.margin|amount }}</td>{% endif %}
+    {% if "margin_pct" in columns %}<td class="num">{{ totals.margin_pct|floatformat:2 }}</td>{% endif %}
+    {% if "share" in columns %}<td class="num">100.00</td>{% endif %}
+  </tr></tfoot>
+  {% endif %}
+{% endcomponent %}
+{% endblock %}

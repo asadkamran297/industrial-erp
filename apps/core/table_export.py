@@ -18,8 +18,11 @@ was looking at rather than everything the screen could have shown.
 """
 
 import csv
+import re
 from datetime import date, datetime
 from decimal import Decimal
+
+from io import BytesIO
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -37,7 +40,7 @@ class TableExportView(View):
     doc_template = "components/table/export_doc.html"
     print_template = "components/table/export_print.html"
 
-    FORMATS = ("xlsx", "csv", "pdf", "doc", "json")
+    FORMATS = ("xlsx", "csv", "pdf", "doc", "json", "png")
 
     def get_rows(self):
         raise NotImplementedError
@@ -72,7 +75,7 @@ class TableExportView(View):
 
         book = Workbook()
         sheet = book.active
-        sheet.title = self.title[:31]
+        sheet.title = re.sub(r"[\\/*?:\[\]]", "-", self.title)[:31]
         sheet.append(header)
 
         heading = Font(bold=True, color="FFFFFF")
@@ -122,13 +125,25 @@ class TableExportView(View):
         response["Content-Disposition"] = f'attachment; filename="{self.filename}.json"'
         return response
 
+    def _png(self, request, header, rows, columns):
+        """The same sheet as an image, drawn with Pillow so nothing leaves the server."""
+        image = render_table_png(self.title, header, rows, self.subtitle(request), request.user)
+        response = HttpResponse(image, content_type="image/png")
+        response["Content-Disposition"] = f'attachment; filename="{self.filename}.png"'
+        return response
+
+    def subtitle(self, request) -> str:
+        return ""
+
     def _paper(self, request, header, rows):
         return {
             "title": self.title,
+            "subtitle": self.subtitle(request),
             "header": header,
             "rows": rows,
             "printed_by": request.user,
             "printed_on": timezone.localdate(),
+            "printed_at": timezone.localtime(),
         }
 
     @staticmethod
@@ -139,3 +154,99 @@ class TableExportView(View):
         if isinstance(value, (int, float, date, datetime)):
             return value
         return str(value)
+
+
+def _font(size: int):
+    from PIL import ImageFont
+
+    for name in ("arial.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size)
+
+
+def _font_bold(size: int):
+    from PIL import ImageFont
+
+    for name in ("arialbd.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return _font(size)
+
+
+def render_table_png(title, header, rows, subtitle="", user=None) -> bytes:
+    """Draw a header band and the rows; numeric cells right-aligned."""
+    from PIL import Image, ImageDraw
+
+    font = _font(14)
+    bold = _font_bold(14)
+    title_font = _font_bold(22)
+    pad, row_h, head_h = 10, 28, 32
+    scratch = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    def width(text, face):
+        return scratch.textlength(str(text), font=face)
+
+    cells = [[("" if value is None else str(value)) for value in row] for row in rows]
+    widths = [
+        int(max([width(label, bold)] + [width(row[i], font) for row in cells] or [0])) + pad * 2
+        for i, label in enumerate(header)
+    ]
+    widths = [min(w, 360) for w in widths]
+    table_w = sum(widths)
+    total_w = max(table_w, int(width(title, title_font)) + pad * 2, 640) + pad * 2
+    top = pad * 2 + 30 + (22 if subtitle else 0)
+    total_h = top + head_h + row_h * max(len(cells), 1) + pad * 4
+
+    image = Image.new("RGB", (total_w, total_h), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((pad, pad), title, fill="#0f172a", font=title_font)
+    if subtitle:
+        draw.text((pad, pad + 30), subtitle, fill="#64748b", font=font)
+
+    y = top
+    x = pad
+    draw.rectangle([x, y, x + table_w, y + head_h], fill="#1e293b")
+    for label, w in zip(header, widths):
+        draw.text((x + pad, y + 8), str(label), fill="white", font=bold)
+        x += w
+    y += head_h
+
+    numeric = [all(_looks_numeric(row[i]) for row in cells if row[i]) for i in range(len(header))]
+    for index, row in enumerate(cells):
+        if index % 2:
+            draw.rectangle([pad, y, pad + table_w, y + row_h], fill="#f8fafc")
+        x = pad
+        for i, (value, w) in enumerate(zip(row, widths)):
+            text = value
+            while width(text, font) > w - pad * 2 and len(text) > 1:
+                text = text[:-2] + "…"
+            offset = w - pad - width(text, font) if numeric[i] else pad
+            draw.text((x + offset, y + 7), text, fill="#0f172a", font=font)
+            x += w
+        draw.line([pad, y + row_h, pad + table_w, y + row_h], fill="#e2e8f0")
+        y += row_h
+    if not cells:
+        draw.text((pad * 2, y + 7), "Nothing matches these filters.", fill="#64748b", font=font)
+        y += row_h
+
+    who = user.get_full_name() or user.username if user is not None else ""
+    footer = f"{len(cells)} rows · {who} · {timezone.localtime():%d %b %Y %H:%M}".strip(" ·")
+    draw.text((pad, y + pad), footer, fill="#64748b", font=_font(12))
+
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _looks_numeric(text: str) -> bool:
+    cleaned = text.replace(",", "").replace("%", "").replace("(", "-").replace(")", "").strip()
+    try:
+        Decimal(cleaned)
+    except Exception:
+        return False
+    return True

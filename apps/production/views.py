@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import ListView, View
 
-from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin, report_sort
+from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.godowns.selectors import active_godowns, default_godown
 
 from . import selectors, services
@@ -368,81 +368,3 @@ class ConversionDeleteView(PagePermissionRequiredMixin, View):
         services.delete_conversion(conversion, request.user)
         messages.success(request, f"{conversion.voucher_no} reversed and removed.")
         return redirect("production:conversion_list")
-
-
-class ReportBase(PagePermissionRequiredMixin, View):
-    page = REPORT_PAGE
-    action = "index"
-
-    def filters(self, request):
-        return {
-            "date_from": _parse_date(request.GET.get("date_from", "")),
-            "date_to": _parse_date(request.GET.get("date_to", "")),
-            "wheat_item": request.GET.get("wheat_item", "").strip() or None,
-            "godown": request.GET.get("godown", "").strip() or None,
-        }
-
-    def base_context(self, request):
-        applied = self.filters(request)
-        return {
-            "filters": applied,
-            "wheat_options": selectors.wheat_options(),
-            "godown_options": active_godowns(),
-            "breadcrumbs": _crumbs(("Reports", "")),
-        }
-
-
-class DailyGrindingReportView(ReportBase):
-    def get(self, request):
-        applied = self.filters(request)
-        rows = selectors.daily_grinding(**applied)
-        context = self.base_context(request)
-        totals = selectors.grinding_totals(rows)
-        rows, sort_context = report_sort(
-            request, list(rows),
-            {"date": "date", "voucher": "voucher_no", "wheat": "wheat_item_id", "disposal": "disposal_wheat", "bags": "disposal_bag_qty", "output": "total_output_kg", "yield": "yield_percent", "area": "issue_area"},
-            default="date", default_dir="desc",
-        )
-        context.update(sort_context)
-        context.update({
-            "title": "Daily Grinding",
-            "rows": rows,
-            "totals": totals,
-        })
-        return render(request, "production/report_daily_grinding.html", context)
-
-
-class YieldTrendReportView(ReportBase):
-    def get(self, request):
-        applied = self.filters(request)
-        context = self.base_context(request)
-        daily, sort_context = report_sort(
-            request, list(selectors.yield_by_day(applied["date_from"], applied["date_to"])),
-            {"date": "period", "wheat": "wheat", "output": "output", "yield": "yield_percent"}, default="date",
-        )
-        context.update(sort_context)
-        context.update({
-            "title": "Yield Trend",
-            "daily": daily,
-            "monthly": selectors.yield_by_month(applied["date_from"], applied["date_to"]),
-            "average": selectors.period_average_yield(applied["date_from"], applied["date_to"]),
-        })
-        return render(request, "production/report_yield_trend.html", context)
-
-
-class ProductionSummaryReportView(ReportBase):
-    def get(self, request):
-        applied = self.filters(request)
-        rows = list(selectors.production_summary(applied["date_from"], applied["date_to"], applied["godown"]))
-        context = self.base_context(request)
-        categories = selectors.summary_by_category(rows)
-        categories, sort_context = report_sort(
-            request, categories, {"category": "category", "qty": "total_qty", "weight": "total_weight"}, default="category",
-        )
-        context.update(sort_context)
-        context.update({
-            "title": "Production Summary",
-            "rows": rows,
-            "categories": categories,
-        })
-        return render(request, "production/report_production_summary.html", context)

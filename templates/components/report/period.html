@@ -1,0 +1,8 @@
+<label class="filter-chip">
+  Period
+  {% component "forms/control" type="select" name="preset" cell=True attrs='onchange="this.form.submit()" aria-label="Period"' only %}
+    {% for value, label in preset_choices %}<option value="{{ value }}" {% if period.preset == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  {% endcomponent %}
+</label>
+<label class="filter-chip">From {% include "components/forms/control.html" with type="date" name="date_from" value=period.start|date:"Y-m-d" cell=True attrs='onchange="this.form.preset.selectedIndex=this.form.preset.length-1;this.form.submit()" aria-label="Date from"' only %}</label>
+<label class="filter-chip">To {% include "components/forms/control.html" with type="date" name="date_to" value=period.end|date:"Y-m-d" cell=True attrs='onchange="this.form.preset.selectedIndex=this.form.preset.length-1;this.form.submit()" aria-label="Date to"' only %}</label>

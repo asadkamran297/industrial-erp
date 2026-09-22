@@ -1,0 +1,24 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id=table_id no_pagination=False %}
+  {% slot filters %}
+    <label class="filter-chip">Threshold % {% include "components/forms/control.html" with type="number" name="threshold" value=extra.threshold cell=True step="0.01" min="0" attrs='onchange="this.form.submit()" aria-label="Threshold"' only %}</label>
+  {% endslot %}
+  {% include "components/report/table.html" %}
+  {% slot below %}
+  {% if extra.averages %}
+  <section class="board-card">
+    <div class="board-scroll">
+      <table class="board-table" id="quality-averages">
+        <thead><tr><th>Arhti</th><th class="num">Avg Impurities %</th><th class="num">Avg Moisture %</th></tr></thead>
+        <tbody>
+          {% for row in extra.averages %}<tr><td>{{ row.supplier }}</td><td class="num">{{ row.impurities|floatformat:2|default:"—" }}</td><td class="num">{{ row.moisture|floatformat:2|default:"—" }}</td></tr>{% endfor %}
+        </tbody>
+        <tfoot><tr class="board-foot"><td>Mill average</td><td class="num">{{ totals.impurities|floatformat:2|default:"—" }}</td><td class="num">{{ totals.moisture|floatformat:2|default:"—" }}</td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+  {% endslot %}
+{% endcomponent %}
+{% endblock %}

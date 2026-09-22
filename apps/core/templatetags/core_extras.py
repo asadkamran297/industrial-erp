@@ -49,6 +49,26 @@ def short_amount(value):
     return f"{sign}{format_amount(number)}"
 
 
+@register.filter(name="get_item")
+def get_item(value, key):
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value.get(key)
+    return getattr(value, key, None)
+
+
+@register.filter(name="mund")
+def mund(value):
+    """Kilograms to mund (40 kg)."""
+    from apps.core.reporting import mund as to_mund
+
+    try:
+        return to_mund(value)
+    except Exception:
+        return value
+
+
 @register.filter(name="dmy")
 def dmy(value):
     """Render a date the way the business writes it: DD-MM-YYYY."""

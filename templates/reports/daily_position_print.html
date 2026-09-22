@@ -1,0 +1,19 @@
+{% extends "reports/print.html" %}
+{% block report_body %}
+<div class="report-tiles">
+  {% for tile in tiles %}<div class="report-tile"><div class="lbl">{{ tile.label }}</div><div class="val">{{ tile.value }}</div>{% if tile.note %}<div class="sub">{{ tile.note }}</div>{% endif %}</div>{% endfor %}
+</div>
+<div class="report-two">
+  <table class="items">
+    <thead><tr><th>Figure</th><th class="num">Value</th></tr></thead>
+    <tbody>{% for row in rows %}<tr><td>{{ row.0 }}</td><td class="num">{{ row.1 }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <table class="items">
+    <thead><tr><th>Produced today</th><th class="num">Units</th><th class="num">Kg</th></tr></thead>
+    <tbody>
+      {% for row in data.extra.production %}<tr><td>{{ row.product }}</td><td class="num">{{ row.units|floatformat:0 }}</td><td class="num">{{ row.kg|floatformat:3 }}</td></tr>
+      {% empty %}<tr><td colspan="3">No grinding on this day.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -115,6 +115,7 @@
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=csv"><span class="export-badge export-badge--csv">CSV</span>CSV</a>
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=doc"><span class="export-badge export-badge--doc">DOC</span>Word</a>
       <a class="export-item" role="menuitem" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf"><span class="export-badge export-badge--pdf">PDF</span>PDF / Print</a>
+      <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=png"><span class="export-badge export-badge--png">PNG</span>Image</a>
       {% elif export_csv_url %}
       <p class="settings-heading">Download</p>
       <a class="export-item" role="menuitem" href="{{ export_csv_url }}?{{ request.GET.urlencode }}"><span class="export-badge export-badge--csv">CSV</span>CSV</a>

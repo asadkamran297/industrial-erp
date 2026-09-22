@@ -1,5 +1,7 @@
 from django.urls import path
 
+from . import report_views as rv
+
 from .views import (
     AccountLinkView,
     CodePreviewView,
@@ -32,4 +34,16 @@ urlpatterns = [
     path("opening-balance/", OpeningBalanceView.as_view(), name="opening_balance"),
     path("rate-update/", RateUpdateView.as_view(), name="rate_update"),
     path("party-bardana/", PartyBardanaListView.as_view(), name="party_bardana"),
+    path("reports/bardana-stock/", rv.BardanaStockView.as_view(), name="report_bardana_stock"),
+    path("reports/bardana-stock/export/", rv.BardanaStockExportView.as_view(), name="report_bardana_stock_export"),
+    path("reports/bardana-stock/columns/", rv.BardanaStockColumnsView.as_view(), name="report_bardana_stock_columns"),
+    path("reports/party-bardana-balances/", rv.PartyBardanaBalancesView.as_view(), name="report_party_bardana"),
+    path("reports/party-bardana-balances/export/", rv.PartyBardanaBalancesExportView.as_view(), name="report_party_bardana_export"),
+    path("reports/party-bardana-balances/columns/", rv.PartyBardanaBalancesColumnsView.as_view(), name="report_party_bardana_columns"),
+    path("reports/bardana-movements/", rv.BardanaMovementView.as_view(), name="report_bardana_movements"),
+    path("reports/bardana-movements/export/", rv.BardanaMovementExportView.as_view(), name="report_bardana_movements_export"),
+    path("reports/bardana-movements/columns/", rv.BardanaMovementColumnsView.as_view(), name="report_bardana_movements_columns"),
+    path("reports/packing-consumption/", rv.PackingConsumptionView.as_view(), name="report_packing_consumption"),
+    path("reports/packing-consumption/export/", rv.PackingConsumptionExportView.as_view(), name="report_packing_consumption_export"),
+    path("reports/packing-consumption/columns/", rv.PackingConsumptionColumnsView.as_view(), name="report_packing_consumption_columns"),
 ]

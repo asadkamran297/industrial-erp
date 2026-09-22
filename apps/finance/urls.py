@@ -79,3 +79,47 @@ urlpatterns = [
     path("vouchers/<int:voucher_pk>/lines/new/", AccountVoucherLineCreateView.as_view(), name="account_voucher_line_create"),
     path("vouchers/<int:voucher_pk>/lines/<int:pk>/delete/", AccountVoucherLineDeleteView.as_view(), name="account_voucher_line_delete"),
 ]
+
+from .report_views import (  # noqa: E402
+    AuditTrailColumnsView,
+    AuditTrailExportView,
+    AuditTrailView,
+    BankBookColumnsView,
+    BankBookExportView,
+    BankBookView,
+    CashBookColumnsView,
+    CashBookExportView,
+    CashBookView,
+    ExpenseAnalysisColumnsView,
+    ExpenseAnalysisExportView,
+    ExpenseAnalysisView,
+    OpeningBalancesColumnsView,
+    OpeningBalancesExportView,
+    OpeningBalancesView,
+    PartyLedgerColumnsView,
+    PartyLedgerExportView,
+    PartyLedgerView,
+    ReceivablePayableColumnsView,
+    ReceivablePayableExportView,
+    ReceivablePayableView,
+    VoucherRegisterColumnsView,
+    VoucherRegisterExportView,
+    VoucherRegisterView,
+)
+
+_REPORTS = (
+    ("cash-book", "report_cash_book", CashBookView, CashBookExportView, CashBookColumnsView),
+    ("bank-book", "report_bank_book", BankBookView, BankBookExportView, BankBookColumnsView),
+    ("party-ledger", "report_party_ledger", PartyLedgerView, PartyLedgerExportView, PartyLedgerColumnsView),
+    ("voucher-register", "report_voucher_register", VoucherRegisterView, VoucherRegisterExportView, VoucherRegisterColumnsView),
+    ("expense-analysis", "report_expense_analysis", ExpenseAnalysisView, ExpenseAnalysisExportView, ExpenseAnalysisColumnsView),
+    ("receivable-payable", "report_receivable_payable", ReceivablePayableView, ReceivablePayableExportView, ReceivablePayableColumnsView),
+    ("opening-balances", "report_opening_balances", OpeningBalancesView, OpeningBalancesExportView, OpeningBalancesColumnsView),
+    ("audit-trail", "report_audit_trail", AuditTrailView, AuditTrailExportView, AuditTrailColumnsView),
+)
+for _slug, _name, _screen, _export, _columns in _REPORTS:
+    urlpatterns += [
+        path(f"reports/{_slug}/", _screen.as_view(), name=_name),
+        path(f"reports/{_slug}/export/", _export.as_view(), name=f"{_name}_export"),
+        path(f"reports/{_slug}/columns/", _columns.as_view(), name=f"{_name}_columns"),
+    ]

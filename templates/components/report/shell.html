@@ -1,0 +1,22 @@
+{% component "table/board" title=title table_id=table_id|default:"report-table" no_search=True no_pagination=no_pagination filters_active=filters_active board_tiles=board_tiles %}
+  {% slot actions %}
+    {% if print_url %}{% include "components/ui/button.html" with label="Print" href=print_url icon="print" variant="secondary" attrs='target="_blank"' only %}{% endif %}
+    {{ slots.actions }}
+  {% endslot %}
+  {% slot above %}{{ slots.above }}{% endslot %}
+  {% slot filters %}
+    {% if as_of %}{% include "components/report/as_of.html" %}{% else %}{% include "components/report/period.html" %}{% endif %}
+    {% if group_toggle %}
+    <label class="filter-chip">
+      Group
+      {% component "forms/control" type="select" name="group" cell=True attrs='onchange="this.form.submit()" aria-label="Group by"' only %}
+        {% for value, label in group_choices %}<option value="{{ value }}" {% if group == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    {% endif %}
+    {% include "components/report/filters.html" %}
+    {{ slots.filters }}
+  {% endslot %}
+  {{ slot }}
+  {% slot below %}{{ slots.below }}{% endslot %}
+{% endcomponent %}

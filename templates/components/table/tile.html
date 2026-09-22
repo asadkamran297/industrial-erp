@@ -2,6 +2,6 @@
   {% if icon %}<span class="tile-icon" aria-hidden="true">{% icon icon %}</span>{% endif %}
   <div class="tile-body">
     <div class="tile-head"><p class="tile-value"{% if value_id %} id="{{ value_id }}"{% endif %}{% if value_x %} x-text="{{ value_x }}"{% endif %}>{{ value }}</p><p class="tile-label">{{ label }}</p></div>
-    {% if slot %}{{ slot }}{% elif note %}<p class="tile-note{% if alert %} tile-note--alert{% endif %}">{{ note }}</p>{% endif %}
+    {% if slot %}{{ slot }}{% elif delta %}<p class="tile-note tile-delta tile-delta--{{ delta.direction }}">{% if delta.direction == 'up' %}{% icon "sort-up" size="sm" %}{% elif delta.direction == 'down' %}{% icon "sort-down" size="sm" %}{% endif %}{% if delta.percent is not None %}{{ delta.percent }}%{% else %}{{ delta.value }}{% endif %}{% if delta_label %} {{ delta_label }}{% endif %}</p>{% elif note %}<p class="tile-note{% if alert %} tile-note--alert{% endif %}">{{ note }}</p>{% endif %}
   </div>
 {% if href %}</a>{% else %}</div>{% endif %}

@@ -1,0 +1,69 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% component "report/shell" title=title table_id="receivables-aging-table" no_pagination=True %}
+  {% slot filters %}
+    <label class="filter-chip">
+      Customer
+      {% component "forms/control" type="select" name="customer" cell=True searchable=True attrs='onchange="this.form.submit()" aria-label="Customer"' only %}
+        <option value="">All</option>
+        {% for option in customer_options %}<option value="{{ option.pk }}" {% if filters.customer == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.customer_name }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    {% if filters.over_limit %}<input type="hidden" name="over_limit" value="1">{% endif %}
+  {% endslot %}
+  <thead><tr>
+    {% include "components/table/sort_header.html" with label="Customer" field="party" %}
+    {% if "city" in columns %}{% include "components/table/sort_header.html" with label="City" field="city" %}{% endif %}
+    {% if "phone" in columns %}<th>Phone</th>{% endif %}
+    {% if "b0" in columns %}{% include "components/table/sort_header.html" with label="0-30" field="b0" align="right" %}{% endif %}
+    {% if "b1" in columns %}{% include "components/table/sort_header.html" with label="31-60" field="b1" align="right" %}{% endif %}
+    {% if "b2" in columns %}{% include "components/table/sort_header.html" with label="61-90" field="b2" align="right" %}{% endif %}
+    {% if "b3" in columns %}{% include "components/table/sort_header.html" with label="90+" field="b3" align="right" %}{% endif %}
+    {% include "components/table/sort_header.html" with label="Balance" field="balance" align="right" %}
+    {% if "credit_limit" in columns %}{% include "components/table/sort_header.html" with label="Credit Limit" field="credit_limit" align="right" %}{% endif %}
+    {% if "over_by" in columns %}{% include "components/table/sort_header.html" with label="Over Limit By" field="over_by" align="right" %}{% endif %}
+    {% if "last_sale" in columns %}{% include "components/table/sort_header.html" with label="Last Sale" field="last_sale" %}{% endif %}
+    <th class="actions-col">Actions</th>
+  </tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a class="doc-num" href="{% url 'inventory:customer_detail' row.party_id %}">{{ row.party }}</a></td>
+      {% if "city" in columns %}<td class="muted">{{ row.city }}</td>{% endif %}
+      {% if "phone" in columns %}<td class="muted">{{ row.phone }}</td>{% endif %}
+      {% if "b0" in columns %}<td class="num">{{ row.b0|amount }}</td>{% endif %}
+      {% if "b1" in columns %}<td class="num">{{ row.b1|amount }}</td>{% endif %}
+      {% if "b2" in columns %}<td class="num{% if row.b2 %} fig-bad{% endif %}">{{ row.b2|amount }}</td>{% endif %}
+      {% if "b3" in columns %}<td class="num{% if row.b3 %} fig-bad{% endif %}">{{ row.b3|amount }}</td>{% endif %}
+      <td class="num strong">{{ row.balance|amount }}</td>
+      {% if "credit_limit" in columns %}<td class="num">{% if row.credit_limit is not None %}{{ row.credit_limit|amount }}{% else %}—{% endif %}</td>{% endif %}
+      {% if "over_by" in columns %}<td class="num">{% if row.over_limit %}{% include "components/table/status_badge.html" with status="reversed" label=row.over_by|amount tone="reversed" title="Over credit limit" only %}{% endif %}</td>{% endif %}
+      {% if "last_sale" in columns %}<td class="date">{{ row.last_sale|dmy|default:"—" }}</td>{% endif %}
+      <td class="actions-col">
+        {% url 'inventory:customer_detail' row.party_id as view_url %}
+        {% capture as ledger_url %}{% url 'inventory:customer_ledger_list' %}?customer={{ row.party_id }}{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url ledger_url=ledger_url only %}
+      </td>
+    </tr>
+    {% empty %}
+    {% include "components/table/empty_row.html" with span=row_span|add:1 label="Nothing outstanding." only %}
+    {% endfor %}
+  </tbody>
+  {% if rows %}
+  <tfoot><tr class="board-foot">
+    <td>Total</td>
+    {% if "city" in columns %}<td></td>{% endif %}
+    {% if "phone" in columns %}<td></td>{% endif %}
+    {% if "b0" in columns %}<td class="num">{{ totals.b0|amount }}</td>{% endif %}
+    {% if "b1" in columns %}<td class="num">{{ totals.b1|amount }}</td>{% endif %}
+    {% if "b2" in columns %}<td class="num">{{ totals.b2|amount }}</td>{% endif %}
+    {% if "b3" in columns %}<td class="num">{{ totals.b3|amount }}</td>{% endif %}
+    <td class="num">{{ totals.balance|amount }}</td>
+    {% if "credit_limit" in columns %}<td></td>{% endif %}
+    {% if "over_by" in columns %}<td class="num">{{ totals.over_by|amount }}</td>{% endif %}
+    {% if "last_sale" in columns %}<td></td>{% endif %}
+    <td></td>
+  </tr></tfoot>
+  {% endif %}
+{% endcomponent %}
+{% endblock %}

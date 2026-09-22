@@ -1,0 +1,18 @@
+{% load humanize %}
+<thead><tr>
+  {% for spec in column_specs %}{% if spec.sortable %}{% include "components/table/sort_header.html" with label=spec.column.label field=spec.column.key align=spec.num|yesno:"right," %}{% else %}<th{% if spec.num %} class="num"{% endif %}>{{ spec.column.label }}</th>{% endif %}{% endfor %}
+  {% if slots.head %}{{ slots.head }}{% endif %}
+</tr></thead>
+<tbody>
+  {% for row in rows %}
+  <tr>{% for spec in column_specs %}{% include "components/report/cell.html" with spec=spec row=row %}{% endfor %}{{ slots.row }}</tr>
+  {% empty %}
+  {% include "components/table/empty_row.html" with span=column_specs|length label=empty_label|default:"Nothing in this period." only %}
+  {% endfor %}
+</tbody>
+{% if rows and totals %}
+<tfoot><tr class="board-foot">
+  {% for spec in column_specs %}{% with c=spec.column %}{% with v=totals|get_item:c.key %}{% if forloop.first and v is None %}<td>Total</td>{% elif c.total and v is not None %}{% if c.kind == "money" %}<td class="num">{{ v|amount }}</td>{% elif c.kind == "qty" %}<td class="num">{{ v|floatformat:c.places|intcomma }}</td>{% elif c.kind == "pct" %}<td class="num">{{ v|floatformat:2 }}</td>{% else %}<td class="num">{{ v }}</td>{% endif %}{% else %}<td></td>{% endif %}{% endwith %}{% endwith %}{% endfor %}
+  {% if slots.head %}<td></td>{% endif %}
+</tr></tfoot>
+{% endif %}

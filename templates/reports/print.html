@@ -1,0 +1,19 @@
+{% extends "layouts/print.html" %}
+{% load core_extras %}
+{% block title %}{{ title }}{% endblock %}
+{% block body_class %}{% if landscape %}landscape{% endif %}{% endblock %}
+{% block print_content %}
+{% if landscape %}<style>@page { size: A4 landscape; margin: 10mm; }</style>{% else %}<style>@page { size: A4 portrait; margin: 12mm; }</style>{% endif %}
+<h1 class="doc-title">{{ title }}</h1>
+<p class="report-sub">{% if period_label %}<b>Period:</b> {{ period_label }}{% endif %}{% if subtitle %} &middot; {{ subtitle }}{% endif %}</p>
+{% block report_body %}
+<table class="items">
+  <thead><tr>{% for label in header %}<th{% if forloop.counter0 in num_cols %} class="num"{% endif %}>{{ label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    {% for row in rows %}<tr>{% for cell in row %}<td{% if forloop.counter0 in num_cols %} class="num"{% endif %}>{{ cell }}</td>{% endfor %}</tr>
+    {% empty %}<tr><td colspan="{{ header|length }}">Nothing matches these filters.</td></tr>{% endfor %}
+  </tbody>
+  {% if footer %}<tfoot><tr>{% for cell in footer %}<td{% if forloop.counter0 in num_cols %} class="num"{% endif %}>{{ cell }}</td>{% endfor %}</tr></tfoot>{% endif %}
+</table>
+{% endblock %}
+{% endblock %}

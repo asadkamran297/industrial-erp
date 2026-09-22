@@ -28,13 +28,13 @@
     <div class="org-center">
       <div class="org-name">{{ org.title|default:"Organization" }}</div>
       {% if branch %}<div class="org-branch">{{ branch.title }}</div>{% endif %}
-      {% with addr=org.address|default:branch.address %}{% if addr %}<div class="org-addr">{{ addr }}</div>{% endif %}{% endwith %}
+      {% firstof org.address branch.address "" as addr %}{% if addr %}<div class="org-addr">{{ addr }}</div>{% endif %}
     </div>
     <div class="org-contact">
-      {% with phone=org.phone|default:branch.phone %}{% if phone %}<span><b>Tel:</b> {{ phone }}</span>{% endif %}{% endwith %}
+      {% firstof org.phone branch.phone "" as phone %}{% if phone %}<span><b>Tel:</b> {{ phone }}</span>{% endif %}
       {% if org.cell %}<span><b>Cell:</b> {{ org.cell }}</span>{% endif %}
-      {% with fax=org.fax|default:branch.fax %}{% if fax %}<span><b>Fax:</b> {{ fax }}</span>{% endif %}{% endwith %}
-      {% with email=org.email|default:branch.email %}{% if email %}<span><b>Email:</b> {{ email }}</span>{% endif %}{% endwith %}
+      {% firstof org.fax branch.fax "" as fax %}{% if fax %}<span><b>Fax:</b> {{ fax }}</span>{% endif %}
+      {% firstof org.email branch.email "" as email %}{% if email %}<span><b>Email:</b> {{ email }}</span>{% endif %}
       {% if org.website %}<span><b>Web:</b> {{ org.website }}</span>{% endif %}
       <span class="print-meta">Printed: {% now "d-M-Y h:i A" %}</span>
     </div>
