@@ -1938,7 +1938,7 @@ a.doc-link:hover { border-color: var(--primary); background: var(--surface-alt);
 .dark .wp-rule { border-top-color: var(--border); }
 .wp-title { margin: 0 0 var(--gap-2); font-size: var(--fs-lg); font-weight: 700; color: var(--text-strong); }
 .dark .wp-title { color: var(--text-strong); }
-.wp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-2) var(--gap-3); }
+.wp-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap-2) var(--gap-3); }
 .wp-row + .wp-row { margin-top: var(--gap-2); }
 .wp-f { display: flex; flex-direction: column; flex: 0 0 auto; gap: .25rem; min-width: 0; }
 .wp-f--grow { flex: 1 1 18rem; }
