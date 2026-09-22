@@ -7,6 +7,10 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ## 2026-09-22
 
+### Live
+
+- Commit `0ca6540` (reporting suite) pulled and deployed via cPanel (deploy #23, exit 0): `inventory.0057` migration applied on live (was pending), 6 static files collected, 50 report permissions seeded (`reports.*` pages), app restarted. Smoke-checked logged in: one report per group + PNG export all 200.
+
 ### Local
 
 - Reporting suite, groups H / I / J built in parallel (three agents, own app files only; nav + registry wired afterwards). Pages `reports.accounts`, `reports.hr`, `reports.setup` seeded; nav "Accounts Reports" (8 new + 7 existing), "HR Reports", "Setup Reports"; `apps/core/reports.py` now lists all 71 catalogue entries (`GROUP_SETUP` added).
