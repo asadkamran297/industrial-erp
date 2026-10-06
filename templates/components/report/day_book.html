@@ -1,0 +1,48 @@
+<article class="daybook">
+  <header class="daybook-head">
+    <div class="daybook-logo">{% if org.logo %}<img src="{{ org.logo }}" alt="{{ org.title }}">{% else %}<span>{{ org.title|default:"O"|slice:":1" }}</span>{% endif %}</div>
+    <div class="daybook-title">
+      <p class="daybook-org">{{ org.title }}</p>
+      <p class="daybook-name">DayBook</p>
+    </div>
+  </header>
+  <div class="daybook-meta">
+    <span>Printed At: <u>{{ printed_at|date:"d/m/y h:iA" }}</u></span>
+    <span>From: <u>{{ date_from|date:"d/m/y" }}</u> &nbsp; To: <u>{{ date_to|date:"d/m/y" }}</u></span>
+    <span>Printed by: {{ request.user.get_full_name|default:request.user.username|upper }}</span>
+  </div>
+  <table class="daybook-summary">
+    <tr><th>Cash in Hand (B/F)</th><td class="num">{{ cash_bf|rupees }}</td></tr>
+    <tr><th>Total Debit</th><td class="num">{{ total_debit|rupees }}</td></tr>
+    <tr><th>Total Credit</th><td class="num">{{ total_credit|rupees }}</td></tr>
+    <tr><th>Cash in Hand (C/F)</th><td class="num">{{ cash_cf|rupees }}</td></tr>
+  </table>
+
+  <table class="daybook-table">
+    <thead>
+      <tr><th class="daybook-no">V. No.</th><th>Dr Account</th><th>Cr Account</th><th>Description</th><th class="num">Amount</th></tr>
+    </thead>
+    {% for section in sections %}
+    <tbody>
+      <tr class="daybook-section"><th colspan="5">{{ section.label }}</th></tr>
+      {% for row in section.rows %}
+      <tr>
+        <td class="daybook-no"><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.number }}</a></td>
+        <td>{{ row.debit_account }}</td>
+        <td>{{ row.credit_account }}</td>
+        <td>{{ row.description }}</td>
+        <td class="num">{{ row.amount|rupees }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="daybook-total">
+        <td colspan="5"><span>{% if section.debit %}{{ section.debit|rupees }} Dr{% endif %}</span><span>{% if section.credit %}{{ section.credit|rupees }} Cr{% endif %}</span></td>
+      </tr>
+    </tbody>
+    {% empty %}
+    <tbody><tr><td colspan="5" class="daybook-empty">No vouchers posted in this period.</td></tr></tbody>
+    {% endfor %}
+    <tfoot>
+      <tr class="daybook-grand"><td colspan="5"><span>Total</span><span>{{ total_debit|rupees }} Dr</span><span>{{ total_credit|rupees }} Cr</span></td></tr>
+    </tfoot>
+  </table>
+</article>

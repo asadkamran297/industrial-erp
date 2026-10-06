@@ -215,6 +215,35 @@ FS_CURRENT_ASSETS_PATH: Final = ("ASSETS", "Current Assets")
 FS_CURRENT_LIABILITIES_PATH: Final = ("LIABILITIES", "Current Liabilities")
 FS_CASH_GROUP_TITLES: Final = ("Cash", "Bank")
 
+DAYBOOK_BANK_PAYMENT: Final = "bank_payment"
+DAYBOOK_BANK_RECEIVED: Final = "bank_received"
+DAYBOOK_CASH_PAYMENT: Final = "cash_payment"
+DAYBOOK_CASH_RECEIVED: Final = "cash_received"
+DAYBOOK_WHEAT_PURCHASE: Final = "wheat_purchase"
+DAYBOOK_PURCHASE: Final = "purchase"
+DAYBOOK_CREDIT_SALE: Final = "credit_sale"
+DAYBOOK_FREIGHT: Final = "freight"
+DAYBOOK_WITHHOLDING: Final = "withholding"
+DAYBOOK_BROKERAGE: Final = "brokerage"
+DAYBOOK_SALE_RETURN: Final = "sale_return"
+DAYBOOK_PURCHASE_RETURN: Final = "purchase_return"
+DAYBOOK_JOURNAL: Final = "journal"
+DAYBOOK_SECTIONS: Final = (
+    (DAYBOOK_BANK_PAYMENT, "Bank Payment"),
+    (DAYBOOK_BANK_RECEIVED, "Bank Received"),
+    (DAYBOOK_CASH_PAYMENT, "Cash Payment"),
+    (DAYBOOK_CASH_RECEIVED, "Cash Received"),
+    (DAYBOOK_WHEAT_PURCHASE, "Wheat Purchase"),
+    (DAYBOOK_PURCHASE, "Purchase"),
+    (DAYBOOK_CREDIT_SALE, "Credit Sale"),
+    (DAYBOOK_FREIGHT, "Freight Charges"),
+    (DAYBOOK_WITHHOLDING, "Withholding Tax"),
+    (DAYBOOK_BROKERAGE, "Broker Commission"),
+    (DAYBOOK_SALE_RETURN, "Sale Return"),
+    (DAYBOOK_PURCHASE_RETURN, "Purchase Return"),
+    (DAYBOOK_JOURNAL, "Journal"),
+)
+
 FS_PL_INCOME: Final = "income"
 FS_PL_COGS: Final = "cogs"
 FS_PL_EXPENSES: Final = "expenses"

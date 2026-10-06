@@ -1,67 +1,28 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% component "table/board" title="Daybook" table_id="daybook-table" no_search=True no_pagination=True filters_active=False %}
-  {% slot filters %}
-    {% capture as prev_url %}?day={{ previous_day|date:'Y-m-d' }}{% if selected_type %}&amp;voucher_type={{ selected_type }}{% endif %}{% endcapture %}
-    {% include "components/ui/icon_button.html" with href=prev_url icon="back" title="Previous day" bordered=True only %}
-    {% include "components/forms/control.html" with type="date" name="day" value=day|date:'Y-m-d' size="sm" attrs='onchange="this.form.submit()" aria-label="Day"' only %}
-    {% capture as next_url %}?day={{ next_day|date:'Y-m-d' }}{% if selected_type %}&amp;voucher_type={{ selected_type }}{% endif %}{% endcapture %}
-    {% include "components/ui/icon_button.html" with href=next_url icon="chevron-right" title="Next day" bordered=True only %}
-    <label class="filter-chip">
-      Type
-      {% component "forms/control" type="select" name="voucher_type" cell=True attrs='onchange="this.form.submit()"' only %}
-        <option value="">All</option>
-        {% for value, label in voucher_types %}<option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
-      {% endcomponent %}
-    </label>
-    {% if not is_today or selected_type %}{% url 'finance:daybook' as today_url %}{% include "components/ui/button.html" with label="Today" href=today_url size="sm" only %}{% endif %}
-  {% endslot %}
-  {% slot tiles %}
-    {% include "components/table/tile.html" with tone="violet" icon="file" value=entries|length label="Entries" only %}
-    {% include "components/table/tile.html" with tone="green" icon="download" value=totals.cash_in|amount label="Cash In" only %}
-    {% include "components/table/tile.html" with tone="amber" icon="upload" value=totals.cash_out|amount label="Cash Out" only %}
-    {% capture as net_tone %}{% if net_cash < 0 %}rose{% else %}sky{% endif %}{% endcapture %}
-    {% include "components/table/tile.html" with tone=net_tone icon="sum" value=net_cash|amount label="Net Cash" only %}
-  {% endslot %}
-  {% slot bar %}
-    {% if summary %}
-    <div class="flex flex-wrap gap-2 px-3 py-2">
-      {% for row in summary %}<span class="chip">{{ row.kind }} &times;{{ row.count }} &middot; <span class="num">{{ row.amount|amount }}</span></span>{% endfor %}
+<div class="daybook-page">
+  <div class="page-head">
+    <div class="page-head__lead"><h1 class="page-title">Day Book</h1></div>
+    <div class="page-head__actions">
+      {% capture as excel_url %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}&amp;format=xlsx{% endcapture %}
+      {% include "components/ui/button.html" with label="Excel" href=excel_url icon="download" variant="secondary" only %}
+      {% include "components/ui/button.html" with label="Print" icon="print" variant="primary" type="button" attrs='onclick="window.print()"' only %}
     </div>
-    {% endif %}
-  {% endslot %}
-  <thead><tr><th>Voucher</th><th>Type</th><th>Account</th><th>Narration</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
-  <tbody>
-    {% for entry in entries %}
-    <tr class="note-row">
-      <td><a href="{% url 'finance:account_voucher_detail' entry.voucher.pk %}" class="doc-num">{{ entry.voucher.voucher_no }}</a></td>
-      <td>{{ entry.kind }}</td>
-      <td class="strong">{{ entry.party }}</td>
-      <td class="muted truncate">{{ entry.voucher.remarks|default:"—" }}</td>
-      <td class="num strong">{{ entry.debit|amount }}</td>
-      <td class="num strong">{{ entry.credit|amount }}</td>
-    </tr>
-    {% for line in entry.lines %}
-    <tr>
-      <td></td>
-      <td class="muted">{{ line.account_no }}</td>
-      <td{% if not line.known %} class="fig-bad"{% endif %}>{{ line.title }}</td>
-      <td class="muted truncate">{{ line.remarks|default:"" }}</td>
-      <td class="num">{% if line.debit %}{{ line.debit|amount }}{% endif %}</td>
-      <td class="num">{% if line.credit %}{{ line.credit|amount }}{% endif %}</td>
-    </tr>
-    {% endfor %}
-    {% if not entry.balanced %}<tr><td colspan="6" class="text-alert">Debit and credit differ.</td></tr>{% endif %}
-    {% empty %}
-    {% include "components/table/empty_row.html" with span=6 label="No transactions this day." only %}
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr class="board-foot">
-      <td colspan="4">Day total</td>
-      <td class="num{% if not balanced %} fig-bad{% endif %}">{{ totals.debit|amount }}</td>
-      <td class="num{% if not balanced %} fig-bad{% endif %}">{{ totals.credit|amount }}</td>
-    </tr>
-  </tfoot>
-{% endcomponent %}
+  </div>
+  <section class="board-card">
+    <div class="filter-bar">
+      <form method="get" class="filter-bar__form">
+        {% capture as prev_url %}?date_from={{ previous_from|date:'Y-m-d' }}&amp;date_to={{ previous_to|date:'Y-m-d' }}{% endcapture %}
+        {% include "components/ui/icon_button.html" with href=prev_url icon="back" title="Previous" bordered=True only %}
+        <label class="filter-chip">From {% include "components/forms/control.html" with type="date" name="date_from" value=date_from|date:'Y-m-d' cell=True attrs='onchange="this.form.submit()" aria-label="From"' only %}</label>
+        <label class="filter-chip">To {% include "components/forms/control.html" with type="date" name="date_to" value=date_to|date:'Y-m-d' cell=True attrs='onchange="this.form.submit()" aria-label="To"' only %}</label>
+        {% capture as next_url %}?date_from={{ next_from|date:'Y-m-d' }}&amp;date_to={{ next_to|date:'Y-m-d' }}{% endcapture %}
+        {% include "components/ui/icon_button.html" with href=next_url icon="chevron-right" title="Next" bordered=True only %}
+        {% url 'finance:daybook' as today_url %}{% include "components/ui/button.html" with label="Today" href=today_url size="sm" variant="ghost" only %}
+      </form>
+    </div>
+
+    {% include "components/report/day_book.html" %}
+  </section>
+</div>
 {% endblock %}

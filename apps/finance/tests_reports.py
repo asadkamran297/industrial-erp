@@ -106,6 +106,36 @@ class AccountsSelectorTests(AccountsReportFixture):
         payable = open_documents("payable", self.today)
         self.assertEqual(payable["totals"]["open"], payables_aging(self.today)["totals"]["balance"])
 
+    def test_day_book_carries_cash_forward(self):
+        book = sel.day_book(self.today, self.today)
+        self.assertEqual(book["cash_bf"], Decimal("5000.00"))
+        self.assertEqual(book["cash_cf"], sel.cash_book(self.today, self.today)["totals"]["closing"])
+        self.assertEqual(book["cash_cf"], book["cash_bf"] + book["total_debit"] - book["total_credit"])
+        sections = {section["key"]: section for section in book["sections"]}
+        cash = sel.cash_book(self.today, self.today)["rows"][0]
+        self.assertEqual(sections["cash_received"]["debit"], cash["receipts"])
+        self.assertEqual(sections["cash_received"]["credit"], Decimal("0"))
+        self.assertEqual(sum((section["credit"] - section["debit"] for section in book["sections"] if section["key"] != "cash_received"), Decimal("0")), cash["payments"])
+        self.assertEqual(sections["bank_payment"]["debit"], sections["bank_payment"]["credit"])
+        self.assertIn((self.cash.title, self.customer_account.title), [(row["debit_account"], row["credit_account"]) for row in sections["cash_received"]["rows"]])
+        self.assertEqual(sel.day_book(self.today + timedelta(days=1), self.today + timedelta(days=1))["cash_bf"], book["cash_cf"])
+
+    def test_pairing_splits_one_voucher_into_legs(self):
+        from types import SimpleNamespace as Line
+
+        lines = [
+            Line(account_no="INV", debit_amount=Decimal("1000"), credit_amount=Decimal("0"), remarks="", line_number=0),
+            Line(account_no="SUP", debit_amount=Decimal("50"), credit_amount=Decimal("0"), remarks="", line_number=0),
+            Line(account_no="CASH", debit_amount=Decimal("0"), credit_amount=Decimal("50"), remarks="", line_number=0),
+            Line(account_no="WHT", debit_amount=Decimal("0"), credit_amount=Decimal("10"), remarks="", line_number=0),
+            Line(account_no="SUP", debit_amount=Decimal("0"), credit_amount=Decimal("990"), remarks="", line_number=0),
+        ]
+        pairs = [(d.account_no, c.account_no, amount) for d, c, amount in sel._pair_lines(lines)]
+        self.assertEqual(pairs, [("SUP", "CASH", Decimal("50")), ("INV", "WHT", Decimal("10")), ("INV", "SUP", Decimal("990"))])
+        shown = sel._gross_up_withholding(lines, {"WHT"}, {"CASH"})
+        pairs = [(d.account_no, c.account_no, amount) for d, c, amount in sel._pair_lines(shown)]
+        self.assertCountEqual(pairs, [("SUP", "CASH", Decimal("50")), ("SUP", "WHT", Decimal("10")), ("INV", "SUP", Decimal("1000"))])
+
     def test_opening_balances_and_audit_trail(self):
         manual = sel.opening_balances(self.fiscal.start_date)
         cash = next(r for r in manual["rows"] if r["code"] == self.cash.code)
@@ -136,6 +166,12 @@ class AccountsScreenTests(AccountsReportFixture):
                 self.assertEqual(response.status_code, 200)
                 for fmt in ("csv", "xlsx", "pdf", "png"):
                     self.assertEqual(self.client.get(reverse(f"finance:{name}_export"), {"format": fmt, **params}).status_code, 200, f"{name} {fmt}")
+
+    def test_day_book_renders_and_exports(self):
+        response = self.client.get(reverse("finance:daybook"), {"date_from": self.today.isoformat(), "date_to": self.today.isoformat()})
+        self.assertContains(response, "Cash in Hand (B/F)")
+        self.assertContains(response, "Cash Received")
+        self.assertEqual(self.client.get(reverse("finance:daybook"), {"format": "xlsx"}).status_code, 200)
 
     def test_expense_columns_follow_the_period(self):
         response = self.client.get(reverse("finance:report_expense_analysis"), {"preset": "month"})

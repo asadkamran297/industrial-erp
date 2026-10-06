@@ -24,7 +24,8 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, cash_bank_account_codes, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from .report_selectors import day_book
+from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, cash_bank_account_codes, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class VoucherNavMixin:
@@ -911,24 +912,85 @@ class AccountLedgerExportView(AccountLedgerView):
         return response
 
 
-class DaybookView(PagePermissionRequiredMixin, TemplateView):
-    """The day's complete record: every voucher posted, in entry order."""
+class DaybookView(PagePermissionRequiredMixin, PrintContextMixin, TemplateView):
+    """The mill's day book: Dr / Cr pairs by section, cash brought and carried forward."""
 
     page = "reports.daybook"
     template_name = "finance/daybook.html"
 
+    def dates(self):
+        day = parse_date((self.request.GET.get("day") or "").strip())
+        start = parse_date((self.request.GET.get("date_from") or "").strip()) or day or timezone.localdate()
+        end = parse_date((self.request.GET.get("date_to") or "").strip()) or day or start
+        return (end, start) if end < start else (start, end)
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("format") == "xlsx":
+            return self.xlsx()
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        day = parse_date((self.request.GET.get("day") or "").strip()) or timezone.localdate()
-        voucher_type = (self.request.GET.get("voucher_type") or "").strip()
-
-        context.update(daybook(day, voucher_type=voucher_type))
-        context["selected_type"] = voucher_type
-        context["voucher_types"] = FIN_VOUCHER_TYPE_CHOICES
-        context["previous_day"] = day - timedelta(days=1)
-        context["next_day"] = day + timedelta(days=1)
-        context["is_today"] = day == timezone.localdate()
+        start, end = self.dates()
+        span = (end - start).days + 1
+        context.update(day_book(start, end))
+        context.update({
+            "date_from": start,
+            "date_to": end,
+            "previous_from": start - timedelta(days=span),
+            "previous_to": end - timedelta(days=span),
+            "next_from": start + timedelta(days=span),
+            "next_to": end + timedelta(days=span),
+            "printed_at": timezone.localtime(),
+        })
         return context
+
+    def xlsx(self):
+        from io import BytesIO
+
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+
+        start, end = self.dates()
+        data = day_book(start, end)
+        org = self._build_print_context(self.request)["org"]
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "DayBook"
+        sheet.append([str(org) if org else ""])
+        sheet.append(["DayBook"])
+        sheet.append([f"From {start:%d/%m/%y} To {end:%d/%m/%y}"])
+        sheet.append([])
+        for label, value in (("Cash in Hand (B/F)", data["cash_bf"]), ("Total Debit", data["total_debit"]), ("Total Credit", data["total_credit"]), ("Cash in Hand (C/F)", data["cash_cf"])):
+            sheet.append(["", "", "", label, float(value)])
+            sheet.cell(sheet.max_row, 5).number_format = "#,##0"
+        sheet.append([])
+        sheet.append(["V. No.", "Dr Account", "Cr Account", "Description", "Amount"])
+        for cell in sheet[sheet.max_row]:
+            cell.font = Font(bold=True)
+        money_format = "#,##0"
+        for section in data["sections"]:
+            sheet.append([section["label"]])
+            sheet[sheet.max_row][0].font = Font(bold=True)
+            for row in section["rows"]:
+                sheet.append([row["number"], row["debit_account"], row["credit_account"], row["description"], float(row["amount"])])
+                sheet.cell(sheet.max_row, 5).number_format = money_format
+            totals = [f'{section["debit"]:,.0f} Dr' if section["debit"] else "", f'{section["credit"]:,.0f} Cr' if section["credit"] else ""]
+            sheet.append(["", "", "", *totals])
+            for cell in sheet[sheet.max_row]:
+                cell.font = Font(bold=True)
+        sheet.append(["", "", "Total", f'{data["total_debit"]:,.0f} Dr', f'{data["total_credit"]:,.0f} Cr'])
+        for cell in sheet[sheet.max_row]:
+            cell.font = Font(bold=True)
+        for letter, width in zip("ABCDE", (14, 34, 34, 52, 18)):
+            sheet.column_dimensions[letter].width = width
+        sheet.append([])
+        sheet.append([f"Printed at {timezone.localtime():%d/%m/%y %I:%M%p} by {self.request.user}"])
+        buffer = BytesIO()
+        book.save(buffer)
+        response = HttpResponse(buffer.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = f'attachment; filename="daybook-{start:%Y-%m-%d}-{end:%Y-%m-%d}.xlsx"'
+        return response
 
 
 class InventoryValuationView(PagePermissionRequiredMixin, TemplateView):

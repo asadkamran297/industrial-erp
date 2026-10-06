@@ -1,5 +1,5 @@
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django import forms, template
 from django.template import Node, TemplateSyntaxError
@@ -24,6 +24,16 @@ def qty(value):
 def amount(value):
     """Render an amount with thousands separators and fixed decimal precision."""
     return format_amount(value)
+
+
+@register.filter(name="rupees")
+def rupees(value):
+    """Whole rupees with thousands separators, for books printed without paisa."""
+    try:
+        number = Decimal(str(value or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+    return f"{number.quantize(Decimal('1'), rounding=ROUND_HALF_UP):,}"
 
 
 @register.filter(name="short_amount")

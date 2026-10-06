@@ -8,6 +8,28 @@ from django.db.models import Count, DecimalField, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncMonth
 
 from apps.core.constants import (
+    DAYBOOK_BANK_PAYMENT,
+    DAYBOOK_BANK_RECEIVED,
+    DAYBOOK_BROKERAGE,
+    DAYBOOK_CASH_PAYMENT,
+    DAYBOOK_CASH_RECEIVED,
+    DAYBOOK_CREDIT_SALE,
+    DAYBOOK_FREIGHT,
+    DAYBOOK_JOURNAL,
+    DAYBOOK_PURCHASE,
+    DAYBOOK_PURCHASE_RETURN,
+    DAYBOOK_SALE_RETURN,
+    DAYBOOK_SECTIONS,
+    DAYBOOK_WHEAT_PURCHASE,
+    DAYBOOK_WITHHOLDING,
+    FS_CASH_GROUP_TITLES,
+    FS_CURRENT_ASSETS_PATH,
+    GL_BROKERAGE_PATH,
+    GL_BROKERS_GROUP_PATH,
+    GL_FREIGHT_PATH,
+    GL_WITHHOLDING_PAYABLE_PATH,
+    VOUCHER_TYPE_PURCHASE,
+    VOUCHER_TYPE_SALES,
     ACCOUNT_TYPE_EXPENSE,
     GL_PAYABLES_PARENT,
     GL_PAYABLES_TITLES,
@@ -20,7 +42,7 @@ from apps.core.constants import (
 from apps.core.reporting import ZERO, money
 
 from .models import AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalYear
-from .services import DEBIT_NATURE_TYPES
+from .services import DEBIT_NATURE_TYPES, voucher_kind
 
 MONEY = DecimalField(max_digits=18, decimal_places=2)
 TYPE_LABELS = dict(FIN_VOUCHER_TYPE_CHOICES)
@@ -491,4 +513,185 @@ def _audit_row(when, kind, number, pk, url, party, amount, reason, user, status,
     return {
         "date": stamp.date() if stamp else when, "time": stamp, "kind_code": kind, "kind": AUDIT_KIND_LABELS[kind], "number": number, "pk": pk, "url": url,
         "voucher_pk": pk if url == "finance:account_voucher_detail" else None, "party": party, "amount": money(amount), "reason": reason, "user": user, "status": status, "status_label": status_label,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Day Book (mill format): Dr / Cr pairs by section, cash counted on one side
+# ---------------------------------------------------------------------------
+
+def _pair_lines(lines):
+    """Split a voucher into ``(debit line, credit line, amount)`` pairs: equal amounts first, then in order."""
+    debits = [[line, line.debit_amount or ZERO] for line in lines if (line.debit_amount or ZERO) > 0]
+    credits = [[line, line.credit_amount or ZERO] for line in lines if (line.credit_amount or ZERO) > 0]
+    pairs = []
+    for debit in debits:
+        for credit in credits:
+            if debit[1] and debit[1] == credit[1] and debit[0].account_no != credit[0].account_no:
+                pairs.append((debit[0], credit[0], debit[1]))
+                debit[1] = credit[1] = ZERO
+                break
+    debits = [entry for entry in debits if entry[1]]
+    credits = [entry for entry in credits if entry[1]]
+    while debits and credits:
+        amount = min(debits[0][1], credits[0][1])
+        pairs.append((debits[0][0], credits[0][0], amount))
+        for side in (debits, credits):
+            side[0][1] -= amount
+            if not side[0][1]:
+                side.pop(0)
+    pairs += [(line, None, amount) for line, amount in debits]
+    pairs += [(None, line, amount) for line, amount in credits]
+    return pairs
+
+
+def _gross_up_withholding(lines, withholding, others):
+    """Show tax held back as Supplier Dr / Tax Cr, the way the paper book reads.
+
+    The ledger credits the supplier net of withholding; for display the
+    supplier's credit is grossed up by the tax and an equal supplier debit is
+    added, which leaves every total unchanged.
+    """
+    from types import SimpleNamespace
+
+    tax = sum(((line.credit_amount or ZERO) for line in lines if line.account_no in withholding), ZERO)
+    payable = [line for line in lines if (line.credit_amount or ZERO) > 0 and line.account_no not in withholding | others]
+    if not tax or not payable:
+        return lines
+    supplier = max(payable, key=lambda line: line.credit_amount)
+    shown = []
+    for line in lines:
+        if line is supplier:
+            line = SimpleNamespace(account_no=line.account_no, debit_amount=ZERO, credit_amount=line.credit_amount + tax, remarks=line.remarks, line_number=line.line_number)
+        shown.append(line)
+    tax_line = next(line for line in lines if line.account_no in withholding)
+    shown.append(SimpleNamespace(account_no=supplier.account_no, debit_amount=tax, credit_amount=ZERO, remarks=tax_line.remarks, line_number=tax_line.line_number))
+    return shown
+
+
+def _qty(value):
+    value = Decimal(value or 0)
+    return f"{value:,.0f}" if value == value.to_integral() else f"{value.normalize():,}"
+
+
+def _document_summaries(vouchers):
+    """``{source_ref: (document number, item summary, is_wheat)}`` for sale and purchase vouchers."""
+    from apps.inventory.models import POSMaster, PurchaseInvoice
+
+    sale_ids, purchase_ids = [], []
+    for voucher in vouchers:
+        prefix, _, pk = voucher.source_ref.partition(":")
+        if pk.isdigit() and prefix == "inv_pos_masters":
+            sale_ids.append(int(pk))
+        elif pk.isdigit() and prefix == "inv_purchase_invoices":
+            purchase_ids.append(int(pk))
+    summaries = {}
+    for sale in POSMaster.objects.filter(pk__in=sale_ids).prefetch_related("items"):
+        items = ", ".join(f"{_qty(item.quantity)} {item.item_name} @ {item.price:,.2f}" for item in sale.items.all())
+        summaries[f"inv_pos_masters:{sale.pk}"] = (sale.sale_num, items, False)
+    for invoice in PurchaseInvoice.objects.filter(pk__in=purchase_ids).prefetch_related("items"):
+        parts, wheat = [], False
+        for line in invoice.items.all():
+            if line.rate_per_mund is not None and line.credit_weight is not None:
+                wheat = True
+                parts.append(f"{line.credit_weight:,.0f} kg @ {line.rate_per_mund:,.0f}/mund")
+            else:
+                parts.append(f"{_qty(line.quantity)} {line.descr} @ {line.rate:,.2f}")
+        if invoice.vehicle_no:
+            parts.append(f"Veh# {invoice.vehicle_no}")
+        summaries[f"inv_purchase_invoices:{invoice.pk}"] = (invoice.invoice_num, ", ".join(parts), wheat)
+    return summaries
+
+
+def day_book(start, end):
+    """The mill's day book: every posted voucher split into Dr / Cr pairs, grouped by section.
+
+    A pair that moves Cash in Hand counts only on the cash side, so
+    ``Cash B/F + Total Debit - Total Credit = Cash C/F``, as on the paper book.
+    """
+    from .statements import balances_as_of, load_chart
+
+    chart = load_chart()
+
+    def codes(path, *, descendants=False):
+        node = chart.find(path)
+        if node is None:
+            return set()
+        return chart.descendant_codes(node) if descendants else chart.leaf_codes(node)
+
+    current = chart.find(FS_CURRENT_ASSETS_PATH)
+    cash, bank = set(), set()
+    for node in current.children if current else []:
+        if node.title == FS_CASH_GROUP_TITLES[0]:
+            cash |= chart.leaf_codes(node)
+        elif node.title == FS_CASH_GROUP_TITLES[1]:
+            bank |= chart.leaf_codes(node)
+    freight = codes(GL_FREIGHT_PATH)
+    withholding = codes(GL_WITHHOLDING_PAYABLE_PATH)
+    brokerage = codes(GL_BROKERAGE_PATH) | codes(GL_BROKERS_GROUP_PATH, descendants=True)
+
+    vouchers = list(
+        AccountVoucher.objects.filter(posted=YES, voucher_date__range=(start, end))
+        .prefetch_related("lines").order_by("voucher_date", "voucher_no", "id")
+    )
+    documents = _document_summaries(vouchers)
+
+    def section_of(voucher, kind, debit_code, credit_code):
+        touches = {debit_code, credit_code}
+        if voucher.voucher_type == VOUCHER_TYPE_PURCHASE:
+            if touches & withholding:
+                return DAYBOOK_WITHHOLDING
+            if touches & brokerage:
+                return DAYBOOK_BROKERAGE
+            if touches & (cash | bank | freight):
+                return DAYBOOK_FREIGHT
+            return DAYBOOK_WHEAT_PURCHASE if documents.get(voucher.source_ref, ("", "", False))[2] else DAYBOOK_PURCHASE
+        if debit_code in cash:
+            return DAYBOOK_CASH_RECEIVED
+        if credit_code in cash:
+            return DAYBOOK_CASH_PAYMENT
+        if debit_code in bank:
+            return DAYBOOK_BANK_RECEIVED
+        if credit_code in bank:
+            return DAYBOOK_BANK_PAYMENT
+        if voucher.voucher_type == VOUCHER_TYPE_SALES:
+            return DAYBOOK_CREDIT_SALE
+        return {"Credit Note": DAYBOOK_SALE_RETURN, "Debit Note": DAYBOOK_PURCHASE_RETURN}.get(kind, DAYBOOK_JOURNAL)
+
+    sections = {key: {"key": key, "label": label, "rows": [], "debit": ZERO, "credit": ZERO} for key, label in DAYBOOK_SECTIONS}
+    summary_sections = (DAYBOOK_WHEAT_PURCHASE, DAYBOOK_PURCHASE, DAYBOOK_CREDIT_SALE, DAYBOOK_CASH_RECEIVED)
+    for voucher in vouchers:
+        kind = voucher_kind(voucher)
+        number, summary, _wheat = documents.get(voucher.source_ref, (voucher.voucher_no, "", False))
+        lines = sorted(voucher.lines.all(), key=lambda line: line.line_number)
+        if voucher.voucher_type == VOUCHER_TYPE_PURCHASE:
+            lines = _gross_up_withholding(lines, withholding, brokerage | cash | bank)
+        for debit, credit, amount in _pair_lines(lines):
+            debit_code = debit.account_no if debit else ""
+            credit_code = credit.account_no if credit else ""
+            key = section_of(voucher, kind, debit_code, credit_code)
+            remark = (debit.remarks if debit and debit_code not in cash else "") or (credit.remarks if credit else "") or (debit.remarks if debit else "")
+            section = sections[key]
+            section["rows"].append({
+                "voucher": voucher, "number": number or voucher.voucher_no, "date": voucher.voucher_date,
+                "debit_account": chart.title(debit_code) if debit else "", "credit_account": chart.title(credit_code) if credit else "",
+                "description": summary if summary and key in summary_sections else (remark or voucher.remarks), "amount": money(amount),
+            })
+            if credit_code not in cash or debit_code in cash:
+                section["debit"] += amount
+            if debit_code not in cash or credit_code in cash:
+                section["credit"] += amount
+
+    shown = [section for section in sections.values() if section["rows"]]
+    total_debit = sum((section["debit"] for section in shown), ZERO)
+    total_credit = sum((section["credit"] for section in shown), ZERO)
+    brought = balances_as_of({"bf": start - timedelta(days=1)}, chart=chart, codes=cash).values()
+    cash_bf = money(sum((values["bf"] for values in brought), ZERO))
+    return {
+        "sections": shown,
+        "cash_bf": cash_bf,
+        "total_debit": money(total_debit),
+        "total_credit": money(total_credit),
+        "cash_cf": money(cash_bf + total_debit - total_credit),
+        "vouchers": len(vouchers),
     }
