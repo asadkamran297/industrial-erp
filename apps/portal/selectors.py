@@ -352,20 +352,29 @@ def _bucket(age_days):
     return "b3"
 
 
+def _allocate(balance, documents):
+    """``(document, open amount)`` newest first until ``balance`` is used up, then ``(None, unmatched rest)``."""
+    remaining = balance
+    for document in documents:
+        if remaining <= 0:
+            return
+        take = min(remaining, document[1])
+        remaining -= take
+        yield document, take
+    if remaining > 0:
+        yield None, remaining
+
+
 def _age_documents(balance, documents, as_of):
     """Spread an outstanding balance over documents newest first (older ones are taken as settled)."""
     buckets = {key: ZERO for key, *_ in AGING_BUCKETS}
-    remaining = balance
     oldest = None
-    for doc_date, amount in documents:
-        if remaining <= 0:
-            break
-        take = min(remaining, amount)
-        buckets[_bucket((as_of - doc_date).days)] += take
-        remaining -= take
-        oldest = doc_date
-    if remaining > 0:
-        buckets["b3"] += remaining
+    for document, take in _allocate(balance, documents):
+        if document is None:
+            buckets["b3"] += take
+            continue
+        buckets[_bucket((as_of - document[0]).days)] += take
+        oldest = document[0]
     return {key: money(value) for key, value in buckets.items()}, oldest
 
 
@@ -459,4 +468,53 @@ def payables_aging(as_of, supplier_id=None, kind=""):
             "invoices": len(documents.get(supplier.pk, [])),
         })
     totals = {key: sum((row[key] for row in rows), ZERO) for key in ("balance", "b0", "b1", "b2", "b3")}
+    return {"rows": rows, "totals": totals}
+
+
+def open_documents(side, as_of, party_id=None):
+    """Aging detail: each customer invoice (``side="receivable"``) or supplier bill still open on ``as_of``.
+
+    Open amounts come from the same newest-first allocation as the aging
+    summary, so the two always agree; a balance older than any document shows
+    as one unmatched line.
+    """
+    receivable = side == "receivable"
+    model = Customer if receivable else Supplier
+    name_attr = "customer_name" if receivable else "name"
+    parties = model.objects.filter(status=STATUS_ACTIVE)
+    if party_id:
+        parties = parties.filter(pk=party_id)
+    parties = list(parties)
+    balances = _party_balances_as_of(parties, name_attr, as_of)
+    documents = defaultdict(list)
+    if receivable:
+        source = (
+            POSMaster.objects.filter(posted=YES, sale_date__lte=as_of, customer_id__in=[p.pk for p in parties])
+            .order_by("-sale_date", "-id").values_list("customer_id", "sale_date", "net_amount", "sale_num", "pk")
+        )
+    else:
+        source = (
+            PurchaseInvoice.objects.filter(status=STATUS_POSTED, invoice_date__lte=as_of, supplier_id__in=[p.pk for p in parties])
+            .order_by("-invoice_date", "-id").values_list("supplier_id", "invoice_date", "total_amount", "invoice_num", "pk")
+        )
+    for party, day, amount, number, pk in source:
+        documents[party].append((day, amount, number, pk))
+    labels = {key: label for key, label, *_ in AGING_BUCKETS}
+    rows = []
+    for party in parties:
+        balance = balances.get(party.pk, ZERO)
+        if balance <= 0:
+            continue
+        for document, open_amount in _allocate(balance, documents.get(party.pk, [])):
+            day, amount, number, pk = document or (None, None, "Unmatched balance", None)
+            age = (as_of - day).days if day else None
+            rows.append({
+                "party_id": party.pk, "party": getattr(party, name_attr), "number": number, "pk": pk, "date": day,
+                "amount": money(amount) if amount is not None else None, "open": money(open_amount),
+                "age": age, "bucket": labels[_bucket(age) if age is not None else "b3"],
+                "bucket_key": _bucket(age) if age is not None else "b3",
+            })
+    totals = {"open": sum((row["open"] for row in rows), ZERO), "documents": sum(1 for row in rows if row["pk"])}
+    for key, *_ in AGING_BUCKETS:
+        totals[key] = sum((row["open"] for row in rows if row["bucket_key"] == key), ZERO)
     return {"rows": rows, "totals": totals}

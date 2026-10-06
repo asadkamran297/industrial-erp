@@ -1,0 +1,56 @@
+<table class="statement-table statement-table--ledger">
+  <thead>
+    <tr>
+      <th class="statement-account">Date</th><th>Type</th><th>No.</th><th>Party</th><th>Memo</th><th>Split</th>
+      {% if amount_mode %}<th class="num">Amount</th>{% else %}<th class="num">Debit</th><th class="num">Credit</th>{% endif %}
+      <th class="num">Balance</th>
+    </tr>
+  </thead>
+  {% for account in accounts %}
+  <tbody x-data="{ open: true }">
+    <tr class="st-row st-row--group">
+      <th scope="row" class="statement-account" colspan="{% if amount_mode %}8{% else %}9{% endif %}">
+        <button type="button" class="st-caret" :class="{ 'is-closed': !open }" @click="open = !open" aria-label="Collapse {{ account.title }}">{% icon "chevron-down" size="sm" %}</button>
+        <a class="st-drill" href="{{ account.url }}">{{ account.code }} · {{ account.title }}</a>
+        {% if account.inactive %}<span class="pill pill--closed">Inactive</span>{% endif %}
+      </th>
+    </tr>
+    {% if with_opening %}
+    <tr class="st-row st-row--account" x-show="open">
+      <td class="statement-account"></td><td colspan="5" class="muted">Opening balance</td>
+      {% if not amount_mode %}<td></td>{% endif %}<td></td>
+      <td class="num{% if account.opening < 0 %} is-neg{% endif %}">{{ account.opening|amount }}</td>
+    </tr>
+    {% endif %}
+    {% for row in account.rows %}
+    <tr class="st-row st-row--account" x-show="open">
+      <td class="statement-account date">{{ row.date|dmy }}</td>
+      <td>{{ row.type }}</td>
+      <td><a class="doc-num" href="{% url 'finance:account_voucher_detail' row.voucher.pk %}">{{ row.number }}</a></td>
+      <td class="truncate">{{ row.party }}</td>
+      <td class="muted truncate" title="{{ row.memo }}">{{ row.memo }}</td>
+      <td class="truncate">{{ row.split }}</td>
+      {% if amount_mode %}
+      <td class="num{% if row.amount < 0 %} is-neg{% endif %}">{{ row.amount|amount }}</td>
+      {% else %}
+      <td class="num">{% if row.debit %}{{ row.debit|amount }}{% endif %}</td>
+      <td class="num">{% if row.credit %}{{ row.credit|amount }}{% endif %}</td>
+      {% endif %}
+      <td class="num{% if row.balance < 0 %} is-neg{% endif %}">{{ row.balance|amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="st-row st-row--total">
+      <th scope="row" class="statement-account" colspan="6">Total {{ account.title }}</th>
+      {% if amount_mode %}
+      <td class="num{% if account.movement < 0 %} is-neg{% endif %}">{{ account.movement|amount }}</td>
+      {% else %}
+      <td class="num">{{ account.debit|amount }}</td>
+      <td class="num">{{ account.credit|amount }}</td>
+      {% endif %}
+      <td class="num{% if account.closing < 0 %} is-neg{% endif %}">{{ account.closing|amount }}</td>
+    </tr>
+  </tbody>
+  {% empty %}
+  <tbody><tr><td colspan="9" class="statement-empty">No entries in this period.</td></tr></tbody>
+  {% endfor %}
+</table>

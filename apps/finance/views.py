@@ -24,7 +24,7 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
-from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, balance_sheet, cash_bank_account_codes, cash_flow_statement, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, ledger_integrity, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, cash_bank_account_codes, close_period_to_retained_earnings, daybook, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class VoucherNavMixin:
@@ -852,73 +852,6 @@ class OpeningBalanceView(PagePermissionRequiredMixin, TemplateView):
         return redirect("finance:opening_balances")
 
 
-class TrialBalanceView(PagePermissionRequiredMixin, TemplateView):
-    page = "finance.trial_balance"
-    template_name = "finance/trial_balance.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        balances = account_balances()
-        zero = Decimal("0.00")
-        rows, totals = [], {"opening_dr": zero, "opening_cr": zero, "movement_dr": zero, "movement_cr": zero, "closing_dr": zero, "closing_cr": zero}
-        accounts = ChartOfAccount.objects.filter(status=STATUS_ACTIVE, children__isnull=True).order_by("code")
-        for account in accounts:
-            own = balances.get(account.code) or {"opening": zero, "movement": zero, "closing": zero}
-            opening_dr, opening_cr = signed_to_dr_cr(own["opening"], account.account_type)
-            movement_dr, movement_cr = signed_to_dr_cr(own["movement"], account.account_type)
-            closing_dr, closing_cr = signed_to_dr_cr(own["closing"], account.account_type)
-            if not any((opening_dr, opening_cr, movement_dr, movement_cr, closing_dr, closing_cr)):
-                continue
-            rows.append({
-                "code": account.code, "title": account.title, "account_type": account.account_type,
-                "opening_dr": opening_dr, "opening_cr": opening_cr,
-                "movement_dr": movement_dr, "movement_cr": movement_cr,
-                "closing_dr": closing_dr, "closing_cr": closing_cr,
-            })
-            for key in totals:
-                totals[key] += rows[-1][key]
-        rows, sort_context = report_sort(
-            self.request, rows,
-            {"code": "code", "title": "title", "opening_dr": "opening_dr", "opening_cr": "opening_cr", "movement_dr": "movement_dr", "movement_cr": "movement_cr", "closing_dr": "closing_dr", "closing_cr": "closing_cr"},
-            default="code",
-        )
-        context.update(sort_context)
-        context["rows"] = rows
-        context["totals"] = totals
-        context["integrity"] = ledger_integrity()
-        return context
-
-
-class IncomeStatementView(PagePermissionRequiredMixin, TemplateView):
-    page = "finance.income_statement"
-    template_name = "finance/income_statement.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(income_statement())
-        return context
-
-
-class BalanceSheetView(PagePermissionRequiredMixin, TemplateView):
-    page = "finance.balance_sheet"
-    template_name = "finance/balance_sheet.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(balance_sheet())
-        return context
-
-
-class CashFlowView(PagePermissionRequiredMixin, TemplateView):
-    page = "finance.cash_flow"
-    template_name = "finance/cash_flow.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(cash_flow_statement())
-        return context
-
-
 class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
     """One account's statement: opening balance, its entries, running balance."""
 
@@ -941,7 +874,8 @@ class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
         context["selected_account"] = code
         context["date_from"] = date_from.isoformat() if date_from else ""
         context["date_to"] = date_to.isoformat() if date_to else ""
-        context["ledger"] = account_ledger(code, date_from=date_from, date_to=date_to) if code else None
+        context["posted_only"] = self.request.GET.get("posted") == "1"
+        context["ledger"] = account_ledger(code, date_from=date_from, date_to=date_to, posted_only=context["posted_only"]) if code else None
         return context
 
 

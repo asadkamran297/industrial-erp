@@ -1,0 +1,17 @@
+<div class="note note--bad">
+  <span class="note-icon">{% icon "alert" %}</span>
+  <div>
+    <p><b>Not everything is accounted for.</b></p>
+    {% if integrity.orphans %}
+    <p>{{ integrity.orphans|length }} code{{ integrity.orphans|length|pluralize }} missing from the Chart of Accounts:</p>
+    <ul class="list-disc pl-5">{% for row in integrity.orphans %}<li><b class="num">{{ row.account_no }}</b> &middot; Dr <span class="num">{{ row.debit|amount }}</span>, Cr <span class="num">{{ row.credit|amount }}</span></li>{% endfor %}</ul>
+    {% endif %}
+    {% if integrity.unbalanced %}
+    <p>{{ integrity.unbalanced|length }} unbalanced voucher{{ integrity.unbalanced|length|pluralize }}:</p>
+    <ul class="list-disc pl-5">{% for row in integrity.unbalanced %}<li><a href="{% url 'finance:account_voucher_detail' row.voucher.pk %}" class="doc-num">{{ row.voucher.voucher_no }}</a> &middot; Dr <span class="num">{{ row.debit|amount }}</span>, Cr <span class="num">{{ row.credit|amount }}</span>, out by <b class="num">{{ row.difference|amount }}</b></li>{% endfor %}</ul>
+    {% endif %}
+    {% if integrity.opening_difference %}
+    <p>Opening balances out by <b class="num">{{ integrity.opening_difference|amount }}</b> (Dr {{ integrity.opening_debit|amount }} / Cr {{ integrity.opening_credit|amount }}). <a href="{% url 'finance:opening_balances' %}" class="doc-num">Opening Balances</a></p>
+    {% endif %}
+  </div>
+</div>

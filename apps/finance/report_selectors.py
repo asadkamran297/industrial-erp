@@ -249,7 +249,7 @@ def party_ledger(start, end, code):
 # 54. Voucher Register by Type
 # ---------------------------------------------------------------------------
 
-def voucher_register(start, end, voucher_type=None, status=None, account=None, posted=None):
+def voucher_register(start, end, voucher_type=None, status=None, account=None, posted=None, party=None):
     qs = AccountVoucher.objects.filter(voucher_date__range=(start, end)).select_related("created_by")
     if voucher_type:
         qs = qs.filter(voucher_type=voucher_type)
@@ -259,6 +259,8 @@ def voucher_register(start, end, voucher_type=None, status=None, account=None, p
         qs = qs.filter(posted=posted)
     if account:
         qs = qs.filter(Q(account_no=account) | Q(party_account_no=account) | Q(lines__account_no=account)).distinct()
+    if party:
+        qs = qs.filter(Q(party_account_no=party) | Q(lines__account_no=party)).distinct()
     titles = _titles()
     rows = []
     for v in qs.order_by("-voucher_date", "-id"):

@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -511,3 +512,24 @@ class AccountVoucherLine(BaseModel):
     def soft_delete(self, user=None) -> None:
         super().soft_delete(user=user)
         self.voucher.recalculate_totals()
+
+
+class SavedReport(BaseModel):
+    """A statement's Customise settings saved under a name (QuickBooks "memorized report")."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="saved_reports", on_delete=models.CASCADE, db_column="user_id")
+    report_key = models.CharField(max_length=80)
+    name = models.CharField(max_length=120)
+    querystring = models.TextField(blank=True)
+    shared = models.CharField(max_length=1, choices=YES_NO_CHOICES, default=NO)
+
+    class Meta:
+        db_table = "fin_saved_reports"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["user", "report_key"]),
+            models.Index(fields=["report_key", "shared"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name

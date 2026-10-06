@@ -3,14 +3,17 @@
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from apps.core.constants import FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES
+from apps.core.constants import FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, STATUS_ACTIVE, YES_NO_CHOICES
 from apps.core.formatting import format_amount
 from apps.core.reporting import PRESET_FISCAL, ReportColumnsView, ReportExportView, ReportView, preset_bounds, resolve_as_of
 from apps.core.table_columns import ColumnSet, col
+from apps.inventory.models import Customer, Supplier
 from apps.inventory.report_views import _tile
 from apps.inventory.report_views_purchase import _views
+from apps.portal.selectors import AGING_BUCKETS, open_documents
 
 from . import report_selectors as sel
+from .statements import ZERO, journal
 
 PAGE = "reports.accounts"
 VOUCHER_LINK = "finance:account_voucher_detail"
@@ -177,13 +180,15 @@ class VoucherRegisterView(ReportView):
         ("voucher_type", "Type", FIN_VOUCHER_TYPE_CHOICES),
         ("status", "Status", FIN_VOUCHER_STATUS_CHOICES),
         ("account", "Account", sel.leaf_account_options),
+        ("party", "Party", sel.party_options),
+        ("posted", "Posted", YES_NO_CHOICES),
     )
 
     def build(self):
         p, f = self.period(), self.filters()
-        data = sel.voucher_register(p.start, p.end, f["voucher_type"] or None, f["status"] or None, f["account"] or None)
+        data = sel.voucher_register(p.start, p.end, f["voucher_type"] or None, f["status"] or None, f["account"] or None, f["posted"] or None, f["party"] or None)
         t = data["totals"]
-        base = f"{p.query}&status={f['status']}&account={f['account']}"
+        base = f"{p.query}&status={f['status']}&account={f['account']}&party={f['party']}&posted={f['posted']}"
         tiles = [_tile("Vouchers", str(t["vouchers"]), "slate", "file", f"Rs {format_amount(t['debit'])}", href=f"?{base}", on=not f["voucher_type"])]
         tones = {"PV": "rose", "RV": "green", "JV": "sky", "CN": "violet", "SV": "teal", "PU": "amber"}
         for code, label in FIN_VOUCHER_TYPE_CHOICES:
@@ -195,6 +200,60 @@ class VoucherRegisterView(ReportView):
 
 
 VoucherRegisterExportView, VoucherRegisterColumnsView = _views(VoucherRegisterView)
+
+
+# Journal --------------------------------------------------------------------
+
+JOURNAL_COLUMNS = ColumnSet("reports.journal", (
+    col("date", "Date", "date", locked=True),
+    col("voucher_no", "Voucher", "link", locked=True, link=VOUCHER_LINK),
+    col("type", "Type"),
+    col("code", "Code", default=False),
+    col("account", "Account", locked=True),
+    col("memo", "Memo", "muted"),
+    col("debit", "Debit", "money", total=True),
+    col("credit", "Credit", "money", total=True),
+))
+
+
+class JournalView(ReportView):
+    page = PAGE
+    title = "Journal"
+    template_name = "reports/generic.html"
+    columns = JOURNAL_COLUMNS
+    url_name = "finance:report_journal"
+    paginate_by = 300
+    filter_specs = (("voucher_type", "Type", FIN_VOUCHER_TYPE_CHOICES),)
+
+    def sorted_rows(self):
+        return list(self.data()["rows"]), {}
+
+    def build(self):
+        p, f = self.period(), self.filters()
+        vouchers = journal(p.start, p.end, voucher_type=f["voucher_type"])
+        rows = []
+        for entry in vouchers:
+            voucher = entry["voucher"]
+            for index, line in enumerate(entry["lines"]):
+                rows.append({
+                    "pk": voucher.pk, "date": voucher.voucher_date if index == 0 else None,
+                    "voucher_no": voucher.voucher_no if index == 0 else "", "type": entry["type"] if index == 0 else "",
+                    "code": line["code"], "account": line["title"], "memo": line["memo"] or (voucher.remarks if index == 0 else ""),
+                    "debit": line["debit"] or None, "credit": line["credit"] or None,
+                })
+        debit = sum((entry["debit"] for entry in vouchers), ZERO)
+        credit = sum((entry["credit"] for entry in vouchers), ZERO)
+        unbalanced = sum(1 for entry in vouchers if not entry["balanced"])
+        tiles = [
+            _tile("Vouchers", str(len(vouchers)), "slate", "file"),
+            _tile("Debit", format_amount(debit), "sky", "sum"),
+            _tile("Credit", format_amount(credit), "sky", "sum"),
+            _tile("Unbalanced", str(unbalanced), "rose" if unbalanced else "green", "alert"),
+        ]
+        return {"rows": rows, "totals": {"debit": debit, "credit": credit}, "tiles": tiles}
+
+
+JournalExportView, JournalColumnsView = _views(JournalView)
 
 
 # 59 ------------------------------------------------------------------------
@@ -396,3 +455,57 @@ class AuditTrailView(ReportView):
 
 
 AuditTrailExportView, AuditTrailColumnsView = _views(AuditTrailView)
+
+
+# Open invoices / unpaid bills (aging detail) --------------------------------
+
+OPEN_DOCUMENT_COLUMNS = ColumnSet("reports.open_documents", (
+    col("party", "Party", locked=True),
+    col("number", "No.", locked=True),
+    col("date", "Date", "date"),
+    col("age", "Age (days)", "int"),
+    col("bucket", "Bucket"),
+    col("amount", "Amount", "money"),
+    col("open", "Open Balance", "money", locked=True, total=True),
+))
+
+
+def _customer_options():
+    return Customer.objects.filter(status=STATUS_ACTIVE).order_by("customer_name").values_list("pk", "customer_name")
+
+
+def _supplier_options():
+    return Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("pk", "name")
+
+
+class OpenInvoicesView(ReportView):
+    page = PAGE
+    title = "Open Invoices"
+    template_name = "reports/generic.html"
+    columns = OPEN_DOCUMENT_COLUMNS
+    url_name = "finance:report_open_invoices"
+    as_of_report = True
+    side = "receivable"
+    default_sort = "age"
+    default_sort_dir = "desc"
+    sort_fields = {k: k for k in OPEN_DOCUMENT_COLUMNS.keys}
+    filter_specs = (("party", "Customer", _customer_options),)
+
+    def build(self):
+        data = open_documents(self.side, self.as_of(), self.filters()["party"] or None)
+        t = data["totals"]
+        tones = ("green", "sky", "amber", "rose")
+        tiles = [_tile("Open", format_amount(t["open"]), "slate", "sum", f"{t['documents']} documents")]
+        tiles += [_tile(label, format_amount(t[key]), tone, "clock") for (key, label, *_), tone in zip(AGING_BUCKETS, tones)]
+        return {"rows": data["rows"], "totals": t, "tiles": tiles}
+
+
+class UnpaidBillsView(OpenInvoicesView):
+    title = "Unpaid Bills"
+    url_name = "finance:report_unpaid_bills"
+    side = "payable"
+    filter_specs = (("party", "Supplier", _supplier_options),)
+
+
+OpenInvoicesExportView, OpenInvoicesColumnsView = _views(OpenInvoicesView)
+UnpaidBillsExportView, UnpaidBillsColumnsView = _views(UnpaidBillsView)

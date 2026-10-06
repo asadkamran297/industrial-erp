@@ -1,8 +1,10 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'finance:account_ledger_export' as export_csv_url %}
-{% component "table/board" title="Account Ledger" table_id="ledger-table" date_filters_enabled=True no_search=True no_pagination=True export_csv_url=export_csv_url %}
+{% component "table/board" title="Account Ledger" table_id="ledger-table" date_filters_enabled=True no_search=True no_pagination=True export_csv_url=export_csv_url back=request.GET.back back_url=request.GET.back %}
   {% slot filters %}
+    {% if posted_only %}<input type="hidden" name="posted" value="1">{% endif %}
+    {% if request.GET.back %}<input type="hidden" name="back" value="{{ request.GET.back }}">{% endif %}
     <label class="filter-chip">
       Account
       {% component "forms/control" type="select" name="account_no" cell=True searchable=True attrs='onchange="this.form.submit()"' only %}

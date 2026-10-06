@@ -210,6 +210,34 @@ CASH_FLOW_SECTION_LABELS: Final[dict[str, str]] = {
     CASH_FLOW_FINANCING: "Financing activities",
 }
 
+FS_PERIOD_CLOSE_PREFIX: Final = "period_close:"
+FS_CURRENT_ASSETS_PATH: Final = ("ASSETS", "Current Assets")
+FS_CURRENT_LIABILITIES_PATH: Final = ("LIABILITIES", "Current Liabilities")
+FS_CASH_GROUP_TITLES: Final = ("Cash", "Bank")
+
+FS_PL_INCOME: Final = "income"
+FS_PL_COGS: Final = "cogs"
+FS_PL_EXPENSES: Final = "expenses"
+FS_PL_OTHER_INCOME: Final = "other_income"
+FS_PL_OTHER_EXPENSES: Final = "other_expenses"
+FS_PL_UNMAPPED: Final = "unmapped"
+
+FS_PL_SECTION_LABELS: Final[dict[str, str]] = {
+    FS_PL_INCOME: "Income",
+    FS_PL_COGS: "Cost of Goods Sold",
+    FS_PL_EXPENSES: "Expenses",
+    FS_PL_OTHER_INCOME: "Other Income",
+    FS_PL_OTHER_EXPENSES: "Other Expenses",
+    FS_PL_UNMAPPED: "Unmapped",
+}
+
+FS_PL_SECTION_BY_GROUP: Final[dict[tuple[str, str], str]] = {
+    ("REVENUE", "Direct Revenue"): FS_PL_INCOME,
+    ("EXPENSES", "Direct Expenses"): FS_PL_COGS,
+    ("EXPENSES", "Indirect Expenses"): FS_PL_EXPENSES,
+    ("REVENUE", "Indirect Revenue"): FS_PL_OTHER_INCOME,
+}
+
 FIN_ACCOUNT_ROLE_LABELS: Final[dict[str, str]] = {
     "cash": "Cash",
     "bank": "Bank",

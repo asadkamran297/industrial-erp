@@ -83,7 +83,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("finance.vouchers", "Vouchers", "Finance", CRUD),
     Page("finance.opening_balances", "Opening Balances", "Finance", MASTER_NO_DELETE),
     Page("finance.trial_balance", "Trial Balance", "Finance", LIST_ONLY),
-    Page("finance.income_statement", "Income Statement", "Finance", LIST_ONLY),
+    Page("finance.income_statement", "Profit and Loss", "Finance", LIST_ONLY),
     Page("finance.balance_sheet", "Balance Sheet", "Finance", LIST_ONLY),
     Page("finance.cash_flow", "Cash Flow", "Finance", LIST_ONLY),
     Page("finance.period_close", "Period Close", "Finance", (ACTION_INDEX, ACTION_ADD)),

@@ -355,6 +355,19 @@
     };
   };
 
+  // Collapsible financial statement rows; spec is "id:depth|id:depth".
+  window.statementFold = function statementFold(spec) {
+    const groups = spec ? spec.split("|").map((item) => { const [id, depth] = item.split(":"); return { id, depth: Number(depth) }; }) : [];
+    return {
+      closed: [],
+      isClosed(id) { return this.closed.includes(id); },
+      toggle(id) { this.closed = this.isClosed(id) ? this.closed.filter((x) => x !== id) : this.closed.concat(id); },
+      shown(chain) { return !chain.split("|").some((id) => this.closed.includes(id)); },
+      expand() { this.closed = []; },
+      level(value) { this.closed = value ? groups.filter((g) => g.depth >= Number(value)).map((g) => g.id) : []; },
+    };
+  };
+
   // Date range control on the board filter bar.
   window.dateRange = function dateRange(from, to) {
     const iso = (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");

@@ -1,0 +1,27 @@
+<div class="statement-page{% if options.red %} statement-page--red{% endif %}" x-data="statementFold('{{ fold_spec }}')">
+  <div class="page-head">
+    <div class="page-head__lead"><h1 class="page-title">{{ title }}</h1></div>
+  </div>
+  {% if integrity and not integrity.is_clean %}{% include "finance/_integrity_note.html" %}{% endif %}
+  <section class="board-card">
+    {% include "components/report/statement_toolbar.html" %}
+    <div class="statement-sheet">
+      <header class="statement-print-head">
+        {% if org %}<p class="statement-org">{{ org }}</p>{% endif %}
+        <p class="statement-title">{{ title }}</p>
+        <p class="statement-period">{{ options.label }}</p>
+        <p class="statement-basis">Accrual basis{% if options.thousands %} · in thousands{% endif %}</p>
+      </header>
+      <div class="statement-scroll">
+        {% include table_template %}
+      </div>
+      {% include "components/table/pagination.html" %}
+      <footer class="statement-print-foot">Generated {{ generated_at|date:"d M Y H:i" }} by {{ request.user }}</footer>
+    </div>
+  </section>
+</div>
+<style>
+@media print {
+  @page { size: A4 {% if landscape %}landscape{% else %}portrait{% endif %}; margin: 12mm; @bottom-right { content: "Page " counter(page) " of " counter(pages); } }
+}
+</style>

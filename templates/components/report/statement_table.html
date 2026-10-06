@@ -1,0 +1,23 @@
+<table class="statement-table">
+  <thead>
+    <tr><th class="statement-account"></th>{% for column in columns %}<th class="num">{{ column.label }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="st-row st-row--{{ row.kind }}"{% if row.ancestors %} x-show="shown('{{ row.ancestors|join:'|' }}')"{% endif %}>
+      <th scope="row" class="statement-account" style="--depth: {{ row.depth }}">
+        {% if row.collapsible %}<button type="button" class="st-caret" :class="{ 'is-closed': isClosed('{{ row.id }}') }" @click="toggle('{{ row.id }}')" aria-label="Collapse {{ row.title }}">{% icon "chevron-down" size="sm" %}</button>{% endif %}
+        <span{% if row.kind == "computed" or row.kind == "grand" %} title="{% if row.id == 'gross_profit' %}Total Income − Total Cost of Goods Sold{% elif row.id == 'net_operating_income' %}Gross Profit − Total Expenses{% elif row.id == 'net_other_income' %}Other Income − Other Expenses{% elif row.id == 'net_income' %}Revenue − Expenses, period closes excluded{% elif row.kind == 'computed' and row.code %}Retained Earnings account + profit before this fiscal year{% endif %}"{% endif %}>{{ row.title }}</span>
+        {% if row.inactive %}<span class="pill pill--closed">Inactive</span>{% endif %}
+      </th>
+      {% for cell in row.cells %}
+      <td class="num{% if cell.negative %} is-neg{% endif %}">
+        {% if row.collapsible %}<span x-show="isClosed('{{ row.id }}')">{{ cell.text }}</span>{% elif cell.url %}<a class="st-drill" href="{{ cell.url }}">{{ cell.text }}</a>{% else %}{{ cell.text }}{% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% empty %}
+    <tr><td colspan="{{ columns|length|add:1 }}" class="statement-empty">No figures for this period.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import Sum
 
 from django.core.exceptions import ValidationError
@@ -181,7 +182,7 @@ def account_role(account, money_groups, customer_codes):
     return FIN_ACCOUNT_TYPE_ROLES.get(account.account_type, "other")
 
 
-def account_balances():
+def account_balances(*, posted_only=False):
     """Opening, voucher movement and closing balance for every account, by code.
 
     Every amount is signed on the account's own natural side: a debit-natured
@@ -198,7 +199,10 @@ def account_balances():
         for code, opening in ChartOfAccount.objects.values_list("code", "opening_balance")
         if code
     }
-    rows = AccountVoucherLine.objects.values("account_no").annotate(
+    lines = AccountVoucherLine.objects.all()
+    if posted_only:
+        lines = lines.filter(voucher__posted=YES, voucher__deleted_at__isnull=True)
+    rows = lines.values("account_no").annotate(
         debit=Sum("debit_amount"), credit=Sum("credit_amount")
     )
     for row in rows:
@@ -214,7 +218,7 @@ def account_balances():
 
 def _account_rows(account_types):
     """Postable accounts of the given root types with their closing balance, signed natural side."""
-    balances = account_balances()
+    balances = account_balances(posted_only=True)
     zero = Decimal("0.00")
     rows = []
     accounts = ChartOfAccount.objects.filter(
@@ -247,86 +251,6 @@ def income_statement():
         "total_revenue": total_revenue,
         "total_expense": total_expense,
         "net_profit": total_revenue - total_expense,
-    }
-
-
-def _balance_forest(account_types):
-    """Chart-of-accounts subtrees for ``account_types``, each node carrying a rolled-up closing balance.
-
-    Headings hold no balance of their own, so a heading's amount is the sum of
-    its subtree. Branches that net to zero are pruned — a balance sheet lists
-    what the business holds, not every account ever opened.
-    """
-    from .models import AccountVoucherLine  # lazy: models imports services in clean()
-
-    zero = Decimal("0.00")
-    balances = account_balances()
-    posted_codes = set(AccountVoucherLine.objects.values_list("account_no", flat=True).distinct())
-    nodes = list(ChartOfAccount.objects.filter(status=STATUS_ACTIVE, account_type__in=account_types).order_by("sort_order", "id"))
-    children_map: dict[int | None, list] = {}
-    for node in nodes:
-        children_map.setdefault(node.parent_id, []).append(node)
-
-    def build(node, depth):
-        children = [built for child in children_map.get(node.id, []) if (built := build(child, depth + 1))]
-        own = balances.get(node.code) or {}
-        if children:
-            amount = sum((child["amount"] for child in children), zero)
-        else:
-            amount = own.get("closing", zero)
-        touched = node.code in posted_codes or bool(own.get("opening"))
-        if not amount and not children and not touched:
-            return None
-        return {
-            "code": node.code,
-            "title": node.title,
-            "account_type": node.account_type,
-            "amount": amount,
-            "depth": depth,
-            "children": children,
-            "is_leaf": not children,
-            "collapsible": bool(children) and depth >= 3,
-        }
-
-    return [built for root in children_map.get(None, []) if (built := build(root, 1))]
-
-
-def _attach_link(nodes, code, url_name):
-    """Tag the node with ``code`` so the statement can link it to its detail page."""
-    for node in nodes:
-        if node["code"] == code:
-            node["link"] = url_name
-            return True
-        if _attach_link(node["children"], code, url_name):
-            return True
-    return False
-
-
-def balance_sheet():
-    """Assets vs. Liabilities + Capital as collapsible trees, with life-to-date net profit in Capital.
-
-    Without closing entries revenue/expense accounts never zero out into
-    retained earnings, so the statement folds ``income_statement()["net_profit"]``
-    into the Capital side to keep Assets = Liabilities + Capital true.
-    """
-    zero = Decimal("0.00")
-    assets = _balance_forest([ACCOUNT_TYPE_ASSET])
-    liabilities = _balance_forest([ACCOUNT_TYPE_LIABILITY])
-    capital = _balance_forest([ACCOUNT_TYPE_CAPITAL])
-    _attach_link(assets, gl_account(GL_INVENTORY_PATH).code, "finance:inventory_valuation")
-    net_profit = income_statement()["net_profit"]
-    total_assets = sum((node["amount"] for node in assets), zero)
-    total_liabilities = sum((node["amount"] for node in liabilities), zero)
-    total_capital = sum((node["amount"] for node in capital), zero) + net_profit
-    return {
-        "assets": assets,
-        "liabilities": liabilities,
-        "capital": capital,
-        "net_profit": net_profit,
-        "total_assets": total_assets,
-        "total_liabilities": total_liabilities,
-        "total_capital": total_capital,
-        "total_liabilities_and_capital": total_liabilities + total_capital,
     }
 
 
@@ -365,7 +289,7 @@ def _cash_flow_section(counterpart_type, code, current_codes):
     return CASH_FLOW_INVESTING
 
 
-def cash_flow_statement():
+def cash_flow_statement(start=None, end=None):
     """Where cash actually came from and went, grouped by activity.
 
     Built from real movements on the Cash and Bank accounts rather than from
@@ -376,17 +300,32 @@ def cash_flow_statement():
     Opening cash + net movement = closing cash, and that reconciliation is
     what makes this a statement rather than a list.
     """
+    from datetime import timedelta
+
+    from .statements import balances_as_of, load_chart  # lazy: statements imports models, which import services
+
     zero = Decimal("0.00")
     money_codes = cash_bank_account_codes()
-    balances = account_balances()
     natures = dict(ChartOfAccount.objects.values_list("code", "account_type"))
     titles = dict(ChartOfAccount.objects.values_list("code", "title"))
     current_codes = _current_account_codes()
 
-    opening = sum((balances.get(code, {}).get("opening", zero) for code in money_codes), zero)
-    closing = sum((balances.get(code, {}).get("closing", zero) for code in money_codes), zero)
+    end = end or timezone.localdate()
+    chart = load_chart()
+    dates = {"close": end}
+    if start:
+        dates["open"] = start - timedelta(days=1)
+    balances = balances_as_of(dates, chart=chart, codes=money_codes)
+    closing = sum((values["close"] for values in balances.values()), zero)
+    if start:
+        opening = sum((values["open"] for values in balances.values()), zero)
+    else:
+        opening = sum((chart.raw_opening(code) for code in money_codes), zero)
 
-    lines = AccountVoucherLine.objects.values("voucher_id", "account_no", "debit_amount", "credit_amount")
+    lines = AccountVoucherLine.objects.filter(voucher__posted=YES, voucher__deleted_at__isnull=True, voucher_date__lte=end)
+    if start:
+        lines = lines.filter(voucher_date__gte=start)
+    lines = lines.values("voucher_id", "account_no", "debit_amount", "credit_amount")
     by_voucher: dict[int, list] = {}
     for line in lines:
         by_voucher.setdefault(line["voucher_id"], []).append(line)
@@ -1069,7 +1008,7 @@ def close_period_to_retained_earnings(*, closing_date, user=None, label=None):
     balance sheet balances on its own, without profit being plugged in.
     """
     zero = Decimal("0.00")
-    balances = account_balances()
+    balances = account_balances(posted_only=True)
     accounts = ChartOfAccount.objects.filter(
         status=STATUS_ACTIVE, children__isnull=True, account_type__in=INCOME_STATEMENT_TYPES
     ).order_by("code")
@@ -1345,62 +1284,29 @@ def sync_customer_from_coa(*, node, user=None):
     )
 
 
-def account_ledger(account_no, *, date_from=None, date_to=None):
+def account_ledger(account_no, *, date_from=None, date_to=None, posted_only=False):
     """One account's statement: opening balance, its entries, running balance.
 
     The opening balance is the account's own opening plus everything posted
-    before ``date_from``, so a date range reads as a continuation of the ledger
-    rather than a fragment of it. Each row carries the balance as it stood after
-    that entry, signed on the account's natural side — the same convention
-    ``account_balances`` uses, so a positive figure always means normal balance.
+    before ``date_from``, so a date range reads as a continuation of the ledger.
+    Built on ``statements.ledger`` so every ledger-shaped report shares one engine.
     """
-    from .models import AccountVoucherLine  # lazy: models imports services in clean()
+    from .statements import ledger  # lazy: statements imports models, which import services
 
-    zero = Decimal("0.00")
     account = ChartOfAccount.objects.filter(code=account_no).first()
     if account is None:
         return None
-
-    debit_natured = account.account_type in DEBIT_NATURE_TYPES
-    signed = (lambda debit, credit: debit - credit) if debit_natured else (lambda debit, credit: credit - debit)
-
-    lines = AccountVoucherLine.objects.filter(account_no=account_no).select_related("voucher")
-
-    opening = account.opening_balance or zero
-    if date_from:
-        earlier = lines.filter(voucher_date__lt=date_from).aggregate(
-            debit=Sum("debit_amount"), credit=Sum("credit_amount")
-        )
-        opening += signed(earlier["debit"] or zero, earlier["credit"] or zero)
-        lines = lines.filter(voucher_date__gte=date_from)
-    if date_to:
-        lines = lines.filter(voucher_date__lte=date_to)
-
-    rows = []
-    balance = opening
-    total_debit = total_credit = zero
-    for line in lines.order_by("voucher_date", "voucher_no", "line_number"):
-        debit = line.debit_amount or zero
-        credit = line.credit_amount or zero
-        balance += signed(debit, credit)
-        total_debit += debit
-        total_credit += credit
-        rows.append({
-            "line": line,
-            "voucher": line.voucher,
-            "debit": debit,
-            "credit": credit,
-            "balance": balance,
-        })
-
+    found = ledger(codes=[account_no], start=date_from, end=date_to, posted_only=posted_only)
+    zero = Decimal("0.00")
+    entry = found[0] if found else {"opening": zero, "rows": [], "debit": zero, "credit": zero, "closing": zero}
     return {
         "account": account,
-        "debit_natured": debit_natured,
-        "opening": opening,
-        "rows": rows,
-        "total_debit": total_debit,
-        "total_credit": total_credit,
-        "closing": balance,
+        "debit_natured": account.account_type in DEBIT_NATURE_TYPES,
+        "opening": entry["opening"],
+        "rows": entry["rows"],
+        "total_debit": entry["debit"],
+        "total_credit": entry["credit"],
+        "closing": entry["closing"],
     }
 
 

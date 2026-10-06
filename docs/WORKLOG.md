@@ -5,6 +5,30 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-06
+
+### Local
+
+- Financial statements steps 1–7 (except Memorize): `statements.ledger()` (3 queries for any account count, split column, running balance) now also drives `services.account_ledger()`; `journal()`, `trial_balance()` (opening / period / closing Dr-Cr, flat or chart tree, orphans listed), `cash_flow()` (indirect; period closes excluded both sides; red row if it misses cash + bank), `changes_in_equity()`; direct `cash_flow_statement(start, end)` kept as the Method toggle.
+- Screens in `statement_views.py` on one base: Trial Balance (dated, flat/tree, integrity banner as `finance/_integrity_note.html`), Statement of Cash Flows (indirect/direct, columns, compare), Changes in Equity, General Ledger / P&L Detail / Balance Sheet Detail (`components/report/ledger_table.html`, 25 accounts per page, Excel). Journal + Open Invoices + Unpaid Bills as board reports in `report_views.py`; Voucher Register gains Party and Posted filters and doubles as Transaction List by Date. `portal.selectors.open_documents()` shares the aging allocation (`_allocate`) so detail = summary. Old `trial_balance.html`, `cash_flow.html` and their views removed. Nav + registry (86 entries) updated; A/R / A/P Aging Summary aliased into Accounts.
+- Memorize: `finance.SavedReport` (`fin_saved_reports`, migration `0017_saved_reports`, indexes `(user, report_key)`, `(report_key, shared)`); star menu on every statement toolbar saves the current querystring by name, optionally shared; owner can remove (soft delete).
+- Local timings: P&L by month 100 ms / 2 queries, BS by month 18 ms / 3, cash flow 14 ms / 2, TB 3 ms / 2, GL 36 ms / 4. Local BS, TB and cash flow tie.
+
+### Open
+
+- P&L by Party possible via `source_ref`; by Product not (voucher lines carry no product). Transaction List amount-range filter not built. Owner aging + party balance chips still count drafts.
+- 3 pre-existing errors in `apps.finance.tests.FinanceModelTests` (voucher line "Active leaf chart-of-account is required"), present on the clean tree too.
+
+## 2026-10-05
+
+### Local
+
+- Financial statements rebuild, step 0 (engine only, no screen wired yet): `apps/finance/statements.py` — `aggregate()` (one conditional-sum query per statement, posted-only, period closes excludable), `account_movements`, `balances_as_of`, single chart read (`Chart`), `TreeBuilder` (group / account / `Total` rows, active/non-zero/all), `profit_and_loss` (Income, COGS, Gross Profit, Expenses, Net Operating Income, Other, Net Income; contra revenue negative), `balance_sheet` (as-of columns, Retained Earnings / Net Income split, red "Out of balance" row). `FS_PL_SECTION_BY_GROUP` + labels in `apps/core/constants.py`. `StatementEngineTests` (9 tests) in `apps/finance/tests_reports.py`.
+- Local data: 50 unposted vouchers (25 RV + 25 PV, status created), 100 lines, Dr = Cr 6,031,250.00 — Cash Dr 2,968,750 / Cr 3,062,500, Sales Revenue Cr 2,968,750, COGS Dr 3,062,500.
+
+- User approved posted-only, posted-only period close, 1 July fiscal fallback. `account_balances(posted_only=...)`; posted-only now on Trial Balance, Cash Flow, Period Close (preview + journal), dashboard profit; party balance chips and other `account_balances()` callers unchanged (drafts still counted there).
+- Step 1–2 screens: `apps/finance/statement_views.py` (`ProfitAndLossView`, `BalanceSheetView` on the old URLs, Excel export with outline levels), `templates/components/report/statement.html` + `statement_toolbar.html`, `finance/statement.html`, `statementFold()` in `static/js/ui.js`, statement CSS in `components.css`. Customise: period presets (quarter, last quarter, YTD, fiscal YTD, last fiscal, all dates), columns by month/quarter/year, compare PP/PY with Change / % Change, % of Income, rows active/non-zero/all, negative format, red, ÷1000, without paisa; collapse per row or to level. Amounts drill to Account Ledger (`posted=1`, back link); BS Net Income drills to P&L. Old `income_statement.html`, `balance_sheet.html`, `_balance_sheet_node.html`, services `balance_sheet()` / `_balance_forest()` removed. Nav + registry: P&L by Month, P&L Comparison, P&L as % of Income, Balance Sheet Comparison, Balance Sheet by Month. `StatementScreenTests` (2 tests).
+
 ## 2026-09-22
 
 ### Live

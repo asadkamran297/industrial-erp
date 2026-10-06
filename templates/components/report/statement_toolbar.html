@@ -1,0 +1,124 @@
+<div class="filter-bar">
+  <form method="get" class="filter-bar__form" id="statement-form">
+    {% if as_of_report %}
+    <label class="filter-chip">As of {% include "components/forms/control.html" with type="date" name="as_of" value=options.end|date:"Y-m-d" cell=True attrs='onchange="this.form.submit()" aria-label="As of"' only %}</label>
+    {% else %}
+    <label class="filter-chip">
+      Period
+      {% component "forms/control" type="select" name="preset" cell=True attrs='onchange="this.form.submit()" aria-label="Period"' only %}
+        {% for value, label in preset_choices %}<option value="{{ value }}" {% if options.preset == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    <label class="filter-chip">From {% include "components/forms/control.html" with type="date" name="date_from" value=options.start|date:"Y-m-d" cell=True attrs='onchange="this.form.preset.value=\'custom\';this.form.submit()" aria-label="Date from"' only %}</label>
+    <label class="filter-chip">To {% include "components/forms/control.html" with type="date" name="date_to" value=options.end|date:"Y-m-d" cell=True attrs='onchange="this.form.preset.value=\'custom\';this.form.submit()" aria-label="Date to"' only %}</label>
+    {% endif %}
+    {% for spec in extra_selects %}
+    <label class="filter-chip">
+      {{ spec.label }}
+      {% component "forms/control" type="select" name=spec.name cell=True searchable=spec.searchable attrs='onchange="this.form.submit()"' only %}
+        {% for value, label in spec.choices %}<option value="{{ value }}" {% if spec.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    {% endfor %}
+    {% if toolbar.by %}
+    <label class="filter-chip">
+      Columns
+      {% component "forms/control" type="select" name="by" cell=True attrs='onchange="this.form.submit()" aria-label="Display columns by"' only %}
+        {% for value, label in by_choices %}<option value="{{ value }}" {% if options.by == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+    {% endif %}
+    {% if toolbar.compare %}
+    <label class="filter-chip">
+      Compare
+      {% component "forms/control" type="select" name="compare" cell=True attrs='onchange="this.form.submit()" aria-label="Compare"' only %}
+        {% for value, label in compare_choices %}<option value="{{ value }}" {% if options.compare == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% endcomponent %}
+    </label>
+
+    {% endif %}
+    {% if toolbar.customise %}
+    <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+      <button type="button" class="filter-chip" :aria-expanded="open.toString()" @click="open = !open">{% icon "settings" size="sm" %}Customise{% icon "chevron-down" size="sm" %}</button>
+      <div class="settings-panel" x-show="open" x-cloak x-transition.opacity>
+        {% if options.compare %}
+        <p class="settings-heading">Compare</p>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="chg" value="1" {% if options.change %}checked{% endif %}><span>Change</span></label>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="pct" value="1" {% if options.pct_change %}checked{% endif %}><span>% Change</span></label>
+        {% endif %}
+        {% if toolbar.pct_income %}
+        <p class="settings-heading">Percent</p>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="poi" value="1" {% if options.pct_income %}checked{% endif %}><span>% of Income</span></label>
+        {% endif %}
+        <p class="settings-heading">Rows</p>
+        {% for value, label in show_choices %}
+        <label class="settings-check-row"><input type="radio" class="check" name="show" value="{{ value }}" {% if options.show == value %}checked{% endif %}><span>{{ label }}</span></label>
+        {% endfor %}
+        <p class="settings-heading">Negative numbers</p>
+        {% for value, label in neg_choices %}
+        <label class="settings-check-row"><input type="radio" class="check" name="neg" value="{{ value }}" {% if options.neg == value %}checked{% endif %}><span class="num">{{ label }}</span></label>
+        {% endfor %}
+        <label class="settings-check-row"><input type="checkbox" class="check" name="red" value="1" {% if options.red %}checked{% endif %}><span>In red</span></label>
+        <p class="settings-heading">Numbers</p>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="k" value="1" {% if options.thousands %}checked{% endif %}><span>Divide by 1000</span></label>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="np" value="1" {% if options.no_paisa %}checked{% endif %}><span>Without paisa</span></label>
+        <div class="settings-apply"><button type="submit" class="btn btn--primary btn--sm">Apply</button></div>
+      </div>
+    </div>
+    {% endif %}
+  </form>
+
+  {% if toolbar.fold %}
+  <label class="filter-chip ml-auto">
+    Expand
+    <select aria-label="Expand to level" @change="level($event.target.value)">
+      <option value="">All</option>
+      <option value="1">Level 1</option>
+      <option value="2">Level 2</option>
+      <option value="3">Level 3</option>
+    </select>
+  </label>
+  {% else %}
+  <span class="ml-auto"></span>
+  {% endif %}
+
+  <a class="bar-btn bar-btn--reset" href="{{ reset_url }}" title="Reset" aria-label="Reset">{% icon "filter-x" %}</a>
+
+  <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+    <button type="button" class="bar-btn" title="Saved views" aria-label="Saved views" :aria-expanded="open.toString()" @click="open = !open">{% icon "star" %}</button>
+    <div class="settings-panel" x-show="open" x-cloak x-transition.opacity>
+      {% if saved_reports %}
+      <p class="settings-heading">Saved</p>
+      {% for item in saved_reports %}
+      <div class="settings-check-row">
+        <a class="st-drill" href="{{ item.url }}">{{ item.report.name }}</a>
+        {% if item.report.shared == "Y" and not item.mine %}<span class="pill pill--closed">{{ item.report.user }}</span>{% endif %}
+        {% if item.mine %}
+        <form method="post" action="{% url 'finance:saved_report_delete' item.report.pk %}" class="ml-auto">{% csrf_token %}
+          <input type="hidden" name="querystring" value="{{ current_query }}">
+          <button type="submit" class="icon-btn" title="Remove" aria-label="Remove {{ item.report.name }}">{% icon "trash" size="sm" %}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% endif %}
+      <p class="settings-heading">Save this view</p>
+      <form method="post" action="{% url 'finance:saved_report_create' %}">{% csrf_token %}
+        <input type="hidden" name="report_key" value="{{ report_key }}">
+        <input type="hidden" name="querystring" value="{{ current_query }}">
+        <div class="settings-check-row"><input type="text" name="name" class="control control--sm" maxlength="120" required aria-label="Name"></div>
+        <label class="settings-check-row"><input type="checkbox" class="check" name="shared" value="1"><span>Shared</span></label>
+        <div class="settings-apply"><button type="submit" class="btn btn--primary btn--sm">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+    <button type="button" class="bar-btn" title="Export" aria-label="Export" :aria-expanded="open.toString()" @click="open = !open">{% icon "download" %}</button>
+    <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
+      <p class="settings-heading">Download</p>
+      <a class="export-item" role="menuitem" href="{{ export_url }}"><span class="export-badge export-badge--xls">XLS</span>Excel</a>
+      <button type="button" class="export-item" role="menuitem" @click="open = false; expand(); $nextTick(() => window.print())"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
+    </div>
+  </div>
+</div>
