@@ -42,6 +42,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from apps.core import features, numbering
 from apps.core.constants import BROKERAGE_WEIGHT_UNIT_KG, WITHHOLDING_WEIGHT_UNIT_KG, INV_BARDANA_NOT_PURCHASED, INV_BARDANA_OWNERSHIP_CHOICES, PRD_LEDGER_PURCHASE, PRD_LEDGER_REVERSAL, PRD_LEDGER_SALE, PRD_LEDGER_SALE_RETURN, CONF_PO_APPROVAL_LIMIT_DEFAULT, CONF_PO_APPROVAL_LIMIT_KEY, INV_BILL_MATCH_TOLERANCE_PERCENT, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_ORDER_OPEN_STATUSES, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, LEDGER_ADJUSTMENT, LEDGER_OPENING, LEDGER_PURCHASE_RETURN, LEDGER_RECEIVE, LEDGER_REVERSAL, LEDGER_SALE, LEDGER_SALE_RETURN, NO, STATUS_ACTIVE, STATUS_CANCELLED, STATUS_CLOSED, STATUS_DRAFT, STATUS_FULLY_INVOICED, STATUS_PARTIALLY_INVOICED, STATUS_PARTIAL_RETURNED, STATUS_POSTED, STATUS_SUBMITTED, STATUS_RETURNED, STATUS_REVERSED, YES, INV_PURCHASE_RETURN_PREFIX, INV_RETURN_DRAFT_STATUSES
 
 TWO_DP = Decimal("0.01")
@@ -259,10 +260,25 @@ def to_base_unit(*, item, uom, quantity, rate):
     )
 
 
+def _switch_off_line_money(lines, *, tax, discount):
+    """Copies of ``lines`` with tax / discount zeroed where General Settings has them off."""
+    if tax and discount:
+        return lines
+    cleaned = []
+    for line in lines:
+        line = dict(line)
+        if not tax:
+            line["tax_perc"] = Decimal("0")
+        if not discount:
+            line["discount_amount"] = Decimal("0")
+        cleaned.append(line)
+    return cleaned
+
+
 def next_purchase_order_number():
     """What the next purchase order will be called; advisory, like the bill one."""
-    last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
-    return f"PO-{last + 1}"
+    last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+    return numbering.preview(numbering.SERIES_PURCHASE_ORDER, last)
 
 
 @transaction.atomic
@@ -279,6 +295,10 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
     ``lines`` is a list of dicts: inventory_item, quantity, rate, an optional
     uom the line was written in, and an optional descr.
     """
+    flags = features.current()
+    discount_amount = features.zero_unless(features.PURCHASE_DISCOUNT, discount_amount, flags)
+    tax_amount = features.zero_unless(features.PURCHASE_TAX, tax_amount, flags)
+    lines = _switch_off_line_money(lines, tax=flags[features.PURCHASE_TAX], discount=flags[features.PURCHASE_DISCOUNT])
     if not supplier:
         raise ValidationError("Pick a supplier.")
 
@@ -368,8 +388,8 @@ def create_purchase_order(*, supplier, quot_num, quot_date, order_date, lines, e
 
 def next_sale_invoice_number():
     """What the next sale invoice will be called; advisory, like the purchase one."""
-    last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first() or 0
-    return f"SAL-{last + 1}"
+    last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first()
+    return numbering.preview(numbering.SERIES_SALE_INVOICE, last)
 
 
 @transaction.atomic
@@ -377,10 +397,8 @@ def next_sale_invoice_number():
 
 def next_sales_order_number():
     """What the next sales order will be called; advisory, like the others."""
-    last = (
-        SalesOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first() or 0
-    )
-    return f"SO-{last + 1:06d}"
+    last = SalesOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+    return numbering.preview(numbering.SERIES_SALES_ORDER, last)
 
 
 def open_sales_order_lines(*, customer=None, sales_order=None):
@@ -535,6 +553,10 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
     ``lines`` is a list of dicts: inventory_item, quantity, price, and an
     optional uom the line was written in.
     """
+    flags = features.current()
+    discount_amount = features.zero_unless(features.SALES_DISCOUNT, discount_amount, flags)
+    tax_amount = features.zero_unless(features.SALES_TAX, tax_amount, flags)
+    lines = _switch_off_line_money(lines, tax=flags[features.SALES_TAX], discount=flags[features.SALES_DISCOUNT])
     if not customer:
         raise ValidationError("Pick a customer.")
 
@@ -758,20 +780,20 @@ def post_sale_return(*, sale_return, user):
 def next_purchase_return_number():
     last = (
         PurchaseReturnMaster.all_objects.exclude(return_seq_num__isnull=True)
-        .order_by("-return_seq_num").values_list("return_seq_num", flat=True).first() or 0
+        .order_by("-return_seq_num").values_list("return_seq_num", flat=True).first()
     )
-    return f"{INV_PURCHASE_RETURN_PREFIX}-{last + 1}"
+    return numbering.preview(numbering.SERIES_PURCHASE_RETURN, last)
 
 
 def _allocate_purchase_return_number(purchase_return):
-    if purchase_return.return_seq_num:
+    if purchase_return.return_seq_num is not None:
         return
     latest = (
         PurchaseReturnMaster.all_objects.select_for_update()
         .exclude(return_seq_num__isnull=True).order_by("-return_seq_num").only("return_seq_num").first()
     )
-    purchase_return.return_seq_num = (latest.return_seq_num if latest else 0) + 1
-    purchase_return.return_num = f"{INV_PURCHASE_RETURN_PREFIX}-{purchase_return.return_seq_num}"
+    purchase_return.return_seq_num = numbering.next_seq(numbering.SERIES_PURCHASE_RETURN, latest.return_seq_num if latest else None)
+    purchase_return.return_num = numbering.format_number(numbering.SERIES_PURCHASE_RETURN, purchase_return.return_seq_num)
 
 
 def purchase_return_lines(invoice, *, exclude_return_id=None):
@@ -1170,11 +1192,8 @@ def next_purchase_invoice_number():
     invoice saved between this preview and the save takes it and the next one
     moves up.
     """
-    last = (
-        PurchaseInvoice.all_objects.order_by("-seq_num")
-        .values_list("seq_num", flat=True).first() or 0
-    )
-    return f"PI-{last + 1:06d}"
+    last = PurchaseInvoice.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+    return numbering.preview(numbering.SERIES_PURCHASE_INVOICE, last)
 
 
 def duplicate_supplier_invoice_number(*, supplier, supplier_invoice_num, exclude_pk=None):
@@ -1320,6 +1339,14 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
     """
     from apps.finance.services import post_purchase_invoice_to_gl  # lazy: finance imports inventory
 
+    flags = features.current()
+    discount_amount = features.zero_unless(features.PURCHASE_DISCOUNT, discount_amount, flags)
+    freight_amount = features.zero_unless(features.PURCHASE_FREIGHT, freight_amount, flags)
+    brokerage_rate_per_100kg = features.zero_unless(features.WHEAT_BROKERAGE, brokerage_rate_per_100kg, flags)
+    withholding_rate_per_40kg = features.zero_unless(features.WHEAT_WITHHOLDING, withholding_rate_per_40kg, flags)
+    if not flags[features.PURCHASE_TAX]:
+        tax_amount = Decimal("0.00")
+    lines = _switch_off_line_money(lines, tax=flags[features.PURCHASE_TAX], discount=flags[features.PURCHASE_DISCOUNT])
     if not supplier:
         raise ValidationError("Pick the supplier this invoice is from.")
     supplier_invoice_num = (supplier_invoice_num or "").strip()

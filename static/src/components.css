@@ -2300,3 +2300,39 @@ details[open] > .tree-summary > .tree-caret--static { transform: rotate(90deg); 
   .daybook-grand td,
   .daybook-name { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* General Settings */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--gap-4); }
+.settings-group { display: grid; gap: var(--gap-1); padding: var(--gap-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-alt); }
+.dark .settings-group { border-color: var(--border); background: var(--surface-alt); }
+.settings-group__title { padding: 0 var(--gap-1); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.dark .settings-group__title { color: var(--text-muted); }
+
+/* ==================================================================== *
+ * Global polish: keyboard focus, line-table hover, scrollbars, motion
+ * ==================================================================== */
+a:focus-visible,
+.tab:focus-visible,
+.tile:focus-visible,
+.export-item:focus-visible,
+.bar-btn:focus-visible,
+.filter-chip:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-sm); }
+.dark a:focus-visible,
+.dark .tab:focus-visible,
+.dark .tile:focus-visible,
+.dark .export-item:focus-visible,
+.dark .bar-btn:focus-visible,
+.dark .filter-chip:focus-within { outline-color: var(--primary); }
+.lines-table tbody tr:hover,
+.li-table tbody tr:hover { background: var(--surface-alt); }
+.dark .lines-table tbody tr:hover,
+.dark .li-table tbody tr:hover { background: var(--surface-alt); }
+.board-scroll,
+.statement-scroll { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.dark .board-scroll,
+.dark .statement-scroll { scrollbar-color: var(--border-strong) transparent; }
+::selection { background: var(--primary-soft); color: var(--text-strong); }
+.dark ::selection { background: var(--primary-soft); color: var(--text-strong); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}

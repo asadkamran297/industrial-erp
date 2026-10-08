@@ -135,6 +135,20 @@ FIN_VOUCHER_TYPE_PICKER_META: Final = tuple(
     entry for entry in FIN_VOUCHER_TYPE_META if entry[0] not in FIN_VOUCHER_TYPE_HIDDEN
 )
 
+MONEY_MODE_CASH: Final = "cash"
+MONEY_MODE_BANK: Final = "bank"
+
+# (series / entry key, label, voucher type, money mode) — one sidebar entry and one number series each.
+VOUCHER_ENTRIES: Final = (
+    ("cash_payment", "Cash Payment", VOUCHER_TYPE_PAYMENT, MONEY_MODE_CASH),
+    ("cash_receipt", "Cash Receipt", VOUCHER_TYPE_RECEIPT, MONEY_MODE_CASH),
+    ("bank_payment", "Bank Payment", VOUCHER_TYPE_PAYMENT, MONEY_MODE_BANK),
+    ("bank_receipt", "Bank Receipt", VOUCHER_TYPE_RECEIPT, MONEY_MODE_BANK),
+    ("journal", "Journal Voucher", VOUCHER_TYPE_JOURNAL, ""),
+)
+VOUCHER_ENTRY_BY_TYPE: Final = {(voucher_type, mode): key for key, _label, voucher_type, mode in VOUCHER_ENTRIES}
+VOUCHER_ENTRY_LABELS: Final = {key: label for key, label, *_rest in VOUCHER_ENTRIES}
+
 VOUCHER_SUPPLIER_TYPES: Final = (VOUCHER_TYPE_PAYMENT, VOUCHER_TYPE_PURCHASE)
 VOUCHER_CUSTOMER_TYPES: Final = (VOUCHER_TYPE_RECEIPT, VOUCHER_TYPE_SALES)
 

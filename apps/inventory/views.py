@@ -36,6 +36,7 @@ from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrder
 from .purchase_board import RETURN_COLUMNS, RETURN_TAB_ALL, RETURN_TAB_DRAFT, RETURN_TAB_POSTED, RETURN_TAB_REVERSED, RETURN_TABS, COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, linked_documents, set_visible_columns, summarise, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
+from .selectors import picker_item_kinds
 from .services import create_purchase_return, next_purchase_return_number, purchase_return_lines, reverse_purchase_return, close_sales_order, create_sales_order, customer_has_open_orders, next_sales_order_number, open_sales_order_lines, submit_sales_order, _refresh_order_invoiced_status, can_reverse_invoice, create_purchase_invoice, next_purchase_invoice_number, open_order_lines, reverse_purchase_invoice, supplier_has_open_orders, approve_purchase_order, cancel_purchase_order, close_purchase_order_short, needs_approval, purchase_order_approval_limit, reopen_purchase_order, set_purchase_order_approval_limit, user_can_approve, amount_in_words, create_direct_sale, create_purchase_order, finalize_manual_transaction, set_opening_stock, generate_transaction_id, next_purchase_order_number, next_sale_invoice_number, post_purchase_return, post_sale, post_sale_return
 
 User = get_user_model()
@@ -1541,7 +1542,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
         items = (
             InventoryItem.objects
             .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
-            .filter(status=STATUS_ACTIVE)
+            .filter(status=STATUS_ACTIVE, item_kind__in=picker_item_kinds())
             .order_by("item_name")
         )
         context = {
@@ -2940,7 +2941,7 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
         items = (
             InventoryItem.objects
             .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
-            .filter(status=STATUS_ACTIVE)
+            .filter(status=STATUS_ACTIVE, item_kind__in=picker_item_kinds())
             .order_by("item_name")
         )
         context = {
@@ -3902,7 +3903,7 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
         items = (
             InventoryItem.objects
             .select_related("uom", "secondary_uom", "stock", "conversion__uom_from", "conversion__uom_to")
-            .filter(status=STATUS_ACTIVE)
+            .filter(status=STATUS_ACTIVE, item_kind__in=picker_item_kinds())
             .order_by("item_name")
         )
         context = {
@@ -4114,7 +4115,7 @@ class SalesOrderCreateView(InventoryManageMixin, View):
         items = (
             InventoryItem.objects
             .select_related("uom", "secondary_uom", "stock")
-            .filter(status=STATUS_ACTIVE)
+            .filter(status=STATUS_ACTIVE, item_kind__in=picker_item_kinds())
             .order_by("item_name")
         )
         context = {

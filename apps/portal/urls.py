@@ -31,11 +31,13 @@ from .report_views_setup import (
     UserAccessExportView,
     UserAccessView,
 )
+from .settings_views import GeneralSettingsView
 from .views import DashboardView, FavouriteToggleView
 
 app_name = "portal"
 
 urlpatterns = [
+    path("settings/", GeneralSettingsView.as_view(), name="general_settings"),
     path("", DashboardView.as_view(), name="dashboard"),
     path("favourites/toggle/", FavouriteToggleView.as_view(), name="favourite_toggle"),
 

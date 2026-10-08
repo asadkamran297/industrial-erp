@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from apps.core.constants import FIN_VOUCHER_TYPE_PICKER_META
+from apps.core.constants import VOUCHER_ENTRIES
 
 
 @dataclass(frozen=True)
@@ -81,10 +81,10 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
             label,
             permission="finance.vouchers.index",
             url_name="finance:account_voucher_list",
-            query=f"voucher_type={code}",
+            query=f"voucher_type={voucher_type}" + (f"&money_mode={mode}" if mode else ""),
         )
-        for code, label, _fkey, _prefix in FIN_VOUCHER_TYPE_PICKER_META
-    )),
+        for _key, label, voucher_type, mode in VOUCHER_ENTRIES
+    ) + (NavigationItem("All Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),)),
     NavigationItem("Financial Reports", permission=None, section=SECTION_FINANCE, icon="R", children=(
         NavigationItem("Trial Balance", permission="finance.trial_balance.index", url_name="finance:trial_balance"),
         NavigationItem("Profit and Loss", permission="finance.income_statement.index", url_name="finance:income_statement"),
@@ -234,7 +234,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Roles", permission="access_control.roles.index", url_name="access_control:role_list"),
         NavigationItem("Permissions", permission="access_control.permissions.index", url_name="access_control:permission_list"),
     )),
-    NavigationItem("System Settings", permission="settings.index", section=SECTION_SETUP, icon="G"),
+    NavigationItem("General Settings", permission="settings.index", section=SECTION_SETUP, icon="G", url_name="portal:general_settings"),
 
     NavigationItem("Help Desk", permission="help.index", section=SECTION_SUPPORT, icon="?"),
 )

@@ -46,6 +46,7 @@ from apps.core.constants import (
     VOUCHER_TYPE_PAYMENT,
     VOUCHER_TYPE_PURCHASE,
     VOUCHER_TYPE_SALES,
+    VOUCHER_ENTRY_BY_TYPE,
     YES,
 )
 from .models import AccountVoucher, AccountVoucherLine, ChartOfAccount
@@ -1079,6 +1080,19 @@ def next_voucher_number(voucher_type: str, money_mode: str = "") -> str:
     retries on the unique constraint.
     """
     import re
+
+    from apps.core import numbering
+
+    entry = VOUCHER_ENTRY_BY_TYPE.get((voucher_type, money_mode if voucher_type != VOUCHER_TYPE_JOURNAL else ""))
+    if entry:
+        row = numbering.series(entry)
+        pattern = re.compile(rf"^{re.escape(row.prefix)}-(\d+)$")
+        highest = None
+        for number in AccountVoucher.all_objects.filter(voucher_no__startswith=f"{row.prefix}-").values_list("voucher_no", flat=True):
+            match = pattern.match(number or "")
+            if match:
+                highest = max(highest or 0, int(match.group(1)))
+        return numbering.preview(entry, highest)
 
     prefix = FIN_VOUCHER_PREFIX_MAP.get(voucher_type, "V") + FIN_MONEY_MODE_SUFFIX.get(money_mode, "")
     pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$")

@@ -8,7 +8,7 @@
       <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
       <div class="kind-switch segmented segmented--compact" role="radiogroup" aria-label="Item kind">
         <label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=product_value extra="kind-option sr-only" checked=True only %}<span>Product</span></label>
-        <label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=service_value extra="kind-option sr-only" only %}<span>Service</span></label>
+        {% if features.services or object.item_kind == service_value %}<label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=service_value extra="kind-option sr-only" only %}<span>Service</span></label>{% endif %}
       </div>
     {% endslot %}
   {% endcomponent %}

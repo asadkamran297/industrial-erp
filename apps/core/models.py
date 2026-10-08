@@ -78,3 +78,20 @@ class SystemSetting(BaseModel):
     @classmethod
     def get_solo(cls):
         return cls.objects.order_by("pk").first() or cls(pk=1)
+
+
+class DocumentSeries(BaseModel):
+    """Prefix, starting number and padding of one document series, set in General Settings."""
+
+    code = models.CharField(max_length=40, unique=True)
+    label = models.CharField(max_length=80)
+    prefix = models.CharField(max_length=12)
+    start_number = models.PositiveIntegerField(default=1)
+    padding = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = "core_document_series"
+        ordering = ["label"]
+
+    def __str__(self) -> str:
+        return self.label

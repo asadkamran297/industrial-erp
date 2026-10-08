@@ -30,8 +30,9 @@
       </td>
     </tr>
     {% component "table/lines_row" pk=order.pk span=9 %}
+      {% doc_columns order.items.all "purchase" as cols %}
       <table class="lines-table">
-        <thead><tr><th>#</th><th>Item</th><th>Unit</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>#</th><th>Item</th><th>Unit</th><th class="num">Qty</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
         <tbody>
           {% for item in order.items.all %}
           <tr>
@@ -40,7 +41,7 @@
             <td>{{ item.uom.title }}</td>
             <td class="num">{{ item.quantity|qty }}</td>
             <td class="num">{{ item.rate|amount }}</td>
-            <td class="num">{{ item.discount_amount|amount }}</td>
+            {% if cols.discount %}<td class="num">{{ item.discount_amount|amount }}</td>{% endif %}
             <td class="num strong">{{ item.total_amount|amount }}</td>
           </tr>
           {% empty %}

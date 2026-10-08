@@ -47,8 +47,8 @@
       {% include "components/forms/control.html" with type="textarea" name="remarks" id="remarks" label="Narration" rows=2 value=posted.remarks only %}
       {% component "forms/totals_panel" %}
         {% include "components/forms/totals_row.html" with label="Sub Total" value_id="sub-total" only %}
-        {% include "components/forms/totals_row.html" with label="Discount (Rs)" field_id="discount_amount" value=posted.discount_amount only %}
-        {% include "components/forms/totals_row.html" with label="Tax (Rs)" field_id="tax_amount" value=posted.tax_amount only %}
+        {% if features.sales_discount %}{% include "components/forms/totals_row.html" with label="Discount (Rs)" field_id="discount_amount" value=posted.discount_amount only %}{% endif %}
+        {% if features.sales_tax %}{% include "components/forms/totals_row.html" with label="Tax (Rs)" field_id="tax_amount" value=posted.tax_amount only %}{% endif %}
         {% include "components/forms/totals_row.html" with label="Total" value_id="grand-total" grand=True only %}
         {% include "components/forms/totals_row.html" with label="Paid" field_id="paid_amount" value=posted.paid_amount only %}
         <div class="totals-row"><span class="totals-label">Balance due</span><span class="totals-value strong fig-bad" id="balance-owed">0.00</span></div>
@@ -318,7 +318,7 @@
 
   document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); });
   ['discount_amount', 'tax_amount', 'paid_amount'].forEach(id =>
-    document.getElementById(id).addEventListener('input', recalc)
+    document.getElementById(id)?.addEventListener('input', recalc)
   );
 
   const customer = document.getElementById('customer');

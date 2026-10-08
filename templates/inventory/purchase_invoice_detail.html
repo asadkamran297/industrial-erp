@@ -33,8 +33,9 @@
       {% endcomponent %}
     </div>
     <div class="overflow-x-auto">
+      {% doc_columns lines "purchase" as cols %}
       <table class="data-table doc-table">
-        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
         <tbody>
           {% for line in lines %}
           <tr>
@@ -51,7 +52,7 @@
             <td class="num">{{ line.quantity|qty }}</td>
             <td>{{ line.uom.title|default:"—" }}</td>
             <td class="num">{{ line.rate|amount }}</td>
-            <td class="num">{{ line.discount_amount|amount }}</td>
+            {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
             <td class="num strong">{{ line.total_amount|amount }}</td>
           </tr>
           {% empty %}
@@ -59,7 +60,7 @@
           {% endfor %}
         </tbody>
         {% if lines %}
-        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td colspan="3"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
+        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td colspan="{% if cols.discount %}3{% else %}2{% endif %}"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
         {% endif %}
       </table>
     </div>

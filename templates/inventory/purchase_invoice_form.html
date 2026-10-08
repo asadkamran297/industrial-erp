@@ -125,8 +125,8 @@
         {% if layout.shown.discount_amount %}{% include "components/forms/totals_row.html" with label="Discount (Rs)" field_id="discount_amount" value=posted.discount_amount only %}{% endif %}
         {% if layout.shown.freight_amount %}{% include "components/forms/totals_row.html" with label="Freight (Rs)" field_id="freight_amount" value=posted.freight_amount only %}{% endif %}
         {% if wheat_products %}
-        {% include "components/forms/totals_row.html" with label="Brokerage / 100 kg" field_id="brokerage_rate_per_100kg" value=posted.brokerage_rate_per_100kg only %}
-        {% include "components/forms/totals_row.html" with label="Withholding / 40 kg" field_id="withholding_rate_per_40kg" value=posted.withholding_rate_per_40kg only %}
+        {% if features.wheat_brokerage %}{% include "components/forms/totals_row.html" with label="Brokerage / 100 kg" field_id="brokerage_rate_per_100kg" value=posted.brokerage_rate_per_100kg only %}{% endif %}
+        {% if features.wheat_withholding %}{% include "components/forms/totals_row.html" with label="Withholding / 40 kg" field_id="withholding_rate_per_40kg" value=posted.withholding_rate_per_40kg only %}{% endif %}
         {% endif %}
         {% if layout.shown.tax_amount %}{% include "components/forms/totals_row.html" with label="Tax (Rs)" field_id="tax_amount" value=posted.tax_amount only %}{% endif %}
         {% include "components/forms/totals_row.html" with label="Total" value_id="grand-total" grand=True only %}
@@ -584,7 +584,7 @@
     addBagBtn && addBagBtn.addEventListener('click', () => { addBardana().querySelector('select').focus(); });
   })();
   ['discount_amount', 'tax_amount', 'paid_amount'].forEach(id =>
-    document.getElementById(id).addEventListener('input', recalc)
+    document.getElementById(id)?.addEventListener('input', recalc)
   );
 
   const supplier = document.getElementById('supplier');

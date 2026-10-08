@@ -50,7 +50,7 @@ _STATIC_PAGES: tuple[Page, ...] = (
     Page("reports.setup", "Setup Reports", "Reports", LIST_ONLY),
     Page("reports.daybook", "Daybook", "Reports", LIST_ONLY),
     Page("reports.account_ledger", "Account Ledger", "Reports", LIST_ONLY),
-    Page("settings", "System Settings", "Setup", LIST_ONLY),
+    Page("settings", "General Settings", "Setup", LIST_ONLY),
     Page("help", "Help Desk", "Support", LIST_ONLY),
     Page("inventory.classes", "Item Categories", "Inventory", MASTER_NO_DELETE),
     Page("inventory.uoms", "UOMs", "Inventory", MASTER_NO_DELETE),

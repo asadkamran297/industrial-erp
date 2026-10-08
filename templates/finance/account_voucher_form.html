@@ -1,8 +1,8 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url 'finance:account_voucher_list' as list_base %}
-{% capture as cancel_url %}{% if object %}{% url 'finance:account_voucher_detail' object.pk %}{% else %}{{ list_base }}?voucher_type={{ selected_voucher_type }}{% endif %}{% endcapture %}
-{% capture as form_title %}{% if object %}Edit {{ selected_voucher_type_label }} Voucher{% else %}{{ selected_voucher_type_label }} Voucher{% endif %}{% endcapture %}
+{% capture as cancel_url %}{% if object %}{% url 'finance:account_voucher_detail' object.pk %}{% else %}{{ list_base }}?voucher_type={{ selected_voucher_type }}{% if selected_money_mode %}&amp;money_mode={{ selected_money_mode }}{% endif %}{% endif %}{% endcapture %}
+{% capture as form_title %}{% if object %}Edit {% endif %}{{ voucher_heading }}{% endcapture %}
 
 <form method="post" id="voucher-form" class="form-stack" enctype="multipart/form-data" data-own-keys>{% csrf_token %}
   <input type="hidden" name="voucher_type" id="id_voucher_type" value="{{ selected_voucher_type }}">
@@ -11,7 +11,7 @@
 
   {% component "ui/page_header" title=form_title meta=object.voucher_no back=True back_url=cancel_url %}
     {% slot fields %}
-      <div id="money-mode" class="segmented segmented--compact" role="radiogroup" aria-label="Cash or bank">
+      <div id="money-mode" class="segmented segmented--compact{% if voucher_entry %} hidden{% endif %}" role="radiogroup" aria-label="Cash or bank"{% if voucher_entry %} data-fixed{% endif %}>
         <label class="money-pill">{% capture as cash_on %}{% if money_mode != "bank" %}1{% endif %}{% endcapture %}{% include "components/forms/control.html" with type="radio" name="money_mode" value="cash" checked=cash_on extra="sr-only" only %}<span>Cash</span></label>
         <label class="money-pill">{% capture as bank_on %}{% if money_mode == "bank" %}1{% endif %}{% endcapture %}{% include "components/forms/control.html" with type="radio" name="money_mode" value="bank" checked=bank_on extra="sr-only" only %}<span>Bank</span></label>
       </div>
@@ -85,7 +85,7 @@
           <div id="add-line-wrap" class="hidden items-center justify-between">
             {% include "components/ui/button.html" with type="button" id="add-line-btn" label="Line" icon="plus" size="sm" only %}
           </div>
-          <p id="balance-hint" class="alert alert--warning hidden">Debit and credit must match.</p>
+          <p id="balance-hint" class="alert alert--warning hidden" role="status"></p>
 
           <div id="field-narration">{% include "components/forms/control.html" with type="textarea" name="remarks" id="id_narration" label="Narration" rows=2 value=form.remarks.value only %}</div>
         </div>
@@ -297,7 +297,7 @@
     }
 
     const pills = document.getElementById('money-mode');
-    if (pills) pills.classList.toggle('hidden', !usesMoneyMode());
+    if (pills) pills.classList.toggle('hidden', !usesMoneyMode() || pills.hasAttribute('data-fixed'));
 
     // Grid-only types drop the header account, the payment method and the
     // amount panel; the rows carry every figure the voucher has.
@@ -359,7 +359,13 @@
         totalCredit.classList.toggle('fig-bad', !balanced);
       }
       // Simple mode always balances: the money leg is generated from this total.
-      hint.classList.toggle('hidden', simple || balanced || (dr === 0 && cr === 0));
+      const off = !simple && Math.abs(dr - cr) >= 0.005 && (dr !== 0 || cr !== 0);
+      hint.textContent = off ? 'Difference ' + money(Math.abs(dr - cr)) + (dr > cr ? ' Dr' : ' Cr') : '';
+      hint.classList.toggle('hidden', !off);
+      ['save-btn', 'save-print-btn'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button && !button.dataset.busy) button.disabled = off;
+      });
       // The side panel shows what this voucher is worth: the amount in simple
       // mode, the debit side of a journal (the two sides must match anyway).
       const summary = document.getElementById('summary-amount');
@@ -818,6 +824,7 @@
     document.querySelectorAll('[id^="field-"] p.field__error').forEach(el => el.remove());
     if (!simpleEntryValid()) { showFlash('Fill the account and amount.', false); return; }
     saveBtn.disabled = true;
+    saveBtn.dataset.busy = '1';
     if (savePrintBtn) savePrintBtn.disabled = true;
     fetch(form.action || window.location.href, {
       method: 'POST',
@@ -848,6 +855,7 @@
       .catch(() => showFlash('Save failed — check the connection and try again.', false))
       .finally(() => {
         saveBtn.disabled = false;
+        delete saveBtn.dataset.busy;
         if (savePrintBtn) savePrintBtn.disabled = false;
       });
   });

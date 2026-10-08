@@ -35,8 +35,6 @@
         </nav>
 
         <div class="ml-auto flex items-center gap-2">
-          {% url 'inventory:pos_create' as sale_url %}{% include "components/ui/button.html" with label="Sale" href=sale_url icon="plus" variant="primary" size="sm" only %}
-          {% url 'finance:account_voucher_create' as voucher_url %}{% include "components/ui/button.html" with label="Voucher" href=voucher_url|add:"?voucher_type=PV" icon="plus" size="sm" only %}
         </div>
         <button type="button" class="icon-btn icon-btn--bordered" @click="toggleTheme()" title="Light / dark" aria-label="Toggle theme">{% icon "sun-moon" %}</button>
         <input class="control h-9 w-9 p-0.5" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" title="Brand colour" aria-label="Primary color">

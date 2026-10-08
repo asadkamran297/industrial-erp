@@ -168,10 +168,12 @@
             <label for="builty_no">Builty No.</label>
             {% include "components/forms/control.html" with id="builty_no" name="builty_no" extra="wp-in" attrs='data-no-amount' only %}
           </div>
+          {% if features.purchase_freight %}
           <div class="wp-f w-32">
             <label for="freight">Freight</label>
             {% include "components/forms/control.html" with id="freight" name="freight" kind="money" extra="wp-in wp-in--num" only %}
           </div>
+          {% endif %}
         </div>
 
         <div class="wp-errors field-errors mt-3" id="wp-errors"></div>
@@ -397,7 +399,7 @@
       vehicle_no: el('vehicle_no').value,
       driver_phone: el('driver_phone').value,
       builty_no: el('builty_no').value,
-      freight: el('freight').value,
+      freight: el('freight') ? el('freight').value : '',
       bardana: Array.prototype.map.call(rowsBox.querySelectorAll('tr'), tr => ({
         product: tr.querySelector('.b-bag').value,
         qty: tr.querySelector('.b-qty').value,

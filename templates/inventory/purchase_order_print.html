@@ -19,12 +19,13 @@
     {% if order.descr %}<tr><td class="lbl">Descr:</td><td colspan="5">{{ order.descr }}</td></tr>{% endif %}
   </table>
 
+  {% doc_columns items "purchase" as cols %}
   <table class="items">
     <thead>
       <tr>
         <th>Sr#</th><th>Material Description</th><th>UOM</th>
         <th class="num">PO Qty</th><th class="num">Unit Price</th>
-        <th class="num">Disc Amount</th><th class="num">Total Amount</th>
+        {% if cols.discount %}<th class="num">Disc Amount</th>{% endif %}<th class="num">Total Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -35,7 +36,7 @@
         <td>{{ item.uom.title }}</td>
         <td class="num">{{ item.quantity|qty }}</td>
         <td class="num">{{ item.rate|amount }}</td>
-        <td class="num">{{ item.discount_amount|amount }}</td>
+        {% if cols.discount %}<td class="num">{{ item.discount_amount|amount }}</td>{% endif %}
         <td class="num">{{ item.total_amount|amount }}</td>
       </tr>
       {% empty %}
@@ -47,7 +48,7 @@
         <th colspan="3" class="num">Totals:</th>
         <th class="num">{{ total_qty|qty }}</th>
         <th></th>
-        <th class="num">{{ total_discount|amount }}</th>
+        {% if cols.discount %}<th class="num">{{ total_discount|amount }}</th>{% endif %}
         <th class="num">{{ grand_total|amount }}</th>
       </tr>
     </tfoot>

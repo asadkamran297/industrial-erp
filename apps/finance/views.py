@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 
-from apps.core.constants import FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_RECEIPT_UPLOAD_TYPES, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_HEADERLESS_TYPES, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
+from apps.core.constants import VOUCHER_ENTRY_BY_TYPE, VOUCHER_ENTRY_LABELS, VOUCHER_TYPE_JOURNAL, FIN_MONEY_MODE_SUFFIX, FIN_ACCOUNT_LEDGER_CHOICES, FIN_ACCOUNT_TYPE_CHOICES, FIN_COA_ACCOUNT_TYPE_CHOICES, FIN_ACCOUNT_ROLE_LABELS, FIN_PAYMENT_CONDITIONAL_FIELDS, FIN_PAYMENT_METHOD_FIELDS, FIN_RECEIPT_UPLOAD_TYPES, FIN_SETTLEMENT_HEADER_ROLES, FIN_VOUCHER_HEADER_ROLES, FIN_VOUCHER_LABELS, FIN_VOUCHER_LINE_ROLES, FIN_VOUCHER_PARTY_ROLES, FIN_VOUCHER_STATUS_CHOICES, FIN_VOUCHER_TYPE_CHOICES, FIN_VOUCHER_TYPE_PICKER_META, RECORD_STATUS_CHOICES, STATUS_ACTIVE, VOUCHER_HEADERLESS_TYPES, VOUCHER_SETTLEMENT_TYPES, VOUCHER_SIMPLE_SIDES, YES_NO_CHOICES
 from apps.configurations.models import PaymentMethod
 from apps.core.formatting import format_date
 from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin, report_sort
@@ -274,12 +274,15 @@ class AccountVoucherListView(SortableListMixin, SearchFilterPaginationMixin, Pag
         context["period_end_display"] = format_date(context["period_end"])
         context["voucher_type_choices"] = FIN_VOUCHER_TYPE_CHOICES
         selected_type = self.request.GET.get("voucher_type", "")
+        money_mode = self.request.GET.get("money_mode", "")
         context["selected_voucher_type"] = selected_type
-        label = dict(FIN_VOUCHER_TYPE_CHOICES).get(selected_type, "")
-        context["list_title"] = f"{label} Details" if label else "Vouchers"
+        entry = VOUCHER_ENTRY_BY_TYPE.get((selected_type, money_mode if selected_type != VOUCHER_TYPE_JOURNAL else ""))
+        label = VOUCHER_ENTRY_LABELS.get(entry) or dict(FIN_VOUCHER_TYPE_CHOICES).get(selected_type, "")
+        context["list_title"] = label or "Vouchers"
         context["add_label"] = f"Add {label}" if label else "Add Voucher"
         creatable = {code for code, *_rest in FIN_VOUCHER_TYPE_PICKER_META}
         context["add_type"] = selected_type if selected_type in creatable else FIN_VOUCHER_TYPE_PICKER_META[0][0]
+        context["add_money_mode"] = money_mode if entry and money_mode else ""
         context["can_add_type"] = not selected_type or selected_type in creatable
         context["period_choices"] = (
             ("this_month", "This Month"), ("last_month", "Last Month"),
@@ -334,12 +337,27 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         initial.setdefault("voucher_date", timezone.localdate())
         return initial
 
+    def _money_mode(self):
+        mode = (self.request.GET.get("money_mode") or "").strip()
+        if self._selected_type() in VOUCHER_HEADERLESS_TYPES:
+            return ""
+        if self.object and getattr(self.object, "pk", None):
+            return money_mode_for_account(self.object.account_no) or mode
+        return mode if mode in FIN_MONEY_MODE_SUFFIX else ""
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["voucher_type_meta"] = FIN_VOUCHER_TYPE_PICKER_META
         context["selected_voucher_type"] = self._selected_type()
-        context["selected_voucher_type_label"] = dict(FIN_VOUCHER_TYPE_CHOICES).get(self._selected_type(), "")
-        preview_mode = "" if self._selected_type() in VOUCHER_HEADERLESS_TYPES else "cash"
+        mode = self._money_mode()
+        entry = VOUCHER_ENTRY_BY_TYPE.get((self._selected_type(), mode))
+        context["selected_money_mode"] = mode
+        context.setdefault("money_mode", mode)
+        context["voucher_entry"] = entry
+        context["selected_voucher_type_label"] = VOUCHER_ENTRY_LABELS.get(entry) or dict(FIN_VOUCHER_TYPE_CHOICES).get(self._selected_type(), "")
+        label = context["selected_voucher_type_label"]
+        context["voucher_heading"] = label if label.endswith("Voucher") else f"{label} Voucher"
+        preview_mode = "" if self._selected_type() in VOUCHER_HEADERLESS_TYPES else (mode or "cash")
         context["next_voucher_no"] = next_voucher_number(self._selected_type(), preview_mode)
         money_groups = money_account_codes()
         customer_codes = receivable_account_codes()
@@ -360,7 +378,9 @@ class AccountVoucherCreateView(AuditSaveMixin, PagePermissionRequiredMixin, Crea
         context["voucher_accounts"] = accounts
         context["simple_voucher_types"] = list(VOUCHER_SIMPLE_SIDES)
         context["simple_voucher_sides"] = {code: list(sides) for code, sides in VOUCHER_SIMPLE_SIDES.items()}
-        context["voucher_header_roles"] = FIN_VOUCHER_HEADER_ROLES
+        context["voucher_header_roles"] = (
+            {**FIN_VOUCHER_HEADER_ROLES, self._selected_type(): (mode,)} if mode else FIN_VOUCHER_HEADER_ROLES
+        )
         context["voucher_line_roles"] = FIN_VOUCHER_LINE_ROLES
         context["settlement_header_roles"] = FIN_SETTLEMENT_HEADER_ROLES
         context["voucher_party_roles"] = FIN_VOUCHER_PARTY_ROLES

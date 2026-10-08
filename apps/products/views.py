@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -38,6 +39,7 @@ PRODUCT_COLUMNS = ColumnSet("products.products", (
     Column("fix_weight", "Fix Weight", default=False),
     Column("actual_weight", "Actual Weight", default=False),
     Column("color", "Color", default=False),
+    Column("rate", "Rate"),
     Column("qty", "Qty"),
     Column("stock_kg", "Stock (Kg)"),
     Column("status", "Status"),
@@ -69,7 +71,11 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        rates = selectors.current_rate_map()
+        for row in context["rows"]:
+            row.current_rate = rates.get(row.pk)
         context["tree_rows"] = selectors.tree_rows(context["rows"])
+        context["board_tiles"] = self.tiles()
         context["title"] = "Products"
         context["create_url"] = reverse("products:product_create")
         context["breadcrumbs"] = _crumbs()
@@ -81,6 +87,28 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
         context["column_menu"] = PRODUCT_COLUMNS.menu(self.request.session)
         context["columns_url"] = reverse_lazy("products:product_columns")
         return context
+
+    def tiles(self):
+        """One clickable tile per product type, counted over the other filters."""
+        query = self.request.GET.copy()
+        current = query.pop("specification", [""])[0]
+        query.pop("page", None)
+        items = selectors.items()
+        search = (self.request.GET.get("q") or "").strip()
+        if search:
+            items = items.filter(Q(name__icontains=search) | Q(complete_code__icontains=search) | Q(quick_code__icontains=search))
+        if self.request.GET.get("status"):
+            items = items.filter(status=self.request.GET["status"])
+        if self.request.GET.get("account"):
+            items = items.filter(account_link__purchase_account_id=self.request.GET["account"])
+        counts = dict(items.values_list("specification").annotate(n=Count("id")).order_by())
+        base = query.urlencode()
+        tiles = [{"label": "All products", "value": sum(counts.values()), "tone": "slate", "icon": "box", "href": f"?{base}", "on": not current}]
+        tones = ("amber", "violet", "green", "teal", "sky", "rose", "slate")
+        for (code, label), tone in zip(PRD_SPECIFICATION_CHOICES, tones):
+            if counts.get(code):
+                tiles.append({"label": label, "value": counts[code], "tone": tone, "icon": "layers", "href": f"?{base}&specification={code}" if base else f"?specification={code}", "on": current == code})
+        return tiles
 
     def get_filter_specs(self):
         return [

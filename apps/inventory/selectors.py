@@ -7,6 +7,8 @@ from django.db.models import Case, Count, DecimalField, F, Sum, Value, When
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
+    INVENTORY_KIND_PRODUCT,
+    INVENTORY_KIND_SERVICE,
     PAY_MODE_CARD,
     PAY_MODE_CASH,
     PAY_MODE_CREDIT,
@@ -414,3 +416,12 @@ def cashier_options():
 
     users = get_user_model().objects.filter(posted_sales_invoices__isnull=False).distinct().order_by("username")
     return [(u.pk, u.get_full_name() or u.username) for u in users]
+
+
+def picker_item_kinds():
+    """Item kinds the pickers offer: services only while General Settings has them on."""
+    from apps.core import features
+
+    if features.enabled(features.SERVICES):
+        return (INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE)
+    return (INVENTORY_KIND_PRODUCT,)

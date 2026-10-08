@@ -1,6 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% capture as add_url %}{% if can_add and can_add_type %}{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}{% endif %}{% endcapture %}
+{% capture as add_url %}{% if can_add and can_add_type %}{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}{% if add_money_mode %}&amp;money_mode={{ add_money_mode }}{% endif %}{% endif %}{% endcapture %}
 {% url 'finance:account_voucher_export' as export_csv_url %}
 {% component "table/board" title=list_title add_url=add_url add_label=add_label table_id="voucher-table" search_placeholder="Search vouchers" date_filters_enabled=True export_csv_url=export_csv_url %}
   {% slot tiles %}

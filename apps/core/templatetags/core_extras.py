@@ -26,6 +26,21 @@ def amount(value):
     return format_amount(value)
 
 
+@register.simple_tag(takes_context=True)
+def doc_columns(context, lines, side="purchase"):
+    """``{"tax": bool, "discount": bool}``: a column shows while its feature is on, or the document already carries it."""
+    from apps.core import features
+
+    flags = context.get("features") or features.current()
+    tax_key = features.PURCHASE_TAX if side == "purchase" else features.SALES_TAX
+    discount_key = features.PURCHASE_DISCOUNT if side == "purchase" else features.SALES_DISCOUNT
+    lines = list(lines or [])
+    return {
+        "tax": flags[tax_key] or any((getattr(line, "tax_perc", 0) or getattr(line, "tax_amount", 0)) for line in lines),
+        "discount": flags[discount_key] or any(getattr(line, "discount_amount", 0) for line in lines),
+    }
+
+
 @register.filter(name="rupees")
 def rupees(value):
     """Whole rupees with thousands separators, for books printed without paisa."""

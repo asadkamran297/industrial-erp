@@ -1,5 +1,6 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
+{% doc_columns sale.items.all "sales" as cols %}
 <section class="form-stack">
   {% url 'inventory:sale_invoice_list' as list_url %}
   {% capture as status_tone %}{% if sale.posted == 'Y' %}posted{% else %}draft{% endif %}{% endcapture %}
@@ -17,7 +18,7 @@
 
   <div class="tiles">
     {% include "components/table/tile.html" with tone="sky" icon="sum" value=bill_amount|amount label="Bill Amount" only %}
-    {% include "components/table/tile.html" with tone="amber" icon="minus" value=discount_total|amount label="Discount" only %}
+    {% if cols.discount %}{% include "components/table/tile.html" with tone="amber" icon="minus" value=discount_total|amount label="Discount" only %}{% endif %}
     {% include "components/table/tile.html" with tone="green" icon="cash" value=payable_amount|amount label="Payable" only %}
   </div>
 
@@ -31,15 +32,15 @@
   {% endif %}
 
   {% component "table/board" title="" table_id="sale-items" no_filters=True no_pagination=True %}
-    <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Tax</th><th class="num">Discount</th><th class="num">Net</th></tr></thead>
+    <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th>{% if cols.tax %}<th class="num">Tax</th>{% endif %}{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Net</th></tr></thead>
     <tbody>
       {% for item in sale.items.all %}
       <tr>
         <td class="strong">{{ item.item_name }}</td>
         <td class="num">{{ item.quantity|qty }}</td>
         <td class="num">{{ item.price|amount }}</td>
-        <td class="num">{{ item.tax_amount|amount }}</td>
-        <td class="num">{{ item.discount_amount|amount }}</td>
+        {% if cols.tax %}<td class="num">{{ item.tax_amount|amount }}</td>{% endif %}
+        {% if cols.discount %}<td class="num">{{ item.discount_amount|amount }}</td>{% endif %}
         <td class="num strong">{{ item.net_total|amount }}</td>
       </tr>
       {% empty %}

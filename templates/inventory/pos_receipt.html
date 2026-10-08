@@ -26,9 +26,10 @@
     </div>
     <hr>
 
+    {% doc_columns items "sales" as cols %}
     <table>
       <thead>
-        <tr><th class="c-sr">#</th><th>Item</th><th class="r c-qty">Qty</th><th class="r c-price">Price</th><th class="r c-disc">Disc</th><th class="r c-amt">Amount</th></tr>
+        <tr><th class="c-sr">#</th><th>Item</th><th class="r c-qty">Qty</th><th class="r c-price">Price</th>{% if cols.discount %}<th class="r c-disc">Disc</th>{% endif %}<th class="r c-amt">Amount</th></tr>
       </thead>
       <tbody>
         {% for item in items %}
@@ -37,7 +38,7 @@
           <td class="item-name">{{ item.item_name }}</td>
           <td class="r">{{ item.quantity|qty }}</td>
           <td class="r">{{ item.price|amount }}</td>
-          <td class="r">{{ item.discount_amount|amount }}</td>
+          {% if cols.discount %}<td class="r">{{ item.discount_amount|amount }}</td>{% endif %}
           <td class="r">{{ item.net_total|amount }}</td>
         </tr>
         {% endfor %}
@@ -47,7 +48,7 @@
           <td colspan="2">Total ({{ items|length }})</td>
           <td class="r">{{ total_qty|qty }}</td>
           <td></td>
-          <td class="r">{{ total_discount|amount }}</td>
+          {% if cols.discount %}<td class="r">{{ total_discount|amount }}</td>{% endif %}
           <td class="r">{{ sale.net_amount|amount }}</td>
         </tr>
       </tfoot>
@@ -55,7 +56,7 @@
 
     <div class="totals">
       <div class="row"><span>Total</span><span>{{ sale.total_amount|amount }}</span></div>
-      <div class="row"><span>Discount</span><span>{{ sale.discount_amount|amount }}</span></div>
+      {% if cols.discount %}<div class="row"><span>Discount</span><span>{{ sale.discount_amount|amount }}</span></div>{% endif %}
       {% if sale.tax_amount %}<div class="row"><span>Tax</span><span>{{ sale.tax_amount|amount }}</span></div>{% endif %}
       <div class="row grand"><span>NET PAYABLE</span><span>{{ sale.net_amount|amount }}</span></div>
     </div>

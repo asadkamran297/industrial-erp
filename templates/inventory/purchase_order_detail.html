@@ -105,9 +105,10 @@
       {% endcomponent %}
     </div>
     <div class="overflow-x-auto">
+      {% doc_columns order.items.all "purchase" as cols %}
       <table class="data-table doc-table">
         <thead>
-          <tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th><th class="num">Tax %</th><th class="num">Discount</th><th class="num">Amount</th></tr>
+          <tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th>{% if cols.tax %}<th class="num">Tax %</th>{% endif %}{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr>
         </thead>
         <tbody>
           {% for item in order.items.all %}
@@ -129,14 +130,14 @@
               {% include "components/forms/control.html" with type="number" step="0.01" min=0 name=rate_name value=item.rate|stringformat:'f'|floatformat:'-2' form_id="order-lines" extra="cell-edit" cell=True attrs=rate_attrs only %}
               {% else %}{{ item.rate|amount }}{% endif %}
             </td>
-            <td class="num">{{ item.tax_perc|floatformat:"-2" }}</td>
-            <td class="num">
+            {% if cols.tax %}<td class="num">{{ item.tax_perc|floatformat:"-2" }}</td>{% endif %}
+            {% if cols.discount %}<td class="num">
               {% if can_edit_lines %}
               <span x-show="!editing">{{ item.discount_amount|amount }}</span>
               {% capture as disc_name %}discount_{{ item.pk }}{% endcapture %}{% capture as disc_attrs %}x-show="editing" x-cloak aria-label="Discount on {{ item.descr }}"{% endcapture %}
               {% include "components/forms/control.html" with type="number" step="0.01" min=0 name=disc_name value=item.discount_amount|stringformat:'f'|floatformat:'-2' form_id="order-lines" extra="cell-edit" cell=True attrs=disc_attrs only %}
               {% else %}{{ item.discount_amount|amount }}{% endif %}
-            </td>
+            </td>{% endif %}
             <td class="num strong">{{ item.total_amount|amount }}</td>
           </tr>
           {% empty %}
@@ -181,7 +182,7 @@
       {% component "table/lines_row" pk=forloop.counter span=8 %}
         <table class="lines-table">
           <thead>
-            <tr><th class="w-8">#</th><th>Item</th><th class="num">Ordered</th><th>Unit</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th><th class="num">Received</th><th class="num">Balance</th><th>Invoiced</th></tr>
+            <tr><th class="w-8">#</th><th>Item</th><th class="num">Ordered</th><th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th><th class="num">Received</th><th class="num">Balance</th><th>Invoiced</th></tr>
           </thead>
           <tbody>
             {% for receipt in note.lines %}
@@ -191,7 +192,7 @@
               <td class="num">{{ receipt.line.quantity|qty }}</td>
               <td>{{ receipt.line.uom.title|default:"—" }}</td>
               <td class="num">{{ receipt.line.rate|amount }}</td>
-              <td class="num">{{ receipt.line.discount_amount|amount }}</td>
+              {% if cols.discount %}<td class="num">{{ receipt.line.discount_amount|amount }}</td>{% endif %}
               <td class="num strong">{{ receipt.line.total_amount|amount }}</td>
               <td class="num fig-in">{{ receipt.received_units|qty }}</td>
               <td class="num {% if receipt.line.open_receive_qty %}fig-due{% else %}fig-nil{% endif %}">{% if receipt.line.closed %}<span class="fig-nil">Closed</span>{% else %}{{ receipt.line.open_receive_qty|qty }}{% endif %}</td>

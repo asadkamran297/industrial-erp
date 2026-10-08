@@ -1,0 +1,59 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+<section class="form-stack">
+  {% include "components/ui/page_header.html" with title=title only %}
+  {% include "components/ui/tabs.html" with tabs=tabs label="General settings" only %}
+
+  <form method="post" enctype="multipart/form-data" class="card card-rail">{% csrf_token %}
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="card-body form-stack">
+      {% if tab == "features" %}
+      <div class="settings-grid">
+        {% for group, items in feature_groups %}
+        <fieldset class="settings-group">
+          <legend class="settings-group__title">{{ group }}</legend>
+          {% for item in items %}
+          <label class="check-row">{% include "components/forms/control.html" with type="checkbox" name="features" value=item.key checked=item.on only %}<span>{{ item.label }}</span></label>
+          {% endfor %}
+        </fieldset>
+        {% endfor %}
+      </div>
+
+      {% elif tab == "numbering" %}
+      <div class="overflow-x-auto">
+        <table class="data-table">
+          <thead><tr><th>Series</th><th>Prefix</th><th class="num">Start</th><th class="num">Padding</th><th class="num">Last used</th><th>Next</th></tr></thead>
+          <tbody>
+            {% for row in series_rows %}
+            <tr>
+              <td class="strong">{{ row.series.label }}{% if row.error %}<p class="field__error">{{ row.error }}</p>{% endif %}</td>
+              {% capture as prefix_name %}{{ row.series.code }}-prefix{% endcapture %}{% capture as start_name %}{{ row.series.code }}-start_number{% endcapture %}{% capture as pad_name %}{{ row.series.code }}-padding{% endcapture %}
+              <td class="w-32">{% include "components/forms/control.html" with name=prefix_name value=row.values.prefix maxlength=12 required=True cell=True attrs='aria-label="Prefix"' only %}</td>
+              <td class="w-32">{% include "components/forms/control.html" with type="number" name=start_name value=row.values.start_number min=0 required=True cell=True kind="num" attrs='aria-label="Start"' only %}</td>
+              <td class="w-24">{% include "components/forms/control.html" with type="number" name=pad_name value=row.values.padding min=0 max=10 required=True cell=True kind="num" attrs='aria-label="Padding"' only %}</td>
+              <td class="num muted">{{ row.last|default_if_none:"—" }}</td>
+              <td class="strong num">{{ row.next }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% elif tab == "company" %}
+      {% include "components/forms/form_errors.html" with form=company_form only %}
+      <div class="form-grid form-grid--cols-3">
+        {% for field in company_form %}{% include "components/forms/field.html" with field=field only %}{% endfor %}
+      </div>
+
+      {% else %}
+      {% include "components/forms/form_errors.html" with form=wheat_form only %}
+      <div class="form-grid form-grid--cols-3">
+        {% for field in wheat_form %}{% include "components/forms/field.html" with field=field kind="money" only %}{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% url 'portal:dashboard' as cancel_url %}
+    {% include "components/forms/submit_bar.html" with cancel_url=cancel_url label="Save" only %}
+  </form>
+</section>
+{% endblock %}

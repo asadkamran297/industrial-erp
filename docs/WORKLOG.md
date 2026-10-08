@@ -5,6 +5,41 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-08
+
+### Local
+
+- Hosting moved to a new cPanel account (premium233 / `flouwwgu`). `.cpanel.yml`
+  and `deploy/cpanel/passenger_wsgi.py` now resolve the checkout from `$HOME`,
+  so no username lives in git (commit `e0a2a00`, pushed).
+- `deploy/cpanel.config` points at the new account; upload-ready `.env`,
+  `htaccess` and `passenger_wsgi.py` generated in `deploy/out/` (git-ignored).
+
+### Live
+
+- New account set up through the cPanel UI: Python app `erp_app` (3.12.14),
+  database `flouwwgu_erp`, repo cloned to `/home/flouwwgu/industrial_erp`,
+  `passenger_wsgi.py`, `public_html/.htaccess` and checkout `.env` uploaded.
+- Live at http://flourorbit.com on the new account (deploy of `e0a2a00`, exit 0):
+  82 migrations, collectstatic, `seed core access_control` (240 permissions,
+  593 roles), superuser `admin`. Fresh install, no business data.
+- TLS: the existing Let's Encrypt cert from `deploy/ssl/` (flourorbit.com +
+  www, expires 2026-11-29) installed through SSL/TLS → Install; HTTPS verifies
+  on both names. `SECURE_SSL_REDIRECT=True` in the server `.env`, app restarted
+  from the Python selector; HTTP now 301s to HTTPS.
+- New server PostgreSQL is also 10.23, so live stays on MySQL.
+- An empty PostgreSQL database `flouwwgu_erp` was created only to read the
+  version; unused.
+
+### Open
+
+- New cPanel password and the MySQL user password were shared in chat; rotate
+  both (MySQL: update `DATABASE_URL` in the server `.env` and `DB_PASS` in
+  `deploy/cpanel.config` to match, then redeploy).
+- Settings/vouchers/numbering work is still uncommitted locally, so it is not
+  on live yet.
+- Renew the certificate before 2026-11-29 (manual ACME, see runbook).
+
 ## 2026-10-06
 
 ### Local
@@ -14,6 +49,9 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - Memorize: `finance.SavedReport` (`fin_saved_reports`, migration `0017_saved_reports`, indexes `(user, report_key)`, `(report_key, shared)`); star menu on every statement toolbar saves the current querystring by name, optionally shared; owner can remove (soft delete).
 - Day Book rebuilt in the mill's paper format (`/finance/daybook/`): `report_selectors.day_book()` splits each posted voucher into Dr / Cr pairs (equal amounts first, then in order) and files each pair under Bank Payment, Bank Received, Cash Payment, Cash Received, Wheat Purchase, Purchase, Credit Sale, Freight Charges, Withholding Tax, Broker Commission, Sale / Purchase Return, Journal (`DAYBOOK_SECTIONS`); cash pairs count on the cash side only so B/F + Dr − Cr = C/F. Sale / wheat descriptions built from the documents (items @ rate, kg @ rate/mund, Veh#). Date range, previous/next, Excel, A4 print with page numbers (`components/report/day_book.html`). Old `services.daybook()` removed. User asked for it ditto: amounts in whole rupees (`rupees` filter), and withholding shown as Supplier Dr / Tax Cr (supplier credit grossed up for display only; totals unchanged).
 - Local timings: P&L by month 100 ms / 2 queries, BS by month 18 ms / 3, cash flow 14 ms / 2, TB 3 ms / 2, GL 36 ms / 4. Local BS, TB and cash flow tie.
+
+- Built the owner's list (`docs/UX_SETTINGS_VOUCHERS_MASTER_PROMPT.md`): top-bar Sale/Voucher buttons removed; **General Settings** (`/portal/settings/`, page `settings`) with Features / Numbering / Company / Wheat tabs. Feature switches in `apps/core/features.py` (stored in `SystemConfiguration` `core.features`, no migration): purchase tax / discount / freight, wheat WHT / brokerage, sales tax / discount, services (off by default) — forms, PO/PI layouts, line columns on details/lists/prints (`{% doc_columns %}` keeps a column on old documents that carry a value), wheat slip freight, services forced 0. Numbering: `core.DocumentSeries` (`core_document_series`, migration `core.0005`) + `apps/core/numbering.py`; PO/PI/PR/SO/SAL/SR and voucher entries use it, start number editable (0 allowed, e.g. PI-000000), lowering below a used number refused; numbers no longer rewritten on later saves. Five voucher entries (Cash/Bank Payment/Receipt, Journal) in nav, list titles, fixed cash/bank on the form, own series CP/CR/BP/BR/JV. Journal shows Dr/Cr difference and blocks Save. Products board: type tiles, current rate column, setup links folded into one menu. Services hidden from item tab, form and pickers. Global CSS polish (focus, hover, scrollbars, reduced motion). `apps/portal/tests_settings.py` (7 tests).
+- Earlier the same day: wrote `docs/UX_SETTINGS_VOUCHERS_MASTER_PROMPT.md`: General Settings screen with feature switches + `core_document_series` numbering (start number editable, e.g. PI-000000), five voucher entries (Cash/Bank Payment/Receipt, Journal), voucher form rebuild, products board, hide Services, remove top-bar Sale/Voucher buttons, UI/UX pass.
 
 ### Open
 

@@ -42,6 +42,7 @@ from apps.core.constants import (
     YES,
     YES_NO_CHOICES,
 )
+from apps.core import numbering
 from apps.core.models import BaseModel
 
 
@@ -318,13 +319,11 @@ class PurchaseOrder(BaseModel):
         return reasons.get(self.close_reason, self.close_reason)
 
     def save(self, *args, **kwargs):
-        if not self.seq_num:
-            last = (
-                PurchaseOrder.all_objects.order_by("-seq_num")
-                .values_list("seq_num", flat=True).first() or 0
-            )
-            self.seq_num = last + 1
-        self.purchase_num = f"PO-{self.seq_num}"
+        if self.seq_num is None:
+            last = PurchaseOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+            self.seq_num = numbering.next_seq(numbering.SERIES_PURCHASE_ORDER, last)
+        if not self.purchase_num:
+            self.purchase_num = numbering.format_number(numbering.SERIES_PURCHASE_ORDER, self.seq_num)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -568,14 +567,11 @@ class PurchaseInvoice(BaseModel):
         )
 
     def save(self, *args, **kwargs):
-        if not self.seq_num:
-            last = (
-                PurchaseInvoice.all_objects.order_by("-seq_num")
-                .values_list("seq_num", flat=True).first() or 0
-            )
-            self.seq_num = last + 1
+        if self.seq_num is None:
+            last = PurchaseInvoice.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+            self.seq_num = numbering.next_seq(numbering.SERIES_PURCHASE_INVOICE, last)
         if not self.invoice_num:
-            self.invoice_num = f"PI-{self.seq_num:06d}"
+            self.invoice_num = numbering.format_number(numbering.SERIES_PURCHASE_INVOICE, self.seq_num)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -941,14 +937,11 @@ class SalesOrder(BaseModel):
         return STATUS_SUBMITTED
 
     def save(self, *args, **kwargs):
-        if not self.seq_num:
-            last = (
-                SalesOrder.all_objects.order_by("-seq_num")
-                .values_list("seq_num", flat=True).first() or 0
-            )
-            self.seq_num = last + 1
+        if self.seq_num is None:
+            last = SalesOrder.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
+            self.seq_num = numbering.next_seq(numbering.SERIES_SALES_ORDER, last)
         if not self.order_num:
-            self.order_num = f"SO-{self.seq_num:06d}"
+            self.order_num = numbering.format_number(numbering.SERIES_SALES_ORDER, self.seq_num)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -1071,10 +1064,11 @@ class POSMaster(BaseModel):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.sale_seq_num:
-            last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first() or 0
-            self.sale_seq_num = last + 1
-        self.sale_num = f"SAL-{self.sale_seq_num}"
+        if self.sale_seq_num is None:
+            last = POSMaster.all_objects.order_by("-sale_seq_num").values_list("sale_seq_num", flat=True).first()
+            self.sale_seq_num = numbering.next_seq(numbering.SERIES_SALE_INVOICE, last)
+        if not self.sale_num:
+            self.sale_num = numbering.format_number(numbering.SERIES_SALE_INVOICE, self.sale_seq_num)
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -1169,10 +1163,11 @@ class POSReturnMaster(BaseModel):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.return_seq_num:
-            last = POSReturnMaster.all_objects.order_by("-return_seq_num").values_list("return_seq_num", flat=True).first() or 0
-            self.return_seq_num = last + 1
-        self.return_num = f"SR-{self.return_seq_num}"
+        if self.return_seq_num is None:
+            last = POSReturnMaster.all_objects.order_by("-return_seq_num").values_list("return_seq_num", flat=True).first()
+            self.return_seq_num = numbering.next_seq(numbering.SERIES_SALE_RETURN, last)
+        if not self.return_num:
+            self.return_num = numbering.format_number(numbering.SERIES_SALE_RETURN, self.return_seq_num)
         self.sale_transaction_id = self.pos_master.transaction_id
         self.sale_num = self.pos_master.sale_num
         if not self.customer_id:

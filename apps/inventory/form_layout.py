@@ -24,6 +24,7 @@ from dataclasses import dataclass
 import re
 
 from apps.configurations.models import SystemConfiguration
+from apps.core import features
 
 FORM_PURCHASE_ORDER = "purchase_order"
 FORM_PURCHASE_INVOICE = "purchase_invoice"
@@ -143,6 +144,19 @@ def _clean_extra(raw):
     }
 
 
+FEATURE_FIELDS = {
+    "tax_amount": features.PURCHASE_TAX,
+    "discount_amount": features.PURCHASE_DISCOUNT,
+    "freight_amount": features.PURCHASE_FREIGHT,
+}
+
+
+def features_hidden(form=FORM_PURCHASE_ORDER) -> set:
+    """Boxes General Settings has switched off for every site screen."""
+    flags = features.current()
+    return {code for code, key in FEATURE_FIELDS.items() if not flags[key]}
+
+
 def get_layout(form=FORM_PURCHASE_ORDER):
     """What the form should render, cleaned and ready for a template."""
     record = _record(form)
@@ -157,6 +171,8 @@ def get_layout(form=FORM_PURCHASE_ORDER):
         seen.add(field["code"])
         extra.append(field)
 
+    switched_off = features_hidden(form)
+    hidden |= switched_off & codes
     return {
         "shown": {field.code: field.code not in hidden for field in _fields_for(form)},
         "hidden": sorted(hidden),
@@ -165,7 +181,7 @@ def get_layout(form=FORM_PURCHASE_ORDER):
         "optional_fields": [
             {"code": field.code, "label": field.label, "group": field.group,
              "note": field.note, "on": field.code not in hidden}
-            for field in _fields_for(form)
+            for field in _fields_for(form) if field.code not in switched_off
         ],
     }
 

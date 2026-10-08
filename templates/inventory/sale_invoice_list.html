@@ -61,8 +61,9 @@
     {% component "table/lines_row" pk=invoice.pk span=12 %}
       {% with line_list=invoice.items.all %}
       {% if line_list %}
+      {% doc_columns line_list "sales" as cols %}
       <table class="lines-table">
-        <thead><tr><th>#</th><th>Item</th><th class="num">Quantity</th><th>Unit</th><th class="num">Rate</th><th class="num">Discount</th><th class="num">Amount</th></tr></thead>
+        <thead><tr><th>#</th><th>Item</th><th class="num">Quantity</th><th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
         <tbody>
           {% for line in line_list %}
           <tr>
@@ -71,7 +72,7 @@
             <td class="num">{{ line.quantity|qty }}</td>
             <td>{% if line.product %}{{ line.product.get_unit_display }}{% else %}{{ line.inventory_item.uom.title|default:"—" }}{% endif %}</td>
             <td class="num">{{ line.price|amount }}</td>
-            <td class="num">{{ line.discount_amount|amount }}</td>
+            {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
             <td class="num strong">{{ line.net_total|amount }}</td>
           </tr>
           {% endfor %}

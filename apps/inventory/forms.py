@@ -269,6 +269,15 @@ class InventoryItemForm(StyledModelForm):
     def clean_code(self):
         return (self.cleaned_data.get("code") or "").strip().upper()
 
+    def clean_item_kind(self):
+        from apps.core import features
+
+        kind = self.cleaned_data.get("item_kind")
+        was_service = self.instance.pk and self.instance.item_kind == INVENTORY_KIND_SERVICE
+        if kind == INVENTORY_KIND_SERVICE and not was_service and not features.enabled(features.SERVICES):
+            raise ValidationError("Services are switched off in General Settings.")
+        return kind
+
     def clean_new_conversion_factor(self):
         factor = self.cleaned_data.get("new_conversion_factor")
         if factor is not None and factor <= 0:
