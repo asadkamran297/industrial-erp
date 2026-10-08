@@ -7,7 +7,7 @@ it. See docs/DEPLOYMENT.md.
 import os
 import sys
 
-CHECKOUT = "/home/flouruge/industrial_erp"
+CHECKOUT = os.path.expanduser("~/industrial_erp")
 
 sys.path.insert(0, CHECKOUT)
 os.chdir(CHECKOUT)

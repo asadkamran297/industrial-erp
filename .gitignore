@@ -83,3 +83,6 @@ deploy/backups/sql/
 
 # Passenger restart trigger written by the deploy script
 tmp/
+
+# Per-account files generated for upload (contain secrets)
+deploy/out/
