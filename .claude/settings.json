@@ -7,7 +7,23 @@
       "Bash(git commit -q -m 'fix\\(deploy\\): filter shell banner out of eval in reseed script *)",
       "Bash(git push *)",
       "Bash(git merge *)",
-      "Bash(curl -sS -m 30 -o /dev/null -w \"%{http_code}\\\\n\" https://flourorbit.com/accounts/login/)"
+      "Bash(curl -sS -m 30 -o /dev/null -w \"%{http_code}\\\\n\" https://flourorbit.com/accounts/login/)",
+      "Bash(git check-ignore *)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "ClaudeInChromeDomain(premium233.web-hosting.com:2083)",
+      "Bash(curl -sS -m 25 -o /dev/null -w \"%{http_code}\\\\n\" -k https://flourorbit.com/accounts/login/)",
+      "Bash(python -c ' *)",
+      "Bash(curl -sS -m 20 http://flourorbit.com/accounts/login/)",
+      "Bash(curl -sS -m 20 -o /dev/null -w \"css %{http_code}\\\\n\" http://flourorbit.com/static/dist/app.css)",
+      "Bash(python -)",
+      "Bash(sed -i 's/^SECURE_SSL_REDIRECT=False$/SECURE_SSL_REDIRECT=True/' deploy/out/.env)",
+      "Bash(grep -c '^SECURE_SSL_REDIRECT=True$' deploy/out/.env)",
+      "Bash(python manage.py check)",
+      "Bash(python manage.py makemigrations --check --dry-run)",
+      "Bash(python manage.py ui_lint)",
+      "Bash(python manage.py test apps.inventory.tests apps.portal.tests_settings)",
+      "Bash(npm run *)",
+      "Bash(git commit *)"
     ]
   }
 }
