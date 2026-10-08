@@ -27,6 +27,8 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   www, expires 2026-11-29) installed through SSL/TLS → Install; HTTPS verifies
   on both names. `SECURE_SSL_REDIRECT=True` in the server `.env`, app restarted
   from the Python selector; HTTP now 301s to HTTPS.
+- Settings / document series / voucher work committed (`17a2acd`) and deployed
+  at `43219a0`: `core.0005_document_series` applied, exit 0.
 - New server PostgreSQL is also 10.23, so live stays on MySQL.
 - An empty PostgreSQL database `flouwwgu_erp` was created only to read the
   version; unused.
@@ -36,8 +38,6 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - New cPanel password and the MySQL user password were shared in chat; rotate
   both (MySQL: update `DATABASE_URL` in the server `.env` and `DB_PASS` in
   `deploy/cpanel.config` to match, then redeploy).
-- Settings/vouchers/numbering work is still uncommitted locally, so it is not
-  on live yet.
 - Renew the certificate before 2026-11-29 (manual ACME, see runbook).
 
 ## 2026-10-06
