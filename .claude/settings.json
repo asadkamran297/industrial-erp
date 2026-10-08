@@ -23,7 +23,8 @@
       "Bash(python manage.py ui_lint)",
       "Bash(python manage.py test apps.inventory.tests apps.portal.tests_settings)",
       "Bash(npm run *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git commit -q -m 'deploy: seed the demo book on the next deploy *)"
     ]
   }
 }
