@@ -29,6 +29,12 @@ One entry per working day. **Local** = changes in the repo/dev environment.
   from the Python selector; HTTP now 301s to HTTPS.
 - Settings / document series / voucher work committed (`17a2acd`) and deployed
   at `43219a0`: `core.0005_document_series` applied, exit 0.
+- Demo book seeded on live at the user's request (`SEED_DEMO=1` for one deploy
+  of `242cb52`, exit 0; flag removed in `018821c` and pulled to the server):
+  masters (980 records), then 40 customers, 200 staff/payroll rows, 50 wheat
+  slips, 25 bardana purchases, 50 stores POs + 45 invoices, 50 direct stores
+  purchases, 25 grinding runs, 50 atta/bran sales, 50 vouchers. Admin password
+  reset to the `.env` value (unchanged).
 - New server PostgreSQL is also 10.23, so live stays on MySQL.
 - An empty PostgreSQL database `flouwwgu_erp` was created only to read the
   version; unused.

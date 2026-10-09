@@ -24,7 +24,12 @@
       "Bash(python manage.py test apps.inventory.tests apps.portal.tests_settings)",
       "Bash(npm run *)",
       "Bash(git commit *)",
-      "Bash(git commit -q -m 'deploy: seed the demo book on the next deploy *)"
+      "Bash(git commit -q -m 'deploy: seed the demo book on the next deploy *)",
+      "Bash(MSYS_NO_PATHCONV=1 git show \"origin/master:.cpanel.yml\")",
+      "Bash(sed -i 's#export APPROOT=$HOME/industrial_erp SEED_DEMO=1 \\\\&\\\\&#export APPROOT=$HOME/industrial_erp \\\\&\\\\&#' .cpanel.yml)",
+      "Bash(git commit -q -m 'deploy: stop seeding the demo book *)",
+      "mcp__claude-in-chrome__tabs_create_mcp",
+      "ClaudeInChromeDomain(flourorbit.com)"
     ]
   }
 }
