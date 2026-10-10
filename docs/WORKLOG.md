@@ -5,6 +5,20 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-10
+
+### Live
+
+- Admin login reset at the user's request: `DJANGO_SUPERUSER_PASSWORD` changed
+  in the server `.env` (uploaded via `Fileman/upload_files`), redeploy of
+  `018821c` ran `ensure_superuser` ("Updated superuser 'admin'", exit 0).
+  Local `deploy/out/.env` and `deploy/cpanel.config` synced.
+
+### Open
+
+- cPanel ports were briefly IP-blocked (brute-force guard) before this; site
+  on 443 stayed up.
+
 ## 2026-10-08
 
 ### Local

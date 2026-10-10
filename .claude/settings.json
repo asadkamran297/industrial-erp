@@ -29,7 +29,12 @@
       "Bash(sed -i 's#export APPROOT=$HOME/industrial_erp SEED_DEMO=1 \\\\&\\\\&#export APPROOT=$HOME/industrial_erp \\\\&\\\\&#' .cpanel.yml)",
       "Bash(git commit -q -m 'deploy: stop seeding the demo book *)",
       "mcp__claude-in-chrome__tabs_create_mcp",
-      "ClaudeInChromeDomain(flourorbit.com)"
+      "ClaudeInChromeDomain(flourorbit.com)",
+      "Bash(curl -sS -o /dev/null -w \"443: %{http_code}\\\\n\" --max-time 15 https://flourorbit.com/)",
+      "Bash(curl -sS -o /dev/null -w \"2083: %{http_code}\\\\n\" --max-time 15 https://premium233.web-hosting.com:2083/)",
+      "Bash(curl -sS -o /dev/null -w \"2082: %{http_code}\\\\n\" --max-time 15 http://premium233.web-hosting.com:2082/)",
+      "Bash(sed -i 's/^DJANGO_SUPERUSER_PASSWORD=.*/DJANGO_SUPERUSER_PASSWORD=nva1D35CWAImhgXG!aZ9/' deploy/out/.env)",
+      "Bash(sed -i 's/^SUPERUSER_PASS=.*/SUPERUSER_PASS=nva1D35CWAImhgXG!aZ9/' deploy/cpanel.config)"
     ]
   }
 }
