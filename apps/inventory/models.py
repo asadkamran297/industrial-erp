@@ -1239,8 +1239,8 @@ class PurchaseReturnMaster(BaseModel):
     transaction_id = models.CharField(max_length=60, unique=True)
     return_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     return_num = models.CharField(max_length=40, unique=True, blank=True, null=True)
-    purchase_invoice = models.ForeignKey("PurchaseInvoice", related_name="returns", on_delete=models.PROTECT,
-                                         db_column="inv_purchase_invoice_id")
+    purchase_invoice = models.ForeignKey("PurchaseInvoice", null=True, blank=True, related_name="returns",
+                                         on_delete=models.PROTECT, db_column="inv_purchase_invoice_id")
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, on_delete=models.PROTECT,
                                        db_column="inv_purchase_order_id")
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, db_column="inv_config_supplier_id")
@@ -1269,9 +1269,13 @@ class PurchaseReturnMaster(BaseModel):
     def save(self, *args, **kwargs):
         if not self.return_num:
             self.return_num = None
-        self.purchase_order = self.purchase_invoice.purchase_order
-        self.supplier = self.purchase_invoice.supplier
-        self.total_purchase_amount = self.purchase_invoice.total_amount
+        if self.purchase_invoice_id:
+            self.purchase_order = self.purchase_invoice.purchase_order
+            self.supplier = self.purchase_invoice.supplier
+            self.total_purchase_amount = self.purchase_invoice.total_amount
+        else:
+            self.purchase_order = None
+            self.total_purchase_amount = Decimal("0.00")
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -1280,7 +1284,11 @@ class PurchaseReturnDetail(BaseModel):
     purchase_return_master = models.ForeignKey(PurchaseReturnMaster, related_name="items", on_delete=models.CASCADE, db_column="inv_purchase_return_master_id")
     invoice_line = models.ForeignKey(PurchaseInvoiceLine, null=True, blank=True, related_name="return_lines",
                                      on_delete=models.PROTECT, db_column="inv_purchase_invoice_item_id")
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, db_column="inv_inventory_code_id")
+    inventory_item = models.ForeignKey(InventoryItem, null=True, blank=True, on_delete=models.PROTECT,
+                                       db_column="inv_inventory_code_id")
+    product = models.ForeignKey("products.ProductNode", null=True, blank=True, related_name="purchase_return_lines",
+                                on_delete=models.PROTECT, db_column="prod_node_id")
+    bardana_ownership = models.CharField(max_length=20, choices=INV_BARDANA_OWNERSHIP_CHOICES, blank=True)
     item_code = models.CharField(max_length=60)
     item_name = models.CharField(max_length=180)
     uom = models.ForeignKey(UOM, null=True, blank=True, on_delete=models.PROTECT, db_column="inv_config_uom_id")
@@ -1291,10 +1299,30 @@ class PurchaseReturnDetail(BaseModel):
 
     class Meta:
         db_table = "inv_purchase_return_details"
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (Q(inventory_item__isnull=False) & Q(product__isnull=True))
+                    | (Q(inventory_item__isnull=True) & Q(product__isnull=False))
+                ),
+                name="inv_pr_line_one_item_kind",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["product", "-id"], name="inv_pr_line_product_idx"),
+        ]
+
+    @property
+    def is_product_line(self):
+        return self.product_id is not None
 
     def save(self, *args, **kwargs):
-        self.item_code = self.inventory_item.code
-        self.item_name = self.inventory_item.item_name
+        if self.product_id:
+            self.item_code = self.product.complete_code
+            self.item_name = self.product.name
+        else:
+            self.item_code = self.inventory_item.code
+            self.item_name = self.inventory_item.item_name
         self.total_price = ((self.quantity or 0) * (self.rate or 0)).quantize(TWO_DP)
         self.full_clean()
         super().save(*args, **kwargs)

@@ -14,15 +14,7 @@
   <div class="card-body">
     <div class="head-fields">
       <div class="head-fields__wide">
-        <div class="notch-field notch-field--action notch-field--tint">
-          <label class="notch-label" for="supplier">Supplier <span class="req">*</span></label>
-          {% component "forms/control" type="select" name="supplier" id="supplier" required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
-            <option value=""></option>
-            {% for row in suppliers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>{% endfor %}
-          {% endcomponent %}
-          {% include "components/ui/icon_button.html" with id="add-supplier" icon="plus" title="New supplier" extra="notch-action" only %}
-        </div>
-        <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
+        {% include "components/forms/party_picker.html" with parties=suppliers selected=posted.supplier required=True add_id="add-supplier" only %}
       </div>
       {% if layout.shown.expected_date %}
       <div class="head-fields__date">{% include "components/forms/control.html" with type="date" name="expected_date" id="expected_date" label="Expected" value=posted.expected_date only %}</div>
@@ -86,79 +78,10 @@
     {% endslot %}
   {% endcomponent %}
 
-  {% if wheat_products or bardana_products %}
-  {% component "forms/section" title="Wheat & bardana" id="order-products" extra="m-3" %}
-    {% slot actions %}{% include "components/ui/button.html" with type="button" id="add-product-row" label="Line" icon="plus" variant="ghost" size="sm" only %}{% endslot %}
-    <table class="li-table" id="order-product-table">
-      <colgroup><col><col class="w-32"><col class="w-32"><col class="w-36"><col class="w-10"></colgroup>
-      <thead><tr><th>Product</th><th class="num">Quantity</th><th class="num">Rate</th><th class="num">Amount</th><th></th></tr></thead>
-      <tbody id="order-product-rows"></tbody>
-    </table>
-  {% endcomponent %}
-<script>
-    (function orderProducts() {
-      const box = document.getElementById('order-product-rows');
-      if (!box) return;
-      const OPTIONS =
-        `{% if wheat_products %}<optgroup label="Wheat">{% for p in wheat_products %}<option value="{{ p.pk }}">{{ p.complete_code }} {{ p.name }}</option>{% endfor %}</optgroup>{% endif %}` +
-        `{% if bardana_products %}<optgroup label="Bardana">{% for p in bardana_products %}<option value="{{ p.pk }}">{{ p.complete_code }} {{ p.name }}</option>{% endfor %}</optgroup>{% endif %}`;
-      const num = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
-      const ICON_CLOSE = '{% filter escapejs %}{% icon "close" %}{% endfilter %}';
-
-      function addRow() {
-        const row = document.createElement('tr');
-        row.className = 'op-row';
-        row.innerHTML =
-          `<td><select name="order_product" class="control control--sm"><option value="">—</option>${OPTIONS}</select></td>` +
-          `<td><input type="number" step="0.001" min="0" name="order_product_qty" class="li-cell num control--weight op-qty" placeholder="0.000" data-no-amount></td>` +
-          `<td><input type="number" step="0.01" min="0" name="order_product_rate" class="li-cell num op-rate" placeholder="0.00"></td>` +
-          `<td class="li-amount op-amount">0.00</td>` +
-          `<td><button type="button" class="icon-btn icon-btn--danger op-drop" title="Remove" aria-label="Remove">${ICON_CLOSE}</button></td>`;
-        box.appendChild(row);
-        return row;
-      }
-
-      function recalc() {
-        Array.from(box.children).forEach(row => {
-          const amount = num(row.querySelector('.op-qty').value) * num(row.querySelector('.op-rate').value);
-          row.querySelector('.op-amount').textContent =
-            amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        });
-      }
-
-      document.getElementById('add-product-row').addEventListener('click', () => {
-        addRow().querySelector('select').focus();
-      });
-      document.addEventListener('input', e => { if (e.target.closest('#order-products')) recalc(); });
-      document.addEventListener('click', e => {
-        const drop = e.target.closest('.op-drop');
-        if (drop) { drop.closest('tr').remove(); recalc(); }
-      });
-    })();
-    </script>
-  {% endif %}
-
   <div class="totals-block">
     {% if layout.shown.remarks %}
     <div>{% include "components/forms/control.html" with type="textarea" name="remarks" id="remarks" label="Narration" rows=1 grow=True value=posted.remarks only %}</div>
     {% endif %}
-    {% component "forms/totals_panel" %}
-      {% include "components/forms/totals_row.html" with label="Sub Total" value_id="sub-total" only %}
-      {% if layout.shown.discount_amount %}{% include "components/forms/totals_row.html" with label="Discount (Rs)" field_id="discount_amount" value=posted.discount_amount only %}{% endif %}
-      {% if layout.shown.tax_amount %}
-      <div class="totals-row">
-        <label class="totals-label" for="tax_percent">Tax</label>
-        <div class="tax-pair">
-          <div class="pct-field">
-            {% include "components/forms/control.html" with type="number" step="0.01" min=0 max=100 name="tax_percent" id="tax_percent" value=posted.tax_percent placeholder="0" kind="num" attrs='data-no-amount aria-label="Tax rate percent"' only %}
-            <span class="pct-field__sign">%</span>
-          </div>
-          {% include "components/forms/control.html" with name="tax_amount" id="tax_amount" value=posted.tax_amount placeholder="0.00" kind="money" attrs='aria-label="Tax amount"' only %}
-        </div>
-      </div>
-      {% endif %}
-      {% include "components/forms/totals_row.html" with label="Total" value_id="grand-total" grand=True only %}
-    {% endcomponent %}
     {% if layout.shown.amount_words %}{% include "components/forms/amount_words.html" %}{% endif %}
   </div>
 
@@ -384,23 +307,7 @@
 
     document.getElementById('total-qty').textContent = qtyOf(quantity);
     document.getElementById('total-amount').textContent = moneyText(goods);
-    document.getElementById('sub-total').textContent = moneyText(goods);
-
-    // A rate typed against the sub total decides the tax; the money box is
-    // written from it so what is posted is an amount either way. Typing in
-    // the money box directly clears the rate, because the two would otherwise
-    // disagree and the rate would win on the next keystroke.
-    const pct = document.getElementById('tax_percent');
-    const tax = document.getElementById('tax_amount');
-    if (pct && tax && pct.value !== '') {
-      tax.value = money(goods * num(pct) / 100);
-    }
-
-    // A box that is off contributes nothing, which is what num() of a
-    // missing element already gives.
-    const total = goods - num(document.getElementById('discount_amount')) + num(tax);
-    document.getElementById('grand-total').textContent = moneyText(total);
-    writeAmount(total);
+    writeAmount(goods);
   }
 
   // Quantities are entered to one decimal place. The box is cut back as it is
@@ -411,20 +318,6 @@
     const dot = typed.indexOf('.');
     if (dot === -1 || typed.length - dot <= 2) return;
     box.value = typed.slice(0, dot + 2);
-  }
-
-  // The money box and the rate box are two ways of saying one figure, so each
-  // clears the other: typing in the money box is the final word and drops the
-  // rate, and clearing the rate takes the tax it worked out away with it.
-  // Registered before recalc is wired to the same boxes, so recalc totals what
-  // these have already settled.
-  const taxAmountBox = document.getElementById('tax_amount');
-  const taxPercentBox = document.getElementById('tax_percent');
-  if (taxAmountBox && taxPercentBox) {
-    taxAmountBox.addEventListener('input', () => { taxPercentBox.value = ''; });
-    taxPercentBox.addEventListener('input', () => {
-      if (taxPercentBox.value === '') taxAmountBox.value = '';
-    });
   }
 
   // Delegated: rows are built and dropped as the operator works.
@@ -469,10 +362,6 @@
   });
 
   document.getElementById('add-row').addEventListener('click', () => { addRow(); recalc(); syncAllRequired(); });
-  ['discount_amount', 'tax_amount', 'tax_percent'].forEach(id => {
-    const box = document.getElementById(id);
-    if (box) box.addEventListener('input', recalc);
-  });
 
   const supplier = document.getElementById('supplier');
 

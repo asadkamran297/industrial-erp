@@ -1,4 +1,4 @@
-{% component "table/board" title=title table_id=table_id|default:"report-table" no_search=True no_pagination=no_pagination filters_active=filters_active board_tiles=board_tiles %}
+{% component "table/board" title=title table_id=table_id|default:"report-table" no_search=True no_pagination=no_pagination filters_active=filters_active board_tiles=board_tiles freeze=freeze_columns %}
   {% slot actions %}
     {% if print_url %}{% include "components/ui/button.html" with label="Print" href=print_url icon="print" variant="secondary" attrs='target="_blank"' only %}{% endif %}
     {{ slots.actions }}

@@ -37,7 +37,7 @@
   {% if rows %}
   <form method="post" action="{% url 'inventory:manual_transaction_submit' %}" class="submit-bar submit-bar--floating" data-own-keys>{% csrf_token %}
     <div class="submit-bar__actions">
-      {% include "components/ui/button.html" with label="Submit & Finalize" icon="check" variant="primary" confirm="Only entries switched on are posted to stock. This cannot be undone." only %}
+      {% include "components/ui/button.html" with label="Finalize" icon="check" variant="primary" confirm="Only entries switched on are posted to stock. This cannot be undone." only %}
     </div>
   </form>
   {% endif %}

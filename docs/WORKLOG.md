@@ -5,6 +5,26 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-19
+
+### Local — purchase review (Hamza Afzal, 9 points; `docs/PURCHASE_REVIEW_MASTER_PROMPT.md`)
+
+- Pending Orders / Order Fulfilment removed (nav, report, view, template, selector, test); `reports/pending-orders/` redirects to the PO board. PO board gained a Status filter and Ordered / Received / Balance Qty columns.
+- Purchase Order: Wheat & Bardana section and Sub Total / Discount / Tax / Total box removed; discount and tax saved as 0; PO form-settings no longer offer them.
+- Purchase menu: Purchase Orders, Wheat Purchase Invoices, General Purchase Invoices, Purchase Returns, Suppliers, Purchase Report. Invoice list filters by `?kind=wheat|general`; the stores form is now "General Purchase Invoice" and saves back to its list.
+- Purchase Return: wheat, bardana and stores lines all returnable (migration `inventory.0058`: detail `product` + `bardana_ownership`, invoice optional); direct return mode; full-width grid, totals panel; invoice detail shows Returned qty. CLAUDE.md 25a rewritten.
+- Wheat Purchase Register: "Invoices" (not "Slips"), Bardana Ded. (kg) and Bardana Amt / Discount / Tax / Freight ± / Brokerage Ded. columns so weights and Net Payable reconcile per row; header amounts only on an invoice's first wheat line; blanks show 0; first three columns frozen; filter bar wraps. WHT kept per 40 kg (owner's decision).
+- Tiles: money of a million or more shows as "Rs 433.25 M" with the exact figure on hover (`kpi_value` tag in `tile.html`); `short_amount` now uses M; labels sit above the value and wrap.
+- Suppliers and Customers: fixed row actions View, Edit, Ledger, Activate/Deactivate with tooltips (`inventory/_party_actions.html`).
+- One supplier picker component (`components/forms/party_picker.html`) on PO, General Invoice and Return; every date box 11.5rem; buttons 12px with shorter labels.
+
+### Open
+- Wheat Purchase Invoice has no PO link (PO no longer carries wheat lines).
+- `apps.finance.tests.FinanceModelTests`: 3 errors ("Active leaf chart-of-account is required.") exist without these changes too.
+- Not deployed.
+
+---
+
 ## 2026-10-10
 
 ### Live

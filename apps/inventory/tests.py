@@ -511,8 +511,87 @@ class PurchaseReturnTests(TestCase):
             "line_id": [self.line.pk], "return_qty": ["3"], "action": "post",
         })
         purchase_return = PurchaseReturnMaster.objects.get(purchase_invoice=self.invoice)
-        self.assertRedirects(response, reverse("inventory:purchase_return_detail", args=[purchase_return.pk]))
+        self.assertRedirects(response, reverse("inventory:purchase_return_list"))
+        self.assertEqual(purchase_return.status, "posted")
         self.assertEqual(self.stock(), Decimal("7.0000"))
+
+    def _wheat_and_bag(self):
+        from apps.core.constants import PRD_LEVEL_ITEM, PRD_SPEC_RAW_ITEM, PRD_SPEC_RAW_PACKING, PRD_UNIT_KG
+        from apps.products.models import ProductNode
+
+        group = ProductNode.objects.create(level=1, code_segment="94", name="Probe Raw", complete_code="94-000-000",
+                                           created_by=self.user, updated_by=self.user)
+        sub = ProductNode.objects.create(parent=group, level=2, code_segment="01", name="Probe Group",
+                                         created_by=self.user, updated_by=self.user)
+        wheat = ProductNode.objects.create(parent=sub, level=PRD_LEVEL_ITEM, code_segment="001", name="Return Wheat",
+                                           specification=PRD_SPEC_RAW_ITEM, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+                                           created_by=self.user, updated_by=self.user)
+        bag = ProductNode.objects.create(parent=sub, level=PRD_LEVEL_ITEM, code_segment="002", name="Return Bag",
+                                         specification=PRD_SPEC_RAW_PACKING, unit=PRD_UNIT_KG, unit_weight=Decimal("1"),
+                                         created_by=self.user, updated_by=self.user)
+        return wheat, bag
+
+    def test_wheat_and_party_bardana_go_back_through_the_product_ledgers(self):
+        from django.db.models import Sum
+
+        from apps.core.constants import INV_BARDANA_PARTY, PRD_LEDGER_PURCHASE_RETURN
+        from apps.finance.models import AccountVoucher
+        from apps.products.models import PartyBardanaLedger, ProductLedger
+
+        wheat, bag = self._wheat_and_bag()
+        invoice = create_purchase_invoice(
+            supplier=self.supplier, supplier_invoice_num="RT-WHEAT",
+            lines=[
+                {"product": wheat, "selected_weight": "10000", "rate_per_mund": "4000"},
+                {"product": bag, "quantity": "50", "rate": "90", "bardana_ownership": INV_BARDANA_PARTY},
+            ],
+            tax_amount=Decimal("0"), user=self.user,
+        )
+        wheat_line = invoice.items.get(product=wheat)
+        bag_line = invoice.items.get(product=bag)
+        lines = {line.pk: line for line in purchase_return_lines(invoice)}
+        self.assertEqual(lines[wheat_line.pk].return_kind, "Wheat")
+        self.assertEqual(lines[bag_line.pk].return_kind, "Bardana")
+
+        with self.assertRaises(ValidationError):
+            create_purchase_return(invoice=invoice, lines=[(wheat_line.pk, Decimal("10001"))], user=self.user)
+
+        purchase_return = create_purchase_return(
+            invoice=invoice, lines=[(wheat_line.pk, Decimal("400")), (bag_line.pk, Decimal("10"))],
+            post=True, user=self.user,
+        )
+        self.assertEqual(purchase_return.returned_amount, Decimal("40000.00"))
+        wheat_stock = ProductLedger.objects.filter(product=wheat).aggregate(q=Sum("quantity"))["q"]
+        self.assertEqual(wheat_stock, Decimal("9600.000"))
+        self.assertTrue(ProductLedger.objects.filter(product=wheat, source=PRD_LEDGER_PURCHASE_RETURN,
+                                                     reference=purchase_return.return_num).exists())
+        party_stock = PartyBardanaLedger.objects.filter(party=self.supplier, bardana_item=bag).aggregate(q=Sum("quantity"))["q"]
+        self.assertEqual(party_stock, Decimal("40.000"))
+        voucher = AccountVoucher.objects.get(source_ref=f"inv_purchase_return_masters:{purchase_return.pk}")
+        self.assertEqual(voucher.lines.aggregate(d=Sum("debit_amount"))["d"], Decimal("40000.00"))
+        lines = {line.pk: line for line in purchase_return_lines(invoice)}
+        self.assertEqual(lines[wheat_line.pk].qty_returned, Decimal("400.0000"))
+
+        reverse_purchase_return(purchase_return=purchase_return, reason="entered_in_error", user=self.user)
+        self.assertEqual(ProductLedger.objects.filter(product=wheat).aggregate(q=Sum("quantity"))["q"], Decimal("10000.000"))
+        self.assertEqual(PartyBardanaLedger.objects.filter(party=self.supplier, bardana_item=bag).aggregate(q=Sum("quantity"))["q"], Decimal("50.000"))
+
+    def test_direct_return_needs_no_invoice(self):
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("inventory:purchase_return_create"), {
+            "supplier": self.supplier.pk, "mode": "direct",
+            "return_date": timezone.localdate().isoformat(), "remarks": "",
+            "direct_ref": [f"i:{self.item.pk}"], "direct_qty": ["2"], "direct_rate": ["50"], "action": "post",
+        })
+        self.assertRedirects(response, reverse("inventory:purchase_return_list"))
+        purchase_return = PurchaseReturnMaster.objects.get(purchase_invoice__isnull=True)
+        self.assertEqual(purchase_return.supplier, self.supplier)
+        self.assertEqual(purchase_return.returned_amount, Decimal("100.00"))
+        self.assertEqual(self.stock(), Decimal("8.0000"))
+        options = self.client.get(reverse("inventory:purchase_return_options"),
+                                  {"supplier": self.supplier.pk, "direct": 1}).json()["items"]
+        self.assertEqual(next(row for row in options if row["ref"] == f"i:{self.item.pk}")["rate"], "50.00")
+        self.assertEqual(self.client.get(reverse("inventory:purchase_return_detail", args=[purchase_return.pk])).status_code, 200)
 
 
 class WheatPurchaseScreenTests(TestCase):

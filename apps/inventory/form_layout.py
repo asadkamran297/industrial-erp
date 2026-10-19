@@ -68,8 +68,6 @@ OPTIONAL_FIELDS: tuple[OptionalField, ...] = (
                   "Off, every line is written in the item's own unit."),
     OptionalField("line_stock", "Stock in hand chip", "Lines"),
     OptionalField("remarks", "Narration", "Money"),
-    OptionalField("discount_amount", "Discount", "Money"),
-    OptionalField("tax_amount", "Tax", "Money"),
     OptionalField("amount_words", "Amount in words panel", "Money"),
 )
 INVOICE_OPTIONAL_FIELDS: tuple[OptionalField, ...] = (

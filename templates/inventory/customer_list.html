@@ -4,8 +4,8 @@
 {% component "table/board" title=title add_url=add_url add_label="Customer" table_id="customer-table" search_placeholder="Search customers" %}
   {% slot tiles %}
     {% include "components/table/tile.html" with tone="violet" icon="users" value=customer_count label="Customers" only %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=sold_total|amount label="Sold" only %}
-    {% include "components/table/tile.html" with tone="rose" icon="cash" value=receivable_total|amount label="Receivable" only %}
+    {% include "components/table/tile.html" with tone="sky" icon="sum" value=sold_total|amount label="Total Sales" only %}
+    {% include "components/table/tile.html" with tone="rose" icon="cash" value=receivable_total|amount label="Total Receivable" only %}
   {% endslot %}
 
   <thead>
@@ -32,14 +32,13 @@
       {% if "phone" in columns %}<td>{{ customer.customer_cell_no|default:"—" }}</td>{% endif %}
       {% if "email" in columns %}<td>{{ customer.customer_email|default:"—" }}</td>{% endif %}
       {% if "receivable" in columns %}<td class="num strong{% if customer.receivable_balance > 0 %} fig-bad{% endif %}">{{ customer.receivable_balance|amount }}</td>{% endif %}
-      {% if "status" in columns %}<td>{% if can_edit %}{% url status_toggle_url_name customer.pk as toggle_url %}{% capture as is_on %}{% if customer.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=customer.status label=customer.get_status_display only %}{% endif %}</td>{% endif %}
+      {% if "status" in columns %}<td>{% include "components/table/status_badge.html" with status=customer.status label=customer.get_status_display only %}</td>{% endif %}
       {% if "default" in columns %}<td>{% if can_edit %}{% url default_toggle_url_name customer.pk as default_url %}{% capture as default_on %}{% if customer.is_default %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=default_url checked=default_on title="Default" %}{% elif customer.is_default %}Yes{% else %}—{% endif %}</td>{% endif %}
       <td class="actions-col">
         {% url 'inventory:customer_detail' customer.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url edit_url_name customer.pk %}{% endif %}{% endcapture %}
-        {% component "table/actions" view_url=view_url edit_url=edit_url %}
-          {% if customer.receivable_code %}{% url 'finance:account_ledger' as ledger_base %}{% capture as ledger_url %}{{ ledger_base }}?account_no={{ customer.receivable_code|urlencode }}{% endcapture %}{% include "components/ui/icon_button.html" with href=ledger_url icon="ledger" title="Ledger" only %}{% endif %}
-        {% endcomponent %}
+        {% capture as ledger_url %}{% if customer.receivable_code %}{% url 'finance:account_ledger' %}?account_no={{ customer.receivable_code|urlencode }}{% endif %}{% endcapture %}
+        {% include "inventory/_party_actions.html" with record=customer view_url=view_url edit_url=edit_url ledger_url=ledger_url can_edit=can_edit toggle_name=status_toggle_url_name only %}
       </td>
     </tr>
     {% component "table/lines_row" pk=customer.pk span=row_span %}

@@ -29,6 +29,9 @@
       {% if "buyer" in columns %}<th>Raised by</th>{% endif %}
       {% if "expected" in columns %}{% include "components/table/sort_header.html" with label="Expected" field="expected" %}{% endif %}
       {% if "value" in columns %}<th class="num">Order value</th>{% endif %}
+      {% if "ordered_qty" in columns %}<th class="num">Ordered Qty</th>{% endif %}
+      {% if "received_qty" in columns %}<th class="num">Received Qty</th>{% endif %}
+      {% if "balance_qty" in columns %}<th class="num">Balance Qty</th>{% endif %}
       {% if "received" in columns %}<th class="w-40">Progress</th>{% endif %}
       {% if "billed" in columns %}<th>Invoiced</th>{% endif %}
       {% if "status" in columns %}{% include "components/table/sort_header.html" with label="Status" field="status" %}{% endif %}
@@ -45,6 +48,9 @@
       {% if "buyer" in columns %}<td>{{ order.created_by.get_full_name|default:order.created_by.username|default:"—" }}</td>{% endif %}
       {% if "expected" in columns %}<td class="date">{{ order.expected_date|dmy|default:"—" }}</td>{% endif %}
       {% if "value" in columns %}<td class="num strong">{{ order.total_amount|amount }}</td>{% endif %}
+      {% if "ordered_qty" in columns %}<td class="num">{{ order.ordered_qty|qty }}</td>{% endif %}
+      {% if "received_qty" in columns %}<td class="num {% if order.received_qty %}fig-in{% else %}fig-nil{% endif %}">{{ order.received_qty|qty }}</td>{% endif %}
+      {% if "balance_qty" in columns %}<td class="num {% if order.pending_qty %}fig-due{% else %}fig-nil{% endif %}">{{ order.pending_qty|qty }}</td>{% endif %}
       {% if "received" in columns %}
       <td>
         <div class="meter"><div class="meter__fill{% if order.received_percent >= 100 %} meter__fill--full{% elif order.received_percent > 0 %} meter__fill--part{% endif %}" style="--pct: {{ order.received_percent }}%"></div></div>

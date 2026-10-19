@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from apps.core.constants import INV_PURCHASE_INVOICE_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES
+from apps.core.constants import INV_PURCHASE_INVOICE_STATUS_CHOICES
 from apps.core.formatting import format_amount
 from apps.core.reporting import (
     GROUP_DAY,
@@ -35,33 +35,36 @@ ARHTI = ("supplier", "Arhti", sel.wheat_supplier_options)
 # 14 ------------------------------------------------------------------------
 
 WHEAT_REGISTER_COLUMNS = ColumnSet("reports.wheat_register", (
-    col("number", "Slip", "link", locked=True, link="inventory:purchase_invoice_detail"),
+    col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
-    col("supplier", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
-    col("vehicle", "Vehicle"),
+    col("supplier", "Arhti", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
+    col("vehicle", "Vehicle", default=False),
     col("broker", "Broker", default=False),
     col("product", "Wheat", default=False),
-    col("party_weight", "Party Wt", "qty", places=3),
-    col("mill_weight", "Mill Wt", "qty", places=3),
-    col("selected_weight", "Selected", "qty", places=3, default=False),
-    col("weight_source", "Wt Source"),
-    col("katla", "Katla", "qty", places=3),
-    col("impurities", "Impurities", "qty", places=3),
-    col("moisture", "Moisture", "qty", places=3),
-    col("sack_deduction", "Sack Ded.", "qty", places=3, default=False),
+    col("party_weight", "Party Wt", "qty", places=3, default=False),
+    col("mill_weight", "Mill Wt", "qty", places=3, default=False),
+    col("selected_weight", "Selected Wt", "qty", places=3),
+    col("weight_source", "Wt Source", default=False),
+    col("katla", "Katla", "qty", places=3, total=True),
+    col("impurities", "Impurities", "qty", places=3, total=True),
+    col("moisture", "Moisture", "qty", places=3, total=True),
+    col("sack_deduction", "Bardana Ded. (kg)", "qty", places=3, total=True),
     col("credit_kg", "Credit Kg", "qty", places=3, total=True, locked=True),
-    col("credit_mund", "Mund", "qty", places=3, total=True),
+    col("credit_mund", "Mund", "qty", places=3, total=True, default=False),
     col("rate_per_mund", "Rate/Mund", "money", total=True),
     col("goods_amount", "Goods", "money", total=True),
-    col("freight", "Freight", "money", total=True),
+    col("bardana_amount", "Bardana Amt", "money", total=True),
+    col("discount", "Discount", "money", total=True, default=False),
+    col("tax", "Tax", "money", total=True, default=False),
+    col("freight", "Freight ±", "money", total=True),
     col("freight_payer", "Freight By", default=False),
-    col("brokerage", "Brokerage", "money", total=True, default=False),
+    col("brokerage", "Brokerage Ded.", "money", total=True),
     col("brokerage_bearer", "Brokerage By", default=False),
     col("wht", "WHT", "money", total=True),
     col("net_payable", "Net Payable", "money", total=True, locked=True),
-    col("paid", "Paid", "money", total=True),
+    col("paid", "Paid", "money", total=True, default=False),
     col("balance", "Balance", "money", total=True),
-    col("status", "Status", "status"),
+    col("status", "Status", "status", default=False),
 ))
 
 
@@ -71,6 +74,7 @@ class WheatRegisterView(ReportView):
     template_name = "reports/generic.html"
     columns = WHEAT_REGISTER_COLUMNS
     url_name = "inventory:report_purchase"
+    freeze_columns = 3
     default_sort = "date"
     default_sort_dir = "desc"
     sort_fields = {k: k for k in WHEAT_REGISTER_COLUMNS.keys if k not in ("number",)} | {"number": "pk"}
@@ -82,11 +86,11 @@ class WheatRegisterView(ReportView):
         data = sel.wheat_register(p.start, p.end, f["supplier"] or None, f["vehicle"], f["broker"] or None, f["weight_source"], f["status"])
         t = data["totals"]
         tiles = [
-            _tile("Slips", str(t["slips"]), "slate", "receipt"),
-            _tile("Credit weight", f"{t['credit_mund']:,.3f} md", "amber", "wheat", f"{t['credit_kg']:,.0f} kg"),
-            _tile("Avg rate / mund", format_amount(t["rate_per_mund"]), "violet", "chart"),
-            _tile("Net payable", format_amount(t["net_payable"]), "sky", "cash", f"WHT {format_amount(t['wht'])}"),
-            _tile("Balance", format_amount(t["balance"]), "rose", "alert", f"paid {format_amount(t['paid'])}"),
+            _tile("Invoices", str(t["invoices"]), "slate", "receipt"),
+            _tile("Credit Weight", f"{t['credit_mund']:,.3f} md", "amber", "wheat", f"{t['credit_kg']:,.0f} kg"),
+            _tile("Avg Rate / Mund", format_amount(t["rate_per_mund"]), "violet", "chart"),
+            _tile("Net Payable", format_amount(t["net_payable"]), "sky", "cash", f"WHT {format_amount(t['wht'])}"),
+            _tile("Balance", format_amount(t["balance"]), "rose", "alert", f"Paid {format_amount(t['paid'])}"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
@@ -98,7 +102,7 @@ WheatRegisterExportView, WheatRegisterColumnsView = _views(WheatRegisterView)
 
 PURCHASE_SUMMARY_COLUMNS = ColumnSet("reports.purchase_summary", (
     col("label", "Period", locked=True),
-    col("slips", "Slips", "int", total=True),
+    col("slips", "Invoices", "int", total=True),
     col("kg", "Kg", "qty", places=3, total=True),
     col("mund", "Mund", "qty", places=3, total=True),
     col("avg_rate", "Avg Rate/Mund", "money", total=True),
@@ -130,7 +134,7 @@ class PurchaseSummaryView(ReportView):
         before = previous_period(p)
         last = sel.purchase_totals(before.start, before.end)
         tiles = [
-            _tile("Slips", str(t["slips"]), "slate", "receipt", change=delta(t["slips"], last["slips"])),
+            _tile("Invoices", str(t["slips"]), "slate", "receipt", change=delta(t["slips"], last["slips"])),
             _tile("Mund", f"{t['mund']:,.0f}", "amber", "wheat", change=delta(t["mund"], last["mund"])),
             _tile("Avg rate", format_amount(t["avg_rate"]), "violet", "chart", change=delta(t["avg_rate"], last["avg_rate"])),
             _tile("Goods", format_amount(t["amount"]), "sky", "cash", change=delta(t["amount"], last["amount"])),
@@ -148,7 +152,7 @@ PurchaseSummaryExportView, PurchaseSummaryColumnsView = _views(PurchaseSummaryVi
 
 SUPPLIER_PURCHASE_COLUMNS = ColumnSet("reports.supplier_purchases", (
     col("supplier", "Arhti", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
-    col("slips", "Slips", "int", total=True),
+    col("slips", "Invoices", "int", total=True),
     col("kg", "Credit Kg", "qty", places=3, total=True),
     col("mund", "Mund", "qty", places=3, total=True),
     col("avg_rate", "Avg Rate/Mund", "money", total=True),
@@ -193,7 +197,7 @@ SupplierPurchasesExportView, SupplierPurchasesColumnsView = _views(SupplierPurch
 # 17 ------------------------------------------------------------------------
 
 WHEAT_QUALITY_COLUMNS = ColumnSet("reports.wheat_quality", (
-    col("number", "Slip", "link", locked=True, link="inventory:purchase_invoice_detail"),
+    col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
     col("supplier", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("vehicle", "Vehicle", default=False),
@@ -232,7 +236,7 @@ class WheatQualityView(ReportView):
         data = sel.wheat_quality(p.start, p.end, f["supplier"] or None, self.threshold())
         t = data["totals"]
         tiles = [
-            _tile("Slips", str(t["slips"]), "slate", "receipt"),
+            _tile("Invoices", str(t["slips"]), "slate", "receipt"),
             _tile("Mill avg impurities", f"{t['impurities'] or 0}%", "amber", "alert"),
             _tile("Mill avg moisture", f"{t['moisture'] or 0}%", "sky", "alert"),
             _tile("Deductions", f"{t['deductions']:,.0f} kg", "rose", "minus", f"{t['deduction_pct'] or 0}% of weight"),
@@ -254,7 +258,7 @@ WheatQualityExportView, WheatQualityColumnsView = _views(WheatQualityView)
 
 RATE_TREND_COLUMNS = ColumnSet("reports.wheat_rate_trend", (
     col("label", "Period", locked=True),
-    col("slips", "Slips", "int", total=True),
+    col("slips", "Invoices", "int", total=True),
     col("mund", "Mund", "qty", places=3, total=True),
     col("kg", "Kg", "qty", places=3, total=True, default=False),
     col("avg_rate", "Avg Rate/Mund", "money", total=True, locked=True),
@@ -296,7 +300,7 @@ WheatRateTrendExportView, WheatRateTrendColumnsView = _views(WheatRateTrendView)
 # 19 ------------------------------------------------------------------------
 
 FREIGHT_COLUMNS = ColumnSet("reports.freight_brokerage", (
-    col("number", "Slip", "link", locked=True, link="inventory:purchase_invoice_detail"),
+    col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
     col("supplier", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("vehicle", "Vehicle"),
@@ -346,7 +350,7 @@ FreightBrokerageExportView, FreightBrokerageColumnsView = _views(FreightBrokerag
 # 20 ------------------------------------------------------------------------
 
 WHT_COLUMNS = ColumnSet("reports.wht_register", (
-    col("number", "Slip", "link", locked=True, link="inventory:purchase_invoice_detail"),
+    col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
     col("month", "Month"),
     col("supplier", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
@@ -429,57 +433,6 @@ class StoresRegisterView(ReportView):
 
 
 StoresRegisterExportView, StoresRegisterColumnsView = _views(StoresRegisterView)
-
-
-# 22 ------------------------------------------------------------------------
-
-ORDER_COLUMNS = ColumnSet("reports.order_fulfilment", (
-    col("number", "Order", "link", locked=True, link="inventory:purchase_order_detail"),
-    col("date", "Date", "date", locked=True),
-    col("expected", "Expected", "date"),
-    col("supplier", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
-    col("lines", "Lines", "int", default=False),
-    col("ordered", "Ordered", "qty", places=3, total=True),
-    col("invoiced", "Received", "qty", places=3, total=True),
-    col("pending", "Pending", "qty", places=3, total=True, locked=True),
-    col("fulfilled_pct", "Fulfilled %", "pct"),
-    col("value", "Order Value", "money", total=True),
-    col("pending_value", "Pending Value", "money", total=True),
-    col("age", "Age (days)", "int"),
-    col("status", "Status", "status"),
-))
-
-
-class OrderFulfilmentView(ReportView):
-    page = PAGE
-    title = "Purchase Orders — Pending / Fulfilment"
-    template_name = "reports/generic.html"
-    columns = ORDER_COLUMNS
-    url_name = "inventory:report_pending_orders"
-    default_preset = "year"
-    default_sort = "date"
-    default_sort_dir = "desc"
-    sort_fields = {k: k for k in ORDER_COLUMNS.keys} | {"number": "pk"}
-    filter_specs = (SUPPLIER, ("status", "Status", INV_PURCHASE_ORDER_STATUS_CHOICES))
-
-    def build(self):
-        from django.utils import timezone
-
-        p, f = self.period(), self.filters()
-        data = sel.order_fulfilment(p.start, p.end, f["supplier"] or None, f["status"], timezone.localdate())
-        t = data["totals"]
-        base = p.query + (f"&supplier={f['supplier']}" if f["supplier"] else "")
-        tiles = [
-            _tile("Orders", str(t["orders"]), "slate", "file", href=f"?{base}"),
-            _tile("Open", str(t["open"]), "amber", "clock", href=f"?{base}&status=submitted", on=f["status"] == "submitted"),
-            _tile("Overdue", str(t["overdue"]), "rose", "alert"),
-            _tile("Pending qty", f"{t['pending']:,.0f}", "violet", "box", f"of {t['ordered']:,.0f} ordered"),
-            _tile("Pending value", format_amount(t["pending_value"]), "sky", "cash", f"of {format_amount(t['value'])}"),
-        ]
-        return {"rows": data["rows"], "totals": t, "tiles": tiles}
-
-
-OrderFulfilmentExportView, OrderFulfilmentColumnsView = _views(OrderFulfilmentView)
 
 
 # 23 ------------------------------------------------------------------------

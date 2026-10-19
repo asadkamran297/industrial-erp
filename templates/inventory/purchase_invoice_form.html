@@ -1,11 +1,11 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% url 'inventory:purchase_invoice_list' as cancel_url %}
-{% component "ui/page_header" title="Purchase Invoice" back=True back_url=cancel_url %}
+{% url "inventory:purchase_invoice_list" as list_base %}{% capture as cancel_url %}{{ list_base }}?kind=general{% endcapture %}
+{% component "ui/page_header" title="General Purchase Invoice" back=True back_url=cancel_url %}
   {% slot fields %}
-    <div class="w-40">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
+    <div class="head-no">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
     {% firstof posted.bill_date today|date:"Y-m-d" as bill_date_value %}
-    <div>{% include "components/forms/control.html" with type="date" name="bill_date" id="bill_date" label="Date" value=bill_date_value form_id="purchase-form" only %}</div>
+    {% include "components/forms/control.html" with type="date" name="bill_date" id="bill_date" label="Date" value=bill_date_value form_id="purchase-form" only %}
   {% endslot %}
   {% slot actions %}{% if can_edit %}{% include "inventory/_purchase_form_settings.html" %}{% endif %}{% endslot %}
 {% endcomponent %}
@@ -13,19 +13,11 @@
 <form method="post" id="purchase-form" class="card card-rail" data-own-keys>{% csrf_token %}
   <div class="card-body doc-head">
     <div class="doc-head__party">
-      <div class="notch-field notch-field--action">
-        <label class="notch-label" for="supplier">Supplier <span class="req">*</span></label>
-        {% component "forms/control" type="select" name="supplier" id="supplier" required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
-          <option value=""></option>
-          {% for row in suppliers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.supplier == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.name }}</option>{% endfor %}
-        {% endcomponent %}
-        {% include "components/ui/icon_button.html" with id="add-supplier" icon="plus" title="New supplier" extra="notch-action" only %}
-      </div>
-      <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
+      {% include "components/forms/party_picker.html" with parties=suppliers selected=posted.supplier required=True add_id="add-supplier" only %}
       {% capture as mode_attrs %}data-url="{% url 'inventory:purchase_order_detail' 0 %}"{% endcapture %}
       <div class="flex flex-wrap gap-2">
         {% component "ui/button" type="button" id="bill-mode" variant="success" size="sm" extra="bill-mode" title="Order lines" attrs=mode_attrs only %}<span>Against <b id="bill-mode-no"></b></span>{% endcomponent %}
-        {% include "components/ui/button.html" with type="button" id="order-pick-open" icon="file" variant="secondary" size="sm" extra="order-pick-again" label="Choose a purchase order" only %}
+        {% include "components/ui/button.html" with type="button" id="order-pick-open" icon="file" variant="secondary" size="sm" extra="order-pick-again" label="Pick PO" only %}
       </div>
     </div>
 

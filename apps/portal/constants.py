@@ -30,13 +30,17 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
     NavigationItem("Dashboard", permission="dashboard.index", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
 
     NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
-        NavigationItem("Purchase Invoices", permission="inventory.purchase_orders.index", url_name="inventory:purchase_invoice_list"),
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index",
                        url_name="inventory:purchase_order_board",
                        match_paths=("/inventory/purchase-orders/",)),
+        NavigationItem("Wheat Purchase Invoices", permission="inventory.purchase_orders.index",
+                       url_name="inventory:purchase_invoice_list", query="kind=wheat",
+                       match_paths=("/inventory/purchases/new/",)),
+        NavigationItem("General Purchase Invoices", permission="inventory.purchase_orders.index",
+                       url_name="inventory:purchase_invoice_list", query="kind=general",
+                       match_paths=("/inventory/purchases/stores/new/",)),
         NavigationItem("Purchase Returns", permission="inventory.purchase_returns.index", url_name="inventory:purchase_return_list"),
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
-        NavigationItem("Pending Orders", permission="inventory.purchase_report.index", url_name="inventory:report_pending_orders"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
     )),
     NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(
@@ -126,7 +130,6 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Freight & Brokerage", permission="reports.purchase.index", url_name="inventory:report_freight_brokerage"),
         NavigationItem("WHT Register", permission="reports.purchase.index", url_name="inventory:report_wht"),
         NavigationItem("Stores Purchase Register", permission="reports.purchase.index", url_name="inventory:report_stores_purchases"),
-        NavigationItem("Order Fulfilment", permission="reports.purchase.index", url_name="inventory:report_pending_orders"),
         NavigationItem("Purchase Returns", permission="reports.purchase.index", url_name="inventory:report_purchase_return"),
         NavigationItem("Supplier Payment Status", permission="reports.purchase.index", url_name="inventory:report_supplier_payments"),
     )),

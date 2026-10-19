@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, Exists, F, OuterRef, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -1546,7 +1546,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             .order_by("item_name")
         )
         context = {
-            "title": "Purchase Invoice",
+            "title": "General Purchase Invoice",
             "next_invoice_no": next_purchase_invoice_number(),
             "suppliers": suppliers_with_balance(),
             "layout": get_layout(FORM_PURCHASE_INVOICE),
@@ -1839,7 +1839,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             )
         if "save_and_new" in posted:
             return redirect("inventory:stores_purchase_create")
-        return redirect("inventory:purchase_invoice_detail", pk=invoice.pk)
+        return redirect(f"{reverse('inventory:purchase_invoice_list')}?kind=general")
 
 
 class ItemConversionOptionsView(InventoryManageMixin, View):
@@ -2416,8 +2416,21 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
              "value": self.request.GET.get("godown", "")},
         ]
 
+    KINDS = {"wheat": "Wheat Purchase Invoices", "general": "General Purchase Invoices"}
+
+    def current_kind(self):
+        kind = (self.request.GET.get("kind") or "").strip()
+        return kind if kind in self.KINDS else ""
+
+    def by_kind(self, queryset):
+        kind = self.current_kind()
+        if not kind:
+            return queryset
+        wheat = Exists(PurchaseInvoiceLine.objects.filter(invoice=OuterRef("pk"), product__isnull=False))
+        return queryset.filter(wheat) if kind == "wheat" else queryset.exclude(wheat)
+
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = self.by_kind(super().get_queryset())
         state = (self.request.GET.get("state") or "").strip()
         if state == "reversed":
             queryset = queryset.filter(status=STATUS_REVERSED)
@@ -2438,7 +2451,7 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         header is what posted to the ledger, so it is the figure that is true.
         """
         rows = list(
-            super(PurchaseInvoiceListView, self).get_queryset().select_related("supplier")
+            self.by_kind(super(PurchaseInvoiceListView, self).get_queryset()).select_related("supplier")
         )
         today = timezone.localdate()
         value = Decimal("0.00")
@@ -2487,6 +2500,9 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             for key in ("q", "supplier", "date_from", "date_to", "state")
         )
         context["state"] = (self.request.GET.get("state") or "").strip()
+        context["kind"] = self.current_kind()
+        context["list_title"] = self.KINDS.get(context["kind"], "Purchase Invoices")
+        context["keep_params"] = [("kind", context["kind"])] if context["kind"] else []
         kept = self.request.GET.copy()
         for key in ("page", "state", "date_from", "date_to"):
             kept.pop(key, None)
@@ -2518,7 +2534,7 @@ class PurchaseInvoiceColumnsView(InventoryListMixin, View):
         carried = request.POST.get("back", "")
         query = urlencode([
             (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
-            if key in ("q", "state", "supplier", "date_from", "date_to", "per_page", "page", "sort", "dir")
+            if key in ("q", "kind", "state", "supplier", "date_from", "date_to", "per_page", "page", "sort", "dir")
         ])
         target = reverse_lazy("inventory:purchase_invoice_list")
         return redirect(f"{target}?{query}" if query else str(target))
@@ -2548,7 +2564,11 @@ class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
         context = super().get_context_data(**kwargs)
         invoice = self.object
         lines = list(invoice.items.all())
+        returned = {line.pk: line.qty_returned for line in purchase_return_lines(invoice)}
+        for line in lines:
+            line.qty_returned = returned.get(line.pk, Decimal("0"))
         context["lines"] = lines
+        context["any_returned"] = any(line.qty_returned for line in lines)
         context["goods_total"] = sum((line.amount or Decimal("0.00") for line in lines), Decimal("0.00"))
         context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
 
@@ -2627,7 +2647,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         .order_by("-purchase_date", "-id")
     )
     search_fields = ("purchase_num", "supplier__name", "quot_num", "descr")
-    filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
+    filter_fields = {"supplier": "supplier_id", "godown": "godown_id", "status": "status"}
     date_filters = [{"field": "purchase_date", "label": "Order date"}]
     sort_fields = {
         "purchase_num": "seq_num",
@@ -2676,6 +2696,8 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
              "value": self.request.GET.get("supplier", "")},
             {"name": "godown", "label": "All godowns", "choices": list(godown_options().values_list("id", "name")),
              "value": self.request.GET.get("godown", "")},
+            {"name": "status", "label": "All statuses", "choices": INV_PURCHASE_ORDER_STATUS_CHOICES,
+             "value": self.request.GET.get("status", "")},
         ]
 
     def get_context_data(self, **kwargs):
@@ -2734,7 +2756,7 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         context["columns_url"] = reverse_lazy("inventory:purchase_order_columns")
         context["filters_active"] = any(
             (self.request.GET.get(key) or "").strip()
-            for key in ("q", "supplier", "date_from", "date_to", "sort", "dir")
+            for key in ("q", "supplier", "godown", "status", "date_from", "date_to", "sort", "dir")
         ) or self.current_tab() != TAB_ALL
         return context
 
@@ -2772,7 +2794,7 @@ class PurchaseOrderColumnsView(InventoryListMixin, View):
         carried = request.POST.get("back", "")
         query = urlencode([
             (key, value) for key, value in parse_qsl(carried, keep_blank_values=False)
-            if key in ("q", "tab", "supplier", "date_from", "date_to", "per_page", "page")
+            if key in ("q", "tab", "supplier", "godown", "status", "date_from", "date_to", "per_page", "page")
         ])
         target = reverse_lazy("inventory:purchase_order_board")
         return redirect(f"{target}?{query}" if query else str(target))
@@ -2813,117 +2835,6 @@ class PurchaseReportView(SortableListMixin, InventoryListMixin, ListView):
         return context
 
 
-class PendingOrdersReportView(SortableListMixin, InventoryListMixin, ListView):
-    """What is still to come in, by supplier. The owner's morning question.
-
-    Only orders that are live: raised, or part invoiced with a balance still
-    owed. A draft has been committed to nobody and a closed or cancelled order
-    is not expected, so neither is anything still to come.
-
-    The balance is read off the order lines, which carry ``qty_invoiced``, so
-    the figure is the same one the order screen shows rather than a second
-    calculation that could disagree with it. A line closed short counts as
-    nothing outstanding without pretending it arrived -- that is what closing
-    short means, and it is why the report can be trusted as a commitment list.
-    """
-
-    page = "inventory.purchase_report"
-    model = PurchaseOrder
-    template_name = "inventory/pending_orders_report.html"
-    context_object_name = "orders"
-    paginate_by = 25
-    sort_fields = {"number": ("supplier__name", "purchase_num"), "date": ("supplier__name", "purchase_date", "id"), "godown": ("supplier__name", "godown__name", "purchase_date"), "expected": ("supplier__name", "expected_date", "purchase_date")}
-    default_sort = "date"
-    queryset = (
-        PurchaseOrder.objects
-        .filter(status__in=[STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED])
-        .select_related("supplier", "godown")
-        .prefetch_related("items__inventory_item", "items__uom")
-        .order_by("supplier__name", "purchase_date", "id")
-    )
-    search_fields = ("purchase_num", "supplier__name", "quot_num")
-    filter_fields = {"supplier": "supplier_id", "godown": "godown_id"}
-    date_filters = [{"field": "purchase_date", "label": "Order date"}]
-
-    def get_filter_specs(self):
-        supplier_choices = list(
-            Supplier.objects.filter(status=STATUS_ACTIVE).order_by("name").values_list("id", "name")
-        )
-        return [
-            {"name": "supplier", "label": "All suppliers", "choices": supplier_choices,
-             "value": self.request.GET.get("supplier", "")},
-            {"name": "godown", "label": "All godowns", "choices": list(godown_options().values_list("id", "name")),
-             "value": self.request.GET.get("godown", "")},
-        ]
-
-    @staticmethod
-    def _outstanding(order):
-        """The lines still owed on one order, and what they come to."""
-        zero = Decimal("0.0000")
-        rows, value = [], Decimal("0.00")
-        for item in order.items.all():
-            pending = item.qty_pending
-            if pending <= zero:
-                continue
-            line_value = (pending * (item.rate or Decimal("0"))).quantize(TWO_DP)
-            value += line_value
-            rows.append({
-                "item": item,
-                "ordered": item.qty_ordered,
-                "invoiced": item.qty_invoiced or zero,
-                "pending": pending,
-                "value": line_value,
-                "uom": uom_title(item),
-            })
-        return rows, value
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        zero = Decimal("0.00")
-
-        groups, page_value = [], zero
-        current = None
-        today = timezone.localdate()
-        for order in context["orders"]:
-            order.pending_rows, order.pending_value = self._outstanding(order)
-            if not order.pending_rows:
-                continue
-            order.days_late = (
-                (today - order.expected_date).days
-                if order.expected_date and order.expected_date < today else 0
-            )
-            page_value += order.pending_value
-            if current is None or current["supplier"].pk != order.supplier_id:
-                current = {"supplier": order.supplier, "orders": [], "value": zero}
-                groups.append(current)
-            current["orders"].append(order)
-            current["value"] += order.pending_value
-        context["groups"] = groups
-        context["page_value"] = page_value
-
-        everything = list(
-            self.filtered_queryset().prefetch_related("items")
-            if hasattr(self, "filtered_queryset")
-            else self.get_queryset().prefetch_related("items")
-        )
-        total_value, order_count, supplier_ids = zero, 0, set()
-        overdue = 0
-        for order in everything:
-            _rows, value = self._outstanding(order)
-            if value <= zero:
-                continue
-            total_value += value
-            order_count += 1
-            supplier_ids.add(order.supplier_id)
-            if order.expected_date and order.expected_date < today:
-                overdue += 1
-        context["pending_value"] = total_value
-        context["pending_orders"] = order_count
-        context["pending_suppliers"] = len(supplier_ids)
-        context["overdue_orders"] = overdue
-        return context
-
-
 class PurchaseOrderCreateView(InventoryManageMixin, View):
     """Raise an order on a supplier.
 
@@ -2955,8 +2866,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             "units": UOM.objects.order_by("title"),
             "godowns": godown_options(),
             "brokers": broker_options(),
-            "wheat_products": wheat_product_options(),
-            "bardana_products": bardana_product_options(),
             "today": timezone.localdate(),
             "items_json": json.dumps([
                 {
@@ -2988,12 +2897,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
             text = (raw or "").strip().replace(",", "") or default
             return Decimal(text)
 
-        def money(name, default="0"):
-            try:
-                return decimal_of(posted.get(name), default)
-            except (InvalidOperation, ValueError):
-                raise ValidationError(f"{name.replace('_', ' ').title()} must be a number.")
-
         lines = []
         item_ids = posted.getlist("item_id")
         quantities = posted.getlist("quantity")
@@ -3017,28 +2920,6 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 uom = UOM.objects.filter(pk=raw_uom).first() if raw_uom.strip().isdigit() else None
                 lines.append({"inventory_item": item, "quantity": quantity, "rate": rate, "uom": uom})
 
-        product_ids = posted.getlist("order_product")
-        product_qtys = posted.getlist("order_product_qty")
-        product_rates = posted.getlist("order_product_rate")
-        orderable = {
-            product.pk: product
-            for product in list(wheat_product_options()) + list(bardana_product_options())
-        }
-        for index, raw_id in enumerate(product_ids):
-            if not (raw_id or "").strip().isdigit():
-                continue
-            product = orderable.get(int(raw_id))
-            if not product:
-                continue
-            try:
-                quantity = decimal_of(product_qtys[index] if index < len(product_qtys) else "")
-                rate = decimal_of(product_rates[index] if index < len(product_rates) else "")
-            except (InvalidOperation, ValueError):
-                messages.error(request, f"Check the quantity and rate on the {product.name} line.")
-                return render(request, self.template_name, self._context(posted=posted))
-            if quantity > 0:
-                lines.append({"product": product, "quantity": quantity, "rate": rate})
-
         extra_values, extra_error = read_extra_values(posted)
         if extra_error:
             messages.error(request, extra_error)
@@ -3054,8 +2935,8 @@ class PurchaseOrderCreateView(InventoryManageMixin, View):
                 godown=picked(posted, "godown", godown_options()),
                 broker=picked(posted, "broker", broker_options()),
                 lines=lines,
-                discount_amount=money("discount_amount"),
-                tax_amount=money("tax_amount"),
+                discount_amount=Decimal("0.00"),
+                tax_amount=Decimal("0.00"),
                 remarks=(posted.get("remarks") or "").strip(),
                 extra_data=extra_values,
                 status=STATUS_DRAFT,
@@ -4714,6 +4595,35 @@ class PurchaseReturnColumnsView(InventoryListMixin, View):
 class PurchaseReturnOptionsView(InventoryListMixin, View):
     page = "inventory.purchase_returns"
 
+    @staticmethod
+    def _line_unit(line):
+        return "kg" if line.product_id else uom_title(line)
+
+    def _direct_items(self, supplier_id):
+        from apps.products.models import ProductNode
+
+        rates = {}
+        for row in (
+            PurchaseInvoiceLine.objects.filter(invoice__supplier_id=supplier_id, invoice__status=STATUS_POSTED)
+            .order_by("invoice__invoice_date", "id").values("inventory_item_id", "product_id", "rate")
+        ):
+            key = f"p:{row['product_id']}" if row["product_id"] else f"i:{row['inventory_item_id']}"
+            rates[key] = str(row["rate"])
+        product_ids = set(wheat_product_options().values_list("pk", flat=True)) | set(
+            bardana_product_options().values_list("pk", flat=True))
+        rows = [
+            {"ref": f"p:{product.pk}", "name": product.name, "code": product.complete_code, "unit": "kg",
+             "rate": rates.get(f"p:{product.pk}", "0")}
+            for product in ProductNode.objects.filter(pk__in=product_ids).order_by("name")
+        ]
+        rows += [
+            {"ref": f"i:{item.pk}", "name": item.item_name, "code": item.code, "unit": uom_title(item),
+             "rate": rates.get(f"i:{item.pk}", str(item.purchase_price or 0))}
+            for item in InventoryItem.objects.filter(status=STATUS_ACTIVE, item_kind=INVENTORY_KIND_PRODUCT)
+            .select_related("uom").order_by("item_name")
+        ]
+        return rows
+
     def get(self, request, *args, **kwargs):
         invoice_id = (request.GET.get("invoice") or "").strip()
         if invoice_id.isdigit():
@@ -4729,8 +4639,9 @@ class PurchaseReturnOptionsView(InventoryListMixin, View):
                 },
                 "lines": [
                     {
-                        "id": line.pk, "item": line.descr or line.inventory_item.item_name,
-                        "code": line.inventory_item.code, "unit": uom_title(line),
+                        "id": line.pk, "item": line.descr, "kind": line.return_kind,
+                        "code": line.product.complete_code if line.product_id else line.inventory_item.code,
+                        "unit": self._line_unit(line),
                         "invoiced": str(line.quantity), "returned": str(line.qty_returned),
                         "returnable": str(line.qty_returnable), "rate": str(line.rate),
                     }
@@ -4740,7 +4651,9 @@ class PurchaseReturnOptionsView(InventoryListMixin, View):
 
         supplier_id = (request.GET.get("supplier") or "").strip()
         if not supplier_id.isdigit():
-            return JsonResponse({"invoices": []})
+            return JsonResponse({"invoices": [], "items": []})
+        if request.GET.get("direct"):
+            return JsonResponse({"items": self._direct_items(supplier_id)})
         invoices = list(
             PurchaseInvoice.objects.filter(supplier_id=supplier_id, status=STATUS_POSTED)
             .select_related("purchase_order").order_by("-invoice_date", "-id")[:100]
@@ -4749,14 +4662,15 @@ class PurchaseReturnOptionsView(InventoryListMixin, View):
         for invoice in invoices:
             lines = purchase_return_lines(invoice)
             returnable = sum((line.qty_returnable for line in lines), Decimal("0"))
+            kinds = sorted({line.return_kind for line in lines})
             rows.append({
                 "id": invoice.pk, "number": invoice.invoice_num,
                 "supplier_ref": invoice.supplier_invoice_num,
                 "date": invoice.invoice_date.strftime("%d-%m-%Y"),
                 "order": invoice.purchase_order.purchase_num if invoice.purchase_order_id else "",
                 "total": str(invoice.total_amount),
+                "kind": " / ".join(kinds),
                 "lines": len([line for line in lines if line.qty_returnable > 0]),
-                "mill_only": not lines,
                 "disabled": returnable <= 0,
             })
         return JsonResponse({"invoices": rows})
@@ -4788,27 +4702,56 @@ class PurchaseReturnCreateView(InventoryManageMixin, View):
                 posted = {"supplier": str(invoice.supplier_id), "purchase_invoice": str(invoice.pk)}
         return self._render(request, posted)
 
+    @staticmethod
+    def _direct_lines(posted):
+        from apps.products.models import ProductNode
+
+        rows = []
+        for ref, raw_qty, raw_rate in zip(posted.getlist("direct_ref"), posted.getlist("direct_qty"),
+                                          posted.getlist("direct_rate")):
+            kind, _, pk = (ref or "").partition(":")
+            if not pk.isdigit() or not (raw_qty or "").strip():
+                continue
+            qty, rate = decimal_of(raw_qty), decimal_of(raw_rate or "0")
+            if kind == "p":
+                product = ProductNode.objects.filter(pk=pk).first()
+                if product:
+                    rows.append({"product": product, "quantity": qty, "rate": rate})
+            elif kind == "i":
+                item = InventoryItem.objects.select_related("uom").filter(pk=pk).first()
+                if item:
+                    rows.append({"item": item, "quantity": qty, "rate": rate})
+        return rows
+
     def post(self, request, *args, **kwargs):
         posted = request.POST
+        direct = posted.get("mode") == "direct"
         posted_lines = {}
         lines = []
-        for line_id, raw in zip(posted.getlist("line_id"), posted.getlist("return_qty")):
-            if not line_id.isdigit() or not (raw or "").strip():
-                continue
-            posted_lines[line_id] = raw
-            try:
-                lines.append((int(line_id), decimal_of(raw)))
-            except InvalidOperation:
-                messages.error(request, "A return quantity is not a number.")
-                return self._render(request, posted, posted_lines, status=400)
+        direct_lines = []
+        supplier = Supplier.objects.filter(pk=(posted.get("supplier") or "0").strip() or 0).first()
+        invoice = None
+        try:
+            if direct:
+                direct_lines = self._direct_lines(posted)
+            else:
+                for line_id, raw in zip(posted.getlist("line_id"), posted.getlist("return_qty")):
+                    if not line_id.isdigit() or not (raw or "").strip():
+                        continue
+                    posted_lines[line_id] = raw
+                    lines.append((int(line_id), decimal_of(raw)))
+        except InvalidOperation:
+            messages.error(request, "A quantity or rate is not a number.")
+            return self._render(request, posted, posted_lines, status=400)
 
-        invoice = PurchaseInvoice.objects.filter(pk=(posted.get("purchase_invoice") or "0").strip() or 0).first()
-        if invoice is None:
-            messages.error(request, "Pick the purchase invoice the goods came in on.")
-            return self._render(request, posted, posted_lines, status=400)
-        if str(invoice.supplier_id) != (posted.get("supplier") or "").strip():
-            messages.error(request, "That invoice is not from the supplier picked.")
-            return self._render(request, posted, posted_lines, status=400)
+        if not direct:
+            invoice = PurchaseInvoice.objects.filter(pk=(posted.get("purchase_invoice") or "0").strip() or 0).first()
+            if invoice is None:
+                messages.error(request, "Pick the purchase invoice the goods came in on.")
+                return self._render(request, posted, posted_lines, status=400)
+            if supplier is None or invoice.supplier_id != supplier.pk:
+                messages.error(request, "That invoice is not from the supplier picked.")
+                return self._render(request, posted, posted_lines, status=400)
 
         post_now = posted.get("action") == "post"
         if post_now and not user_has_permission(request.user, f"{self.page}.edit"):
@@ -4818,7 +4761,9 @@ class PurchaseReturnCreateView(InventoryManageMixin, View):
         try:
             purchase_return = create_purchase_return(
                 invoice=invoice,
+                supplier=supplier,
                 lines=lines,
+                direct_lines=direct_lines,
                 return_date=parse_date(posted.get("return_date") or "") or timezone.localdate(),
                 remarks=(posted.get("remarks") or "").strip(),
                 post=post_now,
@@ -4830,7 +4775,7 @@ class PurchaseReturnCreateView(InventoryManageMixin, View):
 
         state = "posted" if post_now else "saved as draft"
         messages.success(request, f"{purchase_return.return_num} {state}.")
-        return redirect("inventory:purchase_return_detail", pk=purchase_return.pk)
+        return redirect("inventory:purchase_return_list")
 
 
 class PurchaseReturnReceiptView(PrintContextMixin, InventoryListMixin, DetailView):
@@ -4858,7 +4803,7 @@ class PurchaseReturnDetailView(InventoryListMixin, DetailView):
     queryset = (
         PurchaseReturnMaster.objects
         .select_related("purchase_invoice", "purchase_invoice__godown", "purchase_order", "supplier", "created_by")
-        .prefetch_related("items__inventory_item", "items__uom")
+        .prefetch_related("items__inventory_item", "items__product", "items__uom")
     )
 
     def get_context_data(self, **kwargs):
@@ -4878,7 +4823,7 @@ class PurchaseReturnDetailView(InventoryListMixin, DetailView):
             "label": record.purchase_invoice.invoice_num,
             "url": reverse("inventory:purchase_invoice_detail", args=[record.purchase_invoice_id]),
             "dead": record.purchase_invoice.status == STATUS_REVERSED,
-        }]
+        }] if record.purchase_invoice_id else []
         if record.purchase_order_id:
             links.append({
                 "kind": "Purchase Order",
@@ -5079,8 +5024,8 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
 
         bag_links = raw_bardana_map()
         return {
-            "title": "Purchase Invoice",
-            "list_url": reverse_lazy("inventory:purchase_invoice_list"),
+            "title": "Wheat Purchase Invoice",
+            "list_url": f"{reverse_lazy('inventory:purchase_invoice_list')}?kind=wheat",
             "next_voucher_no": next_purchase_invoice_number(),
             "today": timezone.localdate(),
             "suppliers": suppliers,

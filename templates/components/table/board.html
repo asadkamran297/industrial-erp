@@ -16,7 +16,7 @@
   <section class="board-card">
     {% if not no_filters %}{% include "components/table/filter_bar.html" with table_id=table_id|default:"board-table" %}{% endif %}
     {{ slots.bar }}
-    <div class="board-scroll">
+    <div class="board-scroll{% if freeze %} board-freeze-{{ freeze }}{% endif %}">
       <table id="{{ table_id|default:'board-table' }}" class="board-table">{{ slot }}</table>
     </div>
     {% if not no_pagination %}{% include "components/table/pagination.html" %}{% endif %}

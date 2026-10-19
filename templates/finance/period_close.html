@@ -23,7 +23,7 @@
         <div class="card-body">
           {% include "components/forms/control.html" with type="date" id="closing_date" name="closing_date" label="Closing date" value=closing_date|date:'Y-m-d' required=True only %}
         </div>
-        {% include "components/forms/submit_bar.html" with label="Post closing entry" disabled=has_balances|yesno:",1" only %}
+        {% include "components/forms/submit_bar.html" with label="Post Closing" disabled=has_balances|yesno:",1" only %}
       </form>
 
       <section class="statement-section">

@@ -4,8 +4,8 @@
 {% component "table/board" title=title add_url=add_url add_label="Supplier" table_id="supplier-table" search_placeholder="Search suppliers" %}
   {% slot tiles %}
     {% include "components/table/tile.html" with tone="violet" icon="users" value=supplier_count label="Suppliers" only %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchased_total|amount label="Purchased" only %}
-    {% include "components/table/tile.html" with tone="rose" icon="cash" value=payable_total|amount label="Payable" only %}
+    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchased_total|amount label="Total Purchases" only %}
+    {% include "components/table/tile.html" with tone="rose" icon="cash" value=payable_total|amount label="Total Payable" only %}
   {% endslot %}
 
   <thead>
@@ -31,13 +31,12 @@
       {% if "phone" in columns %}<td>{{ supplier.tel1|default:"—" }}</td>{% endif %}
       {% if "email" in columns %}<td>{{ supplier.email|default:"—" }}</td>{% endif %}
       {% if "payable" in columns %}<td class="num strong{% if supplier.payable_balance > 0 %} fig-bad{% endif %}">{{ supplier.payable_balance|amount }}</td>{% endif %}
-      {% if "status" in columns %}<td>{% if can_edit %}{% url status_toggle_url_name supplier.pk as toggle_url %}{% capture as is_on %}{% if supplier.status == 'active' %}1{% endif %}{% endcapture %}{% include "components/forms/switch.html" with url=toggle_url checked=is_on title="Active" %}{% else %}{% include "components/table/status_badge.html" with status=supplier.status label=supplier.get_status_display only %}{% endif %}</td>{% endif %}
+      {% if "status" in columns %}<td>{% include "components/table/status_badge.html" with status=supplier.status label=supplier.get_status_display only %}</td>{% endif %}
       <td class="actions-col">
         {% url 'inventory:supplier_detail' supplier.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url edit_url_name supplier.pk %}{% endif %}{% endcapture %}
-        {% component "table/actions" view_url=view_url edit_url=edit_url %}
-          {% if supplier.payable_code %}{% url 'finance:account_ledger' as ledger_base %}{% capture as ledger_url %}{{ ledger_base }}?account_no={{ supplier.payable_code|urlencode }}{% endcapture %}{% include "components/ui/icon_button.html" with href=ledger_url icon="ledger" title="Ledger" only %}{% endif %}
-        {% endcomponent %}
+        {% capture as ledger_url %}{% if supplier.payable_code %}{% url 'finance:account_ledger' %}?account_no={{ supplier.payable_code|urlencode }}{% endif %}{% endcapture %}
+        {% include "inventory/_party_actions.html" with record=supplier view_url=view_url edit_url=edit_url ledger_url=ledger_url can_edit=can_edit toggle_name=status_toggle_url_name only %}
       </td>
     </tr>
     {% component "table/lines_row" pk=supplier.pk span=row_span %}

@@ -2,7 +2,7 @@
 {% block content %}
 
 <div class="wp-wrap">
-  {% component "ui/page_header" title="Purchase Invoice" back=True back_url=list_url %}
+  {% component "ui/page_header" title="Wheat Purchase Invoice" back=True back_url=list_url %}
     {% slot fields %}
       <div class="head-no">{% include "components/forms/control.html" with id="voucher_no" label="Invoice No" value=next_voucher_no readonly=True extra="strong num" only %}</div>
       {% include "components/forms/control.html" with type="date" id="voucher_date" name="voucher_date" label="Date" value=today|date:'Y-m-d' form_id="wp-form" only %}

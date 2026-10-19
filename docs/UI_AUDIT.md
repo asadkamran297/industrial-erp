@@ -60,7 +60,6 @@ No user list screen exists (only User Assignments).
 | Item Ledger | inventory/ledger_list | literal | N (book tiles via ctx) | N | N | browser | N | dynamic |
 | Customer Ledger | inventory/customer_ledger_list | literal | N | N | N | browser | N | transaction_no,customer_* |
 | Purchase Orders Report | inventory/purchase_report | literal | Y (mixin) | N | N | browser | Y | purchase_num,supplier,quot_num |
-| Pending Orders | inventory/pending_orders_report | literal | Y (slot) | N | Y | browser | Y | purchase_num,supplier,quot_num |
 | Daily Grinding | production/report_daily_grinding | ctx | N | N | N | browser | Y | – |
 | Production Summary | production/report_production_summary | ctx | N | N | N | browser | N | – |
 | Yield Trend | production/report_yield_trend | ctx | Y (slot) | N | N | browser | N | – |

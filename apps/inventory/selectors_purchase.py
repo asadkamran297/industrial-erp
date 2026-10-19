@@ -8,7 +8,6 @@ from django.db.models import Count, DecimalField, Max, Min, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
-    INV_ORDER_OPEN_STATUSES,
     PRD_SPEC_RAW_ITEM,
     PRD_SPEC_RAW_PACKING,
     STATUS_ACTIVE,
@@ -20,7 +19,7 @@ from apps.finance.models import ChartOfAccount
 from apps.products.models import PartyBardanaLedger
 
 from .models import (
-    InventoryClass, InventoryItem, PurchaseInvoice, PurchaseInvoiceLine, PurchaseOrder, PurchaseReturnMaster, Supplier,
+    InventoryClass, InventoryItem, PurchaseInvoice, PurchaseInvoiceLine, PurchaseReturnMaster, Supplier,
 )
 
 MONEY = DecimalField(max_digits=18, decimal_places=2)
@@ -88,9 +87,15 @@ def _weight_source(line):
 # 14. Wheat Purchase Register
 # ---------------------------------------------------------------------------
 
-def _slip_row(line):
+def _freight_effect(inv):
+    freight = money(inv.freight_amount)
+    return -freight if inv.freight_paid_by_mill else freight
+
+
+def _slip_row(line, header=True, bardana_amount=ZERO):
     inv = line.invoice
     credit = line.credit_weight or ZERO
+    head = (lambda value: value) if header else (lambda value: ZERO)
     return {
         "pk": inv.pk,
         "number": inv.invoice_num,
@@ -100,26 +105,29 @@ def _slip_row(line):
         "vehicle": inv.vehicle_no,
         "broker": inv.broker.title if inv.broker_id else "",
         "product": line.product.name,
-        "party_weight": weight(line.party_weight) if line.party_weight is not None else None,
-        "mill_weight": weight(line.mill_weight) if line.mill_weight is not None else None,
-        "selected_weight": weight(line.selected_weight) if line.selected_weight is not None else None,
+        "party_weight": weight(line.party_weight or ZERO),
+        "mill_weight": weight(line.mill_weight or ZERO),
+        "selected_weight": weight(line.selected_weight or ZERO),
         "weight_source": _weight_source(line),
-        "katla": weight(line.katla) if line.katla is not None else None,
-        "impurities": weight(line.khoot) if line.khoot is not None else None,
-        "moisture": weight(line.moisture) if line.moisture is not None else None,
-        "sack_deduction": weight(line.sack_weight_deduction) if line.sack_weight_deduction is not None else None,
+        "katla": weight(line.katla or ZERO),
+        "impurities": weight(line.khoot or ZERO),
+        "moisture": weight(line.moisture or ZERO),
+        "sack_deduction": weight(line.sack_weight_deduction or ZERO),
         "credit_kg": weight(credit),
         "credit_mund": mund(credit),
         "rate_per_mund": money(line.rate_per_mund) if line.rate_per_mund is not None else money(line.rate * 40),
         "goods_amount": money(line.amount),
-        "freight": money(inv.freight_amount),
+        "bardana_amount": head(money(bardana_amount)),
+        "discount": head(money(inv.discount_amount)),
+        "tax": head(money(inv.tax_amount)),
+        "freight": head(_freight_effect(inv)),
         "freight_payer": "Mill" if inv.freight_paid_by_mill else "Supplier",
-        "brokerage": money(inv.brokerage_amount),
+        "brokerage": head(money(inv.brokerage_amount) if inv.brokerage_borne_by_supplier else ZERO),
         "brokerage_bearer": "Supplier" if inv.brokerage_borne_by_supplier else "Mill",
-        "wht": money(inv.withholding_amount),
-        "net_payable": money(inv.supplier_payable_amount),
-        "paid": money(inv.paid_amount),
-        "balance": money(inv.balance_amount),
+        "wht": head(money(inv.withholding_amount)),
+        "net_payable": head(money(inv.supplier_payable_amount)),
+        "paid": head(money(inv.paid_amount)),
+        "balance": head(money(inv.balance_amount)),
         "status": inv.status,
         "status_label": inv.get_status_display(),
     }
@@ -137,11 +145,24 @@ def wheat_register(start, end, supplier=None, vehicle="", broker=None, weight_so
         ).select_related("invoice__supplier", "invoice__broker", "product")
         if supplier:
             lines = lines.filter(invoice__supplier_id=supplier)
-    rows = [_slip_row(line) for line in lines.order_by("-invoice__invoice_date", "-invoice_id")]
+    lines = list(lines.order_by("-invoice__invoice_date", "-invoice_id", "seq_num"))
+    invoice_ids = {line.invoice_id for line in lines}
+    others = dict(
+        PurchaseInvoiceLine.objects.filter(invoice_id__in=invoice_ids)
+        .exclude(product__specification=PRD_SPEC_RAW_ITEM)
+        .values("invoice_id").annotate(total=_sum("amount")).values_list("invoice_id", "total")
+    )
+    rows, seen = [], set()
+    for line in lines:
+        first = line.invoice_id not in seen
+        seen.add(line.invoice_id)
+        rows.append(_slip_row(line, header=first, bardana_amount=others.get(line.invoice_id) or ZERO))
     if weight_source:
         rows = [row for row in rows if row["weight_source"].lower() == weight_source]
-    totals = {key: sum((row[key] or ZERO for row in rows), ZERO) for key in ("credit_kg", "credit_mund", "goods_amount", "freight", "brokerage", "wht", "net_payable", "paid", "balance")}
-    totals["slips"] = len(rows)
+    keys = ("credit_kg", "credit_mund", "goods_amount", "bardana_amount", "discount", "tax", "freight", "brokerage",
+            "wht", "net_payable", "paid", "balance")
+    totals = {key: sum((row[key] or ZERO for row in rows), ZERO) for key in keys}
+    totals["invoices"] = len({row["pk"] for row in rows})
     totals["rate_per_mund"] = money(totals["goods_amount"] / totals["credit_mund"]) if totals["credit_mund"] else ZERO
     return {"rows": rows, "totals": totals}
 
@@ -377,36 +398,6 @@ def stores_register(start, end, supplier=None, item_class=None, item=None):
 
 
 # ---------------------------------------------------------------------------
-# 22. Purchase Orders — Pending / Fulfilment
-# ---------------------------------------------------------------------------
-
-def order_fulfilment(start, end, supplier=None, status="", as_of=None):
-    orders = PurchaseOrder.objects.filter(purchase_date__range=(start, end)).select_related("supplier").prefetch_related("items")
-    if supplier:
-        orders = orders.filter(supplier_id=supplier)
-    orders = orders.filter(status=status) if status else orders.exclude(status="draft")
-    rows = []
-    for po in orders.order_by("-purchase_date", "-id"):
-        items = list(po.items.all())
-        ordered = sum((i.quantity for i in items), ZERO)
-        invoiced = sum((i.qty_invoiced or ZERO for i in items), ZERO)
-        value = sum((i.quantity * i.rate for i in items), ZERO)
-        pending = max(ordered - invoiced, ZERO)
-        rows.append({
-            "pk": po.pk, "number": po.purchase_num, "date": po.purchase_date, "expected": po.expected_date, "supplier_id": po.supplier_id,
-            "supplier": po.supplier.name, "lines": len(items), "ordered": weight(ordered), "invoiced": weight(invoiced), "pending": weight(pending),
-            "fulfilled_pct": _pct(invoiced, ordered), "value": money(value), "pending_value": money(value * pending / ordered) if ordered else ZERO,
-            "age": (as_of - po.purchase_date).days if as_of else None, "overdue": bool(po.expected_date and as_of and pending and po.expected_date < as_of),
-            "status": po.status, "status_label": po.get_status_display(),
-        })
-    totals = {key: sum((row[key] for row in rows), ZERO) for key in ("ordered", "invoiced", "pending", "value", "pending_value")}
-    totals["orders"] = len(rows)
-    totals["open"] = sum(1 for row in rows if row["status"] in INV_ORDER_OPEN_STATUSES)
-    totals["overdue"] = sum(1 for row in rows if row["overdue"])
-    return {"rows": rows, "totals": totals}
-
-
-# ---------------------------------------------------------------------------
 # 23. Purchase Returns
 # ---------------------------------------------------------------------------
 
@@ -422,7 +413,7 @@ def purchase_returns(start, end, supplier=None, item=None):
         names = [i.item_name for i in items]
         rows.append({
             "pk": ret.pk, "number": ret.return_num, "date": ret.return_date, "supplier_id": ret.supplier_id, "supplier": ret.supplier.name,
-            "invoice_pk": ret.purchase_invoice_id, "invoice": ret.purchase_invoice.invoice_num, "invoice_date": ret.purchase_invoice.invoice_date,
+            "invoice_pk": ret.purchase_invoice_id, "invoice": ret.purchase_invoice.invoice_num if ret.purchase_invoice_id else "Direct", "invoice_date": ret.purchase_invoice.invoice_date if ret.purchase_invoice_id else None,
             "items": ", ".join(names[:2]) + (f" +{len(names) - 2}" if len(names) > 2 else ""), "qty": weight(sum((i.quantity for i in items), ZERO)),
             "invoice_amount": money(ret.total_purchase_amount), "returned": money(ret.returned_amount), "adjusted": money(ret.adjusted_amount),
             "remarks": ret.remarks, "status": ret.status, "status_label": ret.get_status_display(),

@@ -63,8 +63,11 @@ class PurchaseSelectorTests(PurchaseReportFixture):
         self.assertEqual(row["weight_source"], "Mill")
         self.assertEqual(row["freight_payer"], "Mill")
         self.assertEqual(row["net_payable"], Decimal("40000.00") - Decimal("60.00") - Decimal("2000.00") - Decimal("400.00"))
-        self.assertEqual(data["totals"]["slips"], 1)
-        self.assertEqual(sel.wheat_register(self.today, self.today, weight_source="party")["totals"]["slips"], 0)
+        self.assertEqual(data["totals"]["invoices"], 1)
+        for r in data["rows"]:
+            self.assertEqual(r["selected_weight"] - r["katla"] - r["impurities"] - r["moisture"] - r["sack_deduction"], r["credit_kg"])
+            self.assertEqual(r["goods_amount"] + r["bardana_amount"] + r["tax"] + r["freight"] - r["discount"] - r["brokerage"] - r["wht"], r["net_payable"])
+        self.assertEqual(sel.wheat_register(self.today, self.today, weight_source="party")["totals"]["invoices"], 0)
 
     def test_summary_and_trend(self):
         row = sel.purchase_summary(self.today, self.today, GROUP_DAY)["rows"][0]
@@ -90,10 +93,6 @@ class PurchaseSelectorTests(PurchaseReportFixture):
         stores = sel.stores_register(self.today, self.today)
         self.assertEqual(stores["rows"][0]["match"], "Against order")
         self.assertEqual(stores["totals"]["amount"], Decimal("2000.00"))
-        orders = sel.order_fulfilment(self.today - timedelta(days=30), self.today, as_of=self.today)
-        self.assertEqual(orders["rows"][0]["pending"], Decimal("6.000"))
-        self.assertTrue(orders["rows"][0]["overdue"])
-        self.assertEqual(orders["totals"]["overdue"], 1)
         returns = sel.purchase_returns(self.today, self.today)
         self.assertEqual(returns["totals"]["returned"], Decimal("500.00"))
         pay = sel.supplier_payment_status(self.today)["rows"][0]
@@ -108,7 +107,7 @@ class PurchaseScreenTests(PurchaseReportFixture):
 
     def test_every_purchase_report_renders_and_exports(self):
         names = ("report_purchase", "report_purchase_summary", "report_supplier_purchases", "report_wheat_quality", "report_wheat_rate_trend",
-                 "report_freight_brokerage", "report_wht", "report_stores_purchases", "report_pending_orders", "report_purchase_return", "report_supplier_payments")
+                 "report_freight_brokerage", "report_wht", "report_stores_purchases", "report_purchase_return", "report_supplier_payments")
         for name in names:
             with self.subTest(report=name):
                 response = self.client.get(reverse(f"inventory:{name}"), {"preset": "year", "threshold": "0.5"})

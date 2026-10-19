@@ -66,12 +66,28 @@ def short_amount(value):
 
     sign = "-" if number < 0 else ""
     number = abs(number)
-    for size, suffix in ((Decimal("10000000"), " Cr"), (Decimal("100000"), " Lac")):
-        if number >= size:
-            scaled = (number / size).quantize(Decimal("0.01"))
-            text = f"{scaled:f}".rstrip("0").rstrip(".")
-            return f"{sign}{text}{suffix}"
+    if number >= MILLION:
+        return f"{sign}{(number / MILLION).quantize(Decimal('0.01')):,} M"
     return f"{sign}{format_amount(number)}"
+
+
+MILLION = Decimal("1000000")
+MONEY_TEXT = re.compile(r"^(Rs\.?\s*)?-?[\d,]+\.\d{2}$")
+
+
+@register.simple_tag
+def kpi_value(value):
+    """Tile figure: money of a million or more is shown in millions, the exact figure kept for hover."""
+    text = str(value if value is not None else "").strip()
+    if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+        number = Decimal(str(value))
+    elif MONEY_TEXT.match(text):
+        number = Decimal(re.sub(r"^Rs\.?\s*|,", "", text))
+    else:
+        return {"text": value, "title": ""}
+    if abs(number) < MILLION or isinstance(value, int):
+        return {"text": value, "title": ""}
+    return {"text": f"Rs {short_amount(number)}", "title": f"Rs {format_amount(number)}"}
 
 
 @register.filter(name="get_item")

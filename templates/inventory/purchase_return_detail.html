@@ -28,7 +28,7 @@
       {% include "components/ui/detail_item.html" with label="Return No" value=purchase_return.return_num only %}
       {% include "components/ui/detail_item.html" with label="Return Date" value=purchase_return.return_date|dmy only %}
       {% include "components/ui/detail_item.html" with label="Supplier" value=purchase_return.supplier.name only %}
-      {% capture as invoice_label %}{{ purchase_return.purchase_invoice.invoice_num }}{% if purchase_return.purchase_invoice.supplier_invoice_num %} &middot; {{ purchase_return.purchase_invoice.supplier_invoice_num }}{% endif %}{% endcapture %}
+      {% capture as invoice_label %}{% if purchase_return.purchase_invoice %}{{ purchase_return.purchase_invoice.invoice_num }}{% if purchase_return.purchase_invoice.supplier_invoice_num %} &middot; {{ purchase_return.purchase_invoice.supplier_invoice_num }}{% endif %}{% else %}Direct{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Purchase Invoice" value=invoice_label only %}
       {% if purchase_return.purchase_invoice.godown %}{% include "components/ui/detail_item.html" with label="Godown" value=purchase_return.purchase_invoice.godown.name only %}{% endif %}
       {% if purchase_return.status == "reversed" %}{% capture as reversed_label %}{{ purchase_return.reversed_on|dmy }} &middot; {{ reverse_reason_label }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Reversed" value=reversed_label only %}{% endif %}
@@ -46,7 +46,7 @@
             <td class="muted">{{ forloop.counter }}</td>
             <td><span class="strong">{{ line.item_name }}</span><span class="sub">{{ line.item_code }}</span></td>
             <td class="num">{{ line.quantity|qty }}</td>
-            <td>{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}</td>
+            <td>{% if line.product_id %}kg{% else %}{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}{% endif %}</td>
             <td class="num">{{ line.rate|amount }}</td>
             <td class="num strong">{{ line.total_price|amount }}</td>
           </tr>

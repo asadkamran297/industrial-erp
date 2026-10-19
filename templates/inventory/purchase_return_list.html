@@ -38,7 +38,7 @@
       <td><a class="doc-num" href="{% url 'inventory:purchase_return_detail' row.pk %}">{{ row.return_num|default:"—" }}</a></td>
       {% if "return_date" in columns %}<td class="date">{{ row.return_date|dmy }}</td>{% endif %}
       {% if "supplier" in columns %}<td class="truncate strong" title="{{ row.supplier.name }}">{{ row.supplier.name }}</td>{% endif %}
-      {% if "invoice" in columns %}<td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.purchase_invoice_id %}">{{ row.purchase_invoice.invoice_num }}</a></td>{% endif %}
+      {% if "invoice" in columns %}<td>{% if row.purchase_invoice_id %}<a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' row.purchase_invoice_id %}">{{ row.purchase_invoice.invoice_num }}</a>{% else %}<span class="muted">Direct</span>{% endif %}</td>{% endif %}
       {% if "order" in columns %}<td>{% if row.purchase_order_id %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' row.purchase_order_id %}">{{ row.purchase_order.purchase_num }}</a>{% else %}<span class="muted">&mdash;</span>{% endif %}</td>{% endif %}
       {% if "lines" in columns %}<td class="num muted">{{ row.line_count }}</td>{% endif %}
       {% if "quantity" in columns %}<td class="num">{{ row.qty_total|qty }}</td>{% endif %}
@@ -77,7 +77,7 @@
             <td class="muted">{{ forloop.counter }}</td>
             <td><span class="strong">{{ line.item_name }}</span>{% if line.item_code %}<span class="sub">{{ line.item_code }}</span>{% endif %}</td>
             <td class="num">{{ line.quantity|qty }}</td>
-            <td>{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}</td>
+            <td>{% if line.product_id %}kg{% else %}{{ line.uom.title|default:line.inventory_item.uom.title|default:"—" }}{% endif %}</td>
             <td class="num">{{ line.rate|amount }}</td>
             <td class="num strong">{{ line.total_price|amount }}</td>
           </tr>

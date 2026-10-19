@@ -1,0 +1,11 @@
+<div class="row-actions">
+  {% include "components/ui/icon_button.html" with href=view_url icon="view" title="View" only %}
+  {% if edit_url %}{% include "components/ui/icon_button.html" with href=edit_url icon="edit" title="Edit" only %}{% else %}{% include "components/ui/icon_button.html" with icon="edit" title="Edit" disabled=True only %}{% endif %}
+  {% if ledger_url %}{% include "components/ui/icon_button.html" with href=ledger_url icon="ledger" title="Ledger" only %}{% else %}{% include "components/ui/icon_button.html" with icon="ledger" title="No ledger yet" disabled=True only %}{% endif %}
+  {% url toggle_name record.pk as toggle_url %}
+  {% if record.status == "active" %}
+    {% if can_edit %}{% include "components/ui/icon_button.html" with icon="deactivate" title="Deactivate" tone="danger" confirm="Deactivate this record?" post=toggle_url only %}{% else %}{% include "components/ui/icon_button.html" with icon="deactivate" title="Deactivate" disabled=True only %}{% endif %}
+  {% else %}
+    {% if can_edit %}{% include "components/ui/icon_button.html" with icon="check" title="Activate" tone="go" confirm="Activate this record?" post=toggle_url only %}{% else %}{% include "components/ui/icon_button.html" with icon="check" title="Activate" disabled=True only %}{% endif %}
+  {% endif %}
+</div>

@@ -55,7 +55,6 @@ REPORTS: tuple[Report, ...] = (
     Report("purchase.freight", "Freight & Brokerage", "inventory", "Purchase Manager", "inventory:report_freight_brokerage", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.wht", "WHT Register", "inventory", "Purchase Manager", "inventory:report_wht", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.stores", "Stores Purchase Register", "inventory", "Purchase Manager", "inventory:report_stores_purchases", "reports.purchase.index", GROUP_PURCHASE),
-    Report("purchase.orders", "Order Fulfilment", "inventory", "Purchase Manager", "inventory:report_pending_orders", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.returns", "Purchase Returns", "inventory", "Purchase Manager", "inventory:report_purchase_return", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.payments", "Supplier Payment Status", "inventory", "Purchase Manager", "inventory:report_supplier_payments", "reports.purchase.index", GROUP_PURCHASE),
 

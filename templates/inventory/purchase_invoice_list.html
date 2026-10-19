@@ -1,9 +1,10 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% if can_add %}{% url 'inventory:purchase_invoice_create' as create_url %}{% endif %}
-{% component "table/board" title="Purchase Invoices" add_url=create_url add_label="Purchase Invoice" table_id="invoice-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
+{% if can_add %}{% if kind == "general" %}{% url 'inventory:stores_purchase_create' as create_url %}{% else %}{% url 'inventory:purchase_invoice_create' as create_url %}{% endif %}{% endif %}
+{% capture as add_label %}{% if kind == "general" %}General Invoice{% else %}Wheat Invoice{% endif %}{% endcapture %}
+{% component "table/board" title=list_title add_url=create_url add_label=add_label table_id="invoice-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
   {% slot actions %}
-    {% if can_add %}{% url 'inventory:stores_purchase_create' as stores_url %}{% include "components/ui/button.html" with label="Stores Invoice" href=stores_url icon="box" only %}{% endif %}
+    {% if can_add and not kind %}{% url 'inventory:stores_purchase_create' as stores_url %}{% include "components/ui/button.html" with label="General Invoice" href=stores_url icon="box" only %}{% endif %}
   {% endslot %}
   {% slot tiles %}
     {% capture as all_on %}{% if not state and not request.GET.date_from %}1{% endif %}{% endcapture %}

@@ -105,7 +105,7 @@
     </div>
 
     {% if object %}
-    {% component "forms/submit_bar" cancel_url=cancel_url label="Update Voucher" save_id="save-btn" prepared_by=request.user %}
+    {% component "forms/submit_bar" cancel_url=cancel_url label="Update" save_id="save-btn" prepared_by=request.user %}
       {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
     {% endcomponent %}
     {% else %}

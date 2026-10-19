@@ -35,7 +35,7 @@
     <div class="overflow-x-auto">
       {% doc_columns lines "purchase" as cols %}
       <table class="data-table doc-table">
-        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th><th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
+        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th>{% if any_returned %}<th class="num">Returned</th>{% endif %}<th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
         <tbody>
           {% for line in lines %}
           <tr>
@@ -50,6 +50,7 @@
               {% if line.bardana_ownership %}<span class="sub">{{ line.get_bardana_ownership_display }}{% if not line.is_purchased_bardana %} &middot; held, not bought{% endif %}</span>{% endif %}
             </td>
             <td class="num">{{ line.quantity|qty }}</td>
+            {% if any_returned %}<td class="num {% if line.qty_returned %}fig-due{% else %}fig-nil{% endif %}">{{ line.qty_returned|qty }}</td>{% endif %}
             <td>{{ line.uom.title|default:"—" }}</td>
             <td class="num">{{ line.rate|amount }}</td>
             {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
@@ -60,7 +61,7 @@
           {% endfor %}
         </tbody>
         {% if lines %}
-        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td colspan="{% if cols.discount %}3{% else %}2{% endif %}"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
+        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td>{% if any_returned %}<td></td>{% endif %}<td colspan="{% if cols.discount %}3{% else %}2{% endif %}"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
         {% endif %}
       </table>
     </div>

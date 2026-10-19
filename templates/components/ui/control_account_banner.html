@@ -4,5 +4,5 @@
     <span><span class="muted">Balance sheet &middot; {{ control_account.account.title }}</span> <b class="num">{{ control_account.ledger|amount }}</b></span>
     {% if not control_account.reconciles %}<span class="fig-warn">Difference <b class="num">{{ control_account.difference|amount }}</b></span>{% endif %}
   </div>
-  {% if control_account.reconciles %}{% include "components/ui/button.html" with label="View valuation" href=control_account.url size="sm" icon="chevron-right" only %}{% else %}{% include "components/ui/button.html" with label="Reconcile" href=control_account.url size="sm" icon="chevron-right" only %}{% endif %}
+  {% if control_account.reconciles %}{% include "components/ui/button.html" with label="Valuation" href=control_account.url size="sm" icon="chevron-right" only %}{% else %}{% include "components/ui/button.html" with label="Reconcile" href=control_account.url size="sm" icon="chevron-right" only %}{% endif %}
 </div>

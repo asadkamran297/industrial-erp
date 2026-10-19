@@ -236,6 +236,7 @@ class ReportView(PagePermissionRequiredMixin, TemplateView):
     paginate_by = 100
     filter_specs: tuple = ()
     group_toggle = False
+    freeze_columns = 0
     default_group = GROUP_DAY
 
     def group(self) -> str:
@@ -337,6 +338,7 @@ class ReportView(PagePermissionRequiredMixin, TemplateView):
         context.update(sort_context)
         context.update({
             "title": self.title,
+            "freeze_columns": self.freeze_columns,
             "rows": rows,
             "page_obj": page_obj,
             "paginator": paginator,
