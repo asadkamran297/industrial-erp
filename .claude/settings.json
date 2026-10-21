@@ -35,7 +35,9 @@
       "Bash(curl -sS -o /dev/null -w \"2082: %{http_code}\\\\n\" --max-time 15 http://premium233.web-hosting.com:2082/)",
       "Bash(sed -i 's/^DJANGO_SUPERUSER_PASSWORD=.*/DJANGO_SUPERUSER_PASSWORD=nva1D35CWAImhgXG!aZ9/' deploy/out/.env)",
       "Bash(sed -i 's/^SUPERUSER_PASS=.*/SUPERUSER_PASS=nva1D35CWAImhgXG!aZ9/' deploy/cpanel.config)",
-      "ClaudeInChromeDomain(127.0.0.1:8001)"
+      "ClaudeInChromeDomain(127.0.0.1:8001)",
+      "Read(//c/Users/Admin/.claude/projects/c--laragon-www-work-industrial-erp/memory/**)",
+      "Bash(echo \"- [Session 2026-10-21 live deploy]\\(session-2026-10-21-live-deploy.md\\) — 626dc2a live, 274 vouchers renumbered, WPI series; open: suppliers/30 ledger note, sale voucher bodies.\")"
     ]
   }
 }

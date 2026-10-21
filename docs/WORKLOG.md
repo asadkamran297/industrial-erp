@@ -113,6 +113,12 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - Separate number series: mill purchase invoices (any wheat/bardana product line) now `WPI-000001…` (new `wheat_purchase_invoice` series, counter `PurchaseInvoice.wheat_seq_num`, migration `inventory.0059`); stores/general stay `PI-`. Existing numbers untouched. Prefix editable in General Settings.
 - Open: `apps.finance.tests.FinanceModelTests` 3 errors pre-existing (`account_no: Active leaf chart-of-account is required` in fixtures).
 
+### Live — 2026-10-21 deploy
+
+- Pre-deploy dump: `deploy/backups/sql/flouwwgu_erp_2026-10-21_predeploy.sql.gz` (86 tables).
+- Commit `626dc2a` pulled and deployed (deploy_id 11); `inventory.0059` applied on MySQL `flouwwgu_erp`; build exit 0.
+- `renumber_auto_vouchers --apply` run on live via one-shot entrypoint (user approved): 274 auto vouchers renumbered to their document numbers (`P-000001` → `PI-000001` …). Log `~/erp_app/renumber_2026-10-21.log`; original `passenger_wsgi.py` restored, app restarted, login 200.
+
 ## 2026-10-20
 
 ### Local — detail pages, links, prints (not committed)
