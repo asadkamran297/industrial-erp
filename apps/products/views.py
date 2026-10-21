@@ -457,7 +457,7 @@ class ProductDetailView(MasterDetailView):
     template_name = "products/product_detail.html"
     detail_fields = (
         ("Complete Code", "complete_code"), ("Quick Code", "quick_code"), ("Parent", "parent"), ("Specification", "specification"),
-        ("Unit", "unit"), ("Unit Weight", "unit_weight", "weight"), ("Fix Weight", "fix_weight", "weight"), ("Actual Weight", "actual_weight", "weight"),
+        ("Unit", "unit"), ("Unit Weight", "unit_weight", "weight_opt"), ("Fix Weight", "fix_weight", "weight_opt"), ("Actual Weight", "actual_weight", "weight_opt"),
         ("Color", "color"), ("Starting Date", "starting_date"), ("Stock", "stock", "weight"), ("Status", "status"),
     )
 
@@ -467,4 +467,11 @@ class ProductDetailView(MasterDetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["movements"] = ProductLedger.objects.filter(product=self.object).select_related("godown").order_by("-entry_date", "-id")[:10]
+        from apps.core.doc_links import doc_link, url_or_blank
+
+        context["doc_links"] = [
+            doc_link("Product Ledger", self.object.name, url_or_blank("inventory:ledger_list", query=f"book=mill&item={self.object.pk}")),
+            doc_link("Party Bardana", "List", url_or_blank("products:party_bardana", query=f"item={self.object.pk}")),
+            doc_link("Account Linking", "Setup", url_or_blank("products:account_linking")),
+        ]
         return context

@@ -217,7 +217,7 @@ class GodownStockView(ReportView):
         tiles = [
             _tile("Wheat", f"{t['wheat_mund']:,.0f} md", "amber", "wheat", f"{t['wheat_kg']:,.0f} kg"),
             _tile("Products", f"{t['products_kg']:,.0f} kg", "teal", "box"),
-            _tile("Empty bags", f"{t['empty_bags']:,.0f}", "violet", "layers"),
+            _tile("Empty bags", f"{t['empty_bags']:,.0f}", "violet", "package"),
             _tile("Mill stock value", format_amount(t["value"]), "sky", "cash"),
             _tile("Stores value", format_amount(t["stores_value"]), "slate", "cash", "all godowns"),
         ]
@@ -258,7 +258,7 @@ class WheatDaysView(ReportView):
         tiles = [
             _tile("Wheat stock in days", f"{latest['days']}" if latest["days"] is not None else "—", "amber", "wheat", f"{latest['stock_mund']:,.0f} md on hand", change=delta(latest["days"], first["days"]) if latest["days"] is not None and first["days"] is not None else None),
             _tile("Wheat stock", f"{latest['stock_kg']:,.0f} kg", "teal", "layers"),
-            _tile("Avg daily grinding", f"{latest['per_day_kg']:,.0f} kg", "violet", "settings", "last 30 days"),
+            _tile("Avg daily grinding", f"{latest['per_day_kg']:,.0f} kg", "violet", "factory", "last 30 days"),
         ]
         tiles[0]["delta_label"] = "vs 30 days ago"
         return {"rows": data["rows"], "totals": {}, "tiles": tiles}

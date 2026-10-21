@@ -242,6 +242,31 @@
       }
       return;
     }
+    const exporter = event.target.closest("[data-export-table]");
+    if (exporter) {
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = exporter.dataset.url;
+      form.hidden = true;
+      if (exporter.dataset.format === "pdf") form.target = "_blank";
+      const fields = {
+        csrfmiddlewaretoken: csrfToken(),
+        format: exporter.dataset.format,
+        title: document.querySelector(".page-title")?.textContent.trim() || "Export",
+        table: JSON.stringify(tableRows(exporter.dataset.exportTable)),
+      };
+      Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+      form.remove();
+      return;
+    }
     const csv = event.target.closest("[data-csv-table]");
     if (csv) {
       const quote = (v) => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;

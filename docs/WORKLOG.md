@@ -5,6 +5,21 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-20
+
+### Local — detail pages, links, prints (not committed)
+
+- Every detail page header now carries the same buttons in one order: Add New, Edit, Print, Voucher, then the page's own (Post, Reverse, Delete). Built from `doc_actions` in `components/ui/detail_header.html`.
+- Linked-documents bar under every detail header (`doc_links`), built by `apps/core/doc_links.py` + `apps/inventory/doc_links.py`: PO, Purchase Invoice, Purchase Return, Sale, Sale Return, Voucher (source document, reversal, ledgers), Supplier, Customer, Item, Product, Godown, Employee, Role, Fiscal Year, Grinding, Conversion. Reversed documents struck through. The three old per-page link blocks removed.
+- Purchase Invoice print added (`inventory:purchase_invoice_print`): weights block for wheat lines, net amount, previous balance, total payable.
+- Every print (layouts/print.html) has an A4 / Thermal switch (`?size=thermal`, 80mm); POS receipts stay thermal-only.
+- Row actions (`components/table/actions.html`): fixed order View, Edit, Print, Ledger, then status actions, then Reverse/Deactivate/Delete; `fixed=True` shows a disabled Edit (and Delete with `delete_slot`) so every row looks alike (PO board, payroll runs).
+- Detail pages: empty fields hidden app-wide (`detail_item.html`); Purchase Invoice head shows date, net weight, @/40kg, net amount, paid, balance, PO; PO head shows ordered/received/balance qty; Sale and Sale Return got a field grid (customer, date, pay mode, amounts, remarks); Conversion shows unit weight, output, prepared by, description; voucher detail now lists its lines (account, narration, person, method, debit, credit). Fixed: purchase invoice line Amount column showed 0.00 (`line.total_amount` → `line.amount`).
+- Icons: sidebar sections use SVG icons instead of letters (13 new icons in `apps/core/icons.py`); 49 card icons matched to their label (truck, factory, package, wallet, briefcase, scale).
+- Download menu: every list offers Excel, CSV, Word, PDF, Image. Screens without their own export post the on-screen table to `/table-export/` (`ScreenTableExportView`), which reuses the server formats.
+
+---
+
 ## 2026-10-19
 
 ### Local — purchase review (Hamza Afzal, 9 points; `docs/PURCHASE_REVIEW_MASTER_PROMPT.md`)
@@ -18,10 +33,15 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 - Suppliers and Customers: fixed row actions View, Edit, Ledger, Activate/Deactivate with tooltips (`inventory/_party_actions.html`).
 - One supplier picker component (`components/forms/party_picker.html`) on PO, General Invoice and Return; every date box 11.5rem; buttons 12px with shorter labels.
 
+### Live — purchase review deployed
+
+- Pre-deploy dump: `deploy/backups/sql/flouwwgu_erp_2026-10-19_predeploy.sql.gz` (git-ignored, 86 tables).
+- Commit `3f47c82` pulled and deployed (deploy_id 10); `inventory.0058` applied on MySQL `flouwwgu_erp`; build exit 0.
+- Checked: login page 200, `/inventory/reports/pending-orders/` 301 to the PO board, new CSS served.
+
 ### Open
 - Wheat Purchase Invoice has no PO link (PO no longer carries wheat lines).
 - `apps.finance.tests.FinanceModelTests`: 3 errors ("Active leaf chart-of-account is required.") exist without these changes too.
-- Not deployed.
 
 ---
 

@@ -304,36 +304,3 @@ RETURN_COLUMNS = ColumnSet("inventory.purchase_returns", (
     Column("value", "Amount", locked=True, export=lambda o: o.returned_amount),
 ))
 
-
-def linked_documents(order):
-    """Everything raised off this order, as one row of links.
-
-    An order is the head of a chain -- it is invoiced, and some of it may go
-    back. The documents that exist are named; the ones that do not are absent,
-    so the row states how far the order has got.
-    """
-    from django.urls import reverse
-
-    from .models import PurchaseReturnMaster
-
-    links = []
-
-    for invoice in order.invoices.all():
-        links.append({
-            "kind": "Purchase Invoice",
-            "label": invoice.invoice_num or invoice.supplier_invoice_num,
-            "url": reverse("inventory:purchase_invoice_detail", args=[invoice.pk]),
-            "new_tab": False,
-            "dead": invoice.status == STATUS_REVERSED,
-        })
-
-    for entry in PurchaseReturnMaster.objects.filter(purchase_order=order).order_by("return_date", "pk"):
-        links.append({
-            "kind": "Purchase Return",
-            "label": entry.return_num,
-            "url": reverse("inventory:purchase_return_detail", args=[entry.pk]),
-            "new_tab": False,
-            "dead": entry.status == STATUS_REVERSED,
-        })
-
-    return links

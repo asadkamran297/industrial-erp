@@ -186,7 +186,7 @@ class SupplierPurchasesView(ReportView):
             _tile("Mund", f"{t['mund']:,.0f}", "amber", "wheat", f"{t['slips']} slips"),
             _tile("Goods", format_amount(t["amount"]), "sky", "cash", f"avg {format_amount(t['avg_rate'])}/md"),
             _tile("Balance", format_amount(t["balance"]), "rose", "alert"),
-            _tile("Sacks held", f"{t['sacks_held']:,.0f}", "teal", "box"),
+            _tile("Sacks held", f"{t['sacks_held']:,.0f}", "teal", "package"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
@@ -334,12 +334,12 @@ class FreightBrokerageView(ReportView):
         data = sel.freight_brokerage(p.start, p.end, f["supplier"] or None, f["broker"] or None)
         t = data["totals"]
         tiles = [
-            _tile("Freight", format_amount(t["freight"]), "sky", "cash", f"{t['invoices']} slips"),
-            _tile("Freight mill paid", format_amount(t["freight_mill"]), "rose", "cash"),
-            _tile("Freight supplier paid", format_amount(t["freight_supplier"]), "green", "cash"),
-            _tile("Brokerage", format_amount(t["brokerage"]), "violet", "users"),
-            _tile("Brokerage mill bears", format_amount(t["brokerage_mill"]), "amber", "users"),
-            _tile("Brokerage supplier bears", format_amount(t["brokerage_supplier"]), "teal", "users"),
+            _tile("Freight", format_amount(t["freight"]), "sky", "truck", f"{t['invoices']} slips"),
+            _tile("Freight mill paid", format_amount(t["freight_mill"]), "rose", "truck"),
+            _tile("Freight supplier paid", format_amount(t["freight_supplier"]), "green", "truck"),
+            _tile("Brokerage", format_amount(t["brokerage"]), "violet", "briefcase"),
+            _tile("Brokerage mill bears", format_amount(t["brokerage_mill"]), "amber", "briefcase"),
+            _tile("Brokerage supplier bears", format_amount(t["brokerage_supplier"]), "teal", "briefcase"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
@@ -378,7 +378,7 @@ class WhtRegisterView(ReportView):
         p, f = self.period(), self.filters()
         data = sel.wht_register(p.start, p.end, f["supplier"] or None)
         t = data["totals"]
-        tiles = [_tile("WHT deducted", format_amount(t["wht"]), "violet", "shield", f"{t['invoices']} slips · {t['credit_mund']:,.0f} md")]
+        tiles = [_tile("WHT deducted", format_amount(t["wht"]), "violet", "ledger", f"{t['invoices']} slips · {t['credit_mund']:,.0f} md")]
         for month, amount in list(data["by_month"].items())[:5]:
             tiles.append(_tile(month, format_amount(amount), "slate", "calendar"))
         return {"rows": data["rows"], "totals": t, "tiles": tiles}

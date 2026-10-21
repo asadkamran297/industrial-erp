@@ -3,7 +3,7 @@
 {% component "table/board" title=title table_id="party-bardana-table" search_placeholder="Search party or bag" %}
   {% slot tiles %}
     {% include "components/table/tile.html" with tone="violet" icon="users" value=party_count label="Parties" only %}
-    {% include "components/table/tile.html" with tone="teal" icon="layers" value=sacks_held|floatformat:0 label="Sacks held" only %}
+    {% include "components/table/tile.html" with tone="teal" icon="package" value=sacks_held|floatformat:0 label="Sacks held" only %}
   {% endslot %}
   <thead>
     <tr>

@@ -6,18 +6,13 @@
   {% capture as status_label %}{% if voucher.posted == "Y" %}Posted{% else %}{{ voucher.get_status_display }}{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if voucher.posted == "Y" %}posted{% else %}pending{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind=voucher.get_voucher_type_display number=voucher.voucher_no date=voucher.voucher_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url %}
-    {% slot actions %}
-      {% url 'finance:account_voucher_print' voucher.pk as print_url %}
-      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
-      {% if not is_locked %}{% url 'finance:account_voucher_update' voucher.pk as edit_url %}{% include "components/ui/button.html" with label="Edit voucher" href=edit_url icon="edit" variant="primary" only %}{% endif %}
-    {% endslot %}
   {% endcomponent %}
 
   {% component "ui/card" %}
     {% component "ui/detail_grid" cols=4 %}
       {% capture as type_label %}{{ voucher.get_voucher_type_display }}{% if money_mode %} &middot; {{ money_mode|capfirst }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Voucher Type" value=type_label only %}
-      {% firstof account_title voucher.account_no as main_account %}
+      {% capture as main_account %}{% if account_title %}{{ account_title }} &middot; {% endif %}{{ voucher.account_no }}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Main Account" value=main_account only %}
       {% if voucher.settlement_mode %}{% include "components/ui/detail_item.html" with label="Settlement" value=voucher.get_settlement_mode_display only %}{% endif %}
       {% if voucher.party_account_no %}{% firstof party_title voucher.party_account_no as party_label %}{% include "components/ui/detail_item.html" with label="Party" value=party_label only %}{% endif %}
@@ -29,6 +24,28 @@
       {% if voucher.source_ref %}{% include "components/ui/detail_item.html" with label="Source Document" value=voucher.source_ref only %}{% endif %}
       {% if voucher.remarks %}{% include "components/ui/detail_item.html" with label="Remarks" value=voucher.remarks wide=True only %}{% endif %}
     {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "ui/card" flush=True %}
+    <div class="overflow-x-auto">
+      <table class="data-table doc-table">
+        <thead><tr><th class="w-10">#</th><th>Account</th><th>Narration</th>{% if line_person %}<th>Person / Party</th>{% endif %}{% if line_method %}<th>Method</th>{% endif %}<th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+        <tbody>
+          {% for row in lines %}
+          <tr>
+            <td class="muted">{{ row.line.line_number }}</td>
+            <td><span class="strong">{{ row.title|default:row.line.account_no }}</span><span class="sub">{{ row.line.account_no }}</span></td>
+            <td>{{ row.line.remarks|default:"" }}</td>
+            {% if line_person %}<td>{{ row.line.person_organization_title|default:row.line.person_organization }}{% if row.line.person_organization_title and row.line.person_organization %}<span class="sub">{{ row.line.person_organization }}</span>{% endif %}</td>{% endif %}
+            {% if line_method %}<td>{{ row.line.payment_method.title|default:"" }}{% if row.line.receipt_no %}<span class="sub">{{ row.line.receipt_no }}</span>{% endif %}{% if row.line.bank %}<span class="sub">{{ row.line.bank }}</span>{% endif %}</td>{% endif %}
+            <td class="num">{% if row.line.debit_amount %}{{ row.line.debit_amount|amount }}{% endif %}</td>
+            <td class="num">{% if row.line.credit_amount %}{{ row.line.credit_amount|amount }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="doc-total"><td colspan="{{ line_lead_span }}">Total</td><td class="num">{{ voucher.debit_amount|amount }}</td><td class="num">{{ voucher.credit_amount|amount }}</td></tr></tfoot>
+      </table>
+    </div>
   {% endcomponent %}
 
   {% component "ui/card" %}

@@ -5,19 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Print{% endblock %}</title>
 <link rel="stylesheet" href="{% block stylesheet %}{% static 'dist/print.css' %}{% endblock %}">
+<style>{% block extra_style %}{% endblock %}</style>
+{% if request.GET.size == "thermal" %}<style>@page { size: 80mm 297mm; margin: 2mm 3mm; }</style>{% endif %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}{% if request.GET.size == 'thermal' %} print--thermal{% endif %}">
   {% block toolbar %}
   <div class="print-btn">
     <button type="button" onclick="window.print()">{% icon "print" %} Print</button>
     <button type="button" onclick="printGoBack()">{% icon "close" %} {% block back_label %}Close{% endblock %}</button>
+    {% block size_switch %}
+    <span class="print-size" role="group" aria-label="Paper">
+      <a href="{% querystring size='a4' %}" class="{% if request.GET.size != 'thermal' %}is-on{% endif %}">A4</a>
+      <a href="{% querystring size='thermal' %}" class="{% if request.GET.size == 'thermal' %}is-on{% endif %}">Thermal</a>
+    </span>
+    {% endblock %}
   </div>
   {% endblock %}
   <script>
     var printBackUrl = "{% block back_url %}{{ print_back_url|default:'' }}{% endblock %}";
     function printGoBack() { if (printBackUrl) { window.location.href = printBackUrl; } else { window.history.back(); } }
-    window.addEventListener("load", function () { window.print(); });
-    window.addEventListener("afterprint", printGoBack);
+    var autoPrint = {% block autoprint %}false{% endblock %};
+    if (autoPrint) {
+      window.addEventListener("load", function () { window.print(); });
+      window.addEventListener("afterprint", printGoBack);
+    }
   </script>
 
   {% block print_header %}

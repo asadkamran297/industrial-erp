@@ -7,8 +7,6 @@
 
   {% component "ui/detail_header" kind="Purchase Order" number=order.purchase_num date=order.purchase_date|dmy party=order.supplier.name status=status_label status_tone=status_tone back=True back_url=orders_url extra="no-print" %}
     {% slot actions %}
-      {% url 'inventory:purchase_order_print' order.pk as print_url %}
-      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
       {% if order.unbilled_value and can_edit %}
         {% url 'inventory:stores_purchase_create' as bill_base %}
         {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
@@ -81,17 +79,6 @@
   </div>
   {% endif %}
 
-  {% if linked_documents %}
-  {% component "ui/card" title="Linked documents" %}
-    <div class="doc-links">
-      {% for link in linked_documents %}
-      <a class="doc-link{% if link.dead %} doc-link--dead{% endif %}" href="{{ link.url }}"{% if link.new_tab %} target="_blank"{% endif %} title="{{ link.kind }} {{ link.label }}{% if link.dead %} (reversed){% endif %}">
-        <span class="doc-link-kind">{{ link.kind }}</span><span class="doc-link-num">{{ link.label }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  {% endcomponent %}
-  {% endif %}
 
   {% component "ui/card" flush=True %}
     <div class="card-body">
@@ -102,6 +89,10 @@
         {% if order.godown %}{% capture as godown_label %}{{ order.godown.code }} &mdash; {{ order.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
         {% if order.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=order.broker.title only %}{% endif %}
         {% include "components/ui/detail_item.html" with label="Value" value=order_total|amount num=True only %}
+        {% include "components/ui/detail_item.html" with label="Ordered Qty" value=ordered_qty|qty num=True only %}
+        {% include "components/ui/detail_item.html" with label="Received Qty" value=received_qty|qty num=True only %}
+        {% include "components/ui/detail_item.html" with label="Balance Qty" value=balance_qty|qty num=True only %}
+        {% if order.quot_num %}{% include "components/ui/detail_item.html" with label="Quotation No" value=order.quot_num only %}{% endif %}
       {% endcomponent %}
     </div>
     <div class="overflow-x-auto">

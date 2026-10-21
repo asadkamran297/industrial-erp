@@ -207,6 +207,13 @@ class RoleDetailView(MasterDetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["permissions"] = Permission.objects.filter(role_links__role=self.object).order_by("seq", "title")
+        context["detail_items"] += [
+            {"label": "Permissions", "value": context["permissions"].count(), "num": True, "wide": False},
+            {"label": "Users", "value": UserAssignment.objects.filter(role=self.object).count(), "num": True, "wide": False},
+        ]
+        from apps.core.doc_links import doc_link, url_or_blank
+
+        context["doc_links"] = [doc_link("User Assignments", "List", url_or_blank("access_control:user_assignment_list", query=f"q={self.object.title}"))]
         return context
 
 

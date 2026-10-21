@@ -2,18 +2,15 @@
 {% block content %}
 <section class="form-stack">
   {% component "ui/detail_header" kind="Godown" number=godown.code party=godown.name status=godown.get_status_display status_tone=godown.status back=True back_url=list_url %}
-    {% slot actions %}
-      {% if can_edit %}{% url 'godowns:godown_update' godown.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" only %}{% endif %}
-    {% endslot %}
   {% endcomponent %}
 
   {% component "ui/card" flush=True %}
     <div class="card-body">
       {% component "ui/detail_grid" cols=4 %}
         {% include "components/ui/detail_item.html" with label="Type" value=godown.get_godown_type_display only %}
-        {% include "components/ui/detail_item.html" with label="Location" value=godown.location|default:"—" only %}
-        {% include "components/ui/detail_item.html" with label="Incharge" value=godown.incharge|default:"—" only %}
-        {% include "components/ui/detail_item.html" with label="Remarks" value=godown.remarks|default:"—" only %}
+        {% include "components/ui/detail_item.html" with label="Location" value=godown.location only %}
+        {% include "components/ui/detail_item.html" with label="Incharge" value=godown.incharge only %}
+        {% include "components/ui/detail_item.html" with label="Remarks" value=godown.remarks only %}
       {% endcomponent %}
     </div>
   {% endcomponent %}

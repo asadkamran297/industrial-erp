@@ -6,9 +6,6 @@
   {% capture as yield_label %}Yield {{ voucher.yield_percent|floatformat:2 }}%{% endcapture %}
   {% component "ui/detail_header" kind="Grinding" number=voucher.voucher_no date=voucher.date|dmy status=yield_label status_tone=tone back=True back_url=cancel_url %}
     {% slot actions %}
-      {% url 'production:grinding_print' voucher.pk as print_url %}
-      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
-      {% if can_edit %}{% url 'production:grinding_update' voucher.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" only %}{% endif %}
       {% if can_delete %}
       {% url 'production:grinding_delete' voucher.pk as delete_url %}
       {% capture as delete_msg %}Reverse the stock and remove {{ voucher.voucher_no }}?{% endcapture %}
@@ -29,7 +26,7 @@
       {% include "components/ui/detail_item.html" with label="Disposal Wheat" value=disposal num=True only %}
       {% include "components/ui/detail_item.html" with label="Bag Released" value=voucher.bag_item only %}
       {% include "components/ui/detail_item.html" with label="Bag Qty" value=voucher.disposal_bag_qty|floatformat:0|intcomma num=True only %}
-      {% firstof voucher.prepared_by.get_full_name voucher.prepared_by.username "—" as prepared %}
+      {% firstof voucher.prepared_by.get_full_name voucher.prepared_by.username voucher.created_by.get_full_name voucher.created_by.username "" as prepared %}
       {% include "components/ui/detail_item.html" with label="Prepared By" value=prepared only %}
       {% if voucher.description %}{% include "components/ui/detail_item.html" with label="Description" value=voucher.description wide=True only %}{% endif %}
     {% endcomponent %}

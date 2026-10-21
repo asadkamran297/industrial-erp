@@ -5,10 +5,6 @@
   {% capture as supplier_meta %}{{ supplier.code }}{% if supplier.city %} &middot; {{ supplier.city }}{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if supplier.status == "active" %}posted{% else %}closed{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind="Supplier" number=supplier.name date=supplier_meta status=supplier.get_status_display status_tone=status_tone back=True back_url=list_url %}
-    {% slot actions %}
-      {% if payable_code %}{% url 'finance:account_ledger' as ledger_base %}{% capture as ledger_url %}{{ ledger_base }}?account_no={{ payable_code|urlencode }}{% endcapture %}{% include "components/ui/button.html" with label="Full ledger" href=ledger_url icon="ledger" only %}{% endif %}
-      {% if can_edit %}{% url 'inventory:supplier_update' supplier.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" variant="primary" only %}{% endif %}
-    {% endslot %}
   {% endcomponent %}
 
   {% component "ui/card" %}
@@ -22,7 +18,7 @@
       {% include "components/ui/detail_item.html" with label="Address" value=address wide=True only %}
       {% include "components/ui/detail_item.html" with label="NTN" value=supplier.ntn_number only %}
       {% include "components/ui/detail_item.html" with label="Sales Tax" value=supplier.sale_tax_num only %}
-      {% capture as credit %}{% if supplier.credit_limit %}{{ supplier.credit_limit|amount }}{% if supplier.credit_period_days %} &middot; {{ supplier.credit_period_days }} days{% endif %}{% else %}None{% endif %}{% endcapture %}
+      {% capture as credit %}{% if supplier.credit_limit %}{{ supplier.credit_limit|amount }}{% if supplier.credit_period_days %} &middot; {{ supplier.credit_period_days }} days{% endif %}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Credit Limit" value=credit only %}
       {% capture as opening %}{{ supplier.opening_balance|amount }}{% if supplier.opening_balance_date %} &middot; {{ supplier.opening_balance_date|dmy }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Opening Balance" value=opening num=True only %}
@@ -32,10 +28,10 @@
 
   <div class="tiles">
     {% capture as bought_note %}{{ purchase_count }} invoice{{ purchase_count|pluralize }} &middot; {{ order_count }} order{{ order_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchase_total|amount label="Purchased" note=bought_note only %}
+    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchase_total|amount label="Total Purchases" note=bought_note only %}
     {% capture as return_note %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="amber" icon="reverse" value=return_total|amount label="Returned" note=return_note only %}
-    {% include "components/table/tile.html" with tone="rose" icon="cash" value=payable_balance|amount label="Payable" note=payable_code only %}
+    {% include "components/table/tile.html" with tone="amber" icon="reverse" value=return_total|amount label="Total Returns" note=return_note only %}
+    {% include "components/table/tile.html" with tone="rose" icon="wallet" value=payable_balance|amount label="Payable Balance" note=payable_code only %}
   </div>
 
   {% component "table/board" title="" table_id="supplier-ledger" no_filters=True no_pagination=True %}

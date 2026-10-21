@@ -140,7 +140,7 @@ class PartyLedgerView(ReportView):
             _tile(side, format_amount(t["closing"]), "amber" if t["closing"] < 0 else "sky", "cash"),
         ]
         if data.get("has_sacks"):
-            tiles.append(_tile("Sacks held", f"{t['sacks']:,.0f}", "violet", "layers"))
+            tiles.append(_tile("Sacks held", f"{t['sacks']:,.0f}", "violet", "package"))
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
 
@@ -355,8 +355,8 @@ class ReceivablePayableView(ReportView):
         t = data["totals"]
         base = f"as_of={self.as_of():%Y-%m-%d}"
         tiles = [
-            _tile("Receivable", format_amount(t["receivable"]), "green", "users", f"{t['customers']} customers", href=f"?{base}&party_type=customer", on=f["party_type"] == "customer"),
-            _tile("Payable", format_amount(t["payable"]), "rose", "box", f"{t['suppliers']} suppliers", href=f"?{base}&party_type=supplier", on=f["party_type"] == "supplier"),
+            _tile("Receivable", format_amount(t["receivable"]), "green", "wallet", f"{t['customers']} customers", href=f"?{base}&party_type=customer", on=f["party_type"] == "customer"),
+            _tile("Payable", format_amount(t["payable"]), "rose", "wallet", f"{t['suppliers']} suppliers", href=f"?{base}&party_type=supplier", on=f["party_type"] == "supplier"),
             _tile("Net position", format_amount(t["net"]), "amber" if t["net"] < 0 else "sky", "cash", href=f"?{base}", on=not f["party_type"]),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}

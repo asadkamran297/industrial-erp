@@ -5,7 +5,7 @@
   {% slot tiles %}
     {% include "components/table/tile.html" with tone="violet" icon="users" value=supplier_count label="Suppliers" only %}
     {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchased_total|amount label="Total Purchases" only %}
-    {% include "components/table/tile.html" with tone="rose" icon="cash" value=payable_total|amount label="Total Payable" only %}
+    {% include "components/table/tile.html" with tone="rose" icon="wallet" value=payable_total|amount label="Total Payable" only %}
   {% endslot %}
 
   <thead>

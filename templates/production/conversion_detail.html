@@ -5,7 +5,6 @@
   {% url 'production:conversion_list' as list_url %}
   {% component "ui/detail_header" kind="Conversion" number=conversion.voucher_no date=conversion.date|dmy back=True back_url=list_url %}
     {% slot actions %}
-      {% if can_edit %}{% url 'production:conversion_update' conversion.pk as edit_url %}{% include "components/ui/button.html" with label="Edit" href=edit_url icon="edit" only %}{% endif %}
       {% if can_delete %}
       {% url 'production:conversion_delete' conversion.pk as delete_url %}
       {% capture as delete_msg %}Reverse the stock and remove {{ conversion.voucher_no }}?{% endcapture %}
@@ -21,6 +20,12 @@
       {% include "components/ui/detail_item.html" with label="Consumed" value=conversion.source_product only %}
       {% capture as consumed %}{{ conversion.source_quantity|floatformat:0|intcomma }} ({{ conversion.source_weight|floatformat:0|intcomma }} kg){% endcapture %}
       {% include "components/ui/detail_item.html" with label="Consumed Qty" value=consumed num=True only %}
+      {% if conversion.source_unit_weight %}{% include "components/ui/detail_item.html" with label="Unit Weight" value=conversion.source_unit_weight|qty num=True only %}{% endif %}
+      {% capture as output_kg %}{{ conversion.total_output_kg|floatformat:0|intcomma }} kg{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="Output" value=output_kg num=True only %}
+      {% firstof conversion.prepared_by.get_full_name conversion.prepared_by.username "" as prepared %}
+      {% include "components/ui/detail_item.html" with label="Prepared By" value=prepared only %}
+      {% include "components/ui/detail_item.html" with label="Description" value=conversion.description wide=True only %}
     {% endcomponent %}
   {% endcomponent %}
 

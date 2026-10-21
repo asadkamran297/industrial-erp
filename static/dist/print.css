@@ -150,3 +150,51 @@
   .report-tile .sub { font-size: 10px; color: #666; }
   .report-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .report-page { counter-reset: page; }
+
+/* ── Paper switch + thermal (80mm) ───────────────────────────── */
+.print-size { display: inline-flex; margin-left: 6px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; vertical-align: middle; }
+.print-size a { padding: 6px 12px; font-weight: 600; color: #0f172a; text-decoration: none; background: #fff; }
+.print-size a.is-on { background: #1e3a5f; color: #fff; }
+body.print--thermal { width: 76mm; margin: 4mm auto; font-size: 10px; }
+.print--thermal .org-header { display: block; text-align: center; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px; }
+.print--thermal .org-header .org-logo img { max-height: 40px; max-width: 50mm; }
+.print--thermal .org-header .org-logo .org-initial { display: none; }
+.print--thermal .org-header .org-center .org-name { font-size: 13px; }
+.print--thermal .org-header .org-center .org-addr,
+.print--thermal .org-header .org-center .org-branch { font-size: 9px; }
+.print--thermal .org-header .org-contact { align-items: center; text-align: center; font-size: 9px; gap: 1px; }
+.print--thermal .org-header .org-contact span:not(:first-child):not(.print-meta) { display: none; }
+.print--thermal h1.doc-title { font-size: 12px; margin: 4px 0; padding-bottom: 3px; }
+.print--thermal .meta td { padding: 1px 2px; font-size: 9.5px; }
+.print--thermal table.items th, .print--thermal table.items td { padding: 2px 3px; font-size: 9px; }
+.print--thermal table.items th { background: #000; }
+.print--thermal table.amount-box td { padding: 2px 4px; font-size: 9.5px; }
+.print--thermal table.amount-box .amt-value { width: auto; }
+.print--thermal .totals { font-size: 10px; }
+.print--thermal .sign { margin-top: 24px; gap: 6px; }
+.print--thermal .sign div { min-width: 0; flex: 1; font-size: 9px; }
+.print--thermal .footer { display: block; text-align: center; font-size: 8.5px; margin-top: 8px; }
+.print--thermal .footer-meta { text-align: center; white-space: normal; }
+.print--thermal .report-tiles, .print--thermal .report-two { grid-template-columns: 1fr; }
+.print--thermal .print-watermark { display: none; }
+.print--thermal table.meta, .print--thermal table.meta tbody { display: block; width: 100%; }
+.print--thermal table.meta tr { display: flex; flex-wrap: wrap; }
+.print--thermal table.meta td { padding: 1px 0; }
+.print--thermal table.meta td:empty { display: none; }
+.print--thermal table.meta td.lbl { flex: 0 0 34%; white-space: normal; }
+.print--thermal table.meta td:not(.lbl) { flex: 0 0 66%; overflow-wrap: anywhere; }
+.print--thermal table.items { table-layout: auto; }
+.print--thermal table.items th, .print--thermal table.items td { padding: 1px 2px; font-size: 8.5px; line-height: 1.25; }
+.print--thermal table.items td { overflow-wrap: anywhere; }
+.print--thermal table.items .num { white-space: nowrap; }
+.print--thermal table.items tfoot th, .print--thermal table.items tfoot td { background: #000; color: #fff; }
+.print--thermal .words { font-size: 9px; }
+.print--thermal .pr-ref { display: block; }
+.print--thermal .pr-ref-left, .print--thermal .pr-ref-right { width: 100%; margin-bottom: 4px; }
+.print--thermal .pr-badge { font-size: 12px; padding: 2px 8px; }
+.print--thermal .ref-table td, .print--thermal .supplier-box .vrow { font-size: 9px; }
+.print--thermal .totals-box { display: block; }
+.print--thermal .totals-inner { min-width: 0; padding: 4px 6px; }
+.print--thermal .totals-inner .trow { font-size: 10px; }
+@media screen { .print--thermal .print-btn { display: flex; flex-wrap: wrap; gap: 4px; } }
+@media print { body.print--thermal { margin: 0; width: 74mm; } .print--thermal .print-btn { display: none !important; } }

@@ -116,14 +116,15 @@
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=doc"><span class="export-badge export-badge--doc">DOC</span>Word</a>
       <a class="export-item" role="menuitem" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf"><span class="export-badge export-badge--pdf">PDF</span>PDF / Print</a>
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=png"><span class="export-badge export-badge--png">PNG</span>Image</a>
-      {% elif export_csv_url %}
-      <p class="settings-heading">Download</p>
-      <a class="export-item" role="menuitem" href="{{ export_csv_url }}?{{ request.GET.urlencode }}"><span class="export-badge export-badge--csv">CSV</span>CSV</a>
-      <button type="button" class="export-item" role="menuitem" data-print-table="{{ table_id|default:'board-table' }}" @click="open = false"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
       {% else %}
       <p class="settings-heading">Download</p>
-      <button type="button" class="export-item" role="menuitem" data-csv-table="{{ table_id|default:'board-table' }}" @click="open = false"><span class="export-badge export-badge--csv">CSV</span><span>CSV</span></button>
-      <button type="button" class="export-item" role="menuitem" data-print-table="{{ table_id|default:'board-table' }}" @click="open = false"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
+      {% url 'table_export' as table_export_url %}
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="xlsx" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--xls">XLS</span><span>Excel</span></button>
+      {% if export_csv_url %}<a class="export-item" role="menuitem" href="{{ export_csv_url }}?{{ request.GET.urlencode }}"><span class="export-badge export-badge--csv">CSV</span><span>CSV</span></a>{% else %}
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="csv" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--csv">CSV</span><span>CSV</span></button>{% endif %}
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="doc" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--doc">DOC</span><span>Word</span></button>
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="pdf" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="png" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--png">PNG</span><span>Image</span></button>
       {% endif %}
       <p class="settings-heading">Copy</p>
       <button type="button" class="export-item" role="menuitem" data-copy-table="{{ table_id|default:'board-table' }}" @click="open = false"><span class="export-badge export-badge--copy">{% icon "copy" size="sm" %}</span><span>Copy table</span></button>

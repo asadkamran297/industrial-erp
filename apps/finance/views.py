@@ -190,6 +190,15 @@ class FiscalYearDetailView(MasterDetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["periods"] = self.object.periods.order_by("code")
+        from apps.core.doc_links import doc_link, url_or_blank
+
+        span = f"date_from={self.object.start_date:%Y-%m-%d}&date_to={self.object.end_date:%Y-%m-%d}"
+        context["doc_links"] = [
+            doc_link("Trial Balance", self.object.title, url_or_blank("finance:trial_balance", query=span)),
+            doc_link("Income Statement", self.object.title, url_or_blank("finance:income_statement", query=span)),
+            doc_link("Balance Sheet", self.object.title, url_or_blank("finance:balance_sheet", query=span)),
+            doc_link("Period Close", "Open", url_or_blank("finance:period_close")),
+        ]
         return context
 
 
@@ -636,8 +645,11 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
                 "title": titles.get(line.account_no),
                 "known": line.account_no in titles,
             }
-            for line in voucher.lines.order_by("line_number")
+            for line in voucher.lines.select_related("payment_method", "bank").order_by("line_number")
         ]
+        context["line_person"] = any(row["line"].person_organization_title or row["line"].person_organization for row in context["lines"])
+        context["line_method"] = any(row["line"].payment_method_id or row["line"].receipt_no or row["line"].bank_id for row in context["lines"])
+        context["line_lead_span"] = 3 + int(context["line_person"]) + int(context["line_method"])
         context["account_title"] = titles.get(voucher.account_no)
         context["party_title"] = titles.get(voucher.party_account_no)
         context["balance_difference"] = voucher.balance_difference
@@ -649,7 +661,28 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         context["amount_words"] = amount_in_words(total)
         counter = [line for line in voucher.lines.all() if line.account_no != voucher.account_no]
         context["counter_titles"] = ", ".join(titles.get(line.account_no, line.account_no) for line in counter)
+        context["doc_links"], context["doc_actions"] = self.voucher_links(voucher, titles)
         return context
+
+    def voucher_links(self, voucher, titles):
+        from apps.core.doc_links import doc_link, source_document_link, url_or_blank, voucher_links
+
+        links = [source_document_link(voucher.source_ref)]
+        ref = voucher.source_ref or ""
+        prefix, _, rest = ref.partition(":")
+        if prefix.endswith("_reversal"):
+            links += [dict(link, kind="Original Voucher") for link in voucher_links(f"{prefix[:-len('_reversal')]}:{rest}")]
+        elif ref:
+            links += [dict(link, kind="Reversal Voucher") for link in voucher_links(f"{prefix}_reversal:{rest}")]
+        for code in dict.fromkeys(c for c in (voucher.account_no, voucher.party_account_no) if c):
+            links.append(doc_link("Ledger", titles.get(code, code), url_or_blank("finance:account_ledger", query=f"account_no={code}")))
+        actions = {
+            "new_url": url_or_blank("finance:account_voucher_create", query=f"voucher_type={voucher.voucher_type}"),
+            "print_url": reverse("finance:account_voucher_print", args=[voucher.pk]),
+        }
+        if voucher.posted != "Y":
+            actions["edit_url"] = reverse("finance:account_voucher_update", args=[voucher.pk])
+        return [link for link in links if link], actions
 
 
 class AccountVoucherLineCreateView(PagePermissionRequiredMixin, View):

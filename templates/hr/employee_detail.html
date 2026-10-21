@@ -12,13 +12,12 @@
       {% if employee.job_type %}<span class="chip">{{ employee.job_type }}</span>{% endif %}
       {% if employee.doj %}<span class="chip">Joined {{ employee.doj|dmy }}</span>{% endif %}
     {% endslot %}
-    {% slot actions %}{% url 'hr:employee_update' employee.pk as edit_url %}{% include "components/ui/button.html" with label="Edit Profile" href=edit_url icon="edit" variant="primary" only %}{% endslot %}
   {% endcomponent %}
 
   <div class="tiles">
     {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
-    {% include "components/table/tile.html" with tone="sky" icon="receipt" value=payrolls.count label="Payroll Records" only %}
-    {% include "components/table/tile.html" with tone="violet" icon="archive" value=employee.experiences.count label="Experience" only %}
+    {% include "components/table/tile.html" with tone="sky" icon="wallet" value=payrolls.count label="Payroll Records" only %}
+    {% include "components/table/tile.html" with tone="violet" icon="briefcase" value=employee.experiences.count label="Experience" only %}
     {% include "components/table/tile.html" with tone="amber" icon="file" value=employee.qualifications.count label="Qualifications" only %}
   </div>
 
@@ -124,7 +123,7 @@
     <div class="tiles">
       {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
       {% include "components/table/tile.html" with tone="violet" icon="layers" value=salary_items.count label="Salary Elements" only %}
-      {% include "components/table/tile.html" with tone="sky" icon="receipt" value=payrolls.count label="Payroll Records" only %}
+      {% include "components/table/tile.html" with tone="sky" icon="wallet" value=payrolls.count label="Payroll Records" only %}
     </div>
 
     {% component "table/board" title="" table_id="salary-element-table" no_filters=True no_pagination=True %}

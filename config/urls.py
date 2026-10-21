@@ -21,6 +21,8 @@ from django.contrib.auth.views import LogoutView
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from apps.core.table_export import ScreenTableExportView
+
 urlpatterns = [
     path('', RedirectView.as_view(pattern_name='portal:dashboard', permanent=False), name='home'),
     path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'images/favicon.svg', permanent=True)),
@@ -38,6 +40,7 @@ urlpatterns = [
     path('godowns/', include('apps.godowns.urls')),
     path('production/', include('apps.production.urls')),
     path('portal/', include('apps.portal.urls')),
+    path('table-export/', ScreenTableExportView.as_view(), name='table_export'),
 ]
 
 if settings.DEBUG:

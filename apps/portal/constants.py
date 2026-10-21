@@ -27,9 +27,9 @@ SECTION_SUPPORT = "Support"
 
 
 NAV_ITEMS: tuple[NavigationItem, ...] = (
-    NavigationItem("Dashboard", permission="dashboard.index", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="D"),
+    NavigationItem("Dashboard", permission="dashboard.index", url_name="portal:dashboard", section=SECTION_WORKSPACE, icon="grid"),
 
-    NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="B", children=(
+    NavigationItem("Purchase", permission=None, section=SECTION_OPERATIONS, icon="cart", children=(
         NavigationItem("Purchase Orders", permission="inventory.purchase_orders.index",
                        url_name="inventory:purchase_order_board",
                        match_paths=("/inventory/purchase-orders/",)),
@@ -43,7 +43,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Suppliers", permission="inventory.suppliers.index", url_name="inventory:supplier_list"),
         NavigationItem("Purchase Report", permission="inventory.purchase_report.index", url_name="inventory:report_purchase"),
     )),
-    NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="S", children=(
+    NavigationItem("Sales", permission=None, section=SECTION_OPERATIONS, icon="tag", children=(
         NavigationItem("Sale Invoices", permission="inventory.pos_sales.index", url_name="inventory:sale_invoice_list"),
         NavigationItem("Sales Orders", permission="inventory.pos_sales.index",
                        url_name="inventory:sales_order_list",
@@ -53,13 +53,13 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Customers", permission="inventory.customers.index", url_name="inventory:customer_list"),
         NavigationItem("Customer Ledger", permission="inventory.customer_ledger.index", url_name="inventory:customer_ledger_list"),
     )),
-    NavigationItem("Stock", permission=None, section=SECTION_OPERATIONS, icon="K", children=(
+    NavigationItem("Stock", permission=None, section=SECTION_OPERATIONS, icon="box", children=(
         NavigationItem("Items & Stock", permission="inventory.items.index", url_name="inventory:item_list"),
         NavigationItem("Stock Adjustment", permission="inventory.manual_transaction.index", url_name="inventory:manual_transaction"),
         NavigationItem("Item Ledger", permission="inventory.item_ledger.index", url_name="inventory:ledger_list"),
         NavigationItem("Ledger Report", permission="inventory.item_ledger.index", url_name="inventory:report_ledger"),
     )),
-    NavigationItem("Products", permission=None, section=SECTION_OPERATIONS, icon="F", children=(
+    NavigationItem("Products", permission=None, section=SECTION_OPERATIONS, icon="package", children=(
         NavigationItem("Product List", permission="products.products.index", url_name="products:product_list"),
         NavigationItem("Account Linking", permission="products.account_links.index", url_name="products:account_linking"),
         NavigationItem("Raw Bardana Linking", permission="products.raw_bardana.index", url_name="products:raw_bardana_linking"),
@@ -67,7 +67,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Opening Balance", permission="products.opening_balances.index", url_name="products:opening_balance"),
         NavigationItem("Rate Update", permission="products.rates.index", url_name="products:rate_update"),
     )),
-    NavigationItem("Production", permission=None, section=SECTION_OPERATIONS, icon="P", children=(
+    NavigationItem("Production", permission=None, section=SECTION_OPERATIONS, icon="factory", children=(
         NavigationItem("Grinding", permission="production.grinding.index", url_name="production:grinding_list",
                        match_paths=("/production/grinding/",)),
         NavigationItem("Products Conversion", permission="production.conversions.index",
@@ -80,7 +80,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
                        url_name="production:report_production_summary"),
     )),
 
-    NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="V", children=tuple(
+    NavigationItem("Vouchers", permission=None, section=SECTION_FINANCE, icon="receipt", children=tuple(
         NavigationItem(
             label,
             permission="finance.vouchers.index",
@@ -89,29 +89,29 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         )
         for _key, label, voucher_type, mode in VOUCHER_ENTRIES
     ) + (NavigationItem("All Vouchers", permission="finance.vouchers.index", url_name="finance:account_voucher_list"),)),
-    NavigationItem("Financial Reports", permission=None, section=SECTION_FINANCE, icon="R", children=(
+    NavigationItem("Financial Reports", permission=None, section=SECTION_FINANCE, icon="chart", children=(
         NavigationItem("Trial Balance", permission="finance.trial_balance.index", url_name="finance:trial_balance"),
         NavigationItem("Profit and Loss", permission="finance.income_statement.index", url_name="finance:income_statement"),
         NavigationItem("Balance Sheet", permission="finance.balance_sheet.index", url_name="finance:balance_sheet"),
         NavigationItem("Cash Flow", permission="finance.cash_flow.index", url_name="finance:cash_flow"),
         NavigationItem("Inventory Valuation", permission="finance.inventory_valuation.index", url_name="finance:inventory_valuation"),
     )),
-    NavigationItem("Accounting Setup", permission=None, section=SECTION_FINANCE, icon="A", children=(
+    NavigationItem("Accounting Setup", permission=None, section=SECTION_FINANCE, icon="book", children=(
         NavigationItem("Chart of Accounts", permission="finance.chart_of_accounts.index", url_name="finance:chart_of_accounts"),
         NavigationItem("Account Master", permission="finance.accounts.index", url_name="finance:account_configuration_list"),
         NavigationItem("Opening Balances", permission="finance.opening_balances.index", url_name="finance:opening_balances"),
         NavigationItem("Fiscal Years", permission="finance.fiscal_years.index", url_name="finance:fiscal_year_list"),
     )),
-    NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close", section=SECTION_FINANCE, icon="L"),
+    NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close", section=SECTION_FINANCE, icon="lock"),
 
-    NavigationItem("Owner", permission=None, section=SECTION_REPORTS, icon="R", children=(
+    NavigationItem("Owner", permission=None, section=SECTION_REPORTS, icon="briefcase", children=(
         NavigationItem("Daily Position", permission="reports.owner.index", url_name="portal:report_daily_position"),
         NavigationItem("Month at a Glance", permission="reports.owner.index", url_name="portal:report_month_glance"),
         NavigationItem("Profitability by Product", permission="reports.owner.index", url_name="portal:report_product_profit"),
         NavigationItem("Receivables Aging", permission="reports.owner.index", url_name="portal:report_receivables_aging"),
         NavigationItem("Payables Aging", permission="reports.owner.index", url_name="portal:report_payables_aging"),
     )),
-    NavigationItem("Sales Reports", permission=None, section=SECTION_REPORTS, icon="S", children=(
+    NavigationItem("Sales Reports", permission=None, section=SECTION_REPORTS, icon="tag", children=(
         NavigationItem("Sales Register", permission="reports.sales.index", url_name="inventory:report_sale"),
         NavigationItem("Sales Summary", permission="reports.sales.index", url_name="inventory:report_sales_summary"),
         NavigationItem("Party-wise Sales", permission="reports.sales.index", url_name="inventory:report_customer_sales"),
@@ -121,7 +121,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("POS Day Sheet", permission="reports.sales.index", url_name="inventory:report_day_sheet"),
         NavigationItem("Customer Ledger", permission="inventory.customer_ledger.index", url_name="inventory:customer_ledger_list"),
     )),
-    NavigationItem("Purchase Reports", permission=None, section=SECTION_REPORTS, icon="B", children=(
+    NavigationItem("Purchase Reports", permission=None, section=SECTION_REPORTS, icon="cart", children=(
         NavigationItem("Wheat Purchase Register", permission="reports.purchase.index", url_name="inventory:report_purchase"),
         NavigationItem("Purchase Summary", permission="reports.purchase.index", url_name="inventory:report_purchase_summary"),
         NavigationItem("Arhti-wise Purchase", permission="reports.purchase.index", url_name="inventory:report_supplier_purchases"),
@@ -133,19 +133,19 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Purchase Returns", permission="reports.purchase.index", url_name="inventory:report_purchase_return"),
         NavigationItem("Supplier Payment Status", permission="reports.purchase.index", url_name="inventory:report_supplier_payments"),
     )),
-    NavigationItem("Weighbridge", permission=None, section=SECTION_REPORTS, icon="W", children=(
+    NavigationItem("Weighbridge", permission=None, section=SECTION_REPORTS, icon="scale", children=(
         NavigationItem("Weighbridge Register", permission="reports.weighbridge.index", url_name="inventory:report_weighbridge"),
         NavigationItem("Vehicle-wise Report", permission="reports.weighbridge.index", url_name="inventory:report_vehicles"),
         NavigationItem("Weight Variance", permission="reports.weighbridge.index", url_name="inventory:report_weight_variance"),
         NavigationItem("Daily Gate Sheet", permission="reports.weighbridge.index", url_name="inventory:report_gate_sheet"),
     )),
-    NavigationItem("Bardana", permission=None, section=SECTION_REPORTS, icon="J", children=(
+    NavigationItem("Bardana", permission=None, section=SECTION_REPORTS, icon="layers", children=(
         NavigationItem("Bardana Stock (Mill)", permission="reports.bardana.index", url_name="products:report_bardana_stock"),
         NavigationItem("Party Bardana Balances", permission="reports.bardana.index", url_name="products:report_party_bardana"),
         NavigationItem("Bardana Movement Register", permission="reports.bardana.index", url_name="products:report_bardana_movements"),
         NavigationItem("Packing Consumption", permission="reports.bardana.index", url_name="products:report_packing_consumption"),
     )),
-    NavigationItem("Production Reports", permission=None, section=SECTION_REPORTS, icon="P", children=(
+    NavigationItem("Production Reports", permission=None, section=SECTION_REPORTS, icon="factory", children=(
         NavigationItem("Grinding Register", permission="production.reports.index", url_name="production:report_grinding_register"),
         NavigationItem("Daily Grinding", permission="production.reports.index", url_name="production:report_daily_grinding"),
         NavigationItem("Yield Trend", permission="production.reports.index", url_name="production:report_yield_trend"),
@@ -155,7 +155,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Production Cost per Bag", permission="production.reports.index", url_name="production:report_cost_per_bag"),
         NavigationItem("Production Summary", permission="production.reports.index", url_name="production:report_production_summary"),
     )),
-    NavigationItem("Stock Reports", permission=None, section=SECTION_REPORTS, icon="K", children=(
+    NavigationItem("Stock Reports", permission=None, section=SECTION_REPORTS, icon="box", children=(
         NavigationItem("Mill Product Stock", permission="reports.stock.index", url_name="inventory:report_mill_stock"),
         NavigationItem("Stores Stock", permission="reports.stock.index", url_name="inventory:report_stores_stock"),
         NavigationItem("Stock Ageing / Slow Moving", permission="reports.stock.index", url_name="inventory:report_slow_moving"),
@@ -165,7 +165,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Item Ledger", permission="inventory.item_ledger.index", url_name="inventory:report_ledger"),
         NavigationItem("Stock Valuation", permission="finance.inventory_valuation.index", url_name="finance:inventory_valuation"),
     )),
-    NavigationItem("Accounts Reports", permission=None, section=SECTION_REPORTS, icon="A", children=(
+    NavigationItem("Accounts Reports", permission=None, section=SECTION_REPORTS, icon="ledger", children=(
         NavigationItem("Cash Book", permission="reports.accounts.index", url_name="finance:report_cash_book"),
         NavigationItem("Bank Book", permission="reports.accounts.index", url_name="finance:report_bank_book"),
         NavigationItem("Party Ledger", permission="reports.accounts.index", url_name="finance:report_party_ledger"),
@@ -197,26 +197,26 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Cash Flow", permission="finance.cash_flow.index", url_name="finance:cash_flow"),
         NavigationItem("Period Close", permission="finance.period_close.index", url_name="finance:period_close"),
     )),
-    NavigationItem("HR Reports", permission=None, section=SECTION_REPORTS, icon="E", children=(
+    NavigationItem("HR Reports", permission=None, section=SECTION_REPORTS, icon="users", children=(
         NavigationItem("Employee Register", permission="reports.hr.index", url_name="payroll:report_employees"),
         NavigationItem("Salary Sheet", permission="reports.hr.index", url_name="payroll:report_salary_sheet"),
         NavigationItem("Payroll Summary", permission="reports.hr.index", url_name="payroll:report_payroll_summary"),
         NavigationItem("Allowance / Deduction Breakdown", permission="reports.hr.index", url_name="payroll:report_allowance_deduction"),
     )),
-    NavigationItem("Setup Reports", permission=None, section=SECTION_REPORTS, icon="M", children=(
+    NavigationItem("Setup Reports", permission=None, section=SECTION_REPORTS, icon="settings", children=(
         NavigationItem("Supplier / Customer Directory", permission="reports.setup.index", url_name="portal:report_party_directory"),
         NavigationItem("Product Master with Rates", permission="reports.setup.index", url_name="portal:report_product_master"),
         NavigationItem("Chart of Accounts", permission="reports.setup.index", url_name="portal:report_chart_of_accounts"),
         NavigationItem("User Access", permission="reports.setup.index", url_name="portal:report_user_access"),
     )),
 
-    NavigationItem("Employees", permission="hr.employees.index", url_name="hr:employee_list", section=SECTION_WORKFORCE, icon="E"),
-    NavigationItem("Payroll", permission=None, section=SECTION_WORKFORCE, icon="Y", children=(
+    NavigationItem("Employees", permission="hr.employees.index", url_name="hr:employee_list", section=SECTION_WORKFORCE, icon="users"),
+    NavigationItem("Payroll", permission=None, section=SECTION_WORKFORCE, icon="wallet", children=(
         NavigationItem("Payroll Runs", permission="payroll.runs.index", url_name="payroll:payroll_list"),
         NavigationItem("Salary Items", permission="payroll.salary_items.index", url_name="payroll:employee_salary_list"),
     )),
 
-    NavigationItem("Master Data", permission=None, section=SECTION_SETUP, icon="M", children=(
+    NavigationItem("Master Data", permission=None, section=SECTION_SETUP, icon="database", children=(
         NavigationItem("Item Categories", permission="inventory.classes.index", url_name="inventory:class_list"),
         NavigationItem("Units of Measure", permission="inventory.uoms.index", url_name="inventory:uom_list"),
         NavigationItem("UOM Conversions", permission="inventory.uom_conversions.index", url_name="inventory:conversion_list"),
@@ -228,16 +228,16 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Banks", permission="configurations.banks.index", href="/masters/banks/", hidden=True),
         NavigationItem("Allowances & Deductions", permission="configurations.allowance_deductions.index", href="/masters/allowance-deductions/", hidden=True),
     )),
-    NavigationItem("Company", permission=None, section=SECTION_SETUP, icon="O", children=(
+    NavigationItem("Company", permission=None, section=SECTION_SETUP, icon="building", children=(
         NavigationItem("Organizations", permission="organizations.organizations.index", url_name="organizations:organization_list"),
         NavigationItem("Branches", permission="organizations.branches.index", url_name="organizations:branch_list"),
     )),
-    NavigationItem("Users & Access", permission=None, section=SECTION_SETUP, icon="U", children=(
+    NavigationItem("Users & Access", permission=None, section=SECTION_SETUP, icon="shield", children=(
         NavigationItem("User Assignments", permission="access_control.user_assignments.index", url_name="access_control:user_assignment_list"),
         NavigationItem("Roles", permission="access_control.roles.index", url_name="access_control:role_list"),
         NavigationItem("Permissions", permission="access_control.permissions.index", url_name="access_control:permission_list"),
     )),
-    NavigationItem("General Settings", permission="settings.index", section=SECTION_SETUP, icon="G", url_name="portal:general_settings"),
+    NavigationItem("General Settings", permission="settings.index", section=SECTION_SETUP, icon="settings", url_name="portal:general_settings"),
 
-    NavigationItem("Help Desk", permission="help.index", section=SECTION_SUPPORT, icon="?"),
+    NavigationItem("Help Desk", permission="help.index", section=SECTION_SUPPORT, icon="help"),
 )

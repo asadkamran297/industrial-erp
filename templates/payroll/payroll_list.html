@@ -25,7 +25,7 @@
       <td class="actions-col">
         {% capture as edit_url %}{% if can_edit and payroll.status == 'pending' %}{% url 'payroll:payroll_update' payroll.pk %}{% endif %}{% endcapture %}
         {% capture as delete_url %}{% if can_delete and payroll.status == 'pending' %}{% url 'payroll:payroll_delete' payroll.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this payroll?" only %}
+        {% include "components/table/actions.html" with edit_url=edit_url delete_url=delete_url delete_confirm="Delete this payroll?" fixed=True delete_slot=True locked_title=payroll.get_status_display only %}
       </td>
     </tr>
     {% empty %}

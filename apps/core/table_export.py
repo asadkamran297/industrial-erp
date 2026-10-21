@@ -18,12 +18,14 @@ was looking at rather than everything the screen could have shown.
 """
 
 import csv
+import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
 
 from io import BytesIO
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -154,6 +156,26 @@ class TableExportView(View):
         if isinstance(value, (int, float, date, datetime)):
             return value
         return str(value)
+
+
+class ScreenTableExportView(LoginRequiredMixin, TableExportView):
+    """The table as shown on a screen without its own export, in the same formats."""
+
+    FORMATS = ("xlsx", "csv", "pdf", "doc", "png")
+
+    def post(self, request, *args, **kwargs):
+        try:
+            table = json.loads(request.POST.get("table") or "[]")
+        except ValueError:
+            table = []
+        table = [[str(cell) for cell in row] for row in table if isinstance(row, list)][:5000]
+        header, rows = (table[0], table[1:]) if table else ([], [])
+        self.title = (request.POST.get("title") or "Export").strip()[:120]
+        self.filename = re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-") or "export"
+        kind = request.POST.get("format", "csv")
+        if kind not in self.FORMATS:
+            kind = "csv"
+        return getattr(self, f"_{kind}")(request, header, rows, None)
 
 
 def _font(size: int):

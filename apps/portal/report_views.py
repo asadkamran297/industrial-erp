@@ -105,12 +105,12 @@ class DailyPositionView(ReportView):
         days_note = f"{stock['per_day_kg']:,.0f} kg/day" if stock["per_day_kg"] else "no grinding in 30 days"
         tiles = [
             _tile("Wheat bought", f"{mund(wheat['kg']):,.3f} md", "amber", "wheat", f"{wheat['kg']:,.0f} kg · Rs {format_amount(wheat['amount'])}"),
-            _tile("Wheat ground", f"{mund(ground['wheat_kg']):,.3f} md", "violet", "settings", f"{ground['wheat_kg']:,.0f} kg in {ground['vouchers']} runs"),
-            _tile("Produced", f"{ground['output_kg']:,.0f} kg", "teal", "box", f"{mund(ground['output_kg']):,.3f} md"),
-            _tile("Bags sold", f"{sold['bags']:,.0f}", "sky", "receipt", f"Rs {format_amount(sold['net'])} · {sold['invoices']} invoices"),
+            _tile("Wheat ground", f"{mund(ground['wheat_kg']):,.3f} md", "violet", "factory", f"{ground['wheat_kg']:,.0f} kg in {ground['vouchers']} runs"),
+            _tile("Produced", f"{ground['output_kg']:,.0f} kg", "teal", "factory", f"{mund(ground['output_kg']):,.3f} md"),
+            _tile("Bags sold", f"{sold['bags']:,.0f}", "sky", "package", f"Rs {format_amount(sold['net'])} · {sold['invoices']} invoices"),
             _tile("Cash & bank", format_amount(data["cash_closing"]), "green", "cash", f"in {format_amount(data['cash']['cash_in'])} · out {format_amount(data['cash']['cash_out'])}"),
-            _tile("Receivable", format_amount(data["receivables"]), "sky", "users", "due from customers"),
-            _tile("Payable", format_amount(data["payables"]), "rose", "users", "owed to suppliers"),
+            _tile("Receivable", format_amount(data["receivables"]), "sky", "wallet", "due from customers"),
+            _tile("Payable", format_amount(data["payables"]), "rose", "wallet", "owed to suppliers"),
             _tile("Wheat stock", f"{stock['days']} days" if stock["days"] is not None else "—", "slate", "layers", f"{mund(stock['stock_kg']):,.0f} md · {days_note}"),
         ]
         return {"rows": rows, "totals": {}, "tiles": tiles, "extra": data}
@@ -182,8 +182,8 @@ class MonthGlanceView(ReportView):
         label = f"vs {before.label}"
         tiles = [
             _tile("Wheat bought", f"{mund(totals['purchase_kg']):,.0f} md", "amber", "wheat", change=delta(totals["purchase_kg"], last["purchase_kg"])),
-            _tile("Wheat ground", f"{mund(totals['grinding_kg']):,.0f} md", "violet", "settings", change=delta(totals["grinding_kg"], last["grinding_kg"])),
-            _tile("Produced", f"{totals['production_kg']:,.0f} kg", "teal", "box", change=delta(totals["production_kg"], last["production_kg"])),
+            _tile("Wheat ground", f"{mund(totals['grinding_kg']):,.0f} md", "violet", "factory", change=delta(totals["grinding_kg"], last["grinding_kg"])),
+            _tile("Produced", f"{totals['production_kg']:,.0f} kg", "teal", "factory", change=delta(totals["production_kg"], last["production_kg"])),
             _tile("Sales", format_amount(totals["sales"]), "sky", "receipt", change=delta(totals["sales"], last["sales"])),
             _tile("Cash in", format_amount(totals["cash_in"]), "green", "cash", change=delta(totals["cash_in"], last["cash_in"])),
             _tile("Cash out", format_amount(totals["cash_out"]), "rose", "cash", change=delta(totals["cash_out"], last["cash_out"])),
@@ -312,7 +312,7 @@ class ReceivablesAgingView(ReportView):
         if filters["customer"]:
             base += f"&customer={filters['customer']}"
         tiles = [
-            _tile("Receivable", format_amount(totals["balance"]), "sky", "users", f"{len(data['rows'])} customers", href=f"?{base}"),
+            _tile("Receivable", format_amount(totals["balance"]), "sky", "wallet", f"{len(data['rows'])} customers", href=f"?{base}"),
             _tile("0-30", format_amount(totals["b0"]), "green", "clock"),
             _tile("31-60", format_amount(totals["b1"]), "amber", "clock"),
             _tile("61-90", format_amount(totals["b2"]), "amber", "clock"),
@@ -396,7 +396,7 @@ class PayablesAgingView(ReportView):
         totals = data["totals"]
         base = f"as_of={self.as_of():%Y-%m-%d}"
         tiles = [
-            _tile("Payable", format_amount(totals["balance"]), "rose", "users", f"{len(data['rows'])} suppliers", href=f"?{base}"),
+            _tile("Payable", format_amount(totals["balance"]), "rose", "wallet", f"{len(data['rows'])} suppliers", href=f"?{base}"),
             _tile("0-30", format_amount(totals["b0"]), "green", "clock"),
             _tile("31-60", format_amount(totals["b1"]), "amber", "clock"),
             _tile("61-90", format_amount(totals["b2"]), "amber", "clock"),

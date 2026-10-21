@@ -5,7 +5,6 @@
   {% capture as status_tone %}{% if is_posted %}posted{% elif purchase_return.status == "reversed" %}reversed{% elif is_draft %}draft{% else %}closed{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind="Purchase Return" number=purchase_return.return_num|default:"—" date=purchase_return.return_date|dmy party=purchase_return.supplier.name status=status_label status_tone=status_tone back=True back_url=list_url extra="no-print" %}
     {% slot actions %}
-      {% if purchase_return.return_num and not is_draft %}{% url 'inventory:purchase_return_receipt' purchase_return.pk as print_url %}{% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}{% endif %}
       {% if can_edit and is_draft %}
       <form method="post" action="{% url 'inventory:purchase_return_post' purchase_return.pk %}">{% csrf_token %}
         {% include "components/ui/button.html" with label="Post" icon="post" variant="primary" only %}
@@ -15,13 +14,6 @@
     {% endslot %}
   {% endcomponent %}
 
-  {% if linked_documents %}
-  <div class="doc-chain">
-    {% for link in linked_documents %}
-    <a class="doc-link{% if link.dead %} doc-link--dead{% endif %}" href="{{ link.url }}"><span class="doc-link-kind">{{ link.kind }}</span><span class="doc-link-num">{{ link.label }}</span></a>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   {% component "ui/card" %}
     {% component "ui/detail_grid" cols=4 %}

@@ -80,7 +80,7 @@
         {% url 'inventory:purchase_order_detail' order.pk as view_url %}
         {% url 'inventory:purchase_order_print' order.pk as print_url %}
         {% capture as edit_url %}{% if can_edit and order.is_live %}{{ view_url }}?edit=1{% endif %}{% endcapture %}
-        {% component "table/actions" view_url=view_url edit_url=edit_url print_url=print_url %}
+        {% component "table/actions" view_url=view_url edit_url=edit_url print_url=print_url fixed=True locked_title="Not editable" %}
           {% if order.next_action == "approve" %}
             {% capture as approve_attrs %}@click="askApproval($el.dataset)" data-pk="{{ order.pk }}" data-url="{% url 'inventory:purchase_order_raise' order.pk %}" data-number="{{ order.purchase_num }}" data-supplier="{{ order.supplier.name }}" data-amount="{{ order.total_amount|amount }}" data-date="{{ order.purchase_date|dmy }}" data-expected="{{ order.expected_date|dmy|default:'' }}"{% endcapture %}
             {% include "components/ui/button.html" with type="button" label="Approve" icon="check" variant="primary" size="sm" attrs=approve_attrs only %}

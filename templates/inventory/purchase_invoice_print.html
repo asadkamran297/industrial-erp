@@ -1,0 +1,69 @@
+{% extends "layouts/print.html" %}
+{% block title %}Purchase Invoice {{ invoice.invoice_num }}{% endblock %}
+
+{% block print_content %}
+  <h1 class="doc-title">{% if is_wheat %}Wheat Purchase Invoice{% else %}Purchase Invoice{% endif %}</h1>
+
+  <table class="meta">
+    <tr><td class="lbl">Invoice No</td><td><b>{{ invoice.invoice_num }}</b></td><td class="lbl">Date</td><td>{{ invoice.invoice_date|dmy }}</td></tr>
+    <tr><td class="lbl">Party</td><td colspan="3">{{ invoice.supplier.name }}</td></tr>
+    {% if invoice.vehicle_no or invoice.godown %}<tr><td class="lbl">Vehicle</td><td>{{ invoice.vehicle_no|default:"—" }}</td><td class="lbl">Godown</td><td>{{ invoice.godown.name|default:"—" }}</td></tr>{% endif %}
+    {% if invoice.supplier_invoice_num or invoice.purchase_order %}<tr><td class="lbl">Bill No</td><td>{{ invoice.supplier_invoice_num|default:"—" }}</td><td class="lbl">PO</td><td>{{ invoice.purchase_order.purchase_num|default:"—" }}</td></tr>{% endif %}
+    {% if invoice.broker %}<tr><td class="lbl">Broker</td><td colspan="3">{{ invoice.broker.title }}</td></tr>{% endif %}
+  </table>
+
+  <table class="items">
+    <thead><tr><th>SN</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+      {% for line in lines %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ line.descr }}{% if line.bardana_ownership %} ({{ line.get_bardana_ownership_display }}){% endif %}</td>
+        <td class="num">{{ line.quantity|qty }}</td>
+        <td class="num">{% if line.rate_per_mund %}{{ line.rate_per_mund|amount }}/40kg{% else %}{{ line.rate|amount }}{% endif %}</td>
+        <td class="num">{{ line.amount|amount }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="u-empty">No items.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td></td><td class="num">{{ invoice.goods_amount|amount }}</td></tr></tfoot>
+  </table>
+
+  {% for line in wheat_lines %}
+  <table class="amount-box">
+    <tr><td class="amt-head" colspan="2">Weight (KG){% if wheat_lines|length > 1 %} &middot; {{ line.descr }}{% endif %}</td></tr>
+    <tr><td class="amt-label">Party Weight</td><td class="amt-value">{{ line.party_weight|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Mill Weight</td><td class="amt-value">{{ line.mill_weight|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Selected Weight</td><td class="amt-value">{{ line.selected_weight|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Katla</td><td class="amt-value">{{ line.katla|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Impurities</td><td class="amt-value">{{ line.khoot|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Moisture</td><td class="amt-value">{{ line.moisture|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Bardana Ded.</td><td class="amt-value">{{ line.sack_weight_deduction|default:0|qty }}</td></tr>
+    <tr><td class="amt-label u-bold">Credit Weight</td><td class="amt-value">{{ line.credit_weight|default:0|qty }}</td></tr>
+    <tr><td class="amt-label">Rate @ 40kg</td><td class="amt-value">{{ line.rate_per_mund|amount }}</td></tr>
+  </table>
+  {% endfor %}
+
+  <table class="amount-box">
+    <tr><td class="amt-label">Goods</td><td class="amt-value">{{ invoice.goods_amount|amount }}</td></tr>
+    {% if invoice.discount_amount %}<tr><td class="amt-label">Discount</td><td class="amt-value">-{{ invoice.discount_amount|amount }}</td></tr>{% endif %}
+    {% if invoice.tax_amount %}<tr><td class="amt-label">Sales Tax</td><td class="amt-value">{{ invoice.tax_amount|amount }}</td></tr>{% endif %}
+    {% if invoice.freight_amount %}<tr><td class="amt-label">Freight{% if invoice.freight_paid_by_mill %} (paid by mill){% endif %}</td><td class="amt-value">{% if invoice.freight_paid_by_mill %}-{% endif %}{{ invoice.freight_amount|amount }}</td></tr>{% endif %}
+    {% if invoice.brokerage_amount and invoice.brokerage_borne_by_supplier %}<tr><td class="amt-label">Brokerage</td><td class="amt-value">-{{ invoice.brokerage_amount|amount }}</td></tr>{% endif %}
+    {% if invoice.withholding_amount %}<tr><td class="amt-label">WHT</td><td class="amt-value">-{{ invoice.withholding_amount|amount }}</td></tr>{% endif %}
+    <tr><td class="amt-label amt-head">Net Amount</td><td class="amt-value amt-head">{{ invoice.supplier_payable_amount|amount }}</td></tr>
+    {% if invoice.paid_amount %}<tr><td class="amt-label">Paid</td><td class="amt-value">{{ invoice.paid_amount|amount }}</td></tr>{% endif %}
+    <tr><td class="amt-label">Previous Balance</td><td class="amt-value">{{ previous_balance|amount }}</td></tr>
+    <tr><td class="amt-label amt-head">Total Payable</td><td class="amt-value amt-head">{{ total_payable|amount }}</td></tr>
+    <tr><td class="amt-words" colspan="2">{{ amount_in_words }}</td></tr>
+  </table>
+
+  {% if invoice.remarks %}<p class="words">{{ invoice.remarks }}</p>{% endif %}
+
+  <div class="sign">
+    <div>Prepared By<br>{{ invoice.created_by.get_full_name|default:invoice.created_by.username }}</div>
+    <div>Checked By</div>
+    <div>Approved By</div>
+  </div>
+{% endblock %}

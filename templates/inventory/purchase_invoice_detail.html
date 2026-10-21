@@ -5,27 +5,22 @@
   {% capture as status_tone %}{% if invoice.status == "reversed" %}reversed{% else %}posted{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind="Purchase Invoice" number=invoice.invoice_num date=invoice.invoice_date|dmy party=invoice.supplier.name status=status_label status_tone=status_tone back=True back_url=invoices_url extra="no-print" %}
     {% slot meta %}{% if invoice.legacy_bill_no %}<span class="chip" title="Earlier bill number">{{ invoice.legacy_bill_no }}</span>{% endif %}{% endslot %}
-    {% slot actions %}
-      {% for order in source_orders %}{% url 'inventory:purchase_order_detail' order.pk as order_url %}{% include "components/ui/button.html" with label=order.purchase_num href=order_url icon="file" only %}{% endfor %}
-      {% url 'inventory:supplier_detail' invoice.supplier_id as supplier_url %}
-      {% include "components/ui/button.html" with label="Supplier" href=supplier_url icon="user" only %}
-    {% endslot %}
   {% endcomponent %}
 
-  {% if linked_documents %}
-  <div class="doc-chain">
-    <span class="doc-chain__cap">Linked documents</span>
-    {% for link in linked_documents %}
-    <a class="doc-link{% if link.dead %} doc-link--dead{% endif %}" href="{{ link.url }}"{% if link.new_tab %} target="_blank"{% endif %}><span class="doc-link-kind">{{ link.kind }}</span><span class="doc-link-num">{{ link.label }}</span></a>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   {% component "ui/card" flush=True %}
     <div class="card-body">
       {% component "ui/detail_grid" cols=4 %}
         {% include "components/ui/detail_item.html" with label="Supplier" value=invoice.supplier.name only %}
-        {% include "components/ui/detail_item.html" with label="Supplier invoice no" value=invoice.supplier_invoice_num only %}
+        {% include "components/ui/detail_item.html" with label="Date" value=invoice.invoice_date|dmy only %}
+        {% if credit_weight is not None %}{% capture as credit_label %}{{ credit_weight|qty }} kg{% endcapture %}{% include "components/ui/detail_item.html" with label="Net Weight" value=credit_label num=True only %}{% endif %}
+        {% if rate_per_mund %}{% include "components/ui/detail_item.html" with label="@ / 40 kg" value=rate_per_mund|amount num=True only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Net Amount" value=invoice.supplier_payable_amount|amount num=True only %}
+        {% if invoice.paid_amount %}{% include "components/ui/detail_item.html" with label="Paid" value=invoice.paid_amount|amount num=True only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Balance" value=invoice.balance_amount|amount num=True only %}
+        {% if invoice.purchase_order %}{% include "components/ui/detail_item.html" with label="Purchase Order" value=invoice.purchase_order.purchase_num only %}{% endif %}
+        {% if invoice.due_date %}{% include "components/ui/detail_item.html" with label="Due Date" value=invoice.due_date|dmy only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Supplier Invoice No" value=invoice.supplier_invoice_num only %}
         {% if invoice.godown %}{% capture as godown_label %}{{ invoice.godown.code }} &mdash; {{ invoice.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
         {% if invoice.vehicle_no %}{% include "components/ui/detail_item.html" with label="Vehicle" value=invoice.vehicle_no only %}{% endif %}
         {% if invoice.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=invoice.broker.title only %}{% endif %}
@@ -54,7 +49,7 @@
             <td>{{ line.uom.title|default:"—" }}</td>
             <td class="num">{{ line.rate|amount }}</td>
             {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
-            <td class="num strong">{{ line.total_amount|amount }}</td>
+            <td class="num strong">{{ line.amount|amount }}</td>
           </tr>
           {% empty %}
           <tr><td colspan="7" class="empty-note">No items.</td></tr>

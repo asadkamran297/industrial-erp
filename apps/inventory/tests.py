@@ -576,6 +576,39 @@ class PurchaseReturnTests(TestCase):
         self.assertEqual(ProductLedger.objects.filter(product=wheat).aggregate(q=Sum("quantity"))["q"], Decimal("10000.000"))
         self.assertEqual(PartyBardanaLedger.objects.filter(party=self.supplier, bardana_item=bag).aggregate(q=Sum("quantity"))["q"], Decimal("50.000"))
 
+    def test_detail_pages_carry_links_actions_and_both_prints(self):
+        purchase_return = create_purchase_return(invoice=self.invoice, lines=[(self.line.pk, Decimal("1"))], post=True, user=self.user)
+        self.client.force_login(self.user)
+        invoice_page = self.client.get(reverse("inventory:purchase_invoice_detail", args=[self.invoice.pk]))
+        self.assertContains(invoice_page, 'class="doc-chain')
+        self.assertContains(invoice_page, purchase_return.return_num)
+        self.assertContains(invoice_page, reverse("inventory:purchase_invoice_print", args=[self.invoice.pk]))
+        self.assertContains(invoice_page, "Voucher")
+        for size in ("a4", "thermal"):
+            page = self.client.get(reverse("inventory:purchase_invoice_print", args=[self.invoice.pk]), {"size": size})
+            self.assertContains(page, self.invoice.invoice_num)
+        self.assertContains(self.client.get(reverse("inventory:purchase_invoice_print", args=[self.invoice.pk]), {"size": "thermal"}), "print--thermal")
+        return_page = self.client.get(reverse("inventory:purchase_return_detail", args=[purchase_return.pk]))
+        self.assertContains(return_page, self.invoice.invoice_num)
+        for url in (
+            reverse("inventory:supplier_detail", args=[self.supplier.pk]),
+            reverse("inventory:item_detail", args=[self.item.pk]),
+        ):
+            self.assertContains(self.client.get(url), 'class="doc-chain', msg_prefix=url)
+
+    def test_screen_table_exports_in_every_format(self):
+        import json
+
+        table = json.dumps([["Item", "Qty"], ["Bearing", "10.000"], ["Belt", "2.000"]])
+        self.assertEqual(self.client.post(reverse("table_export"), {"format": "csv", "table": table}).status_code, 302)
+        self.client.force_login(self.user)
+        expected = {"xlsx": "spreadsheetml", "csv": "text/csv", "doc": "msword", "png": "image/png", "pdf": "text/html"}
+        for fmt, kind in expected.items():
+            response = self.client.post(reverse("table_export"), {"format": fmt, "title": "Items & Stock", "table": table})
+            self.assertEqual(response.status_code, 200, fmt)
+            self.assertIn(kind, response["Content-Type"], fmt)
+        self.assertIn(b"Bearing", self.client.post(reverse("table_export"), {"format": "csv", "table": table}).content)
+
     def test_direct_return_needs_no_invoice(self):
         self.client.force_login(self.user)
         response = self.client.post(reverse("inventory:purchase_return_create"), {

@@ -67,7 +67,7 @@ class WeighbridgeRegisterView(ReportView):
             data = sel.weighbridge_register(p.start, p.end, f["vehicle"], f["supplier"] or None, self.min_difference())
         t = data["totals"]
         tiles = [
-            _tile("Vehicles", str(t["vehicles"]), "slate", "users", f"{t['slips']} weighments"),
+            _tile("Vehicles", str(t["vehicles"]), "slate", "truck", f"{t['slips']} weighments"),
             _tile("In (kg)", f"{t['credit_kg']:,.0f}", "amber", "wheat", f"{t['credit_kg'] / 40:,.0f} md"),
             _tile("Out (kg)", "0", "teal", "box", "no outbound weighing"),
             _tile("Avg difference", f"{t['avg_difference']:,.3f} kg", "rose" if t["avg_difference"] < 0 else "green", "chart", "mill − party"),
@@ -111,8 +111,8 @@ class VehicleReportView(ReportView):
         data = sel.vehicle_report(p.start, p.end, f["vehicle"])
         t = data["totals"]
         tiles = [
-            _tile("Vehicles", str(t["vehicles"]), "slate", "users"),
-            _tile("Trips", str(t["trips"]), "sky", "receipt"),
+            _tile("Vehicles", str(t["vehicles"]), "slate", "truck"),
+            _tile("Trips", str(t["trips"]), "sky", "truck"),
             _tile("Net weight", f"{t['net_mund']:,.0f} md", "amber", "wheat", f"{t['net_kg']:,.0f} kg"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
@@ -158,7 +158,7 @@ class WeightVarianceView(ReportView):
         tiles = [
             _tile("Beyond tolerance", str(t["slips"]), "rose", "alert", f"± {self.tolerance()} kg"),
             _tile("Net difference", f"{t['difference']:,.3f} kg", "amber", "chart", "mill − party"),
-            _tile("Party weight taken", str(party), "violet", "users", f"mill weight taken {t['slips'] - party}"),
+            _tile("Party weight taken", str(party), "violet", "scale", f"mill weight taken {t['slips'] - party}"),
             _tile("Cost impact", format_amount(t["cost_impact"]), "sky", "cash", "difference × rate"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles, "extra": {"min_difference": self.tolerance()}}
@@ -202,9 +202,9 @@ class GateSheetView(ReportView):
         data = sel.gate_sheet(p.start, p.end)
         t = data["totals"]
         tiles = [
-            _tile("Vehicles in", str(t["vehicles"]), "slate", "users", f"{t['slips']} slips"),
+            _tile("Vehicles in", str(t["vehicles"]), "slate", "truck", f"{t['slips']} slips"),
             _tile("Wheat in", f"{t['credit_kg'] / 40:,.0f} md", "amber", "wheat", f"{t['credit_kg']:,.0f} kg"),
-            _tile("Vehicles out", "0", "teal", "box", "no outbound weighing"),
+            _tile("Vehicles out", "0", "teal", "truck", "no outbound weighing"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 

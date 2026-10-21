@@ -2,6 +2,8 @@
 {% load humanize static %}
 {% block title %}Return Receipt {{ sale_return.return_num }}{% endblock %}
 {% block stylesheet %}{% static 'dist/receipt.css' %}{% endblock %}
+{% block size_switch %}{% endblock %}
+{% block autoprint %}true{% endblock %}
 {% block back_label %}New Return{% endblock %}
 {% block back_url %}{% url 'inventory:pos_return_list' %}{% endblock %}
 {% block print_header %}{% endblock %}

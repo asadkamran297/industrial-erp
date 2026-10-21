@@ -101,7 +101,7 @@ class SalesRegisterView(ReportView):
         base = period.query + "".join(f"&{k}={v}" for k, v in f.items() if v and k != "pay_mode")
         tiles = [
             _tile("Invoices", str(t["invoices"]), "slate", "receipt", href=f"?{base}"),
-            _tile("Bags", f"{t['bags']:,.0f}", "teal", "box", f"{t['kg']:,.0f} kg"),
+            _tile("Bags", f"{t['bags']:,.0f}", "teal", "package", f"{t['kg']:,.0f} kg"),
             _tile("Net", format_amount(t["net"]), "sky", "cash", f"gross {format_amount(t['gross'])}"),
             _tile("Cash", format_amount(t["cash"]), "green", "cash", href=f"?{base}&pay_mode=cash", on=f["pay_mode"] == "cash"),
             _tile("Credit", format_amount(t["credit"]), "amber", "users", href=f"?{base}&pay_mode=credit", on=f["pay_mode"] == "credit"),
@@ -164,7 +164,7 @@ class SalesSummaryView(ReportView):
         label = f"vs {before.label}"
         tiles = [
             _tile("Invoices", str(t["invoices"]), "slate", "receipt", change=delta(t["invoices"], last["invoices"])),
-            _tile("Bags", f"{t['bags']:,.0f}", "teal", "box", change=delta(t["bags"], last["bags"])),
+            _tile("Bags", f"{t['bags']:,.0f}", "teal", "package", change=delta(t["bags"], last["bags"])),
             _tile("Net", format_amount(t["net"]), "sky", "cash", change=delta(t["net"], last["net"])),
             _tile("Cash", format_amount(t["cash"]), "green", "cash", change=delta(t["cash"], last["cash"])),
             _tile("Credit", format_amount(t["credit"]), "amber", "users", change=delta(t["credit"], last["credit"])),

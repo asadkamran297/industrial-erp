@@ -4,10 +4,8 @@
 <section class="form-stack">
   {% url 'inventory:sale_invoice_list' as list_url %}
   {% capture as status_tone %}{% if sale.posted == 'Y' %}posted{% else %}draft{% endif %}{% endcapture %}
-  {% component "ui/detail_header" kind="Sale" number=sale.sale_num date=sale.sale_date|dmy party=sale.transaction_id status=sale.get_status_display status_tone=status_tone back=True back_url=list_url %}
+  {% component "ui/detail_header" kind="Sale" number=sale.sale_num date=sale.sale_date|dmy party=sale.customer.customer_name|default:"Walk-in" status=sale.get_status_display status_tone=status_tone back=True back_url=list_url %}
     {% slot actions %}
-      {% url 'inventory:pos_receipt' sale.pk as print_url %}
-      {% include "components/ui/button.html" with label="Print" href=print_url icon="print" target="_blank" only %}
       {% if sale.posted != 'Y' %}
       <form method="post" action="{% url 'inventory:pos_post' sale.pk %}">{% csrf_token %}
         {% include "components/ui/button.html" with label="Post Sale" icon="post" variant="primary" only %}
@@ -16,10 +14,23 @@
     {% endslot %}
   {% endcomponent %}
 
+  {% component "ui/card" %}
+    {% component "ui/detail_grid" cols=4 %}
+      {% include "components/ui/detail_item.html" with label="Customer" value=sale.customer.customer_name|default:"Walk-in" only %}
+      {% include "components/ui/detail_item.html" with label="Date" value=sale.sale_date|dmy only %}
+      {% include "components/ui/detail_item.html" with label="Paid By" value=sale.get_pay_mode_display only %}
+      {% if sale.sales_order %}{% include "components/ui/detail_item.html" with label="Sales Order" value=sale.sales_order.order_num only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Received" value=sale.total_paid|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Balance" value=sale_balance|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Reference" value=sale.transaction_id only %}
+      {% include "components/ui/detail_item.html" with label="Remarks" value=sale.remarks wide=True only %}
+    {% endcomponent %}
+  {% endcomponent %}
+
   <div class="tiles">
     {% include "components/table/tile.html" with tone="sky" icon="sum" value=bill_amount|amount label="Bill Amount" only %}
     {% if cols.discount %}{% include "components/table/tile.html" with tone="amber" icon="minus" value=discount_total|amount label="Discount" only %}{% endif %}
-    {% include "components/table/tile.html" with tone="green" icon="cash" value=payable_amount|amount label="Payable" only %}
+    {% include "components/table/tile.html" with tone="green" icon="wallet" value=payable_amount|amount label="Payable" only %}
   </div>
 
   {% if sale.posted != 'Y' %}

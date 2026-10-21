@@ -7,6 +7,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import ListView, View
 
+from apps.access_control.selectors import user_has_permission
+
 from apps.core.mixins import PagePermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.godowns.selectors import active_godowns, default_godown
 
@@ -164,6 +166,49 @@ def _stored_lines(voucher):
     ]
 
 
+
+def _doc_actions(request, page, new_name, edit_name, pk, print_name=""):
+    actions = {}
+    if user_has_permission(request.user, f"{page}.add"):
+        actions["new_url"] = reverse(new_name)
+    if user_has_permission(request.user, f"{page}.edit"):
+        actions["edit_url"] = reverse(edit_name, args=[pk])
+    if print_name:
+        actions["print_url"] = reverse(print_name, args=[pk])
+    return actions
+
+
+def _mill_ledger(reference):
+    from apps.core.doc_links import doc_link, url_or_blank
+
+    return doc_link("Product Ledger", reference, url_or_blank("inventory:ledger_list", query=f"book=mill&q={reference}"))
+
+
+def _grinding_links(voucher):
+    from apps.core.doc_links import doc_link
+
+    links = []
+    if voucher.godown_id:
+        links.append(doc_link("Godown", voucher.godown.name, reverse("godowns:godown_detail", args=[voucher.godown_id])))
+    if voucher.wheat_item_id:
+        links.append(doc_link("Wheat", voucher.wheat_item.name, reverse("products:product_detail", args=[voucher.wheat_item_id])))
+    links.append(_mill_ledger(voucher.voucher_no))
+    return links
+
+
+def _conversion_links(conversion):
+    from apps.core.doc_links import doc_link
+
+    links = []
+    if conversion.godown_id:
+        links.append(doc_link("Godown", conversion.godown.name, reverse("godowns:godown_detail", args=[conversion.godown_id])))
+    if conversion.source_product_id:
+        links.append(doc_link("Source", conversion.source_product.name,
+                              reverse("products:product_detail", args=[conversion.source_product_id])))
+    links.append(_mill_ledger(conversion.voucher_no))
+    return links
+
+
 class GrindingDetailView(PagePermissionRequiredMixin, View):
     page = GRINDING_PAGE
     action = "view"
@@ -178,6 +223,9 @@ class GrindingDetailView(PagePermissionRequiredMixin, View):
             "voucher": voucher,
             "title": voucher.voucher_no,
             "breadcrumbs": _crumbs((voucher.voucher_no, "")),
+            "doc_links": _grinding_links(voucher),
+            "doc_actions": _doc_actions(request, self.page, "production:grinding_create", "production:grinding_update",
+                                        voucher.pk, print_name="production:grinding_print"),
         })
 
 
@@ -353,6 +401,9 @@ class ConversionDetailView(PagePermissionRequiredMixin, View):
             return redirect("production:conversion_list")
         return render(request, "production/conversion_detail.html", {
             "conversion": conversion,
+            "doc_links": _conversion_links(conversion),
+            "doc_actions": _doc_actions(request, self.page, "production:conversion_create", "production:conversion_update",
+                                        conversion.pk),
             "title": conversion.voucher_no,
             "breadcrumbs": _crumbs(("Products Conversion", reverse("production:conversion_list")),
                                    (conversion.voucher_no, "")),

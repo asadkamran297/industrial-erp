@@ -70,6 +70,16 @@ class GodownDetailView(PagePermissionRequiredMixin, DetailView):
         context["movements"] = movements
         context["list_url"] = reverse("godowns:godown_list")
         context["breadcrumbs"] = _crumbs((self.object.code, ""))
+        from apps.core.doc_links import doc_link, url_or_blank
+
+        context["doc_links"] = [
+            doc_link("Product Ledger", self.object.name, url_or_blank("inventory:ledger_list", query=f"book=mill&godown={self.object.pk}")),
+            doc_link("Grinding", "List", url_or_blank("production:grinding_list", query=f"godown={self.object.pk}")),
+        ]
+        context["doc_actions"] = {
+            "new_url": reverse("godowns:godown_create") if context.get("can_add") else "",
+            "edit_url": reverse("godowns:godown_update", args=[self.object.pk]) if context.get("can_edit") else "",
+        }
         return context
 
 
