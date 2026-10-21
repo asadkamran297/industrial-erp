@@ -2,11 +2,6 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
 {% component "table/board" title=title add_url=add_url add_label="Supplier" table_id="supplier-table" search_placeholder="Search suppliers" %}
-  {% slot tiles %}
-    {% include "components/table/tile.html" with tone="violet" icon="users" value=supplier_count label="Suppliers" only %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchased_total|amount label="Total Purchases" only %}
-    {% include "components/table/tile.html" with tone="rose" icon="wallet" value=payable_total|amount label="Total Payable" only %}
-  {% endslot %}
 
   <thead>
     <tr>

@@ -476,6 +476,7 @@ class PurchaseInvoice(BaseModel):
     purchase_order = models.ForeignKey(PurchaseOrder, null=True, blank=True, related_name="invoices",
                                        on_delete=models.PROTECT, db_column="inv_purchase_order_id")
     seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
+    wheat_seq_num = models.PositiveIntegerField(unique=True, blank=True, null=True)
     invoice_num = models.CharField(max_length=40, unique=True, blank=True)
     supplier_invoice_num = models.CharField(max_length=80, blank=True)
     supplier_invoice_date = models.DateField(null=True, blank=True)
@@ -567,11 +568,17 @@ class PurchaseInvoice(BaseModel):
         )
 
     def save(self, *args, **kwargs):
-        if self.seq_num is None:
-            last = PurchaseInvoice.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
-            self.seq_num = numbering.next_seq(numbering.SERIES_PURCHASE_INVOICE, last)
         if not self.invoice_num:
-            self.invoice_num = numbering.format_number(numbering.SERIES_PURCHASE_INVOICE, self.seq_num)
+            if getattr(self, "mill_series", False):
+                if self.wheat_seq_num is None:
+                    self.wheat_seq_num = numbering.next_seq(numbering.SERIES_WHEAT_PURCHASE_INVOICE,
+                                                            numbering.last_used(numbering.SERIES_WHEAT_PURCHASE_INVOICE))
+                self.invoice_num = numbering.format_number(numbering.SERIES_WHEAT_PURCHASE_INVOICE, self.wheat_seq_num)
+            else:
+                if self.seq_num is None:
+                    self.seq_num = numbering.next_seq(numbering.SERIES_PURCHASE_INVOICE,
+                                                      numbering.last_used(numbering.SERIES_PURCHASE_INVOICE))
+                self.invoice_num = numbering.format_number(numbering.SERIES_PURCHASE_INVOICE, self.seq_num)
         self.full_clean()
         super().save(*args, **kwargs)
 

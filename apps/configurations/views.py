@@ -109,11 +109,10 @@ class MasterDetailView(MasterConfigMixin, PagePermissionRequiredMixin, DetailVie
         context = super().get_context_data(**kwargs)
         record = self.object
         config = self.master_config
-        items = [{"label": "Title", "value": record.title}, {"label": "Code", "value": record.code}]
+        items = []
         for name in config.extra_fields:
             field = record._meta.get_field(name)
             items.append({"label": field.verbose_name.title(), "value": display_value(record, name)})
-        items.append({"label": "Status", "value": record.get_status_display()})
         context.update({
             "kind": config.singular,
             "title": record.title,

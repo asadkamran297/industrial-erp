@@ -6,7 +6,7 @@
 
   <table class="meta">
     <tr><td class="lbl">Invoice No</td><td><b>{{ invoice.invoice_num }}</b></td><td class="lbl">Date</td><td>{{ invoice.invoice_date|dmy }}</td></tr>
-    <tr><td class="lbl">Party</td><td colspan="3">{{ invoice.supplier.name }}</td></tr>
+    <tr><td class="lbl">Supplier</td><td colspan="3">{{ invoice.supplier.name }}</td></tr>
     {% if invoice.vehicle_no or invoice.godown %}<tr><td class="lbl">Vehicle</td><td>{{ invoice.vehicle_no|default:"—" }}</td><td class="lbl">Godown</td><td>{{ invoice.godown.name|default:"—" }}</td></tr>{% endif %}
     {% if invoice.supplier_invoice_num or invoice.purchase_order %}<tr><td class="lbl">Bill No</td><td>{{ invoice.supplier_invoice_num|default:"—" }}</td><td class="lbl">PO</td><td>{{ invoice.purchase_order.purchase_num|default:"—" }}</td></tr>{% endif %}
     {% if invoice.broker %}<tr><td class="lbl">Broker</td><td colspan="3">{{ invoice.broker.title }}</td></tr>{% endif %}
@@ -30,6 +30,8 @@
     <tfoot><tr><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td><td></td><td class="num">{{ invoice.goods_amount|amount }}</td></tr></tfoot>
   </table>
 
+  <div{% if wheat_lines %} class="print-two"{% endif %}>
+  <div>
   {% for line in wheat_lines %}
   <table class="amount-box">
     <tr><td class="amt-head" colspan="2">Weight (KG){% if wheat_lines|length > 1 %} &middot; {{ line.descr }}{% endif %}</td></tr>
@@ -44,6 +46,7 @@
     <tr><td class="amt-label">Rate @ 40kg</td><td class="amt-value">{{ line.rate_per_mund|amount }}</td></tr>
   </table>
   {% endfor %}
+  </div>
 
   <table class="amount-box">
     <tr><td class="amt-label">Goods</td><td class="amt-value">{{ invoice.goods_amount|amount }}</td></tr>
@@ -58,6 +61,7 @@
     <tr><td class="amt-label amt-head">Total Payable</td><td class="amt-value amt-head">{{ total_payable|amount }}</td></tr>
     <tr><td class="amt-words" colspan="2">{{ amount_in_words }}</td></tr>
   </table>
+  </div>
 
   {% if invoice.remarks %}<p class="words">{{ invoice.remarks }}</p>{% endif %}
 

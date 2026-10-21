@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ system_setting.company_name }}{% endblock %}</title>
+  <title>{% block title %}{{ brand.name }}{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'images/favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'dist/app.css' %}">
   <script defer src="{% static 'vendor/htmx/htmx.min.js' %}"></script>
@@ -12,6 +12,7 @@
   <script defer src="{% static 'js/searchable-select.js' %}"></script>
   <script defer src="{% static 'js/amount-format.js' %}"></script>
   <script defer src="{% static 'js/party-balance.js' %}"></script>
+  <script defer src="{% static 'js/party-add.js' %}"></script>
   <script defer src="{% static 'js/ui.js' %}"></script>
   <script defer src="{% static 'vendor/alpinejs/alpine.min.js' %}"></script>
   {% block extra_head %}{% endblock %}

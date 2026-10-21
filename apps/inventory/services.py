@@ -1247,15 +1247,15 @@ def supplier_has_open_orders(*, supplier):
     return bool(open_order_lines(supplier=supplier))
 
 
-def next_purchase_invoice_number():
+def next_purchase_invoice_number(wheat=False):
     """What the next invoice will be called.
 
     Advisory only: the number is allocated in ``PurchaseInvoice.save()``, so an
     invoice saved between this preview and the save takes it and the next one
     moves up.
     """
-    last = PurchaseInvoice.all_objects.order_by("-seq_num").values_list("seq_num", flat=True).first()
-    return numbering.preview(numbering.SERIES_PURCHASE_INVOICE, last)
+    code = numbering.SERIES_WHEAT_PURCHASE_INVOICE if wheat else numbering.SERIES_PURCHASE_INVOICE
+    return numbering.preview(code, numbering.last_used(code))
 
 
 def duplicate_supplier_invoice_number(*, supplier, supplier_invoice_num, exclude_pk=None):
@@ -1556,7 +1556,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
     header_order = list(touched_orders.values())[0] if len(touched_orders) == 1 else None
 
-    invoice = PurchaseInvoice.objects.create(
+    invoice = PurchaseInvoice(
         supplier=supplier,
         purchase_order=header_order,
         supplier_invoice_num=supplier_invoice_num,
@@ -1586,6 +1586,8 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
         created_by=user,
         updated_by=user,
     )
+    invoice.mill_series = any(line.get("product") is not None for line in clean)
+    invoice.save()
 
     transaction_id = generate_transaction_id("PINV", PurchaseInvoice)
 
@@ -1664,6 +1666,7 @@ def create_purchase_invoice(*, supplier, supplier_invoice_num, supplier_invoice_
 
         post_supplier_payment_to_gl(
             source_ref=f"inv_purchase_invoices_paid:{invoice.pk}",
+            voucher_no=f"{invoice.invoice_num}-PMT",
             payment_date=invoice.invoice_date,
             supplier=supplier,
             amount=paid,

@@ -146,6 +146,7 @@ class OrganizationDetailView(MasterDetailView):
     subtitle_attr = "code"
     list_url_name = "organizations:organization_list"
     edit_url_name = "organizations:organization_update"
+    create_url_name = "organizations:organization_create"
     detail_fields = (
         ("Parent", "parent"), ("Phone", "phone"), ("Cell", "cell"), ("Fax", "fax"),
         ("Email", "email"), ("Website", "website"), ("Address", "address", "wide"), ("Status", "status"),
@@ -165,6 +166,7 @@ class BranchDetailView(MasterDetailView):
     subtitle_attr = "code"
     list_url_name = "organizations:branch_list"
     edit_url_name = "organizations:branch_update"
+    create_url_name = "organizations:branch_create"
     detail_fields = (
         ("Organization", "organization"), ("Parent Branch", "parent"), ("City", "city"), ("Phone", "phone"),
         ("Email", "email"), ("Fax", "fax"), ("Address", "address", "wide"), ("Status", "status"),

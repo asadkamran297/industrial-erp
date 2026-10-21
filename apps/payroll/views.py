@@ -73,6 +73,7 @@ class EmployeeSalaryDetailView(MasterDetailView):
     subtitle_attr = "employee.full_name"
     list_url_name = "payroll:employee_salary_list"
     edit_url_name = "payroll:employee_salary_update"
+    create_url_name = "payroll:employee_salary_create"
     detail_fields = (("Employee", "employee"), ("Element", "allowance_deduction"), ("Type", "allowance_deduction_type"), ("Amount", "amount", "money"))
 
 

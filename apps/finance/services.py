@@ -478,7 +478,7 @@ def customer_receivable_balances():
 
 
 def _post_voucher(*, source_ref, voucher_type, voucher_date, account_no, entries, remarks,
-                  settlement_mode="", party_account_no="", user=None):
+                  settlement_mode="", party_account_no="", voucher_no="", user=None):
     """Create one balanced, posted voucher from ``entries`` and return it.
 
     ``entries`` is a list of ``(account_code, debit, credit, line_remark)``.
@@ -494,9 +494,12 @@ def _post_voucher(*, source_ref, voucher_type, voucher_date, account_no, entries
         return existing
     if not any(debit or credit for _code, debit, credit, _r in entries):
         return None
+    if voucher_no and AccountVoucher.all_objects.filter(voucher_no=voucher_no).exists():
+        voucher_no = ""
 
     voucher = AccountVoucher(
         source_ref=source_ref,
+        voucher_no=voucher_no or "",
         voucher_type=voucher_type,
         voucher_date=voucher_date,
         settlement_mode=settlement_mode,
@@ -574,6 +577,7 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
     on_credit = receivable > 0
     return _post_voucher(
         source_ref=f"inv_pos_masters:{sale.pk}",
+        voucher_no=sale.sale_num,
         voucher_type=VOUCHER_TYPE_SALES,
         voucher_date=sale.sale_date,
         settlement_mode=SETTLEMENT_CREDIT if on_credit else SETTLEMENT_CASH,
@@ -623,6 +627,7 @@ def post_sale_return_to_gl(*, sale_return, cost_of_goods, user=None):
 
     return _post_voucher(
         source_ref=f"inv_pos_return_masters:{sale_return.pk}",
+        voucher_no=sale_return.return_num,
         voucher_type=VOUCHER_TYPE_JOURNAL,
         voucher_date=sale_return.return_date,
         account_no=customer_account.code,
@@ -771,6 +776,7 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
 
     return _post_voucher(
         source_ref=f"inv_purchase_invoices:{invoice.pk}",
+        voucher_no=invoice.invoice_num,
         voucher_type=VOUCHER_TYPE_PURCHASE,
         voucher_date=invoice.invoice_date,
         settlement_mode=SETTLEMENT_CREDIT,
@@ -803,6 +809,7 @@ def reverse_gl_posting(*, source_ref, reversal_ref, voucher_date, remarks, user=
     ]
     return _post_voucher(
         source_ref=reversal_ref,
+        voucher_no=f"{original.voucher_no}-REV",
         voucher_type=VOUCHER_TYPE_JOURNAL,
         voucher_date=voucher_date,
         settlement_mode=original.settlement_mode,
@@ -815,7 +822,7 @@ def reverse_gl_posting(*, source_ref, reversal_ref, voucher_date, remarks, user=
 
 
 @transaction.atomic
-def post_supplier_payment_to_gl(*, source_ref, payment_date, supplier, amount, reference, user=None):
+def post_supplier_payment_to_gl(*, source_ref, payment_date, supplier, amount, reference, voucher_no="", user=None):
     """Money paid to a supplier against what is owed.
 
         Dr Supplier payable     the debt being settled
@@ -837,6 +844,7 @@ def post_supplier_payment_to_gl(*, source_ref, payment_date, supplier, amount, r
 
     return _post_voucher(
         source_ref=source_ref,
+        voucher_no=voucher_no,
         voucher_type=VOUCHER_TYPE_PAYMENT,
         voucher_date=payment_date,
         settlement_mode=SETTLEMENT_CASH,
@@ -868,6 +876,7 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
 
     return _post_voucher(
         source_ref=f"inv_purchase_return_masters:{purchase_return.pk}",
+        voucher_no=purchase_return.return_num,
         voucher_type=VOUCHER_TYPE_JOURNAL,
         voucher_date=purchase_return.return_date,
         account_no=supplier_account.code,

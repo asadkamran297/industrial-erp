@@ -40,7 +40,7 @@ REPORTS: tuple[Report, ...] = (
 
     Report("sales.register", "Sales Register", "inventory", "Sales Manager", "inventory:report_sale", "reports.sales.index", GROUP_SALES),
     Report("sales.summary", "Sales Summary", "inventory", "Sales Manager", "inventory:report_sales_summary", "reports.sales.index", GROUP_SALES),
-    Report("sales.customers", "Party-wise Sales", "inventory", "Sales Manager", "inventory:report_customer_sales", "reports.sales.index", GROUP_SALES),
+    Report("sales.customers", "Customer-wise Sales", "inventory", "Sales Manager", "inventory:report_customer_sales", "reports.sales.index", GROUP_SALES),
     Report("sales.products", "Product-wise Sales", "inventory", "Sales Manager", "inventory:report_product_sales", "reports.sales.index", GROUP_SALES),
     Report("sales.rate_history", "Sale Rate History", "inventory", "Sales Manager", "inventory:report_rate_history", "reports.sales.index", GROUP_SALES),
     Report("sales.returns", "Sale Returns", "inventory", "Sales Manager", "inventory:report_sale_return", "reports.sales.index", GROUP_SALES),
@@ -49,7 +49,7 @@ REPORTS: tuple[Report, ...] = (
 
     Report("purchase.wheat_register", "Wheat Purchase Register", "inventory", "Purchase Manager", "inventory:report_purchase", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.summary", "Purchase Summary", "inventory", "Purchase Manager", "inventory:report_purchase_summary", "reports.purchase.index", GROUP_PURCHASE),
-    Report("purchase.arhti", "Arhti-wise Purchase", "inventory", "Purchase Manager", "inventory:report_supplier_purchases", "reports.purchase.index", GROUP_PURCHASE),
+    Report("purchase.arhti", "Supplier-wise Purchase", "inventory", "Purchase Manager", "inventory:report_supplier_purchases", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.quality", "Wheat Quality", "inventory", "Purchase Manager", "inventory:report_wheat_quality", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.rate_trend", "Wheat Rate Trend", "inventory", "Purchase Manager", "inventory:report_wheat_rate_trend", "reports.purchase.index", GROUP_PURCHASE),
     Report("purchase.freight", "Freight & Brokerage", "inventory", "Purchase Manager", "inventory:report_freight_brokerage", "reports.purchase.index", GROUP_PURCHASE),

@@ -699,6 +699,36 @@ class WheatPurchaseScreenTests(TestCase):
         self.assertContains(response, 'id="total_bill"')
         self.assertContains(response, "wp-f--calc")
 
+    def test_every_document_form_uses_the_same_party_picker(self):
+        self.client.force_login(self.user)
+        for name, label in (("inventory:purchase_order_create", "Supplier"), ("inventory:stores_purchase_create", "Supplier"),
+                            ("inventory:purchase_invoice_create", "Supplier"), ("inventory:sale_invoice_create", "Customer"),
+                            ("inventory:sales_order_create", "Customer")):
+            response = self.client.get(reverse(name))
+            self.assertEqual(response.status_code, 200, name)
+            self.assertContains(response, "notch-field--tint", msg_prefix=name)
+            self.assertContains(response, f'{label} <span class="req">', msg_prefix=name)
+            self.assertNotContains(response, ">Sender<", msg_prefix=name)
+
+    def test_detail_and_both_prints_show_every_slip_field(self):
+        response = self._post(self._entry(builty_no="B-77", transporter="Khan Goods"))
+        self.assertEqual(response.status_code, 200, response.content)
+        invoice = PurchaseInvoice.objects.get(invoice_num=response.json()["invoice_num"])
+
+        detail = self.client.get(reverse("inventory:purchase_invoice_detail", args=[invoice.pk]))
+        self.assertEqual(detail.status_code, 200)
+        for label in ("Party Load Wgt.", "Mill Tare Wgt.", "Credit Wgt.", "Driver Phone", "Builty No.",
+                      "Transporter Name", "Total Bill", "Stock Details", ">Invoice<", ">Voucher<"):
+            self.assertContains(detail, label)
+        self.assertContains(detail, "0302-4254786")
+        self.assertContains(detail, "B-77")
+
+        voucher = self.client.get(reverse("inventory:purchase_voucher_print", args=[invoice.pk]))
+        self.assertEqual(voucher.status_code, 200)
+        self.assertContains(voucher, "Purchase Voucher")
+        self.assertContains(voucher, "Khan Goods")
+        self.assertEqual(self.client.get(reverse("inventory:purchase_invoice_print", args=[invoice.pk])).status_code, 200)
+
     def test_the_mills_real_entry_prices_and_posts_as_the_gate_wrote_it(self):
         from django.db.models import Sum
 

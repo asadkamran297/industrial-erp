@@ -2,19 +2,6 @@
 {% block content %}
 {% if can_add %}{% url 'inventory:purchase_return_create' as create_url %}{% endif %}
 {% component "table/board" title="Purchase Returns" add_url=create_url add_label="Return" table_id="return-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
-  {% slot tiles %}
-    {% capture as all_on %}{% if current_tab == "all" and not request.GET.date_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=all" tone="violet" icon="reverse" value=tiles.all_count label="All" on=all_on %}<p class="tile-note">Rs {{ tiles.all_value|short_amount }}</p>{% endcomponent %}
-    {% capture as draft_on %}{% if current_tab == "draft" %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=draft" tone="slate" icon="file" value=tiles.draft_count label="Draft" on=draft_on %}<p class="tile-note{% if tiles.draft_count %} tile-note--alert{% endif %}">Rs {{ tiles.draft_value|short_amount }}</p>{% endcomponent %}
-    {% capture as posted_on %}{% if current_tab == "posted" and not request.GET.date_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=posted" tone="green" icon="check" value=tiles.posted_count label="Posted" on=posted_on %}<p class="tile-note">Rs {{ tiles.posted_value|short_amount }}</p>{% endcomponent %}
-    {% capture as reversed_on %}{% if current_tab == "reversed" %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=reversed" tone="rose" icon="deactivate" value=tiles.reversed_count label="Reversed" on=reversed_on %}<p class="tile-note">Rs {{ tiles.reversed_value|short_amount }}</p>{% endcomponent %}
-    {% capture as month_href %}?{{ base_query }}&amp;tab=posted&amp;date_from={{ tiles.month_from }}&amp;date_to={{ tiles.month_to }}{% endcapture %}
-    {% capture as month_on %}{% if request.GET.date_from == tiles.month_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href=month_href tone="sky" icon="calendar" value=tiles.month_count label="This month" on=month_on %}<p class="tile-note">Rs {{ tiles.month_value|short_amount }}</p>{% endcomponent %}
-  {% endslot %}
 
   <thead>
     <tr>
@@ -52,7 +39,7 @@
       <td class="print-hide actions-col">
         {% url 'inventory:purchase_return_detail' row.pk as view_url %}
         {% capture as print_url %}{% if row.status != "reversed" and row.return_num %}{% url 'inventory:purchase_return_receipt' row.pk %}{% endif %}{% endcapture %}
-        {% component "table/actions" view_url=view_url print_url=print_url %}
+        {% component "table/actions" view_url=view_url print_url=print_url fixed=True locked_title=row.get_status_display %}
           {% if can_edit and row.status in draft_statuses %}
           <form method="post" action="{% url 'inventory:purchase_return_post' row.pk %}">{% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">

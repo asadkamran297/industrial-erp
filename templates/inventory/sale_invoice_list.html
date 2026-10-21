@@ -2,16 +2,6 @@
 {% block content %}
 {% if can_add %}{% url 'inventory:sale_invoice_create' as create_url %}{% endif %}
 {% component "table/board" title="Sale Invoices" add_url=create_url add_label="Sale Invoice" table_id="sale-table" search_placeholder="Search" date_filters_enabled=True %}
-  {% slot tiles %}
-    {% capture as all_on %}{% if current_tab == "all" and not request.GET.date_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=all" tone="green" icon="receipt" value=tiles.sold_count label="Sales" on=all_on %}<p class="tile-note">Rs {{ tiles.sold_value|short_amount }} invoiced</p>{% endcomponent %}
-    {% capture as month_on %}{% if request.GET.date_from == tiles.month_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&date_from="|add:tiles.month_from tone="sky" icon="calendar" value=tiles.month_count label="This month" on=month_on %}<p class="tile-note">Rs {{ tiles.month_value|short_amount }}</p>{% endcomponent %}
-    {% capture as owing_on %}{% if current_tab == "owing" %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=owing" tone="rose" icon="cash" value=tiles.owing_count label="Owing" on=owing_on %}<p class="tile-note{% if tiles.owing_count %} tile-note--alert{% endif %}">{% if tiles.owing_count %}Rs {{ tiles.owing_value|short_amount }} not received{% else %}Everything settled{% endif %}</p>{% endcomponent %}
-    {% capture as draft_on %}{% if current_tab == "draft" %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=draft" tone="amber" icon="file" value=tiles.draft_count label="Not posted" on=draft_on %}<p class="tile-note{% if tiles.draft_count %} tile-note--alert{% endif %}">{% if tiles.draft_count %}Rs {{ tiles.draft_value|short_amount }} unposted{% else %}Nothing waiting{% endif %}</p>{% endcomponent %}
-  {% endslot %}
 
   <thead>
     <tr>
@@ -53,7 +43,7 @@
       <td class="print-hide actions-col">
         {% url 'inventory:pos_detail' invoice.pk as view_url %}
         {% url 'inventory:pos_receipt' invoice.pk as print_url %}
-        {% component "table/actions" view_url=view_url print_url=print_url %}
+        {% component "table/actions" view_url=view_url print_url=print_url fixed=True locked_title=invoice.get_status_display %}
           {% if invoice.state == "draft" and can_edit %}{% url 'inventory:pos_update' invoice.pk as finish_url %}{% include "components/ui/icon_button.html" with href=finish_url icon="post" title="Finish and post" tone="go" only %}{% endif %}
         {% endcomponent %}
       </td>

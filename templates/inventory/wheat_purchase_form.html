@@ -16,12 +16,8 @@
       <div class="card-body">
         <div class="wp-row">
           <div class="wp-f wp-f--grow">
-            <label for="supplier">Sender</label>
-            {% component "forms/control" type="select" id="supplier" name="supplier" extra="wp-in" searchable=True required=True attrs='data-balance-chip="supplier-balance" data-balance-owed="Balance" data-balance-credit="In credit"' only %}
-              <option value="">Select an Account</option>
-              {% for s in suppliers %}<option value="{{ s.pk }}" data-balance="{{ s.balance }}">{{ s.name }}</option>{% endfor %}
-            {% endcomponent %}
-            <p id="supplier-balance" class="bal-chip mt-1 hidden"></p>
+            {% url 'inventory:supplier_create' as supplier_add_base %}
+            {% include "components/forms/party_picker.html" with parties=suppliers required=True add_url=supplier_add_base|add:"?embed=1" add_kind="supplier:saved" add_title="New supplier" only %}
           </div>
           <div class="wp-f w-56">
             <label for="wheat_product">Wheat Item</label>
@@ -178,12 +174,13 @@
 
         <div class="wp-errors field-errors mt-3" id="wp-errors"></div>
 
-        <hr class="wp-rule">
-        {% include "components/ui/button.html" with id="wp-save" label="Save" icon="save" variant="primary" extra="btn--wide" data="save" title="Save (Ctrl+S)" only %}
+        {% component "forms/submit_bar" cancel_url=list_url save_id="wp-save" prepared_by=request.user only %}{% endcomponent %}
       </div>
     </section>
   </form>
 </div>
+
+{% include "components/ui/frame_modal.html" with entity_title="New Supplier" %}
 
 <script id="wp-wheat-data" type="application/json">{{ wheat_json|safe }}</script>
 <script id="wp-bardana-data" type="application/json">{{ bardana_json|safe }}</script>
@@ -225,12 +222,12 @@
   function addRow(bagId) {
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td><select class="wp-in b-bag" name="bardana_product" data-searchable>' + bagOptions() + '</select></td>' +
-      '<td><input class="wp-in wp-in--num b-qty" name="bardana_qty" data-no-amount data-weight></td>' +
-      '<td><select class="wp-in b-own" name="bardana_ownership" data-searchable>' + ownOptions() + '</select></td>' +
-      '<td><input class="wp-in wp-in--num b-rate" name="bardana_rate" data-amount></td>' +
+      '<td><select class="control wp-in b-bag" name="bardana_product" data-searchable>' + bagOptions() + '</select></td>' +
+      '<td><input class="control wp-in wp-in--num b-qty" name="bardana_qty" data-no-amount data-weight></td>' +
+      '<td><select class="control wp-in b-own" name="bardana_ownership" data-searchable>' + ownOptions() + '</select></td>' +
+      '<td><input class="control wp-in wp-in--num b-rate" name="bardana_rate" data-amount></td>' +
       '<td><div class="wp-out b-amount">0</div></td>' +
-      '<td><input class="wp-in wp-in--num b-ded" name="bardana_ded_per_bag" data-no-amount data-weight></td>' +
+      '<td><input class="control wp-in wp-in--num b-ded" name="bardana_ded_per_bag" data-no-amount data-weight></td>' +
       '<td><div class="wp-out b-total-ded">0</div></td>' +
       '<td><button type="button" class="icon-btn icon-btn--danger wp-del" title="Remove line" aria-label="Remove line">' + ICON_CLOSE + '</button></td>';
     rowsBox.appendChild(tr);
@@ -352,7 +349,7 @@
   function problemsWithEntry() {
     const totals = recalc();
     const problems = [];
-    if (!el('supplier').value) problems.push('Choose the sender before saving.');
+    if (!el('supplier').value) problems.push('Choose the supplier before saving.');
     if (!el('wheat_product').value) problems.push('Choose the wheat item before saving.');
     if (!val('mill_load')) problems.push('Enter the mill weight before saving.');
     if (!selectedWeight()) problems.push('Select the weight this purchase is settled on.');

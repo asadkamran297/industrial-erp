@@ -1,27 +1,10 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% if can_add %}{% if kind == "general" %}{% url 'inventory:stores_purchase_create' as create_url %}{% else %}{% url 'inventory:purchase_invoice_create' as create_url %}{% endif %}{% endif %}
-{% capture as add_label %}{% if kind == "general" %}General Invoice{% else %}Wheat Invoice{% endif %}{% endcapture %}
+{% capture as add_label %}{% if kind == "general" %}Stores Invoice{% else %}Wheat Invoice{% endif %}{% endcapture %}
 {% component "table/board" title=list_title add_url=create_url add_label=add_label table_id="invoice-table" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
   {% slot actions %}
-    {% if can_add and not kind %}{% url 'inventory:stores_purchase_create' as stores_url %}{% include "components/ui/button.html" with label="General Invoice" href=stores_url icon="box" only %}{% endif %}
-  {% endslot %}
-  {% slot tiles %}
-    {% capture as all_on %}{% if not state and not request.GET.date_from %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:tile_query tone="violet" icon="receipt" value=tiles.count label="Invoices" on=all_on %}
-      <p class="tile-note">Rs {{ tiles.value|short_amount }} invoiced</p>
-    {% endcomponent %}
-    {% capture as month_href %}?{{ tile_query }}&amp;date_from={{ tiles.month_from }}&amp;date_to={{ tiles.month_to }}{% endcapture %}
-    {% capture as month_on %}{% if request.GET.date_from == tiles.month_from and not state %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href=month_href tone="sky" icon="calendar" value=tiles.month_count label="This month" on=month_on %}
-      <p class="tile-note">Rs {{ tiles.month_value|short_amount }}</p>
-    {% endcomponent %}
-    {% url 'inventory:supplier_list' as supplier_url %}
-    {% include "components/table/tile.html" with href=supplier_url tone="teal" icon="users" value=tiles.supplier_count label="Suppliers" only %}
-    {% capture as unpaid_on %}{% if state == "posted" %}1{% endif %}{% endcapture %}
-    {% component "table/tile" href="?"|add:tile_query|add:"&state=posted" tone="rose" icon="cash" value=tiles.unpaid_count label="Unpaid" on=unpaid_on %}
-      <p class="tile-note{% if tiles.unpaid_count %} tile-note--alert{% endif %}">{% if tiles.unpaid_count %}Rs {{ tiles.unpaid_value|short_amount }} owed{% else %}Nothing outstanding{% endif %}</p>
-    {% endcomponent %}
+    {% if can_add and not kind %}{% url 'inventory:stores_purchase_create' as stores_url %}{% include "components/ui/button.html" with label="Add Stores Invoice" href=stores_url icon="plus" variant="success" only %}{% endif %}
   {% endslot %}
 
   <thead>
@@ -31,14 +14,19 @@
       {% if "supplier_ref" in columns %}<th>Supplier ref</th>{% endif %}
       {% if "invoice_date" in columns %}{% include "components/table/sort_header.html" with label="Date" field="invoice_date" %}{% endif %}
       {% if "supplier" in columns %}{% include "components/table/sort_header.html" with label="Supplier" field="supplier" %}{% endif %}
-      {% if "buyer" in columns %}<th>Entered by</th>{% endif %}
+      {% if "buyer" in columns %}<th>Prepared By</th>{% endif %}
       {% if "lines" in columns %}<th class="num">Items</th>{% endif %}
       {% if "quantity" in columns %}<th class="num">Quantity</th>{% endif %}
       {% if "order" in columns %}<th>Order</th>{% endif %}
+      {% if "manual" in columns %}<th>Manual #</th>{% endif %}
       {% if "vehicle" in columns %}<th>Vehicle</th>{% endif %}
+      {% if "credit_wt" in columns %}<th class="num">Credit Wt</th>{% endif %}
+      {% if "rate_md" in columns %}<th class="num">@ 40 kg</th>{% endif %}
+      {% if "freight" in columns %}<th class="num">Freight</th>{% endif %}
       {% if "godown" in columns %}<th>Godown</th>{% endif %}
       {% if "status" in columns %}<th>Status</th>{% endif %}
       {% if "value" in columns %}<th class="num">Amount</th>{% endif %}
+      {% if "net" in columns %}<th class="num">Net Amount</th>{% endif %}
       <th class="print-hide actions-col">Actions</th>
     </tr>
   </thead>
@@ -57,13 +45,19 @@
         {% if invoice.purchase_order %}<a class="doc-num" href="{% url 'inventory:purchase_order_detail' invoice.purchase_order.pk %}">{{ invoice.purchase_order.purchase_num }}</a>
         {% else %}{% include "components/table/status_badge.html" with status="closed" label="Direct" only %}{% endif %}
       </td>{% endif %}
+      {% if "manual" in columns %}<td class="truncate" title="{{ invoice.remarks }}">{{ invoice.remarks|default:"—" }}</td>{% endif %}
       {% if "vehicle" in columns %}<td>{{ invoice.vehicle_no|default:"—" }}</td>{% endif %}
+      {% if "credit_wt" in columns %}<td class="num">{% if invoice.credit_wt is not None %}{{ invoice.credit_wt|qty }}{% else %}—{% endif %}</td>{% endif %}
+      {% if "rate_md" in columns %}<td class="num">{% if invoice.rate_md %}{{ invoice.rate_md|amount }}{% else %}—{% endif %}</td>{% endif %}
+      {% if "freight" in columns %}<td class="num">{{ invoice.freight_amount|amount }}</td>{% endif %}
       {% if "godown" in columns %}<td>{% if invoice.godown %}{{ invoice.godown.name }}{% else %}—{% endif %}</td>{% endif %}
       {% if "status" in columns %}<td>{% include "components/table/status_badge.html" with status=invoice.status label=invoice.get_status_display only %}</td>{% endif %}
       {% if "value" in columns %}<td class="num strong">{{ invoice.total_amount|amount }}</td>{% endif %}
+      {% if "net" in columns %}<td class="num strong">{{ invoice.supplier_payable_amount|amount }}</td>{% endif %}
       <td class="print-hide actions-col">
         {% url 'inventory:purchase_invoice_detail' invoice.pk as view_url %}
-        {% include "components/table/actions.html" with view_url=view_url only %}
+        {% url 'inventory:purchase_invoice_print' invoice.pk as print_url %}
+        {% include "components/table/actions.html" with view_url=view_url print_url=print_url fixed=True locked_title=invoice.get_status_display only %}
       </td>
     </tr>
     {% component "table/lines_row" pk=invoice.pk span=row_span %}
@@ -83,7 +77,7 @@
             <td>{{ line.uom.title|default:"—" }}</td>
             <td class="num">{{ line.rate|amount }}</td>
             {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
-            <td class="num strong">{{ line.total_amount|amount }}</td>
+            <td class="num strong">{{ line.amount|amount }}</td>
           </tr>
           {% endfor %}
         </tbody>

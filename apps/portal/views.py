@@ -9,8 +9,10 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
+from django.urls import reverse
 
 from apps.core.constants import STATUS_POSTED
+from apps.core.formatting import format_amount
 from apps.core.mixins import PagePermissionRequiredMixin
 from apps.finance.models import AccountVoucher
 from apps.finance.services import (
@@ -54,6 +56,31 @@ def _with_share(rows) -> list[dict]:
     return rows
 
 
+def mill_tiles():
+    """Today at the mill, from the same selector as the Daily Position report."""
+    from apps.core.reporting import mund
+
+    from .selectors import daily_position
+
+    data = daily_position(timezone.localdate())
+    wheat, ground, sold, stock = data["wheat"], data["grinding"], data["sales"], data["wheat_stock"]
+    daily = reverse("portal:report_daily_position")
+    return [
+        {"label": "Wheat Bought Today", "value": f"{mund(wheat['kg']):,.0f} md", "tone": "amber", "icon": "wheat",
+         "note": f"{wheat['slips']} slips · Rs {format_amount(wheat['amount'])}", "href": f"{reverse('inventory:purchase_invoice_list')}?kind=wheat"},
+        {"label": "Wheat Ground Today", "value": f"{mund(ground['wheat_kg']):,.0f} md", "tone": "violet", "icon": "grinding",
+         "note": f"{ground['output_kg']:,.0f} kg produced", "href": reverse("production:grinding_list")},
+        {"label": "Bags Sold Today", "value": f"{sold['bags']:,.0f}", "tone": "sky", "icon": "bardana",
+         "note": f"Rs {format_amount(sold['net'])}", "href": reverse("inventory:sale_invoice_list")},
+        {"label": "Wheat Stock", "value": f"{mund(stock['stock_kg']):,.0f} md", "tone": "teal", "icon": "stock",
+         "note": f"{stock['days']} days of grinding" if stock["days"] is not None else "", "href": daily},
+        {"label": "Receivable", "value": format_amount(data["receivables"]), "tone": "green", "icon": "receivable",
+         "href": reverse("portal:report_receivables_aging")},
+        {"label": "Payable", "value": format_amount(data["payables"]), "tone": "rose", "icon": "payable",
+         "href": reverse("portal:report_payables_aging")},
+    ]
+
+
 class DashboardView(PagePermissionRequiredMixin, TemplateView):
     """Headline trading position: what was earned, spent, kept and held.
 
@@ -77,17 +104,15 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         revenue = statement["total_revenue"]
         margin = (statement["net_profit"] / revenue * 100) if revenue else None
 
-        context["kpis"] = [
-            {"key": "revenue", "label": "Total Revenue", "value": revenue, "tone": "green", "icon": "sum",
-             "note": "Net of discounts and returns"},
-            {"key": "expense", "label": "Total Expense", "value": statement["total_expense"], "tone": "amber", "icon": "cash",
-             "note": "Cost of sales and running costs"},
-            {"key": "profit", "label": "Net Profit", "value": statement["net_profit"],
-             "tone": "rose" if statement["net_profit"] < 0 else "violet", "icon": "chart",
-             "note": f"{margin:.1f}% margin" if margin is not None else "No revenue yet",
-             "signed": True},
-            {"key": "cash", "label": "Cash & Bank", "value": cash_on_hand, "tone": "sky", "icon": "cash",
-             "note": "Available balance"},
+        mill = mill_tiles()
+        profit = statement["net_profit"]
+        context["today_tiles"] = mill[:4]
+        context["money_tiles"] = mill[4:6] + [
+            {"label": "Cash & Bank", "value": format_amount(cash_on_hand), "tone": "sky", "icon": "cash",
+             "href": reverse("finance:report_cash_book")},
+            {"label": "Net Profit", "value": format_amount(profit), "tone": "rose" if profit < 0 else "violet", "icon": "chart",
+             "note": f"{margin:.1f}% of Rs {format_amount(revenue)} revenue" if margin is not None else "",
+             "href": reverse("finance:income_statement")},
         ]
 
         months = _recent_months(TREND_MONTHS)
@@ -153,12 +178,15 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         )
         context["recent_vouchers"] = AccountVoucher.objects.order_by("-voucher_date", "-id")[:5]
 
-        context["secondary"] = [
-            {"label": "Active Employees", "value": Employee.objects.filter(status="active").count(), "icon": "users"},
-            {"label": "Payroll Net", "value": Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO,
-             "money": True, "icon": "cash"},
-            {"label": "Posted Vouchers", "value": AccountVoucher.objects.filter(posted="Y").count(), "icon": "file"},
-            {"label": "Sales Recorded", "value": POSMaster.objects.filter(status=STATUS_POSTED).count(), "icon": "layers"},
+        context["activity_tiles"] = [
+            {"label": "Active Employees", "value": f"{Employee.objects.filter(status='active').count():,}", "tone": "slate",
+             "icon": "employee", "href": reverse("hr:employee_list")},
+            {"label": "Payroll Net", "value": format_amount(Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO),
+             "tone": "slate", "icon": "payroll", "href": reverse("payroll:payroll_list")},
+            {"label": "Posted Vouchers", "value": f"{AccountVoucher.objects.filter(posted='Y').count():,}", "tone": "slate",
+             "icon": "voucher", "href": reverse("finance:account_voucher_list")},
+            {"label": "Sales Recorded", "value": f"{POSMaster.objects.filter(status=STATUS_POSTED).count():,}", "tone": "slate",
+             "icon": "sale", "href": reverse("inventory:sale_invoice_list")},
         ]
 
         context["integrity"] = ledger_integrity()

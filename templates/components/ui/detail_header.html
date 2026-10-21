@@ -8,15 +8,14 @@
     {% if party %}<span class="detail-head__meta"><b>{{ party }}</b></span>{% endif %}
     {{ slots.meta }}
   </div>
-  {% if slots.actions or slot or doc_actions %}
   <div class="detail-head__actions">
     {% if doc_actions.new_url %}{% include "components/ui/button.html" with label="Add New" href=doc_actions.new_url icon="plus" variant="success" only %}{% endif %}
     {% if doc_actions.edit_url %}{% include "components/ui/button.html" with label="Edit" href=doc_actions.edit_url icon="edit" variant="secondary" only %}{% endif %}
-    {% if doc_actions.print_url %}{% include "components/ui/button.html" with label="Print" href=doc_actions.print_url icon="print" variant="secondary" target="_blank" only %}{% endif %}
-    {% if doc_actions.voucher_url %}{% include "components/ui/button.html" with label="Voucher" href=doc_actions.voucher_url icon="ledger" variant="secondary" only %}{% endif %}
+    {{ slots.edit }}
+    {% if doc_actions.print_url %}{% include "components/ui/button.html" with label=doc_actions.print_label|default:"Print" href=doc_actions.print_url icon="print" variant="secondary" target="_blank" only %}{% else %}{% capture as page_print_url %}{{ request.path }}?print=1{% endcapture %}{% include "components/ui/button.html" with label="Print" href=page_print_url icon="print" variant="secondary" target="_blank" only %}{% endif %}
+    {% if doc_actions.voucher_url %}{% include "components/ui/button.html" with label="Voucher" href=doc_actions.voucher_url icon="receipt" variant="secondary" target="_blank" only %}{% endif %}
     {{ slots.actions }}{{ slot }}
   </div>
-  {% endif %}
 </div>
 {% if doc_links %}
 <nav class="doc-chain no-print" aria-label="Linked documents">

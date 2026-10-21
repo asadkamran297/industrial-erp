@@ -1,0 +1,1 @@
+<div class="figure figure--{{ tone|default:'slate' }}"><p class="figure__label">{{ label }}</p><p class="figure__value">{% if value or value == 0 %}{{ value }}{% else %}&mdash;{% endif %}</p>{% if note %}<p class="figure__note">{{ note }}</p>{% endif %}</div>

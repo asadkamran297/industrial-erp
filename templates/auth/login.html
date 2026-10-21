@@ -1,54 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Login | {{ system_setting.company_name }}{% endblock %}
+{% block title %}Sign in | {{ brand.name }}{% endblock %}
 {% block body %}
 <main class="grid min-h-screen lg:grid-cols-[1.15fr_0.85fr]">
-  <section class="relative flex min-h-[42rem] items-center overflow-hidden bg-slate-950 p-6 text-white sm:p-10">
+  <section class="relative flex min-h-[28rem] items-center overflow-hidden bg-slate-950 p-6 text-white sm:p-10">
     {% if system_setting.login_background_image %}
       <img src="{{ system_setting.login_background_image.url }}" alt="" class="absolute inset-0 h-full w-full object-cover opacity-30">
     {% endif %}
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,.35),transparent_36%),linear-gradient(135deg,rgba(15,23,42,.95),rgba(15,23,42,.78))]"></div>
     <div class="relative z-10 max-w-3xl">
-      <div class="mb-10 flex items-center gap-4">
-        <div class="grid h-16 w-16 place-items-center rounded-xl bg-white text-sm font-bold text-slate-950">
-          {% if system_setting.company_logo %}<img src="{{ system_setting.company_logo.url }}" alt="{{ system_setting.company_name }}" class="h-16 w-16 rounded-xl object-cover">{% else %}ERP{% endif %}
+      <div class="flex items-center gap-4">
+        <div class="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-white text-slate-950">
+          {% if brand.logo %}<img src="{{ brand.logo }}" alt="{{ brand.name }}" class="h-16 w-16 rounded-xl object-cover">{% else %}{% icon "wheat" size="lg" %}{% endif %}
         </div>
         <div>
-          <h1 class="text-3xl font-semibold tracking-normal sm:text-5xl">{{ system_setting.company_name }}</h1>
-          <p class="mt-2 text-base text-slate-200">{{ system_setting.company_tagline }}</p>
+          <h1 class="text-3xl font-semibold tracking-normal sm:text-5xl">{{ brand.name }}</h1>
+          {% if brand.tagline %}<p class="mt-2 text-base text-slate-200">{{ brand.tagline }}</p>{% endif %}
         </div>
       </div>
-      <div class="max-w-2xl rounded-lg border border-white/15 bg-white/10 p-5 backdrop-blur">
+      {% if system_setting.md_name and system_setting.md_message %}
+      <div class="mt-10 max-w-2xl rounded-lg border border-white/15 bg-white/10 p-5 backdrop-blur">
         <div class="flex items-start gap-4">
-          <div class="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-white/15">
-            {% if system_setting.md_picture %}<img src="{{ system_setting.md_picture.url }}" alt="{{ system_setting.md_name }}" class="h-full w-full object-cover">{% else %}<span class="text-sm font-semibold">MD</span>{% endif %}
-          </div>
+          {% if system_setting.md_picture %}<img src="{{ system_setting.md_picture.url }}" alt="{{ system_setting.md_name }}" class="h-14 w-14 shrink-0 rounded-full object-cover">{% endif %}
           <div>
-            <p class="text-sm uppercase tracking-wide text-slate-300">Message from Managing Director</p>
-            <p class="mt-2 text-lg leading-8 text-white">{{ system_setting.md_message }}</p>
-            {% if system_setting.md_name %}<p class="mt-3 text-sm font-semibold text-slate-200">{{ system_setting.md_name }}</p>{% endif %}
+            <p class="text-lg leading-8 text-white">{{ system_setting.md_message }}</p>
+            <p class="mt-3 text-sm font-semibold text-slate-200">{{ system_setting.md_name }}</p>
           </div>
         </div>
       </div>
-      <div class="mt-8 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
-        <p>MIS helpline: {{ system_setting.mis_helpline_phone|default:"Contact administration" }}</p>
-        <p>Email: {{ system_setting.mis_helpline_email|default:system_setting.support_email|default:"support@example.com" }}</p>
-        <p>Support phone: {{ system_setting.support_phone|default:"Available during office hours" }}</p>
-        <p>Security notice: authorized users only.</p>
+      {% endif %}
+      {% if brand.contacts %}
+      <div class="mt-8 flex flex-wrap gap-x-8 gap-y-2 text-sm text-slate-200">
+        {% for label, value in brand.contacts %}<p>{{ label }}: {{ value }}</p>{% endfor %}
       </div>
+      {% endif %}
     </div>
   </section>
 
   <section class="flex items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
     <div class="w-full max-w-md">
       <div class="mb-6 flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-[var(--primary-color)]">Official portal</p>
-          <h2 class="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">Sign in securely</h2>
-        </div>
-        <div class="flex items-center gap-2">
-          {% include "components/ui/icon_button.html" with icon="sun-moon" title="Light / dark" bordered=True attrs='@click="toggleTheme()"' only %}
-          {% include "components/forms/control.html" with type="color" extra="h-9 w-9 p-0.5" attrs='x-model="primaryColor" @input="setPrimaryColor(primaryColor)" aria-label="Brand colour"' only %}
-        </div>
+        <h2 class="text-2xl font-semibold text-slate-950 dark:text-white">Sign in</h2>
+        {% include "components/ui/icon_button.html" with icon="sun-moon" title="Light / dark" bordered=True attrs='@click="toggleTheme()"' only %}
       </div>
 
       <form method="post" class="card" data-own-keys>{% csrf_token %}
@@ -56,15 +48,12 @@
           {% if form.non_field_errors %}{% include "components/ui/alert.html" with message=form.non_field_errors.0 tone="danger" only %}{% endif %}
           {% include "components/forms/field.html" with field=form.username only %}
           {% include "components/forms/field.html" with field=form.password only %}
-          <div class="flex items-center justify-between gap-3">
-            {% include "components/forms/field.html" with field=form.remember_me only %}
-            <a href="#" class="link-btn">Forgot password?</a>
-          </div>
+          {% include "components/forms/field.html" with field=form.remember_me only %}
           {% include "components/ui/button.html" with label="Sign in" variant="primary" size="lg" extra="btn--block" data="save" only %}
         </div>
       </form>
 
-      <p class="muted mt-4 text-center text-xs">{{ system_setting.footer_text }}</p>
+      {% if system_setting.footer_text %}<p class="muted mt-4 text-center text-xs">{{ system_setting.footer_text }}</p>{% endif %}
     </div>
   </section>
 </main>

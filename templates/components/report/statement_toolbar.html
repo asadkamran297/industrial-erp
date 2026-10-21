@@ -113,12 +113,14 @@
     </div>
   </div>
 
+  <a class="bar-btn" target="_blank" href="?{% if current_query %}{{ current_query }}&amp;{% endif %}print=1" title="Print" aria-label="Print">{% icon "print" %}</a>
+
   <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
     <button type="button" class="bar-btn" title="Export" aria-label="Export" :aria-expanded="open.toString()" @click="open = !open">{% icon "download" %}</button>
     <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
       <p class="settings-heading">Download</p>
       <a class="export-item" role="menuitem" href="{{ export_url }}"><span class="export-badge export-badge--xls">XLS</span>Excel</a>
-      <button type="button" class="export-item" role="menuitem" @click="open = false; expand(); $nextTick(() => window.print())"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
+      <a class="export-item" role="menuitem" target="_blank" href="?{% if current_query %}{{ current_query }}&amp;{% endif %}print=1"><span class="export-badge export-badge--pdf">PDF</span><span>PDF</span></a>
     </div>
   </div>
 </div>

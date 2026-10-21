@@ -15,32 +15,41 @@
     src: url("../fonts/inter-latin.woff2") format('woff2');
   }
   * { box-sizing: border-box; }
-  body { font-family: Inter, Arial, Helvetica, sans-serif; color: #111; margin: 24px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  @page { size: A4; margin: 10mm; }
+  body { font-family: Inter, Arial, Helvetica, sans-serif; color: #111; margin: 0; font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums; }
+
+  /* ── Screen preview = the sheet that prints ───────────────── */
+  @media screen {
+    html { background: #e5e7eb; }
+    body { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 0 10mm 10mm; background: #fff; box-shadow: 0 1px 6px rgba(15, 23, 42, .18); }
+    body.landscape { width: 297mm; min-height: 210mm; }
+    .print-btn { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 -10mm 10mm; padding: 8px 10mm; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  }
 
   /* ── Org Header ─────────────────────────────────────────────── */
   .org-header {
     display: grid;
-    grid-template-columns: 120px 1fr 180px;
+    grid-template-columns: 90px 1fr 180px;
     align-items: center;
     border-bottom: 3px double #1e3a5f;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
     gap: 12px;
   }
   .org-header .org-logo img {
-    max-height: 72px;
-    max-width: 120px;
+    max-height: 56px;
+    max-width: 90px;
     object-fit: contain;
   }
   .org-header .org-logo .org-initial {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 72px;
-    height: 72px;
+    width: 56px;
+    height: 56px;
     background: #1e3a5f;
     color: #fff;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 900;
     border-radius: 8px;
   }
@@ -48,7 +57,7 @@
     text-align: center;
   }
   .org-header .org-center .org-name {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 900;
     color: #1e3a5f;
     text-transform: uppercase;
@@ -72,38 +81,41 @@
     color: #333;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 1px;
   }
   .org-header .org-contact span { white-space: nowrap; }
   .org-header .org-contact b { color: #1e3a5f; }
-  .org-header .org-contact .print-meta { margin-top: 6px; color: #888; font-size: 10px; border-top: 1px solid #ddd; padding-top: 4px; }
+  .org-header .org-contact .print-meta { margin-top: 3px; color: #888; font-size: 10px; border-top: 1px solid #ddd; padding-top: 4px; }
 
   /* ── Document ────────────────────────────────────────────────── */
-  h1.doc-title { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 10px; color: #1e3a5f; border-bottom: 1px solid #ccc; padding-bottom: 6px; }
-  .meta { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .meta td { padding: 3px 8px; vertical-align: top; font-size: 12px; }
+  h1.doc-title { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 6px; color: #1e3a5f; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  .meta { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  .meta td { padding: 2px 6px; vertical-align: top; font-size: 12px; }
   .meta .lbl { font-weight: bold; white-space: nowrap; color: #1e3a5f; }
-  table.items { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  table.items th, table.items td { border: 1px solid #bbb; padding: 5px 8px; font-size: 11px; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.items th, table.items td { border: 1px solid #bbb; padding: 3px 6px; font-size: 11px; }
+  tr { break-inside: avoid; }
   table.items th { background: #1e3a5f; color: #fff; text-align: left; }
   table.items td.num, table.items th.num { text-align: right; }
   .totals { text-align: right; margin-top: 10px; font-size: 13px; border-top: 2px solid #1e3a5f; padding-top: 6px; }
   .words { margin-top: 4px; font-style: italic; color: #444; }
   /* The figure, laid out the way a receipt reads it. */
-  table.amount-box { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  table.amount-box td { border: 1px solid #999; padding: 6px 8px; font-size: 12px; }
+  table.amount-box { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.amount-box td { border: 1px solid #999; padding: 3px 8px; font-size: 11.5px; }
   table.amount-box .amt-label { font-weight: 600; }
   table.amount-box .amt-colon { width: 14px; text-align: center; border-left: 0; border-right: 0; }
-  table.amount-box .amt-value { text-align: right; font-weight: 700; white-space: nowrap; width: 160px; }
+  table.amount-box .amt-value { text-align: right; font-weight: 700; white-space: nowrap; width: 130px; }
+  .print-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; margin-top: 8px; }
+  .print-two table.amount-box { margin-top: 0; }
   table.amount-box .amt-head { background: #f1f4f8; font-weight: 700; }
   table.amount-box .amt-words { font-style: italic; }
 
-  .sign { display: flex; justify-content: space-between; margin-top: 60px; }
+  .sign { display: flex; justify-content: space-between; margin-top: 40px; break-inside: avoid; }
   .sign div { text-align: center; border-top: 1px solid #555; padding-top: 4px; min-width: 140px; font-weight: bold; font-size: 11px; }
 
   /* ── Footer ──────────────────────────────────────────────────── */
   .footer {
-    margin-top: 24px;
+    margin-top: 12px;
     border-top: 1px solid #bbb;
     padding-top: 6px;
     display: flex;
@@ -116,8 +128,7 @@
   .footer .footer-org { font-weight: 600; color: #1e3a5f; }
 
   /* ── Controls ────────────────────────────────────────────────── */
-  .print-btn { margin-bottom: 14px; }
-  @media print { .print-btn { display: none; } body { margin: 0; } }
+  @media print { .print-btn { display: none; } body { margin: 0; padding: 0; width: auto; min-height: 0; box-shadow: none; } }
 
 /* ── Utilities ───────────────────────────────────────────────── */
 .u-center { text-align: center; }
@@ -155,7 +166,10 @@
 .print-size { display: inline-flex; margin-left: 6px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; vertical-align: middle; }
 .print-size a { padding: 6px 12px; font-weight: 600; color: #0f172a; text-decoration: none; background: #fff; }
 .print-size a.is-on { background: #1e3a5f; color: #fff; }
-body.print--thermal { width: 76mm; margin: 4mm auto; font-size: 10px; }
+body.print--thermal { width: 80mm; min-height: 0; margin: 16px auto; padding: 0 2mm 2mm; font-size: 10px; }
+@media screen { .print--thermal .print-btn { margin: 0 -2mm 3mm; padding: 6px 2mm; } }
+.print--thermal .print-two { display: block; }
+.print--thermal .print-two table.amount-box { margin-top: 4px; }
 .print--thermal .org-header { display: block; text-align: center; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px; }
 .print--thermal .org-header .org-logo img { max-height: 40px; max-width: 50mm; }
 .print--thermal .org-header .org-logo .org-initial { display: none; }
@@ -198,3 +212,20 @@ body.print--thermal { width: 76mm; margin: 4mm auto; font-size: 10px; }
 .print--thermal .totals-inner .trow { font-size: 10px; }
 @media screen { .print--thermal .print-btn { display: flex; flex-wrap: wrap; gap: 4px; } }
 @media print { body.print--thermal { margin: 0; width: 74mm; } .print--thermal .print-btn { display: none !important; } }
+
+/* ── Purchase voucher (gate slip) ─────────────────────────────── */
+table.slip { width: 100%; border-collapse: collapse; border: 1px solid #000; position: relative; z-index: 1; }
+table.slip > tbody > tr > td, table.slip > tr > td { vertical-align: top; padding: 6px; }
+.slip-weight { width: 34%; border-right: 1px solid #000; }
+.slip-weight table.amount-box { width: 100%; margin: 0 0 8px; }
+.slip-main table.meta, .slip-main table.items { margin-bottom: 8px; }
+.slip-main table.amount-box { margin: 0 0 0 auto; }
+.slip-sign { border-bottom: 1px solid #000; height: 18px; }
+.print--thermal table.slip, .print--thermal table.slip tbody, .print--thermal table.slip tr { display: block; width: 100%; }
+.print--thermal table.slip > tbody > tr > td { display: block; width: 100%; padding: 2px 0; border-right: 0; }
+.print--thermal .slip-weight { border-bottom: 1px dashed #000; }
+
+/* ── List / register print ───────────────────────────────────── */
+table.items--list th, table.items--list td { padding: 3px 5px; font-size: 10px; white-space: nowrap; }
+table.items--list td { max-width: 60mm; overflow: hidden; text-overflow: ellipsis; }
+.print--thermal table.items--list th, .print--thermal table.items--list td { white-space: normal; max-width: none; }

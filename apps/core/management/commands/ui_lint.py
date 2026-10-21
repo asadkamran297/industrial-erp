@@ -23,6 +23,10 @@ FORM_RE = re.compile(r"<form\s[^>]*method\s*=\s*[\"']post", re.I)
 FORM_SHELLS = ("components/forms/crud_form.html", 'component "forms/crud_form"', "components/forms/tabbed_form.html", 'component "forms/tabbed_form"', "components/forms/submit_bar.html", 'component "forms/submit_bar"')
 RAW_PILL_RE = re.compile(r'<span class="pill pill--(?:draft|pending|posted|reversed|partial|closed|danger)"')
 DELETE_ACTION_RE = re.compile(r"components/table/actions\.html[^%]*\sdelete_url=")
+TILES_RE = re.compile(r"components/table/tile\.html|component \"table/tile\"|\{% slot tiles %\}|class=\"tiles\"")
+HIDDEN_DETAIL_RE = re.compile(r'\{% if [a-z_.]+ %\}\{% include "components/ui/detail_item\.html"')
+PARTY_SELECT_RE = re.compile(r'type="select"[^%]*name="(supplier|customer)"|name="(supplier|customer)"[^%]*type="select"')
+OFF_VOCAB_RE = re.compile(r'label="(Save Invoice|Save Voucher|Save PO|Update|Raise order|Save as draft|Post Sale|Save Links|Save Opening|Save Rates|Post adjustment|Return & Print|Edit PO)"')
 
 # Master list screens from docs/UI_AUDIT.md; these may never carry a delete action.
 MASTER_LIST_TEMPLATES = (
@@ -50,7 +54,11 @@ SORT_EXEMPT = (
     "finance/account_ledger.html", "finance/daybook.html", "inventory/ledger_list.html", "inventory/customer_ledger_list.html",
 )
 # Forms outside the contract by decision (docs/UI_SYSTEM.md, Screen contracts).
-FORM_EXEMPT = ("auth/login.html", "inventory/wheat_purchase_form.html")
+FORM_EXEMPT = ("auth/login.html",)
+# Ledger statement head and the POS entry screen's live bill totals.
+# List heads carry Add only; export, print, import and related links live in the filter bar menus.
+HEAD_ACTIONS_ALLOWED = ("inventory/pos_list.html", "inventory/purchase_invoice_list.html")
+TILES_ALLOWED = ("finance/account_ledger.html", "inventory/pos_list.html")
 
 
 def is_component(rel):
@@ -103,6 +111,24 @@ class Command(BaseCommand):
             if rel in MASTER_LIST_TEMPLATES:
                 for match in DELETE_ACTION_RE.finditer(text):
                     contract.append((rel, line_of(text, match.start()), "delete action on a master list"))
+
+            if rel.endswith(("_detail.html", "_list.html")) and rel not in TILES_ALLOWED:
+                for match in TILES_RE.finditer(text):
+                    contract.append((rel, line_of(text, match.start()), "tiles on a list or detail screen"))
+
+            if rel.endswith("_list.html") and BOARD_TAG in text and rel not in HEAD_ACTIONS_ALLOWED and "{% slot actions %}" in text:
+                contract.append((rel, line_of(text, text.index("{% slot actions %}")), "buttons in a list head; use excel_url / print_url / import_url or the more slot"))
+
+            if rel.endswith("_detail.html"):
+                for match in HIDDEN_DETAIL_RE.finditer(text):
+                    contract.append((rel, line_of(text, match.start()), "detail field hidden when empty; show it with a dash"))
+
+            for match in OFF_VOCAB_RE.finditer(text):
+                contract.append((rel, line_of(text, match.start()), f"button label {match.group(1)!r}; use Save / Save Draft / Save & Post / Post"))
+
+            if is_form_template(rel):
+                for match in PARTY_SELECT_RE.finditer(text):
+                    contract.append((rel, line_of(text, match.start()), "party select outside components/forms/party_picker.html"))
 
             form_match = FORM_RE.search(markup) if is_form_template(rel) else None
             if form_match and rel not in FORM_EXEMPT and not any(shell in text for shell in FORM_SHELLS):

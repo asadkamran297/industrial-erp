@@ -1,12 +1,12 @@
 {% firstof id name "supplier" as pid %}
 <div class="party-field">
-  <div class="notch-field{% if add_id %} notch-field--action{% endif %} notch-field--tint">
+  <div class="notch-field{% if add_id or add_url %} notch-field--action{% endif %} notch-field--tint">
     <label class="notch-label" for="{{ pid }}">{{ label|default:"Supplier" }}{% if required %} <span class="req">*</span>{% endif %}</label>
-    <select name="{{ name|default:'supplier' }}" id="{{ pid }}" class="control"{% if required %} required{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %} data-balance-chip="{{ pid }}-balance" data-balance-owed="Balance" data-balance-credit="In credit"{% if attrs %} {{ attrs|safe }}{% endif %}>
+    <select name="{{ name|default:'supplier' }}" id="{{ pid }}" class="control"{% if required %} required{% endif %}{% if form_id %} form="{{ form_id }}"{% endif %} data-balance-chip="{{ pid }}-balance" data-balance-owed="{{ owed_label|default:'Balance' }}" data-balance-credit="{{ credit_label|default:'In credit' }}"{% if attrs %} {{ attrs|safe }}{% endif %}>
       <option value=""></option>
-      {% for row in parties %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}"{% if selected == row.pk|stringformat:'s' %} selected{% endif %}>{{ row.name }}</option>{% endfor %}
+      {% for row in parties %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}"{% if selected == row.pk|stringformat:'s' %} selected{% endif %}>{% firstof row.name row.customer_name %}</option>{% endfor %}
     </select>
-    {% if add_id %}{% include "components/ui/icon_button.html" with id=add_id icon="plus" title=add_title|default:"New supplier" extra="notch-action" only %}{% endif %}
+    {% if add_id %}{% include "components/ui/icon_button.html" with id=add_id icon="plus" title=add_title|default:"New supplier" extra="notch-action" only %}{% elif add_url %}{% capture as add_attrs %}data-party-add data-url="{{ add_url }}" data-kind="{{ add_kind }}" data-target="{{ pid }}" data-title="{{ add_title|default:'New supplier' }}"{% endcapture %}{% include "components/ui/icon_button.html" with icon="plus" title=add_title|default:"New supplier" extra="notch-action" attrs=add_attrs only %}{% endif %}
   </div>
   <p id="{{ pid }}-balance" class="bal-chip mt-1 hidden"></p>
 </div>

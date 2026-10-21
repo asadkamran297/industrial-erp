@@ -453,7 +453,7 @@ def supplier_payment_status(as_of, kind=""):
         open_docs = unpaid.get(s.pk, [])
         due_soon = sum(1 for _d, due in open_docs if due and as_of <= due <= as_of + timedelta(days=7))
         rows.append({
-            "supplier_id": s.pk, "supplier": s.name, "kind": ", ".join(label for key, label in (("arhti", "Arhti"), ("bardana", "Bardana"), ("stores", "Stores")) if getattr(s, f"is_{key}")),
+            "supplier_id": s.pk, "supplier": s.name, "kind": ", ".join(label for key, label in (("arhti", "Wheat"), ("bardana", "Bardana"), ("stores", "Stores")) if getattr(s, f"is_{key}")),
             "invoices": inv.get("count", 0), "invoiced": money(inv.get("total")), "paid": money(inv.get("paid")), "balance": balance,
             "oldest_unpaid": open_docs[0][0] if open_docs else None, "days_outstanding": (as_of - open_docs[0][0]).days if open_docs else None,
             "due_in_7": due_soon, "last_invoice": inv.get("last"),

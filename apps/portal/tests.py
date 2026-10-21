@@ -192,7 +192,7 @@ class AgingTests(OwnerPackFixture):
         row = data["rows"][0]
         self.assertEqual(row["balance"], Decimal("1200.00"))
         self.assertEqual(row["b0"], Decimal("1200.00"))
-        self.assertEqual(row["kind"], "Arhti (wheat)")
+        self.assertEqual(row["kind"], "Wheat")
         self.assertEqual(selectors.payables_aging(self.today, kind="stores")["rows"], [])
 
 

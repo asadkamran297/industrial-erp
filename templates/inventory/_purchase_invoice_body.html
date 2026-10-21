@@ -1,0 +1,92 @@
+  {% capture as prepared %}{% firstof invoice.created_by.get_full_name invoice.created_by.username %}{% endcapture %}
+  {% capture as godown_label %}{% if invoice.godown %}{{ invoice.godown.code }} &mdash; {{ invoice.godown.name }}{% endif %}{% endcapture %}
+
+  {% component "ui/card" %}
+    {% component "ui/detail_section" title="Invoice" %}
+      {% include "components/ui/detail_item.html" with label="Supplier" value=invoice.supplier.name only %}
+      {% if wheat_line %}
+      {% include "components/ui/detail_item.html" with label="Wheat Item" value=wheat_line.descr only %}
+      {% else %}
+      {% include "components/ui/detail_item.html" with label="Supplier Invoice No" value=invoice.supplier_invoice_num only %}
+      {% include "components/ui/detail_item.html" with label="Purchase Order" value=invoice.purchase_order.purchase_num only %}
+      {% include "components/ui/detail_item.html" with label="Due Date" value=invoice.due_date|dmy only %}
+      {% endif %}
+      {% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}
+      {% include "components/ui/detail_item.html" with label="Broker" value=invoice.broker.title only %}
+      {% include "components/ui/detail_item.html" with label="Prepared By" value=prepared only %}
+      {% include "components/ui/detail_item.html" with label="Manual Remark" value=invoice.remarks wide=True only %}
+    {% endcomponent %}
+
+    {% if wheat_line %}
+    {% component "ui/detail_section" title="Weight (KG)" cols=3 %}
+      {% include "components/ui/detail_item.html" with label="Party Load Wgt." value=wheat_line.party_load_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Party Tare Wgt." value=wheat_line.party_tare_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Party Net Wgt." value=wheat_line.party_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Selected Wgt." value=selected_source only %}
+      {% include "components/ui/detail_item.html" with label="Mill Load Wgt." value=wheat_line.mill_load_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Mill Tare Wgt." value=wheat_line.mill_tare_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Mill Net Wgt." value=wheat_line.mill_weight|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Katla" value=wheat_line.katla|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Impurities" value=wheat_line.khoot|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Mois. Ded." value=wheat_line.moisture|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Bag Ded." value=wheat_line.sack_weight_deduction|qty num=True only %}
+      {% include "components/ui/detail_item.html" with label="Credit Wgt." value=wheat_line.credit_weight|qty num=True only %}
+    {% endcomponent %}
+
+    {% component "ui/detail_section" title="Carrier" cols=3 %}
+      {% include "components/ui/detail_item.html" with label="Transporter Name" value=carrier.transporter only %}
+      {% include "components/ui/detail_item.html" with label="Vehicle No." value=invoice.vehicle_no only %}
+      {% include "components/ui/detail_item.html" with label="Driver Phone" value=carrier.driver_phone only %}
+      {% include "components/ui/detail_item.html" with label="Builty No." value=carrier.builty_no only %}
+    {% endcomponent %}
+    {% endif %}
+
+    {% component "ui/detail_section" title="Amount" cols=3 %}
+      {% if wheat_line %}
+      {% include "components/ui/detail_item.html" with label="@ / 40kg" value=wheat_line.rate_per_mund|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Stock Amount" value=wheat_line.amount|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Bags Amount" value=bardana_amount|amount num=True only %}
+      {% else %}
+      {% include "components/ui/detail_item.html" with label="Goods" value=invoice.goods_amount|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Discount" value=invoice.discount_amount|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Sales Tax" value=invoice.tax_amount|amount num=True only %}
+      {% endif %}
+      {% include "components/ui/detail_item.html" with label="Freight" value=invoice.freight_amount|amount num=True only %}
+      {% capture as brokerage %}{{ invoice.brokerage_amount|amount }}{% if invoice.brokerage_rate_per_100kg %} @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg{% endif %}{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="Brokerage" value=brokerage num=True only %}
+      {% capture as wht %}{{ invoice.withholding_amount|amount }}{% if invoice.withholding_rate_per_40kg %} @ {{ invoice.withholding_rate_per_40kg|amount }}/40kg{% endif %}{% endcapture %}
+      {% include "components/ui/detail_item.html" with label="WHT" value=wht num=True only %}
+      {% include "components/ui/detail_item.html" with label="Total Bill" value=invoice.supplier_payable_amount|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Paid" value=invoice.paid_amount|amount num=True only %}
+      {% include "components/ui/detail_item.html" with label="Balance" value=invoice.balance_amount|amount num=True only %}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "ui/card" title="Stock Details" flush=True %}
+    <div class="overflow-x-auto">
+      {% doc_columns lines "purchase" as cols %}
+      <table class="data-table doc-table">
+        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th>{% if any_returned %}<th class="num">Returned</th>{% endif %}<th>Unit</th><th>Bardana</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
+        <tbody>
+          {% for line in lines %}
+          <tr>
+            <td class="muted">{{ line.seq_num }}</td>
+            <td><span class="strong">{{ line.descr }}</span>{% if line.inventory_item.item_code %}<span class="sub">{{ line.inventory_item.item_code }}</span>{% elif line.product %}<span class="sub">{{ line.product.complete_code }}</span>{% endif %}</td>
+            <td class="num">{{ line.quantity|qty }}</td>
+            {% if any_returned %}<td class="num {% if line.qty_returned %}fig-due{% else %}fig-nil{% endif %}">{{ line.qty_returned|qty }}</td>{% endif %}
+            <td>{{ line.uom.title|default:"—" }}</td>
+            <td>{{ line.get_bardana_ownership_display|default:"—" }}</td>
+            <td class="num">{% if line.rate_per_mund %}{{ line.rate_per_mund|amount }} / 40kg{% else %}{{ line.rate|amount }}{% endif %}</td>
+            {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
+            <td class="num strong">{{ line.amount|amount }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="empty-note">No items.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if lines %}
+        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td>{% if any_returned %}<td></td>{% endif %}<td colspan="{% if cols.discount %}4{% else %}3{% endif %}"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
+        {% endif %}
+      </table>
+    </div>
+  {% endcomponent %}

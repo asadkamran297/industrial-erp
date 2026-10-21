@@ -430,7 +430,7 @@ def supplier_kind_flags():
     }
 
 
-SUPPLIER_KIND_CHOICES = (("arhti", "Arhti (wheat)"), ("bardana", "Bardana"), ("stores", "Stores"))
+SUPPLIER_KIND_CHOICES = (("arhti", "Wheat"), ("bardana", "Bardana"), ("stores", "Stores"))
 
 
 def payables_aging(as_of, supplier_id=None, kind=""):

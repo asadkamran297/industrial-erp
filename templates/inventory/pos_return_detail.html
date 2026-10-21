@@ -4,7 +4,7 @@
   {% url 'inventory:pos_return_list' as list_url %}
   {% capture as status_label %}{% if sale_return.posted == 'Y' %}Posted{% else %}Draft{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if sale_return.posted == 'Y' %}posted{% else %}draft{% endif %}{% endcapture %}
-  {% component "ui/detail_header" kind="Sale Return" number=sale_return.return_num party=sale_return.customer.customer_name|default:sale_return.sale_num date=sale_return.return_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url %}
+  {% component "ui/detail_header" kind="Sale Return" number=sale_return.return_num date=sale_return.return_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url %}
     {% slot actions %}
       {% if sale_return.posted != 'Y' %}
       <form method="post" action="{% url 'inventory:pos_return_post' sale_return.pk %}">{% csrf_token %}
@@ -14,15 +14,17 @@
     {% endslot %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% include "components/ui/figure.html" with label="Invoice Amount" value=sale_return.total_invoice_amount|amount tone="sky" only %}
+    {% include "components/ui/figure.html" with label="Returned" value=sale_return.returned_amount|amount tone="rose" only %}
+    {% include "components/ui/figure.html" with label="Adjusted" value=sale_return.adjusted_amount|amount tone="amber" only %}
+  {% endcomponent %}
+
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
+    {% component "ui/detail_section" title="Sale Return" %}
       {% include "components/ui/detail_item.html" with label="Customer" value=sale_return.customer.customer_name|default:"Walk-in" only %}
-      {% include "components/ui/detail_item.html" with label="Return Date" value=sale_return.return_date|dmy only %}
       {% include "components/ui/detail_item.html" with label="Sale Invoice" value=sale_return.sale_num only %}
       {% include "components/ui/detail_item.html" with label="Refund By" value=sale_return.get_pay_mode_display only %}
-      {% include "components/ui/detail_item.html" with label="Invoice Amount" value=sale_return.total_invoice_amount|amount num=True only %}
-      {% include "components/ui/detail_item.html" with label="Returned" value=sale_return.returned_amount|amount num=True only %}
-      {% if sale_return.adjusted_amount %}{% include "components/ui/detail_item.html" with label="Adjusted" value=sale_return.adjusted_amount|amount num=True only %}{% endif %}
       {% include "components/ui/detail_item.html" with label="Remarks" value=sale_return.remarks wide=True only %}
     {% endcomponent %}
   {% endcomponent %}

@@ -29,18 +29,20 @@ from .models import (
 from apps.finance.models import ChartOfAccount
 
 
-PRODUCT_COLUMNS = ColumnSet("products.products", (
-    Column("starting_date", "Starting Date"),
-    Column("code", "Complete Code", locked=True),
-    Column("name", "Product", locked=True),
+PRODUCT_COLUMNS = ColumnSet("products.list", (
+    Column("name", "Name", locked=True),
+    Column("code", "Code", locked=True),
+    Column("category", "Category"),
+    Column("type", "Type"),
+    Column("unit", "Unit"),
+    Column("starting_date", "Starting Date", default=False),
     Column("quick_code", "Quick Code", default=False),
-    Column("unit", "Unit", default=False),
     Column("unit_weight", "Unit Weight", default=False),
     Column("fix_weight", "Fix Weight", default=False),
     Column("actual_weight", "Actual Weight", default=False),
     Column("color", "Color", default=False),
+    Column("qty", "Stock Qty"),
     Column("rate", "Rate"),
-    Column("qty", "Qty"),
     Column("stock_kg", "Stock (Kg)"),
     Column("status", "Status"),
 ))
@@ -50,8 +52,7 @@ def _crumbs(*trail):
     return [("Dashboard", reverse("portal:dashboard")), ("Products", reverse("products:product_list")), *trail]
 
 
-class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, ListView):
-    """The tree as a list: headings in place, items indented beneath them."""
+class ProductListView(PagePermissionRequiredMixin, SortableListMixin, SearchFilterPaginationMixin, ListView):
 
     page = "products.products"
     template_name = "products/product_list.html"
@@ -59,6 +60,13 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
     paginate_by = 50
     search_fields = ("name", "complete_code", "quick_code")
     filter_fields = {"specification": "specification", "status": "status", "code": "complete_code__startswith"}
+    sort_fields = {
+        "name": "name", "code": "complete_code", "category": ("parent__parent__name", "parent__name", "name"),
+        "type": ("specification", "complete_code"), "unit": ("unit", "name"), "qty": ("stock", "name"),
+        "status": ("status", "name"), "starting_date": ("starting_date", "name"),
+    }
+    python_sort_fields = {"rate": "current_rate", "stock_kg": "stock_kg"}
+    default_sort = "code"
 
     def get_queryset(self):
         self.model = ProductNode
@@ -72,10 +80,11 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         rates = selectors.current_rate_map()
-        for row in context["rows"]:
+        rows = list(context["rows"])
+        for row in rows:
             row.current_rate = rates.get(row.pk)
-        context["tree_rows"] = selectors.tree_rows(context["rows"])
-        context["board_tiles"] = self.tiles()
+        context["rows"] = self.sort_rows(rows)
+        context["page_total_kg"] = sum((row.stock_kg or 0 for row in rows if row.keeps_stock), 0)
         context["title"] = "Products"
         context["create_url"] = reverse("products:product_create")
         context["breadcrumbs"] = _crumbs()
@@ -83,32 +92,13 @@ class ProductListView(PagePermissionRequiredMixin, SearchFilterPaginationMixin, 
         columns = PRODUCT_COLUMNS.visible(self.request.session)
         context["columns"] = columns
         context["row_span"] = len(columns) + 1
-        context["heading_span"] = len(columns) - 2
+        keys = [key for key in PRODUCT_COLUMNS.keys if key in columns]
+        if "stock_kg" in keys:
+            context["foot_span"] = keys.index("stock_kg")
+            context["foot_tail"] = len(keys) - keys.index("stock_kg")
         context["column_menu"] = PRODUCT_COLUMNS.menu(self.request.session)
         context["columns_url"] = reverse_lazy("products:product_columns")
         return context
-
-    def tiles(self):
-        """One clickable tile per product type, counted over the other filters."""
-        query = self.request.GET.copy()
-        current = query.pop("specification", [""])[0]
-        query.pop("page", None)
-        items = selectors.items()
-        search = (self.request.GET.get("q") or "").strip()
-        if search:
-            items = items.filter(Q(name__icontains=search) | Q(complete_code__icontains=search) | Q(quick_code__icontains=search))
-        if self.request.GET.get("status"):
-            items = items.filter(status=self.request.GET["status"])
-        if self.request.GET.get("account"):
-            items = items.filter(account_link__purchase_account_id=self.request.GET["account"])
-        counts = dict(items.values_list("specification").annotate(n=Count("id")).order_by())
-        base = query.urlencode()
-        tiles = [{"label": "All products", "value": sum(counts.values()), "tone": "slate", "icon": "box", "href": f"?{base}", "on": not current}]
-        tones = ("amber", "violet", "green", "teal", "sky", "rose", "slate")
-        for (code, label), tone in zip(PRD_SPECIFICATION_CHOICES, tones):
-            if counts.get(code):
-                tiles.append({"label": label, "value": counts[code], "tone": tone, "icon": "layers", "href": f"?{base}&specification={code}" if base else f"?specification={code}", "on": current == code})
-        return tiles
 
     def get_filter_specs(self):
         return [
@@ -454,11 +444,15 @@ class ProductDetailView(MasterDetailView):
     subtitle_attr = "complete_code"
     list_url_name = "products:product_list"
     edit_url_name = "products:product_update"
+    create_url_name = "products:product_create"
     template_name = "products/product_detail.html"
     detail_fields = (
         ("Complete Code", "complete_code"), ("Quick Code", "quick_code"), ("Parent", "parent"), ("Specification", "specification"),
-        ("Unit", "unit"), ("Unit Weight", "unit_weight", "weight_opt"), ("Fix Weight", "fix_weight", "weight_opt"), ("Actual Weight", "actual_weight", "weight_opt"),
+        ("Unit", "unit"), ("Unit Weight", "unit_weight", "weight"), ("Fix Weight", "fix_weight", "weight"), ("Actual Weight", "actual_weight", "weight"),
         ("Color", "color"), ("Starting Date", "starting_date"), ("Stock", "stock", "weight"), ("Status", "status"),
+    )
+    figure_fields = (
+        ("Stock", "stock", "weight", "teal"), ("Unit Weight", "unit_weight", "weight", "violet"),
     )
 
     def get_queryset(self):

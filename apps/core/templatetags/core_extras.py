@@ -9,7 +9,7 @@ from django.utils.safestring import mark_safe
 
 from apps.access_control.selectors import user_has_permission
 from apps.core.formatting import format_amount, format_date, format_qty
-from apps.core.icons import ICONS
+from apps.core.icons import resolve as resolve_icon
 
 register = template.Library()
 
@@ -142,7 +142,7 @@ MONEY_NAME = re.compile(
 @register.simple_tag
 def icon(name, size="", extra=""):
     """Inline SVG from the single icon set: ``{% icon "edit" %}``."""
-    paths = ICONS.get(name)
+    paths = resolve_icon(name)
     if paths is None:
         return ""
     classes = "icon"

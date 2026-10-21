@@ -60,7 +60,8 @@
     {% if embed %}
     {% include "components/forms/submit_bar.html" with embed=True only %}
     {% else %}
-    {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_new=True only %}
+    {% capture as new_ok %}{% if not form.instance.pk %}1{% endif %}{% endcapture %}
+    {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_new=new_ok only %}
     {% endif %}
   </form>
 </section>

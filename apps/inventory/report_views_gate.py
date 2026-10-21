@@ -26,7 +26,7 @@ WEIGHBRIDGE_COLUMNS = ColumnSet("reports.weighbridge", (
     col("date", "Date", "date", locked=True),
     col("time", "Time", "time"),
     col("vehicle", "Vehicle"),
-    col("party", "Party", "link", link="inventory:supplier_detail", link_key="supplier_id"),
+    col("party", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("direction", "Direction"),
     col("product", "Product", default=False),
     col("party_gross", "Party Gross", "qty", places=3, default=False),
@@ -67,7 +67,7 @@ class WeighbridgeRegisterView(ReportView):
             data = sel.weighbridge_register(p.start, p.end, f["vehicle"], f["supplier"] or None, self.min_difference())
         t = data["totals"]
         tiles = [
-            _tile("Vehicles", str(t["vehicles"]), "slate", "truck", f"{t['slips']} weighments"),
+            _tile("Vehicles", str(t["vehicles"]), "slate", "vehicle", f"{t['slips']} weighments"),
             _tile("In (kg)", f"{t['credit_kg']:,.0f}", "amber", "wheat", f"{t['credit_kg'] / 40:,.0f} md"),
             _tile("Out (kg)", "0", "teal", "box", "no outbound weighing"),
             _tile("Avg difference", f"{t['avg_difference']:,.3f} kg", "rose" if t["avg_difference"] < 0 else "green", "chart", "mill − party"),
@@ -111,7 +111,7 @@ class VehicleReportView(ReportView):
         data = sel.vehicle_report(p.start, p.end, f["vehicle"])
         t = data["totals"]
         tiles = [
-            _tile("Vehicles", str(t["vehicles"]), "slate", "truck"),
+            _tile("Vehicles", str(t["vehicles"]), "slate", "vehicle"),
             _tile("Trips", str(t["trips"]), "sky", "truck"),
             _tile("Net weight", f"{t['net_mund']:,.0f} md", "amber", "wheat", f"{t['net_kg']:,.0f} kg"),
         ]
@@ -125,7 +125,7 @@ VARIANCE_COLUMNS = ColumnSet("reports.weight_variance", (
     col("number", "Slip", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
     col("vehicle", "Vehicle"),
-    col("party", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
+    col("party", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("party_weight", "Party Net", "qty", places=3, total=True),
     col("mill_weight", "Mill Net", "qty", places=3, total=True),
     col("difference", "Difference Kg", "qty", places=3, total=True, locked=True),
@@ -202,9 +202,9 @@ class GateSheetView(ReportView):
         data = sel.gate_sheet(p.start, p.end)
         t = data["totals"]
         tiles = [
-            _tile("Vehicles in", str(t["vehicles"]), "slate", "truck", f"{t['slips']} slips"),
+            _tile("Vehicles in", str(t["vehicles"]), "slate", "vehicle", f"{t['slips']} slips"),
             _tile("Wheat in", f"{t['credit_kg'] / 40:,.0f} md", "amber", "wheat", f"{t['credit_kg']:,.0f} kg"),
-            _tile("Vehicles out", "0", "teal", "truck", "no outbound weighing"),
+            _tile("Vehicles out", "0", "teal", "vehicle", "no outbound weighing"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 

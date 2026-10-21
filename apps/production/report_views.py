@@ -59,8 +59,8 @@ class GrindingRegisterView(ReportView):
         t = data["totals"]
         tiles = [
             _tile("Vouchers", str(t["vouchers"]), "slate", "receipt"),
-            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "factory", f"{t['wheat_kg']:,.0f} kg"),
-            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "factory"),
+            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "grinding", f"{t['wheat_kg']:,.0f} kg"),
+            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "grinding"),
             _tile("Avg yield", f"{t['yield_pct']}%", "green" if t["below"] == 0 else "rose", "chart", f"{t['below']} below standard"),
             _tile("Shortage", f"{t['shortage_kg']:,.0f} kg", "violet", "minus", f"{t['shortage_pct']}%"),
         ]
@@ -106,8 +106,8 @@ class DailyGrindingView(ReportView):
         tiles = [
             _tile("Days", str(t["days"]), "slate", "calendar", f"{t['runs']} runs"),
             _tile("Downtime days", str(t["downtime_days"]), "rose" if t["downtime_days"] else "green", "alert"),
-            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "factory", f"{t['wheat_kg']:,.0f} kg"),
-            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "factory"),
+            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "grinding", f"{t['wheat_kg']:,.0f} kg"),
+            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "grinding"),
             _tile("Yield", f"{t['yield_pct'] or 0}%", "violet", "chart"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
@@ -188,7 +188,7 @@ class OutputMixView(ReportView):
         p, f = self.period(), self.filters()
         data = sel.output_mix(p.start, p.end, f["godown"] or None)
         t = data["totals"]
-        tiles = [_tile("Wheat in", f"{t['wheat_kg']:,.0f} kg", "amber", "wheat"), _tile("Output", f"{t['kg']:,.0f} kg", "teal", "factory", f"{t['of_wheat_pct'] or 0}% of wheat")]
+        tiles = [_tile("Wheat in", f"{t['wheat_kg']:,.0f} kg", "amber", "wheat"), _tile("Output", f"{t['kg']:,.0f} kg", "teal", "grinding", f"{t['of_wheat_pct'] or 0}% of wheat")]
         for index, row in enumerate(data["rows"][:4]):
             tiles.append(_tile(row["product"], f"{row['share_pct']}%", ("sky", "violet", "green", "rose")[index], "box", f"{row['kg']:,.0f} kg"))
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
@@ -324,7 +324,7 @@ class CostPerBagView(ReportView):
         t = data["totals"]
         tiles = [
             _tile("Wheat cost", format_amount(t["wheat_cost"]), "amber", "wheat", f"{t['wheat_kg']:,.0f} kg @ {format_amount(t['wheat_rate'])}"),
-            _tile("Bardana cost", format_amount(t["bardana_cost"]), "teal", "package", f"@ {format_amount(t['bag_rate'])}/bag"),
+            _tile("Bardana cost", format_amount(t["bardana_cost"]), "teal", "bardana", f"@ {format_amount(t['bag_rate'])}/bag"),
             _tile("Direct expenses", format_amount(t["expense_cost"]), "violet", "cash", f"{t['expense_accounts']} linked accounts"),
             _tile("Total cost", format_amount(t["total_cost"]), "sky", "sum"),
             _tile("Cost / bag", format_amount(t["cost_per_bag"]), "green", "receipt", f"{format_amount(t['cost_per_kg'])}/kg"),
@@ -372,8 +372,8 @@ class ProductionSummaryView(ReportView):
         t = data["totals"]
         tiles = [
             _tile("Days run", str(t["days"]), "slate", "calendar", f"{t['runs']} runs"),
-            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "factory", f"{t['wheat_kg']:,.0f} kg"),
-            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "factory"),
+            _tile("Wheat ground", f"{t['wheat_mund']:,.0f} md", "amber", "grinding", f"{t['wheat_kg']:,.0f} kg"),
+            _tile("Output", f"{t['output_kg']:,.0f} kg", "teal", "grinding"),
             _tile("Yield", f"{t['yield_pct'] or 0}%", "violet", "chart"),
             _tile("Shortage", f"{t['shortage_kg']:,.0f} kg", "rose", "minus", f"{t['shortage_pct'] or 0}%"),
         ]

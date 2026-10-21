@@ -3,7 +3,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block body_class %}{% if landscape %}landscape{% endif %}{% endblock %}
 {% block print_content %}
-{% if landscape %}<style>@page { size: A4 landscape; margin: 10mm; }</style>{% else %}<style>@page { size: A4 portrait; margin: 12mm; }</style>{% endif %}
+{% if landscape %}<style>@page { size: A4 landscape; margin: 10mm; }</style>{% else %}<style>@page { size: A4 portrait; margin: 10mm; }</style>{% endif %}
 <h1 class="doc-title">{{ title }}</h1>
 <p class="report-sub">{% if period_label %}<b>Period:</b> {{ period_label }}{% endif %}{% if subtitle %} &middot; {{ subtitle }}{% endif %}</p>
 {% block report_body %}

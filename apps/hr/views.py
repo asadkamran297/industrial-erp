@@ -70,12 +70,6 @@ class EmployeeDetailView(PagePermissionRequiredMixin, DetailView):
                 "payrolls": Payroll.objects.filter(employee=self.object).order_by("-year", "-month"),
             }
         )
-        from apps.core.doc_links import doc_link, url_or_blank
-
-        context["doc_links"] = [
-            doc_link("Salary Items", "List", url_or_blank("payroll:employee_salary_list", query=f"q={self.object.full_name}")),
-            doc_link("Payroll", "List", url_or_blank("payroll:payroll_list", query=f"q={self.object.full_name}")),
-        ]
         context["doc_actions"] = {
             "new_url": reverse_lazy("hr:employee_create") if context.get("can_add") else "",
             "edit_url": reverse_lazy("hr:employee_update", args=[self.object.pk]) if context.get("can_edit") else "",

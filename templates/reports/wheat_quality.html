@@ -10,7 +10,7 @@
   <section class="board-card">
     <div class="board-scroll">
       <table class="board-table" id="quality-averages">
-        <thead><tr><th>Arhti</th><th class="num">Avg Impurities %</th><th class="num">Avg Moisture %</th></tr></thead>
+        <thead><tr><th>Supplier</th><th class="num">Avg Impurities %</th><th class="num">Avg Moisture %</th></tr></thead>
         <tbody>
           {% for row in extra.averages %}<tr><td>{{ row.supplier }}</td><td class="num">{{ row.impurities|floatformat:2|default:"—" }}</td><td class="num">{{ row.moisture|floatformat:2|default:"—" }}</td></tr>{% endfor %}
         </tbody>

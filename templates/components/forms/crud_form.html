@@ -5,6 +5,6 @@
       {% include "components/forms/form_errors.html" with form=form only %}
       {% if slot %}{% for field in form.hidden_fields %}{{ field }}{% endfor %}{{ slot }}{% else %}{% include "components/forms/form_grid.html" with form=form cols=cols|default:3 only %}{% endif %}
     </div>
-    {% if embed %}{% include "components/forms/submit_bar.html" with embed=True label=save_label only %}{% else %}{% include "components/forms/submit_bar.html" with cancel_url=cancel_url label=save_label show_new=show_new only %}{% endif %}
+    {% if embed %}{% include "components/forms/submit_bar.html" with embed=True label=save_label only %}{% else %}{% capture as new_ok %}{% if show_new and not form.instance.pk %}1{% endif %}{% endcapture %}{% include "components/forms/submit_bar.html" with cancel_url=cancel_url label=save_label show_new=new_ok only %}{% endif %}
   </form>
 </section>

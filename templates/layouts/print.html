@@ -6,7 +6,7 @@
 <title>{% block title %}Print{% endblock %}</title>
 <link rel="stylesheet" href="{% block stylesheet %}{% static 'dist/print.css' %}{% endblock %}">
 <style>{% block extra_style %}{% endblock %}</style>
-{% if request.GET.size == "thermal" %}<style>@page { size: 80mm 297mm; margin: 2mm 3mm; }</style>{% endif %}
+<style id="page-size">{% if request.GET.size == "thermal" %}@page { size: 80mm 297mm; margin: 2mm 3mm; }{% endif %}</style>
 </head>
 <body class="{% block body_class %}{% endblock %}{% if request.GET.size == 'thermal' %} print--thermal{% endif %}">
   {% block toolbar %}
@@ -15,15 +15,29 @@
     <button type="button" onclick="printGoBack()">{% icon "close" %} {% block back_label %}Close{% endblock %}</button>
     {% block size_switch %}
     <span class="print-size" role="group" aria-label="Paper">
-      <a href="{% querystring size='a4' %}" class="{% if request.GET.size != 'thermal' %}is-on{% endif %}">A4</a>
-      <a href="{% querystring size='thermal' %}" class="{% if request.GET.size == 'thermal' %}is-on{% endif %}">Thermal</a>
+      <a href="{% querystring size='a4' %}" data-paper="a4" class="{% if request.GET.size != 'thermal' %}is-on{% endif %}">A4</a>
+      <a href="{% querystring size='thermal' %}" data-paper="thermal" class="{% if request.GET.size == 'thermal' %}is-on{% endif %}">Thermal</a>
     </span>
     {% endblock %}
   </div>
   {% endblock %}
   <script>
     var printBackUrl = "{% block back_url %}{{ print_back_url|default:'' }}{% endblock %}";
-    function printGoBack() { if (printBackUrl) { window.location.href = printBackUrl; } else { window.history.back(); } }
+    function printGoBack() {
+      if (printBackUrl) { window.location.href = printBackUrl; return; }
+      if (window.opener || window.history.length <= 1) { window.close(); return; }
+      window.history.back();
+    }
+    document.addEventListener("click", function (event) {
+      var pick = event.target.closest("[data-paper]");
+      if (!pick) return;
+      event.preventDefault();
+      var thermal = pick.dataset.paper === "thermal";
+      document.body.classList.toggle("print--thermal", thermal);
+      document.getElementById("page-size").textContent = thermal ? "@page { size: 80mm 297mm; margin: 2mm 3mm; }" : "";
+      document.querySelectorAll("[data-paper]").forEach(function (a) { a.classList.toggle("is-on", a === pick); });
+      if (window.history.replaceState) window.history.replaceState(null, "", pick.getAttribute("href"));
+    });
     var autoPrint = {% block autoprint %}false{% endblock %};
     if (autoPrint) {
       window.addEventListener("load", function () { window.print(); });

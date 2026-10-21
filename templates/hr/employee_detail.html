@@ -2,24 +2,19 @@
 {% block content %}
 <section class="form-stack" x-data="{ tab: window.location.hash ? window.location.hash.substring(1) : 'profile', setTab(v) { this.tab = v; window.history.replaceState(null, '', '#' + v); } }">
   {% url 'hr:employee_list' as list_url %}
-  {% capture as role %}{{ employee.designation|default:"" }}{% if employee.designation and employee.department %} &middot; {% endif %}{{ employee.department|default:"" }}{% endcapture %}
   {% capture as status_tone %}{% if employee.status == "active" %}posted{% else %}closed{% endif %}{% endcapture %}
-  {% component "ui/detail_header" kind="Employee" number=employee.full_name date=role status=employee.get_status_display status_tone=status_tone back=True back_url=list_url %}
+  {% component "ui/detail_header" kind="Employee" number=employee.full_name status=employee.get_status_display status_tone=status_tone back=True back_url=list_url %}
     {% slot meta %}
       {% if employee.avatar %}<img src="{{ employee.avatar.url }}" alt="" class="h-9 w-9 rounded-full object-cover">{% endif %}
-      {% if employee.organization %}<span class="chip">{{ employee.organization }}</span>{% endif %}
-      {% if employee.branch %}<span class="chip">{{ employee.branch }}</span>{% endif %}
-      {% if employee.job_type %}<span class="chip">{{ employee.job_type }}</span>{% endif %}
-      {% if employee.doj %}<span class="chip">Joined {{ employee.doj|dmy }}</span>{% endif %}
     {% endslot %}
   {% endcomponent %}
 
-  <div class="tiles">
-    {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
-    {% include "components/table/tile.html" with tone="sky" icon="wallet" value=payrolls.count label="Payroll Records" only %}
-    {% include "components/table/tile.html" with tone="violet" icon="briefcase" value=employee.experiences.count label="Experience" only %}
-    {% include "components/table/tile.html" with tone="amber" icon="file" value=employee.qualifications.count label="Qualifications" only %}
-  </div>
+  {% component "ui/detail_figures" %}
+    {% include "components/ui/figure.html" with label="Base Salary" value=employee.salary|amount tone="green" only %}
+    {% include "components/ui/figure.html" with label="Payroll Records" value=payrolls.count tone="sky" only %}
+    {% include "components/ui/figure.html" with label="Experience" value=employee.experiences.count tone="violet" only %}
+    {% include "components/ui/figure.html" with label="Qualifications" value=employee.qualifications.count tone="amber" only %}
+  {% endcomponent %}
 
   {% component "ui/tabs" %}
     {% include "components/ui/tab_button.html" with key="profile" label="Profile" setter="setTab" only %}
@@ -31,7 +26,7 @@
 
   <section x-show="tab === 'profile'" x-cloak>
     {% component "ui/card" %}
-      {% component "ui/detail_grid" cols=3 %}
+      {% component "ui/detail_section" title="Profile" %}
         {% include "components/ui/detail_item.html" with label="CNIC" value=employee.cnic only %}
         {% include "components/ui/detail_item.html" with label="Email" value=employee.email only %}
         {% include "components/ui/detail_item.html" with label="Contact" value=employee.contact only %}
@@ -44,14 +39,14 @@
         {% include "components/ui/detail_item.html" with label="Emergency Contact" value=employee.emergency_contact only %}
         {% include "components/ui/detail_item.html" with label="Next of Kin" value=employee.nok only %}
         {% include "components/ui/detail_item.html" with label="NOK CNIC" value=employee.nok_cnic only %}
-        {% if employee.address %}{% include "components/ui/detail_item.html" with label="Address" value=employee.address wide=True only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Address" value=employee.address wide=True only %}
       {% endcomponent %}
     {% endcomponent %}
   </section>
 
   <section x-show="tab === 'employment'" x-cloak>
     {% component "ui/card" %}
-      {% component "ui/detail_grid" cols=3 %}
+      {% component "ui/detail_section" title="Employment" %}
         {% include "components/ui/detail_item.html" with label="Organization" value=employee.organization only %}
         {% include "components/ui/detail_item.html" with label="Branch" value=employee.branch only %}
         {% include "components/ui/detail_item.html" with label="Department" value=employee.department only %}
@@ -120,11 +115,6 @@
   </section>
 
   <section x-show="tab === 'payroll'" x-cloak class="form-stack">
-    <div class="tiles">
-      {% include "components/table/tile.html" with tone="green" icon="cash" value=employee.salary|amount label="Base Salary" only %}
-      {% include "components/table/tile.html" with tone="violet" icon="layers" value=salary_items.count label="Salary Elements" only %}
-      {% include "components/table/tile.html" with tone="sky" icon="wallet" value=payrolls.count label="Payroll Records" only %}
-    </div>
 
     {% component "table/board" title="" table_id="salary-element-table" no_filters=True no_pagination=True %}
       {% slot bar %}

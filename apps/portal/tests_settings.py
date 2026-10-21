@@ -98,8 +98,8 @@ class GeneralSettingsTests(TestCase):
                 self.assertContains(self.client.get(reverse("finance:account_voucher_list"), query), title)
                 self.assertContains(self.client.get(reverse("finance:account_voucher_create"), query), title)
 
-    def test_products_board_has_tiles_and_setup_menu(self):
+    def test_products_board_has_no_tiles_and_has_setup_menu(self):
         response = self.client.get(reverse("products:product_list"))
-        self.assertContains(response, "All products")
+        self.assertNotContains(response, "All products")
         self.assertContains(response, "Rate Update")
         self.assertNotContains(response, 'label="Sale"')

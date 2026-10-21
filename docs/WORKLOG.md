@@ -5,6 +5,114 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-21
+
+### Local — design consistency, round 1 (not committed)
+
+- Detail pages follow the old mill system: titled sections, 3-column `label : value` grid (`components/ui/detail_section.html`, `.detail-item` restyled), every form field shown, empty values as `—`.
+- Wheat Purchase Invoice detail rebuilt as the reference screen: Invoice, Weight (KG), Carrier, Amount, Stock Details. Builty, driver phone, transporter, load/tare split now visible.
+- Header buttons: Add New · Edit · Invoice (print) · Voucher. Voucher = new gate-slip print `inventory:purchase_voucher_print` (wheat only); GL vouchers stay in the link chain.
+- `apps.core.doc_links.guard` hides Add New / Edit without the page right (was shown to everyone on inventory details).
+- Tiles removed from detail pages (supplier, customer, sale, grinding, employee); figures moved into the grid. "List" shortcut chips removed.
+- `MasterDetailView` uses explicit `create_url_name`; `weight_opt` hack removed.
+- Test: wheat invoice detail + both prints render every slip field.
+
+### Local — design consistency, round 2 (not committed)
+
+- Tiles removed from every list screen (status tiles in `SearchFilterPaginationMixin`, products type tiles, PO / PI / sale / return / supplier / customer / voucher / party bardana boards). Status tabs stay in the filter bar select with counts. Kept: reports, account ledger head, POS entry totals. PI tiles used to load every invoice into Python; gone.
+- Boards show `N records · Page x of y` above the table (`.board-count`).
+- Button vocabulary: Save / Save Draft / Save & Post / Save & New / Save & Print / Post (was Save Invoice, Save Voucher, Save PO, Update, Raise order, Save as draft, Post Sale).
+- Wheat slip uses `forms/submit_bar` (Cancel, Prepared by, Save) like every other form.
+- One heading style for `section__title`, `card-title`, `detail-section__title`, `wp-title`.
+- `apps/core/icons.py` `CONCEPTS` (business concept -> glyph); `{% icon %}` resolves concepts; sidebar and report tiles name concepts.
+- `ui_lint` now fails on tiles on list/detail screens, detail fields hidden when empty, and off-vocabulary button labels.
+- `CLAUDE.md` rule 13/13a and `docs/UI_SYSTEM.md` (DETAIL, lists, lint, icons) updated.
+- Every detail page (masters, PO, PI, returns, sale, voucher, grinding, conversion, godown, employee, parties) now uses titled `detail_section` blocks.
+- Tests: inventory, portal, products, core, hr, godowns, access_control pass; 3 `apps.finance.tests` errors are the known pre-existing chart-of-account fixture issue.
+
+### Local — party picker and fields, round 3 (not committed)
+
+- One supplier/customer picker everywhere (`components/forms/party_picker.html`, now takes label, customer names, balance labels, `add_url`/`add_kind`). Wheat slip "Sender" is now the PO-style Supplier picker with "+ New supplier"; Sale Invoice and Sales Order customer use it too. Messages and prints say Supplier, weighbridge report column too.
+- `static/js/party-add.js` (loaded in `base.html`): any `[data-party-add]` opens the embedded master form and drops the saved record into its picker.
+- Header layout: Purchase Invoice, Sale Invoice and Sales Order headers moved to `.head-fields` like PO / Return; PI header fields back to normal size; dead `doc-head*` form CSS removed.
+- Field look: wheat slip inputs/labels now the standard `control` / field label; field labels one style, Title Case.
+- `ui_lint` fails on a supplier/customer select outside `party_picker`. Test: every document form renders the same picker, no "Sender".
+
+### Local — demo readiness, round 4 (not committed)
+
+- Crawl of every GET screen and print (249) in a rolled-back transaction: no 500s.
+- Branding: sidebar, page titles and login use `brand` (`apps/core/context_processors.py`): company name from General Settings, else the active Organization; wheat glyph instead of "ERP"; default tagline and placeholder contacts (example.com, 000-0000000) hidden.
+- Removed demo embarrassments: fake notification bell (hard-coded "3", dead links), brand-colour picker in the top bar and on login, dead "Forgot password?" link, dead Help Desk menu item.
+- Top bar search is now a menu finder (type a screen name, Enter opens it).
+- Dashboard opens with today at the mill: wheat bought / ground, bags sold, wheat stock (days), receivable, payable (each links to its register/report); explanatory KPI notes removed.
+- Wheat purchase register gains Manual #, Credit Wt, @ 40 kg, Freight (optional), Net Amount, plus print and lock icons per row; expanded line amounts were blank (`line.total_amount`), fixed.
+- One name per thing: Stores Purchase (was General), Product Conversion, Customer-wise Sales, Prepared By. `seed` run for the page title.
+
+### Local — sidebar and detail look, round 5 (not committed)
+
+- Sidebar now highlights the right entry on every detail / edit page: `request.nav_href` override and longest-match rule in `apps/portal/navigation.py`; purchase invoice detail -> Wheat / Stores Purchase Invoices, sale detail -> Sale Invoices, voucher detail -> its own type (money mode added to `VoucherNavMixin`). Crawl: 249 pages, every one has an active entry.
+- Detail pages no longer look like forms: key-figure strip (`ui/detail_figures`, `ui/figure`) under the header on purchase invoice, PO, sale, grinding, supplier, customer; fields as small uppercase label over bold value with dashed rules, accented section titles, muted dash for empty.
+- Purchase invoice detail Back returns to its own register (wheat / stores).
+- Every detail page has Print: its own print view where one exists, else the page itself prints clean (sidebar, top bar, buttons, link chain hidden; mill name on top) via `data-print-page`.
+
+### Local — one list experience, round 6 (not committed)
+
+- Every list head shows only a green "Add <thing>" (board builds the label). Items: count chip, Excel, Print, Import moved into the download menu; Products setup and Grinding report links into a new More (gear) menu in the filter bar; Item Ledger print and report Print moved into the menu (reports already had PDF / Print there). Item Categories / UOM add buttons aligned.
+- Download menu is generic: `excel_url`, `print_url`, `import_url`, `sample_url`; More menu from `{% slot more %}`.
+- `ui_lint` fails on buttons in a list head (except POS entry and the purchase invoice stores add).
+
+### Local — one print experience, round 7 (not committed)
+
+- Every Print opens a paper with the same toolbar: Print, Close, A4 / Thermal. Pages without their own print (product, supplier, customer, godown, employee, item, roles...) open `?print=1` of `layouts/portal.html` in a new tab: mill header (logo, name, address, phone, time), content without sidebar/buttons/links/row actions, printed-by footer; Thermal = 76 mm single column.
+- `layouts/print.html` A4 / Thermal now switches in the browser (no reload, works on POSTed exports too); Close shuts a print tab instead of going back.
+- List "PDF / Print" export page rebuilt on `layouts/print.html` (mill header, toolbar, A4 landscape), no auto-print.
+- `org` / `branch` come from the context processor for every template.
+
+### Local — view cards, round 8 (not committed)
+
+- Detail cards redone after the old-system reference: each section title is a full-width light band inside the card (Invoice, Weight, Carrier, Amount...), fields read as a spec sheet (muted label left, bold value right, one thin rule per row, no input-like boxes), card heads of line tables use the same band; key figures are white cards with a coloured left edge. CSS only (`components.css`), every detail page picks it up.
+
+### Local — dashboard cards, round 9 (not committed)
+
+- Tile rows never leave an orphan: `.tiles` picks columns by card count (6 → 3+3, 4/8 → 4, 5 → 5 on wide, 3/9 → 3); applies to dashboard and every report.
+- Dashboard finance cards (`stat_card`) restyled to match the mill tiles (tinted card, coloured left edge, tinted icon, tone label); tone classes now win over the stat-tile defaults.
+
+### Local — dashboard grid, round 10 (not committed)
+
+- Dashboard cards are one system: three titled rows of four identical tiles (Today at the Mill: wheat bought / ground, bags sold, wheat stock; Money: receivable, payable, cash & bank, net profit with margin; Activity: employees, payroll net, posted vouchers, sales recorded), each linking to its screen; charts and lists below. Revenue / Expense cards and the masked stat cards are gone from the dashboard; tiles share a minimum height.
+
+### Local — full consistency audit, round 11 (not committed)
+
+- Audit by rendering every screen (178 with sidebar) and comparing head buttons, download menu, row icons, detail buttons/figures/sections, submit bars.
+- Detail: figures added to Item, Product (`MasterDetailView.figure_fields`, not repeated in the grid), Voucher, Employee, Purchase Return, Sale Return, Conversion; PO header now Add New · Edit · Print then Enter Invoice / Approve / Cancel (new `edit` slot in `detail_header` keeps Edit in place); unposted sale gets Edit.
+- Lists: document rows are View · Edit-or-lock · Print everywhere (sale, purchase return, sale return, vouchers, conversions with `?print=1`); Sales Orders gained an actions column with Close (asks reason).
+- Forms: Save & New only when creating (crud_form / tabbed_form), edits show Cancel · Save; Save Links / Save Opening / Save Rates / Post adjustment / Return & Print renamed to the vocabulary and added to ui_lint.
+- Print: financial statements and Day Book open the print page (`?print=1`, A4 / Thermal) instead of the bare browser print; Day Book Excel / Print moved from the head into its download menu.
+
+### Open
+
+- Item Categories / UOM are still two-pane screens, not boards.
+- Document form bodies still use different inner layouts (`head-fields`, `card-rail`, `wp-*`); converge into one `doc_form` shell next.
+
+### Local — repetition sweep (not committed)
+
+- Detail headers no longer repeat the party (PO, PI, purchase return, sale, sale return): the doc-chain chip and the section field already show it.
+- Section grids drop number/date already in the header (PO, PI, purchase return, sale, sale return, grinding, conversion).
+- Employee header: designation, department, organization, branch, job type, joining chips removed (all in Employment). Customer header: city removed.
+- Master details: title, code (subtitle) and status no longer repeated in the grid (`MasterDetailView.get_detail_items`, configurations master detail).
+- Sidebar: report groups get their own icons (chart, cart, package, factory, book, users, database) instead of reusing the module icon.
+- Local admin password reset to the `seed_demo` default at the user's request.
+- Visible Print icon beside Export on every board/report (`table/filter_bar.html`), statement toolbar and day book; menu item renamed "PDF", old "Print list" menu entry folded into the button. Detail pages already had Print via `detail_header`.
+- Print pages (`layouts/print.html` + `static/dist/print.css`): screen preview is now the A4 sheet itself (210mm, 10mm margins = `@page`; landscape lists 297mm via `body.landscape`), sticky toolbar, tighter header/table/sign spacing, rows never split across pages. Wheat invoice print: Weight and Amount boxes side by side, fits one A4. List prints (`items--list`) one line per row.
+- One number per document: auto-posted GL vouchers now take the source document number (`_post_voucher(voucher_no=...)`): purchase invoice `PI-…`, its payment `PI-…-PMT`, sale `SAL-…`, sale return, purchase return; reversals `<original>-REV`. Falls back to the series if the number is taken. Existing vouchers: `python manage.py renumber_auto_vouchers` (dry run; `--apply` writes) — local dry run 270 vouchers, not applied yet.
+- GL voucher detail for a purchase invoice (or its payment/reversal) shows the invoice body (Invoice, Weight, Carrier, Amount, Stock Details) via shared `inventory/_purchase_invoice_body.html` + `purchase_invoice_body()`. Raw "Source Document" ref row removed (doc chain links it).
+- Reports: "Arhti" → "Supplier" in purchase/gate report headings, filter, wheat quality table; "Arhti-wise Purchase" → "Supplier-wise Purchase"; supplier type "Arhti (wheat)" → "Wheat".
+- Supplier / customer detail: "Recent purchase/sale invoices" table removed (ledger already lists them).
+- Item form: single-option "Product" pill hidden; Stock Item / Service switch shows only when services are on.
+- Products list (`/products/`) now flat like Inventory Items: Name, Code, Category (Group — Sub Group), Type, Unit, Stock Qty, Rate, Stock (Kg), Status; sortable; page total Kg. Tree heading rows and `selectors.tree_rows` removed; column picker key now `products.list`.
+- Separate number series: mill purchase invoices (any wheat/bardana product line) now `WPI-000001…` (new `wheat_purchase_invoice` series, counter `PurchaseInvoice.wheat_seq_num`, migration `inventory.0059`); stores/general stay `PI-`. Existing numbers untouched. Prefix editable in General Settings.
+- Open: `apps.finance.tests.FinanceModelTests` 3 errors pre-existing (`account_no: Active leaf chart-of-account is required` in fixtures).
+
 ## 2026-10-20
 
 ### Local — detail pages, links, prints (not committed)

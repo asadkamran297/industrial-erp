@@ -25,6 +25,8 @@ from apps.access_control.selectors import user_has_permission
 from apps.core.models import SystemSetting
 from apps.core.table_columns import Column, ColumnSet
 from apps.core.table_export import TableExportView
+from apps.core.doc_links import guard
+
 from . import doc_links as links
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.core.views import SaveAndNewMixin, MasterDetailView
@@ -34,7 +36,7 @@ from apps.finance.views import AuditSaveMixin
 
 from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
-from .purchase_board import RETURN_COLUMNS, RETURN_TAB_ALL, RETURN_TAB_DRAFT, RETURN_TAB_POSTED, RETURN_TAB_REVERSED, RETURN_TABS, COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, summarise, visible_columns
+from .purchase_board import RETURN_COLUMNS, RETURN_TAB_ALL, RETURN_TAB_DRAFT, RETURN_TAB_POSTED, RETURN_TAB_REVERSED, RETURN_TABS, COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
 from .models import TWO_DP
 from .selectors import picker_item_kinds
@@ -785,6 +787,7 @@ class UOMConversionDetailView(MasterDetailView):
     title_attr = "__str__"
     list_url_name = "inventory:conversion_list"
     edit_url_name = "inventory:conversion_update"
+    create_url_name = "inventory:conversion_create"
     detail_fields = (("From", "uom_from"), ("To", "uom_to"), ("Factor", "conversion_factor"), ("Status", "status"))
 
     def get_queryset(self):
@@ -1004,16 +1007,15 @@ class SupplierDetailView(PagePermissionRequiredMixin, DetailView):
         context["return_total"] = sent_back["total"] or zero
         context["return_count"] = sent_back["count"] or 0
         context["order_count"] = PurchaseOrder.objects.filter(supplier=supplier).count()
-        context["recent_invoices"] = PurchaseInvoice.objects.filter(supplier=supplier, status=STATUS_POSTED).order_by("-invoice_date", "-id")[:10]
 
         account = ChartOfAccount.objects.filter(title=supplier.name, is_group=False).first()
         context["payable_code"] = account.code if account else ""
         ledger = account_ledger(account.code) if account else None
         context["ledger"] = ledger
         context["payable_balance"] = ledger["closing"] if ledger else zero
-        context["doc_links"], context["doc_actions"] = links.supplier(self.object, context["payable_code"])
-        if user_has_permission(self.request.user, f"{self.page}.edit"):
-            context["doc_actions"]["edit_url"] = reverse("inventory:supplier_update", args=[self.object.pk])
+        context["doc_links"], actions = links.supplier(self.object, context["payable_code"])
+        actions["edit_url"] = reverse("inventory:supplier_update", args=[self.object.pk])
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -1550,7 +1552,7 @@ class PurchaseInvoiceCreateView(InventoryManageMixin, View):
             .order_by("item_name")
         )
         context = {
-            "title": "General Purchase Invoice",
+            "title": "Stores Purchase Invoice",
             "next_invoice_no": next_purchase_invoice_number(),
             "suppliers": suppliers_with_balance(),
             "layout": get_layout(FORM_PURCHASE_INVOICE),
@@ -1937,12 +1939,17 @@ class ItemDetailView(MasterDetailView):
     subtitle_attr = "code"
     list_url_name = "inventory:item_list"
     edit_url_name = "inventory:item_update"
+    create_url_name = "inventory:item_create"
     template_name = "inventory/item_detail.html"
     detail_fields = (
         ("Code", "code"), ("Category", "item_class"), ("Unit", "uom"), ("Secondary Unit", "secondary_uom"),
         ("Barcode", "item_bar_code"), ("Kind", "item_kind"), ("Type", "inventory"), ("Imported", "imported"),
         ("Sale Price", "price", "money"), ("Purchase Price", "purchase_price", "money"),
         ("Stock Qty", "stock.current_quantity", "weight"), ("Stock Value", "stock_value", "money"), ("Status", "status"),
+    )
+    figure_fields = (
+        ("Stock Qty", "stock.current_quantity", "weight", "teal"), ("Stock Value", "stock_value", "money", "violet"),
+        ("Purchase Price", "purchase_price", "money", "amber"), ("Sale Price", "price", "money", "sky"),
     )
 
     def get_queryset(self):
@@ -1956,8 +1963,7 @@ class ItemDetailView(MasterDetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["movements"] = ItemLedger.objects.filter(inventory_item=self.object).order_by("-transaction_date", "-id")[:10]
-        context["doc_links"], extra = links.item(self.object)
-        context["doc_actions"] = {**extra, **{k: v for k, v in context["doc_actions"].items() if v}}
+        context["doc_links"], _ = links.item(self.object)
         return context
 
 
@@ -2422,7 +2428,7 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
              "value": self.request.GET.get("godown", "")},
         ]
 
-    KINDS = {"wheat": "Wheat Purchase Invoices", "general": "General Purchase Invoices"}
+    KINDS = {"wheat": "Wheat Purchase Invoices", "general": "Stores Purchase Invoices"}
 
     def current_kind(self):
         kind = (self.request.GET.get("kind") or "").strip()
@@ -2448,51 +2454,6 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             queryset = queryset.filter(purchase_order__isnull=True)
         return queryset
 
-    def tiles(self):
-        """The figures over everything the filters allow, not just this page.
-
-        Counted over the filtered set rather than the page, because "how much
-        did we buy" is a question about the whole of it, and the totals are
-        read off the invoice header rather than re-added from the lines: the
-        header is what posted to the ledger, so it is the figure that is true.
-        """
-        rows = list(
-            self.by_kind(super(PurchaseInvoiceListView, self).get_queryset()).select_related("supplier")
-        )
-        today = timezone.localdate()
-        value = Decimal("0.00")
-        month_value = Decimal("0.00")
-        month_count = 0
-        unpaid_count = 0
-        unpaid_value = Decimal("0.00")
-        suppliers = set()
-        for row in rows:
-            if row.status == STATUS_REVERSED:
-                continue
-            total = row.total_amount or Decimal("0.00")
-            value += total
-            suppliers.add(row.supplier_id)
-            if row.invoice_date and (row.invoice_date.year, row.invoice_date.month) == (today.year, today.month):
-                month_count += 1
-                month_value += total
-            outstanding = row.balance_amount
-            if outstanding > Decimal("0.00"):
-                unpaid_count += 1
-                unpaid_value += outstanding
-        month_start = today.replace(day=1)
-        next_month = (month_start + timedelta(days=32)).replace(day=1)
-        return {
-            "count": len([r for r in rows if r.status != STATUS_REVERSED]),
-            "value": value,
-            "month_count": month_count,
-            "month_value": month_value,
-            "month_from": month_start.isoformat(),
-            "month_to": (next_month - timedelta(days=1)).isoformat(),
-            "supplier_count": len(suppliers),
-            "unpaid_count": unpaid_count,
-            "unpaid_value": unpaid_value,
-        }
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         carried = self.request.GET.copy()
@@ -2507,13 +2468,9 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
         )
         context["state"] = (self.request.GET.get("state") or "").strip()
         context["kind"] = self.current_kind()
+        self.request.nav_href = f"{reverse('inventory:purchase_invoice_list')}?kind={context['kind'] or 'wheat'}"
         context["list_title"] = self.KINDS.get(context["kind"], "Purchase Invoices")
         context["keep_params"] = [("kind", context["kind"])] if context["kind"] else []
-        kept = self.request.GET.copy()
-        for key in ("page", "state", "date_from", "date_to"):
-            kept.pop(key, None)
-        context["tile_query"] = kept.urlencode()
-        context["tiles"] = self.tiles()
         context["export_url"] = reverse_lazy("inventory:purchase_invoice_export")
         columns = PURCHASE_INVOICE_COLUMNS.visible(self.request.session)
         context["columns"] = columns
@@ -2526,7 +2483,10 @@ class PurchaseInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             lines = list(invoice.items.all())
             invoice.line_count = len(lines)
             invoice.qty_total = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
-            page_total += invoice.total_amount or Decimal("0.00")
+            wheat = next((line for line in lines if line.credit_weight is not None), None)
+            invoice.credit_wt = wheat.credit_weight if wheat else None
+            invoice.rate_md = wheat.rate_per_mund if wheat else None
+            page_total += (invoice.supplier_payable_amount if "net" in columns else invoice.total_amount) or Decimal("0.00")
         context["page_total"] = page_total
         context["invoice_count"] = context["paginator"].count if context.get("paginator") else len(context["invoices"])
         return context
@@ -2546,6 +2506,49 @@ class PurchaseInvoiceColumnsView(InventoryListMixin, View):
         return redirect(f"{target}?{query}" if query else str(target))
 
 
+def wheat_slip(invoice, lines):
+    """The gate-slip figures of a wheat invoice, shared by its detail page and both prints."""
+    wheat = next((line for line in lines if line.credit_weight is not None), None)
+    bardana = [line for line in lines if line is not wheat and line.product_id]
+    for line in bardana:
+        line.total_deduction = (line.quantity or Decimal("0")) * (line.bag_weight or Decimal("0"))
+    source = ""
+    if wheat is not None and wheat.selected_weight is not None:
+        source = "Party" if wheat.selected_weight == wheat.party_weight else "Mill"
+    return {
+        "wheat_line": wheat,
+        "bardana_lines": bardana,
+        "bardana_amount": sum((line.amount or Decimal("0.00") for line in bardana), Decimal("0.00")),
+        "selected_source": source,
+        "carrier": invoice.extra_data or {},
+    }
+
+
+PURCHASE_INVOICE_QUERYSET = (
+    PurchaseInvoice.objects
+    .select_related("supplier", "created_by", "posted_by", "purchase_order", "godown", "broker")
+    .prefetch_related("items__inventory_item", "items__uom", "items__product",
+                      "items__purchase_order_item__purchase_order")
+)
+
+
+def purchase_invoice_body(invoice):
+    """Context for `inventory/_purchase_invoice_body.html`, shared by the invoice and its GL voucher."""
+    lines = list(invoice.items.all())
+    returned = {line.pk: line.qty_returned for line in purchase_return_lines(invoice)}
+    for line in lines:
+        line.qty_returned = returned.get(line.pk, Decimal("0"))
+    body = {
+        "invoice": invoice,
+        "lines": lines,
+        "any_returned": any(line.qty_returned for line in lines),
+        "goods_total": sum((line.amount or Decimal("0.00") for line in lines), Decimal("0.00")),
+        "qty_total": sum((line.quantity or Decimal("0") for line in lines), Decimal("0")),
+    }
+    body.update(wheat_slip(invoice, lines))
+    return body
+
+
 class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
     """One purchase invoice, read as the paper it stands for.
 
@@ -2559,27 +2562,15 @@ class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
     model = PurchaseInvoice
     template_name = "inventory/purchase_invoice_detail.html"
     context_object_name = "invoice"
-    queryset = (
-        PurchaseInvoice.objects
-        .select_related("supplier", "created_by", "posted_by", "purchase_order")
-        .prefetch_related("items__inventory_item", "items__uom",
-                          "items__purchase_order_item__purchase_order")
-    )
+    queryset = PURCHASE_INVOICE_QUERYSET
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         invoice = self.object
-        lines = list(invoice.items.all())
-        returned = {line.pk: line.qty_returned for line in purchase_return_lines(invoice)}
-        for line in lines:
-            line.qty_returned = returned.get(line.pk, Decimal("0"))
-        context["lines"] = lines
-        context["any_returned"] = any(line.qty_returned for line in lines)
-        wheat = [line for line in lines if line.credit_weight is not None]
-        context["credit_weight"] = sum((line.credit_weight for line in wheat), Decimal("0")) if wheat else None
-        context["rate_per_mund"] = wheat[0].rate_per_mund if len(wheat) == 1 else None
-        context["goods_total"] = sum((line.amount or Decimal("0.00") for line in lines), Decimal("0.00"))
-        context["qty_total"] = sum((line.quantity or Decimal("0") for line in lines), Decimal("0"))
+        context.update(purchase_invoice_body(invoice))
+        lines = context["lines"]
+        kind = "wheat" if any(line.product_id for line in lines) else "general"
+        self.request.nav_href = f"{reverse('inventory:purchase_invoice_list')}?kind={kind}"
 
         orders = {}
         for line in lines:
@@ -2591,8 +2582,9 @@ class PurchaseInvoiceDetailView(InventoryListMixin, DetailView):
 
         context["can_reverse"], context["reverse_blocked_reason"] = can_reverse_invoice(invoice)
         context["reversal_reasons"] = INV_REVERSAL_REASONS
-        context["invoices_url"] = reverse_lazy("inventory:purchase_invoice_list")
-        context["doc_links"], context["doc_actions"] = links.purchase_invoice(invoice, context["source_orders"])
+        context["invoices_url"] = self.request.nav_href
+        context["doc_links"], actions = links.purchase_invoice(invoice, context["source_orders"])
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -2611,6 +2603,7 @@ class PurchaseInvoicePrintView(PrintContextMixin, InventoryListMixin, DetailView
         lines = list(invoice.items.select_related("product", "inventory_item").order_by("seq_num"))
         previous = _party_balances_as_of([invoice.supplier], "name", invoice.invoice_date - timedelta(days=1)).get(
             invoice.supplier_id, Decimal("0.00"))
+        context.update(wheat_slip(invoice, lines))
         context.update({
             "lines": lines,
             "wheat_lines": [line for line in lines if line.credit_weight is not None],
@@ -2623,6 +2616,10 @@ class PurchaseInvoicePrintView(PrintContextMixin, InventoryListMixin, DetailView
         })
         return context
 
+
+
+class PurchaseVoucherPrintView(PurchaseInvoicePrintView):
+    template_name = "inventory/purchase_voucher_print.html"
 
 class PurchaseInvoiceReverseView(InventoryManageMixin, View):
     """Withdraw a posted invoice: stock back out, payable cancelled."""
@@ -2747,7 +2744,6 @@ class PurchaseOrderListView(SortableListMixin, InventoryListMixin, ListView):
         context["order_count"] = context["paginator"].count if context.get("paginator") else len(orders)
 
         everything = list(self.filtered_queryset())
-        context["tiles"] = summarise(everything)
         def tab_count(key):
             statuses = TAB_STATUSES.get(key)
             return sum(1 for order in everything
@@ -3091,7 +3087,8 @@ class PurchaseOrderDetailView(InventoryListMixin, DetailView):
         context["cancel_form"] = PurchaseOrderCancelForm()
         context["close_short_form"] = PurchaseOrderCloseShortForm()
         context["reversal_form"] = ReversalReasonForm()
-        context["doc_links"], context["doc_actions"] = links.purchase_order(self.object)
+        context["doc_links"], actions = links.purchase_order(self.object)
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         order_lines = list(self.object.items.all())
         context["ordered_qty"] = sum((line.quantity or Decimal("0") for line in order_lines), Decimal("0"))
         context["received_qty"] = sum((line.qty_invoiced or Decimal("0") for line in order_lines), Decimal("0"))
@@ -3572,16 +3569,15 @@ class CustomerDetailView(PagePermissionRequiredMixin, DetailView):
         context["return_total"] = sent_back["total"] or zero
         context["return_count"] = sent_back["count"] or 0
         context["order_count"] = SalesOrder.objects.filter(customer=customer).count()
-        context["recent_invoices"] = POSMaster.objects.filter(customer=customer, posted=YES).order_by("-sale_date", "-id")[:10]
 
         account = ChartOfAccount.objects.filter(title=customer.customer_name, is_group=False).first()
         context["receivable_code"] = account.code if account else ""
         ledger = account_ledger(account.code) if account else None
         context["ledger"] = ledger
         context["receivable_balance"] = ledger["closing"] if ledger else zero
-        context["doc_links"], context["doc_actions"] = links.customer(self.object, context["receivable_code"])
-        if user_has_permission(self.request.user, f"{self.page}.edit"):
-            context["doc_actions"]["edit_url"] = reverse("inventory:customer_update", args=[self.object.pk])
+        context["doc_links"], actions = links.customer(self.object, context["receivable_code"])
+        actions["edit_url"] = reverse("inventory:customer_update", args=[self.object.pk])
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -3733,28 +3729,6 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
              "choices": customer_choices, "value": self.request.GET.get("customer", "")},
         ]
 
-    def tiles(self):
-        """The figures over everything the filters allow, not just this page."""
-        base = self.filtered_queryset()
-        posted = base.filter(posted=YES)
-        sold = posted.aggregate(count=Count("id"), value=Sum("net_amount"), taken=Sum("total_paid"))
-        owing = posted.filter(balance__gt=Decimal("0.00")).aggregate(count=Count("id"), value=Sum("balance"))
-        drafts = base.exclude(posted=YES).aggregate(count=Count("id"), value=Sum("net_amount"))
-        month = timezone.localdate().replace(day=1)
-        this_month = posted.filter(sale_date__gte=month).aggregate(count=Count("id"), value=Sum("net_amount"))
-        return {
-            "sold_count": sold["count"] or 0,
-            "sold_value": sold["value"] or Decimal("0.00"),
-            "taken": sold["taken"] or Decimal("0.00"),
-            "month_count": this_month["count"] or 0,
-            "month_value": this_month["value"] or Decimal("0.00"),
-            "owing_count": owing["count"] or 0,
-            "owing_value": owing["value"] or Decimal("0.00"),
-            "draft_count": drafts["count"] or 0,
-            "draft_value": drafts["value"] or Decimal("0.00"),
-            "month_from": month.isoformat(),
-        }
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         carried = self.request.GET.copy()
@@ -3769,7 +3743,6 @@ class SaleInvoiceListView(SortableListMixin, InventoryListMixin, ListView):
             (self.request.GET.get(key) or "").strip()
             for key in ("q", "customer", "date_from", "date_to", "tab")
         )
-        context["tiles"] = self.tiles()
         context["export_url"] = reverse_lazy("inventory:sale_invoice_export")
 
         page_total = Decimal("0.00")
@@ -4282,7 +4255,9 @@ class POSDetailView(InventoryListMixin, DetailView):
         context["net_amount"] = net_amount
         context["payable_amount"] = net_amount
         context["sale_balance"] = net_amount - (self.object.total_paid or Decimal("0"))
-        context["doc_links"], context["doc_actions"] = links.sale(self.object)
+        self.request.nav_href = reverse("inventory:sale_invoice_list")
+        context["doc_links"], actions = links.sale(self.object)
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -4433,7 +4408,8 @@ class POSReturnDetailView(InventoryListMixin, DetailView):
         form = POSReturnDetailForm()
         form.fields["pos_detail"].queryset = self.object.pos_master.items.all()
         context["item_form"] = form
-        context["doc_links"], context["doc_actions"] = links.sale_return(self.object)
+        context["doc_links"], actions = links.sale_return(self.object)
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -4581,7 +4557,6 @@ class PurchaseReturnListView(SortableListMixin, InventoryListMixin, ListView):
             for key, label in RETURN_TABS
         ]
         context["current_tab"] = current
-        context["tiles"] = tiles
         context["per_page"] = self.get_paginate_by(None)
         context["per_page_options"] = list(self.PER_PAGE_OPTIONS)
         context["filters_active"] = any(
@@ -4866,7 +4841,8 @@ class PurchaseReturnDetailView(InventoryListMixin, DetailView):
         context["reversal_reasons"] = INV_REVERSAL_REASONS
         context["reverse_reason_label"] = dict(INV_REVERSAL_REASONS).get(record.reverse_reason, "")
         context["list_url"] = reverse_lazy("inventory:purchase_return_list")
-        context["doc_links"], context["doc_actions"] = links.purchase_return(record)
+        context["doc_links"], actions = links.purchase_return(record)
+        context["doc_actions"] = guard(actions, self.request.user, self.page)
         return context
 
 
@@ -4969,7 +4945,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         supplier = Supplier.objects.filter(pk=payload.get("supplier") or 0, status=STATUS_ACTIVE).first()
         wheat = wheat_product_options().filter(pk=payload.get("wheat_product") or 0).first()
         if not supplier:
-            return JsonResponse({"errors": ["Choose the sender before saving."]}, status=400)
+            return JsonResponse({"errors": ["Choose the supplier before saving."]}, status=400)
         if not wheat:
             return JsonResponse({"errors": ["Choose the wheat item before saving."]}, status=400)
 
@@ -5061,7 +5037,7 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
         return {
             "title": "Wheat Purchase Invoice",
             "list_url": f"{reverse_lazy('inventory:purchase_invoice_list')}?kind=wheat",
-            "next_voucher_no": next_purchase_invoice_number(),
+            "next_voucher_no": next_purchase_invoice_number(wheat=True),
             "today": timezone.localdate(),
             "suppliers": suppliers,
             "wheat_products": wheat,

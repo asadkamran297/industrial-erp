@@ -8,23 +8,30 @@
   {% component "ui/detail_header" kind=voucher.get_voucher_type_display number=voucher.voucher_no date=voucher.voucher_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% include "components/ui/figure.html" with label="Debit" value=voucher.debit_amount|amount tone="sky" only %}
+    {% include "components/ui/figure.html" with label="Credit" value=voucher.credit_amount|amount tone="violet" only %}
+    {% include "components/ui/figure.html" with label="Lines" value=lines|length tone="slate" only %}
+  {% endcomponent %}
+
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
+    {% component "ui/detail_section" title="Voucher" %}
       {% capture as type_label %}{{ voucher.get_voucher_type_display }}{% if money_mode %} &middot; {{ money_mode|capfirst }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Voucher Type" value=type_label only %}
       {% capture as main_account %}{% if account_title %}{{ account_title }} &middot; {% endif %}{{ voucher.account_no }}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Main Account" value=main_account only %}
-      {% if voucher.settlement_mode %}{% include "components/ui/detail_item.html" with label="Settlement" value=voucher.get_settlement_mode_display only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Settlement" value=voucher.get_settlement_mode_display only %}
       {% if voucher.party_account_no %}{% firstof party_title voucher.party_account_no as party_label %}{% include "components/ui/detail_item.html" with label="Party" value=party_label only %}{% endif %}
-      {% if voucher.payment_method %}{% include "components/ui/detail_item.html" with label="Payment Method" value=voucher.payment_method.title only %}{% endif %}
-      {% if voucher.bank_name %}{% include "components/ui/detail_item.html" with label="Bank" value=voucher.bank_name only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Payment Method" value=voucher.payment_method.title only %}
+      {% include "components/ui/detail_item.html" with label="Bank" value=voucher.bank_name only %}
       {% if voucher.cheque_no %}{% capture as cheque_label %}{{ voucher.cheque_no }}{% if voucher.cheque_date %} &middot; {{ voucher.cheque_date|dmy }}{% endif %}{% endcapture %}{% include "components/ui/detail_item.html" with label="Cheque" value=cheque_label only %}{% endif %}
-      {% if voucher.transaction_ref %}{% include "components/ui/detail_item.html" with label="Reference" value=voucher.transaction_ref only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Reference" value=voucher.transaction_ref only %}
       {% if voucher.payment_receipt %}{% component "ui/detail_item" label="Payment Receipt" only %}<a href="{{ voucher.payment_receipt.url }}" target="_blank" class="doc-num">View slip</a>{% endcomponent %}{% endif %}
-      {% if voucher.source_ref %}{% include "components/ui/detail_item.html" with label="Source Document" value=voucher.source_ref only %}{% endif %}
-      {% if voucher.remarks %}{% include "components/ui/detail_item.html" with label="Remarks" value=voucher.remarks wide=True only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Remarks" value=voucher.remarks wide=True only %}
     {% endcomponent %}
   {% endcomponent %}
+
+  {% if source_document_html %}{{ source_document_html }}{% endif %}
 
   {% component "ui/card" flush=True %}
     <div class="overflow-x-auto">
@@ -49,7 +56,7 @@
   {% endcomponent %}
 
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=3 %}
+    {% component "ui/detail_section" title="Settlement" %}
       {% capture as from_label %}{% if voucher.voucher_type == "RV" %}Received In{% else %}Paid From{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label=from_label value=main_account only %}
       {% capture as to_label %}{% if voucher.voucher_type == "RV" %}Received From{% else %}Paid To{% endif %}{% endcapture %}

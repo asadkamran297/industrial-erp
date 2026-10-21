@@ -69,3 +69,40 @@ ICONS = {
     "truck": '<path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
     "wheat": '<path d="M2 22 16 8"/><path d="M3.5 12.5 5 11l1.5 1.5a3.5 3.5 0 0 1 0 5L5 19l-1.5-1.5a3.5 3.5 0 0 1 0-5z"/><path d="M7.5 8.5 9 7l1.5 1.5a3.5 3.5 0 0 1 0 5L9 15l-1.5-1.5a3.5 3.5 0 0 1 0-5z"/><path d="M11.5 4.5 13 3l1.5 1.5a3.5 3.5 0 0 1 0 5L13 11l-1.5-1.5a3.5 3.5 0 0 1 0-5z"/>',
 }
+
+# Business concept -> icon. Screens name the concept; the glyph is chosen here once.
+CONCEPTS = {
+    "dashboard": "grid",
+    "purchase": "cart",
+    "sale": "tag",
+    "stock": "box",
+    "product": "package",
+    "bardana": "package",
+    "wheat": "wheat",
+    "grinding": "factory",
+    "weighbridge": "scale",
+    "vehicle": "truck",
+    "freight": "truck",
+    "brokerage": "briefcase",
+    "voucher": "receipt",
+    "ledger": "ledger",
+    "report": "chart",
+    "accounts": "book",
+    "period_close": "lock",
+    "owner": "briefcase",
+    "payable": "wallet",
+    "receivable": "wallet",
+    "payroll": "wallet",
+    "employee": "users",
+    "party": "users",
+    "master_data": "database",
+    "company": "building",
+    "access": "shield",
+    "settings": "settings",
+    "help": "help",
+}
+
+
+def resolve(name):
+    """Glyph paths for an icon or concept name, or None."""
+    return ICONS.get(CONCEPTS.get(name, name))

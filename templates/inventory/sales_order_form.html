@@ -10,17 +10,16 @@
 {% endcomponent %}
 
 <form method="post" id="so-form" class="card card-rail" x-data="salesOrderForm()">{% csrf_token %}
-  <div class="card-body form-grid form-grid--cols-4">
-    <div>
-      {% component "forms/control" type="select" name="customer" id="customer" label="Customer" required=True attrs='data-balance-chip="customer-balance" data-balance-owed="Receivable" data-balance-credit="Advance"' only %}
-        <option value=""></option>
-        {% for row in customers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.customer == row.pk|stringformat:"s" %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
-      {% endcomponent %}
-      <p id="customer-balance" class="bal-chip mt-1 hidden"></p>
+  <div class="card-body">
+    <div class="head-fields">
+      <div class="head-fields__wide">
+        {% url 'inventory:customer_create' as customer_add_base %}
+        {% include "components/forms/party_picker.html" with label="Customer" name="customer" parties=customers selected=posted.customer required=True add_url=customer_add_base|add:"?embed=1" add_kind="customer:saved" add_title="New customer" owed_label="Receivable" credit_label="Advance" only %}
+      </div>
+      <div class="head-fields__date">{% include "components/forms/control.html" with type="date" name="expected_date" id="expected_date" label="Promised By" value=posted.expected_date only %}</div>
+      <div>{% include "components/forms/control.html" with name="customer_ref" id="customer_ref" label="Customer Ref" value=posted.customer_ref only %}</div>
+      <div class="head-fields__wide">{% include "components/forms/control.html" with name="remarks" id="remarks" label="Narration" value=posted.remarks only %}</div>
     </div>
-    {% include "components/forms/control.html" with type="date" name="expected_date" id="expected_date" label="Promised by" value=posted.expected_date only %}
-    {% include "components/forms/control.html" with name="customer_ref" id="customer_ref" label="Customer's reference" value=posted.customer_ref wrap="span-2" only %}
-    {% include "components/forms/control.html" with name="remarks" id="remarks" label="Narration" value=posted.remarks wrap="span-2" only %}
   </div>
 
   <div class="li-wrap">
@@ -59,10 +58,12 @@
     </div>
   </div>
 
-  {% component "forms/submit_bar" cancel_url=cancel_url label="Raise order" prepared_by=request.user only %}
-    {% include "components/ui/button.html" with label="Save as draft" name="save_draft" value="1" variant="secondary" only %}
+  {% component "forms/submit_bar" cancel_url=cancel_url label="Save" prepared_by=request.user only %}
+    {% include "components/ui/button.html" with label="Save Draft" name="save_draft" value="1" variant="secondary" only %}
   {% endcomponent %}
 </form>
+
+{% include "components/ui/frame_modal.html" with entity_title="New Customer" %}
 
 <script id="items-data" type="application/json">{{ items_json|safe }}</script>
 <script>

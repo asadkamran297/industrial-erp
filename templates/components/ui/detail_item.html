@@ -1,1 +1,1 @@
-{% if slot or value or value == 0 %}<div class="detail-item{% if num %} detail-item--num{% endif %}{% if wide %} detail-item--wide{% endif %}"><dt>{{ label }}</dt><dd>{% if slot %}{{ slot }}{% else %}{{ value }}{% endif %}</dd></div>{% endif %}
+<div class="detail-item{% if num %} detail-item--num{% endif %}{% if wide %} detail-item--wide{% endif %}"><dt>{{ label }}</dt><dd>{% if slot %}{{ slot }}{% elif value or value == 0 %}{{ value }}{% else %}<span class="detail-empty">&mdash;</span>{% endif %}</dd></div>

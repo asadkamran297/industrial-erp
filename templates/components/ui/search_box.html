@@ -1,5 +1,6 @@
-<form class="search-field" role="search">
+<form class="search-field" role="search" data-menu-search>
   <label class="sr-only" for="global-search">Search</label>
-  <input id="global-search" name="q" type="search" placeholder="{{ placeholder|default:'Search...' }}" class="search-input">
+  <input id="global-search" name="q" type="search" list="menu-screens" autocomplete="off" placeholder="{{ placeholder|default:'Search...' }}" class="search-input">
+  <datalist id="menu-screens"></datalist>
   {% icon "search" extra="search-icon" %}
 </form>

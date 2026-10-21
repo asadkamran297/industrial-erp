@@ -1,16 +1,10 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
-{% capture as item_count %}{% if is_paginated %}{{ paginator.count }}{% else %}{{ records|length }}{% endif %}{% endcapture %}
-{% component "table/board" title=title add_url=add_url add_label="Item" table_id="item-table" search_placeholder="Search items" %}
-  {% slot actions %}
-    <span class="chip">{{ item_count }}</span>
-    {% url 'inventory:item_export' as export_base %}{% capture as export_href %}{{ export_base }}{% if page_query %}?{{ page_query }}{% endif %}{% endcapture %}
-    {% include "components/ui/button.html" with label="Excel" href=export_href icon="download" only %}
-    {% url 'inventory:item_print' as print_base %}{% capture as print_href %}{{ print_base }}{% if page_query %}?{{ page_query }}{% endif %}{% endcapture %}
-    {% include "components/ui/button.html" with label="Print" href=print_href icon="print" target="_blank" only %}
-    {% if can_add %}{% url 'inventory:item_import' as import_url %}{% include "components/ui/button.html" with label="Import" href=import_url icon="upload" only %}{% endif %}
-  {% endslot %}
+{% url 'inventory:item_export' as excel_url %}{% url 'inventory:item_print' as print_url %}
+{% capture as import_url %}{% if can_add %}{% url 'inventory:item_import' %}{% endif %}{% endcapture %}
+{% capture as sample_url %}{% if can_add %}{% url 'inventory:item_import_sample' %}{% endif %}{% endcapture %}
+{% component "table/board" title=title add_url=add_url add_label="Item" table_id="item-table" search_placeholder="Search items" excel_url=excel_url print_url=print_url import_url=import_url sample_url=sample_url %}
   {% slot above %}
     {% include "inventory/_item_tabs.html" %}
     {% if control_account %}{% include "components/ui/control_account_banner.html" %}{% endif %}

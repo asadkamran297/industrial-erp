@@ -1,0 +1,71 @@
+{% extends "layouts/print.html" %}
+{% block title %}Purchase Voucher {{ invoice.invoice_num }}{% endblock %}
+
+{% block print_content %}
+  <h1 class="doc-title">Purchase Voucher</h1>
+
+  <table class="slip">
+    <tr>
+      <td class="slip-weight">
+        <table class="amount-box">
+          <tr><td class="amt-head" colspan="2">Weight (KG)</td></tr>
+          <tr><td class="amt-label">Party Load</td><td class="amt-value">{{ wheat_line.party_load_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Party Tare</td><td class="amt-value">{{ wheat_line.party_tare_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Party Net</td><td class="amt-value">{{ wheat_line.party_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Mill Load</td><td class="amt-value">{{ wheat_line.mill_load_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Mill Tare</td><td class="amt-value">{{ wheat_line.mill_tare_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Mill Net</td><td class="amt-value">{{ wheat_line.mill_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Selected ({{ selected_source|default:"—" }})</td><td class="amt-value">{{ wheat_line.selected_weight|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Katla</td><td class="amt-value">{{ wheat_line.katla|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Impurities</td><td class="amt-value">{{ wheat_line.khoot|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Moisture</td><td class="amt-value">{{ wheat_line.moisture|default:0|qty }}</td></tr>
+          <tr><td class="amt-label">Bag Ded.</td><td class="amt-value">{{ wheat_line.sack_weight_deduction|default:0|qty }}</td></tr>
+          <tr><td class="amt-label u-bold">Credit Weight</td><td class="amt-value u-bold">{{ wheat_line.credit_weight|default:0|qty }}</td></tr>
+        </table>
+        <table class="meta">
+          <tr><td class="lbl">Prepared By</td><td>{{ invoice.created_by.get_full_name|default:invoice.created_by.username }}</td></tr>
+          <tr><td class="lbl">Signature</td><td class="slip-sign"></td></tr>
+        </table>
+      </td>
+      <td class="slip-main">
+        <table class="meta">
+          <tr><td class="lbl">Voucher No</td><td><b>{{ invoice.invoice_num }}</b></td><td class="lbl">Date</td><td>{{ invoice.invoice_date|dmy }}</td></tr>
+          <tr><td class="lbl">Supplier</td><td colspan="3">{{ invoice.supplier.name }}</td></tr>
+          <tr><td class="lbl">Wheat</td><td>{{ wheat_line.descr|default:"—" }}</td><td class="lbl">Godown</td><td>{{ invoice.godown.name|default:"—" }}</td></tr>
+          <tr><td class="lbl">Vehicle No</td><td>{{ invoice.vehicle_no|default:"—" }}</td><td class="lbl">Builty No</td><td>{{ carrier.builty_no|default:"—" }}</td></tr>
+          <tr><td class="lbl">Transporter</td><td>{{ carrier.transporter|default:"—" }}</td><td class="lbl">Driver Phone</td><td>{{ carrier.driver_phone|default:"—" }}</td></tr>
+          <tr><td class="lbl">Remarks</td><td colspan="3">{{ invoice.remarks|default:"—" }}</td></tr>
+        </table>
+
+        <table class="items">
+          <thead><tr><th>Bag</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th><th>Ownership</th><th class="num">Ded./Bag</th><th class="num">T.Ded.</th></tr></thead>
+          <tbody>
+            {% for line in bardana_lines %}
+            <tr>
+              <td>{{ line.descr }}</td>
+              <td class="num">{{ line.quantity|floatformat:0 }}</td>
+              <td class="num">{{ line.rate|amount }}</td>
+              <td class="num">{{ line.amount|amount }}</td>
+              <td>{{ line.get_bardana_ownership_display|default:"—" }}</td>
+              <td class="num">{{ line.bag_weight|default:0|qty }}</td>
+              <td class="num">{{ line.total_deduction|qty }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="u-empty">No bardana.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <table class="amount-box">
+          <tr><td class="amt-label">Rate @ 40 kg</td><td class="amt-value">{{ wheat_line.rate_per_mund|amount }}</td></tr>
+          <tr><td class="amt-label">Stock Amount</td><td class="amt-value">{{ wheat_line.amount|amount }}</td></tr>
+          <tr><td class="amt-label">Bardana Amount</td><td class="amt-value">{{ bardana_amount|amount }}</td></tr>
+          {% if invoice.freight_amount %}<tr><td class="amt-label">Freight</td><td class="amt-value">-{{ invoice.freight_amount|amount }}</td></tr>{% endif %}
+          {% if invoice.brokerage_amount %}<tr><td class="amt-label">Brokerage</td><td class="amt-value">-{{ invoice.brokerage_amount|amount }}</td></tr>{% endif %}
+          {% if invoice.withholding_amount %}<tr><td class="amt-label">WHT</td><td class="amt-value">-{{ invoice.withholding_amount|amount }}</td></tr>{% endif %}
+          <tr><td class="amt-label amt-head">Total Bill</td><td class="amt-value amt-head">{{ invoice.supplier_payable_amount|amount }}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+{% endblock %}

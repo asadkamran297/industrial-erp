@@ -5,34 +5,34 @@
   {% capture as status_label %}{% if order.status == "draft" %}Awaiting approval{% elif order.days_late %}Delivery overdue{% elif order.status == "partially_invoiced" %}Partly invoiced{% elif order.status == "fully_invoiced" %}Fully invoiced{% elif order.status == "closed" %}Closed{% elif order.status == "cancelled" %}Cancelled{% else %}Awaiting invoice{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if order.status == "draft" %}draft{% elif order.days_late %}danger{% elif order.status == "partially_invoiced" %}partial{% elif order.status == "fully_invoiced" %}posted{% elif order.status == "closed" %}closed{% elif order.status == "cancelled" %}reversed{% else %}pending{% endif %}{% endcapture %}
 
-  {% component "ui/detail_header" kind="Purchase Order" number=order.purchase_num date=order.purchase_date|dmy party=order.supplier.name status=status_label status_tone=status_tone back=True back_url=orders_url extra="no-print" %}
+  {% component "ui/detail_header" kind="Purchase Order" number=order.purchase_num date=order.purchase_date|dmy status=status_label status_tone=status_tone back=True back_url=orders_url extra="no-print" %}
+    {% slot edit %}{% if can_edit_lines %}{% include "components/ui/button.html" with type="button" label="Edit" icon="edit" variant="secondary" attrs='x-show="!editing" @click="askEdit = true"' only %}{% endif %}{% endslot %}
     {% slot actions %}
       {% if order.unbilled_value and can_edit %}
         {% url 'inventory:stores_purchase_create' as bill_base %}
         {% capture as bill_url %}{{ bill_base }}?order={{ order.pk }}&amp;supplier={{ order.supplier_id }}{% endcapture %}
-        {% include "components/ui/button.html" with label="Enter invoice" href=bill_url icon="receipt" only %}
+        {% include "components/ui/button.html" with label="Enter Invoice" href=bill_url icon="receipt" only %}
       {% endif %}
       {% if order.days_late %}
         {% url 'inventory:supplier_detail' order.supplier_id as chase_url %}
-        {% include "components/ui/button.html" with label="Chase supplier" href=chase_url icon="phone" only %}
+        {% include "components/ui/button.html" with label="Chase Supplier" href=chase_url icon="phone" only %}
       {% endif %}
       {% if order.status == "draft" and can_edit %}
       <form method="post" action="{% url 'inventory:purchase_order_raise' order.pk %}">{% csrf_token %}
-        {% include "components/ui/button.html" with label="Approve order" icon="check" variant="primary" only %}
+        {% include "components/ui/button.html" with label="Approve" icon="check" variant="primary" only %}
       </form>
       {% endif %}
-      {% if can_edit_lines %}{% include "components/ui/button.html" with type="button" label="Edit PO" icon="edit" attrs='x-show="!editing" @click="askEdit = true"' only %}{% endif %}
-      {% if can_approve and can_close_short %}{% include "components/ui/button.html" with type="button" id="close" label="Close PO" icon="archive" variant="danger" extra="anchor" attrs='@click="closing = true"' only %}{% endif %}
-      {% if can_approve and can_cancel %}{% include "components/ui/button.html" with type="button" id="cancel" label="Cancel order" icon="deactivate" variant="danger" extra="anchor" attrs='@click="cancelling = true"' only %}{% endif %}
+      {% if can_approve and can_close_short %}{% include "components/ui/button.html" with type="button" id="close" label="Close" icon="archive" variant="danger" extra="anchor" attrs='@click="closing = true"' only %}{% endif %}
+      {% if can_approve and can_cancel %}{% include "components/ui/button.html" with type="button" id="cancel" label="Cancel" icon="deactivate" variant="danger" extra="anchor" attrs='@click="cancelling = true"' only %}{% endif %}
     {% endslot %}
   {% endcomponent %}
 
   {% if can_edit_lines %}
   {% component "ui/modal" show="askEdit" close="askEdit = false" title="Edit "|add:order.purchase_num %}
-    <p class="text-sm">Quantities, rates and discounts become editable until Save PO.</p>
+    <p class="text-sm">Quantities, rates and discounts become editable until saved.</p>
     {% slot foot %}
       {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs='@click="askEdit = false"' only %}
-      {% include "components/ui/button.html" with type="button" label="Edit PO" icon="edit" variant="danger" attrs='@click="editing = true; askEdit = false"' only %}
+      {% include "components/ui/button.html" with type="button" label="Edit" icon="edit" variant="danger" attrs='@click="editing = true; askEdit = false"' only %}
     {% endslot %}
   {% endcomponent %}
   {% endif %}
@@ -79,20 +79,22 @@
   </div>
   {% endif %}
 
+  {% component "ui/detail_figures" %}
+    {% include "components/ui/figure.html" with label="Order Value" value=order_total|amount tone="violet" only %}
+    {% include "components/ui/figure.html" with label="Ordered Qty" value=ordered_qty|qty tone="sky" only %}
+    {% include "components/ui/figure.html" with label="Received Qty" value=received_qty|qty tone="green" only %}
+    {% capture as bt %}{% if balance_qty %}amber{% else %}green{% endif %}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Balance Qty" value=balance_qty|qty tone=bt only %}
+  {% endcomponent %}
 
   {% component "ui/card" flush=True %}
     <div class="card-body">
-      {% component "ui/detail_grid" cols=4 %}
+      {% component "ui/detail_section" title="Purchase Order" %}
         {% include "components/ui/detail_item.html" with label="Supplier" value=order.supplier.name only %}
-        {% include "components/ui/detail_item.html" with label="Order date" value=order.purchase_date|dmy only %}
         {% include "components/ui/detail_item.html" with label="Expected" value=order.expected_date|dmy only %}
         {% if order.godown %}{% capture as godown_label %}{{ order.godown.code }} &mdash; {{ order.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
-        {% if order.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=order.broker.title only %}{% endif %}
-        {% include "components/ui/detail_item.html" with label="Value" value=order_total|amount num=True only %}
-        {% include "components/ui/detail_item.html" with label="Ordered Qty" value=ordered_qty|qty num=True only %}
-        {% include "components/ui/detail_item.html" with label="Received Qty" value=received_qty|qty num=True only %}
-        {% include "components/ui/detail_item.html" with label="Balance Qty" value=balance_qty|qty num=True only %}
-        {% if order.quot_num %}{% include "components/ui/detail_item.html" with label="Quotation No" value=order.quot_num only %}{% endif %}
+        {% include "components/ui/detail_item.html" with label="Broker" value=order.broker.title only %}
+        {% include "components/ui/detail_item.html" with label="Quotation No" value=order.quot_num only %}
       {% endcomponent %}
     </div>
     <div class="overflow-x-auto">
@@ -143,7 +145,7 @@
     {% if can_edit_lines %}
     <form method="post" id="order-lines" action="{% url 'inventory:purchase_order_lines_update' order.pk %}" class="lines-save card-body" x-show="editing" x-cloak>{% csrf_token %}
       {% include "components/ui/button.html" with type="button" label="Cancel" variant="ghost" attrs='@click="editing = false"' only %}
-      {% include "components/ui/button.html" with label="Save PO" icon="save" variant="primary" data="save" only %}
+      {% include "components/ui/button.html" with label="Save" icon="save" variant="primary" data="save" only %}
     </form>
     {% endif %}
     <div class="card-body doc-foot">

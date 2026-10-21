@@ -517,3 +517,58 @@
     bar.scrollLeft += event.deltaY;
   }, { passive: false });
 })();
+
+(function () {
+  const form = document.querySelector("[data-menu-search]");
+  if (!form) return;
+  const input = form.querySelector("input");
+  const list = form.querySelector("datalist");
+  const screens = () => Array.from(document.querySelectorAll("[data-nav-leaf]"))
+    .map((leaf) => ({ label: leaf.dataset.label, href: leaf.dataset.href }))
+    .filter((s) => s.label && s.href && s.href !== "#");
+  const seen = new Set();
+  screens().forEach((s) => {
+    if (seen.has(s.label)) return;
+    seen.add(s.label);
+    list.appendChild(new Option(s.label));
+  });
+  const go = () => {
+    const term = input.value.trim().toLowerCase();
+    if (!term) return false;
+    const all = screens();
+    const hit = all.find((s) => s.label.toLowerCase() === term)
+      || all.find((s) => s.label.toLowerCase().startsWith(term))
+      || all.find((s) => s.label.toLowerCase().includes(term));
+    if (hit) window.location.href = hit.href;
+    return Boolean(hit);
+  };
+  form.addEventListener("submit", (event) => { event.preventDefault(); go(); });
+  input.addEventListener("change", () => {
+    if (screens().some((s) => s.label === input.value)) go();
+  });
+})();
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-print-page]")) window.print();
+});
+
+(function () {
+  const sheet = document.getElementById("page-print");
+  if (!sheet) return;
+  document.addEventListener("click", (event) => {
+    const pick = event.target.closest("[data-paper]");
+    if (pick) {
+      event.preventDefault();
+      const thermal = pick.dataset.paper === "thermal";
+      sheet.classList.toggle("page-print--thermal", thermal);
+      document.getElementById("page-size").textContent = thermal ? "@page { size: 80mm 297mm; margin: 2mm 3mm; }" : "";
+      document.querySelectorAll("[data-paper]").forEach((a) => a.classList.toggle("is-on", a === pick));
+      window.history.replaceState(null, "", pick.getAttribute("href"));
+      return;
+    }
+    if (event.target.closest("[data-print-close]")) {
+      if (window.opener || window.history.length <= 1) window.close();
+      else window.history.back();
+    }
+  });
+})();

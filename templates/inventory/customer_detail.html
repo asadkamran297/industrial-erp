@@ -2,13 +2,21 @@
 {% block content %}
 <section class="form-stack">
   {% url 'inventory:customer_list' as list_url %}
-  {% capture as customer_meta %}{{ customer.customer_code|default:"" }}{% if customer.city %} &middot; {{ customer.city }}{% endif %}{% endcapture %}
+  {% capture as customer_meta %}{{ customer.customer_code|default:"" }}{% endcapture %}
   {% capture as status_tone %}{% if customer.status == "active" %}posted{% else %}closed{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind="Customer" number=customer.customer_name date=customer_meta status=customer.get_status_display status_tone=status_tone back=True back_url=list_url %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% capture as n %}{{ sale_count }} invoice{{ sale_count|pluralize }}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Total Sales" value=sale_total|amount note=n tone="sky" only %}
+    {% capture as n %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Total Returns" value=return_total|amount note=n tone="amber" only %}
+    {% include "components/ui/figure.html" with label="Receivable Balance" value=receivable_balance|amount tone="rose" only %}
+  {% endcomponent %}
+
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
+    {% component "ui/detail_section" title="Customer" %}
       {% include "components/ui/detail_item.html" with label="Phone" value=customer.customer_cell_no only %}
       {% include "components/ui/detail_item.html" with label="Email" value=customer.customer_email only %}
       {% capture as default_label %}{% if customer.is_default %}Yes{% else %}No{% endif %}{% endcapture %}
@@ -21,17 +29,9 @@
       {% include "components/ui/detail_item.html" with label="Credit Limit" value=credit only %}
       {% capture as opening %}{{ customer.opening_balance|amount }}{% if customer.opening_balance_date %} &middot; {{ customer.opening_balance_date|dmy }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Opening Balance" value=opening num=True only %}
-      {% if customer.remarks %}{% include "components/ui/detail_item.html" with label="Remarks" value=customer.remarks wide=True only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Remarks" value=customer.remarks wide=True only %}
     {% endcomponent %}
   {% endcomponent %}
-
-  <div class="tiles">
-    {% capture as sold_note %}{{ sale_count }} invoice{{ sale_count|pluralize }} &middot; {{ order_count }} order{{ order_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=sale_total|amount label="Total Sales" note=sold_note only %}
-    {% capture as return_note %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="amber" icon="reverse" value=return_total|amount label="Total Returns" note=return_note only %}
-    {% include "components/table/tile.html" with tone="rose" icon="wallet" value=receivable_balance|amount label="Receivable Balance" note=receivable_code only %}
-  </div>
 
   {% component "table/board" title="" table_id="customer-ledger" no_filters=True no_pagination=True %}
     {% slot bar %}<div class="section__head"><h2 class="section__title">Ledger</h2></div>{% endslot %}
@@ -53,21 +53,5 @@
     </tbody>
   {% endcomponent %}
 
-  {% component "table/board" title="" table_id="customer-invoices" no_filters=True no_pagination=True %}
-    {% slot bar %}<div class="section__head"><h2 class="section__title">Recent sale invoices</h2></div>{% endslot %}
-    <thead><tr><th>Invoice</th><th>Date</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
-    <tbody>
-      {% for invoice in recent_invoices %}
-      <tr>
-        <td><a class="doc-num" href="{% url 'inventory:pos_detail' invoice.pk %}">{{ invoice.sale_num }}</a></td>
-        <td class="date">{{ invoice.sale_date|dmy }}</td>
-        <td class="num strong">{{ invoice.net_amount|amount }}</td>
-        <td class="actions-col">{% url 'inventory:pos_detail' invoice.pk as view_url %}{% include "components/table/actions.html" with view_url=view_url only %}</td>
-      </tr>
-      {% empty %}
-      {% include "components/table/empty_row.html" with span=4 label="No sales." only %}
-      {% endfor %}
-    </tbody>
-  {% endcomponent %}
 </section>
 {% endblock %}

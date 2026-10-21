@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 SERIES_PURCHASE_ORDER = "purchase_order"
 SERIES_PURCHASE_INVOICE = "purchase_invoice"
+SERIES_WHEAT_PURCHASE_INVOICE = "wheat_purchase_invoice"
 SERIES_PURCHASE_RETURN = "purchase_return"
 SERIES_SALES_ORDER = "sales_order"
 SERIES_SALE_INVOICE = "sale_invoice"
@@ -32,6 +33,7 @@ class SeriesDefault:
 DEFAULTS: tuple[SeriesDefault, ...] = (
     SeriesDefault(SERIES_PURCHASE_ORDER, "Purchase Order", "PO", 0),
     SeriesDefault(SERIES_PURCHASE_INVOICE, "Purchase Invoice", "PI", 6),
+    SeriesDefault(SERIES_WHEAT_PURCHASE_INVOICE, "Wheat Purchase Invoice", "WPI", 6),
     SeriesDefault(SERIES_PURCHASE_RETURN, "Purchase Return", "PR", 0),
     SeriesDefault(SERIES_SALES_ORDER, "Sales Order", "SO", 6),
     SeriesDefault(SERIES_SALE_INVOICE, "Sale Invoice", "SAL", 0),
@@ -77,6 +79,7 @@ def preview(code: str, last) -> str:
 _COUNTERS = {
     SERIES_PURCHASE_ORDER: ("inventory", "PurchaseOrder", "seq_num"),
     SERIES_PURCHASE_INVOICE: ("inventory", "PurchaseInvoice", "seq_num"),
+    SERIES_WHEAT_PURCHASE_INVOICE: ("inventory", "PurchaseInvoice", "wheat_seq_num"),
     SERIES_PURCHASE_RETURN: ("inventory", "PurchaseReturnMaster", "return_seq_num"),
     SERIES_SALES_ORDER: ("inventory", "SalesOrder", "seq_num"),
     SERIES_SALE_INVOICE: ("inventory", "POSMaster", "sale_seq_num"),

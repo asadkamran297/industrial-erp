@@ -3,22 +3,6 @@
 {{ approval_lines|json_script:"approval-lines" }}
 {% if can_add %}{% url 'inventory:purchase_order_create' as create_url %}{% endif %}
 {% component "table/board" title="Purchase Orders" add_url=create_url add_label="Purchase Order" table_id="order-table" x_data="poBoard()" search_placeholder="Search" columns_action=columns_url date_filters_enabled=True %}
-  {% slot tiles %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=open" tone="violet" icon="file" value=tiles.open_count label="Open POs" %}
-      <p class="tile-note">Rs {{ tiles.open_value|short_amount }} committed</p>
-    {% endcomponent %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=pending" tone="amber" icon="clock" value=tiles.pending_count label="Awaiting approval" %}
-      <p class="tile-note{% if tiles.pending_value %} tile-note--alert{% endif %}">{% if tiles.pending_value %}Rs {{ tiles.pending_value|short_amount }} not committed{% elif tiles.pending_empty %}No items added{% else %}Nothing waiting{% endif %}</p>
-      <p class="tile-note">Approval above Rs {{ approval_limit|short_amount }}</p>
-    {% endcomponent %}
-    {% component "table/tile" href="?"|add:base_query|add:"&tab=open" tone="sky" icon="box" value=tiles.awaiting_count label="Awaiting goods" %}
-      <p class="tile-note">Rs {{ tiles.awaiting_value|short_amount }} to arrive</p>
-    {% endcomponent %}
-    {% url 'inventory:purchase_invoice_list' as invoice_list_url %}
-    {% component "table/tile" href=invoice_list_url tone="rose" icon="cash" value=tiles.unbilled_count label="Awaiting invoice" %}
-      <p class="tile-note{% if tiles.unbilled_count %} tile-note--alert{% endif %}">Rs {{ tiles.unbilled_value|short_amount }} not invoiced</p>
-    {% endcomponent %}
-  {% endslot %}
 
   <thead>
     <tr>

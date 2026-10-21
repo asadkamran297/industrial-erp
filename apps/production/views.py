@@ -298,9 +298,9 @@ class ConversionListView(SortableListMixin, PagePermissionRequiredMixin, SearchF
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["title"] = "Products Conversion"
+        context["title"] = "Product Conversion"
         context["create_url"] = reverse("production:conversion_create")
-        context["breadcrumbs"] = _crumbs(("Products Conversion", ""))
+        context["breadcrumbs"] = _crumbs(("Product Conversion", ""))
         return context
 
 
@@ -319,7 +319,7 @@ class ConversionFormView(PagePermissionRequiredMixin, View):
             "form": form,
             "conversion": conversion,
             "voucher_no": conversion.voucher_no if conversion else services.next_conversion_number(),
-            "breadcrumbs": _crumbs(("Products Conversion", reverse("production:conversion_list")),
+            "breadcrumbs": _crumbs(("Product Conversion", reverse("production:conversion_list")),
                                    ("Edit" if conversion else "Add", "")),
             "line_rows": lines if lines is not None else _stored_conversion_lines(conversion),
             "line_errors": errors or [],
@@ -405,7 +405,7 @@ class ConversionDetailView(PagePermissionRequiredMixin, View):
             "doc_actions": _doc_actions(request, self.page, "production:conversion_create", "production:conversion_update",
                                         conversion.pk),
             "title": conversion.voucher_no,
-            "breadcrumbs": _crumbs(("Products Conversion", reverse("production:conversion_list")),
+            "breadcrumbs": _crumbs(("Product Conversion", reverse("production:conversion_list")),
                                    (conversion.voucher_no, "")),
         })
 

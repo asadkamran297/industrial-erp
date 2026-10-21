@@ -106,6 +106,11 @@
   <a class="bar-btn bar-btn--reset" href="{{ reset_url|default:request.path }}" title="Clear all filters" aria-label="Clear all filters">{% icon "filter-x" %}</a>
   {% endif %}
 
+  {% url 'table_export' as table_print_url %}
+  {% if print_url %}<a class="bar-btn" target="_blank" href="{{ print_url }}{% if page_query and "?" not in print_url %}?{{ page_query }}{% endif %}" title="Print" aria-label="Print">{% icon "print" %}</a>
+  {% elif export_url %}<a class="bar-btn" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf" title="Print" aria-label="Print">{% icon "print" %}</a>
+  {% else %}<button type="button" class="bar-btn" data-export-table="{{ table_id|default:'board-table' }}" data-format="pdf" data-url="{{ table_print_url }}" title="Print" aria-label="Print">{% icon "print" %}</button>{% endif %}
+
   <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
     <button type="button" class="bar-btn" title="Export" aria-label="Export" :aria-expanded="open.toString()" @click="open = !open">{% icon "download" %}</button>
     <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
@@ -114,20 +119,33 @@
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=xlsx"><span class="export-badge export-badge--xls">XLS</span>Excel</a>
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=csv"><span class="export-badge export-badge--csv">CSV</span>CSV</a>
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=doc"><span class="export-badge export-badge--doc">DOC</span>Word</a>
-      <a class="export-item" role="menuitem" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf"><span class="export-badge export-badge--pdf">PDF</span>PDF / Print</a>
+      <a class="export-item" role="menuitem" target="_blank" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=pdf"><span class="export-badge export-badge--pdf">PDF</span>PDF</a>
       <a class="export-item" role="menuitem" href="{{ export_url }}?{{ base_query }}&amp;tab={{ current_tab }}&amp;format=png"><span class="export-badge export-badge--png">PNG</span>Image</a>
       {% else %}
       <p class="settings-heading">Download</p>
       {% url 'table_export' as table_export_url %}
-      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="xlsx" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--xls">XLS</span><span>Excel</span></button>
+      {% if excel_url %}<a class="export-item" role="menuitem" href="{{ excel_url }}{% if page_query and "?" not in excel_url %}?{{ page_query }}{% endif %}"><span class="export-badge export-badge--xls">XLS</span><span>Excel</span></a>{% else %}
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="xlsx" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--xls">XLS</span><span>Excel</span></button>{% endif %}
       {% if export_csv_url %}<a class="export-item" role="menuitem" href="{{ export_csv_url }}?{{ request.GET.urlencode }}"><span class="export-badge export-badge--csv">CSV</span><span>CSV</span></a>{% else %}
       <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="csv" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--csv">CSV</span><span>CSV</span></button>{% endif %}
       <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="doc" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--doc">DOC</span><span>Word</span></button>
-      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="pdf" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--pdf">PDF</span><span>PDF / Print</span></button>
+      <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="pdf" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--pdf">PDF</span><span>PDF</span></button>
       <button type="button" class="export-item" role="menuitem" data-export-table="{{ table_id|default:'board-table' }}" data-format="png" data-url="{{ table_export_url }}" @click="open = false"><span class="export-badge export-badge--png">PNG</span><span>Image</span></button>
+      {% endif %}
+      {% if import_url %}
+      <p class="settings-heading">Import</p>
+      <a class="export-item" role="menuitem" href="{{ import_url }}"><span class="export-badge export-badge--xls">{% icon "upload" size="sm" %}</span><span>Import from Excel</span></a>
+      {% if sample_url %}<a class="export-item" role="menuitem" href="{{ sample_url }}"><span class="export-badge export-badge--csv">{% icon "download" size="sm" %}</span><span>Sample file</span></a>{% endif %}
       {% endif %}
       <p class="settings-heading">Copy</p>
       <button type="button" class="export-item" role="menuitem" data-copy-table="{{ table_id|default:'board-table' }}" @click="open = false"><span class="export-badge export-badge--copy">{% icon "copy" size="sm" %}</span><span>Copy table</span></button>
     </div>
   </div>
+
+  {% if slots.more %}
+  <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+    <button type="button" class="bar-btn" title="More" aria-label="More" :aria-expanded="open.toString()" @click="open = !open">{% icon "settings" %}</button>
+    <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">{{ slots.more }}</div>
+  </div>
+  {% endif %}
 </div>

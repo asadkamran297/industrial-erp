@@ -166,46 +166,6 @@ def decorate(orders, today=None):
     return orders
 
 
-def summarise(orders, today=None):
-    """The five tiles across the top, over whatever set is handed in.
-
-    Read from decorated orders rather than from the database a second time, so
-    a tile can never disagree with the rows underneath it.
-    """
-    today = today or timezone.localdate()
-    decorate(orders, today=today)
-
-    tiles = {
-        "open_count": 0, "open_value": ZERO,
-        "pending_count": 0, "pending_value": ZERO,
-        "awaiting_count": 0, "awaiting_value": ZERO,
-        "unbilled_count": 0, "unbilled_value": ZERO,
-        "overdue_count": 0, "pending_empty": 0,
-        "closed_short_count": 0, "closed_short_value": ZERO,
-    }
-
-    for order in orders:
-        if order.status in LIVE_STATUSES:
-            tiles["open_count"] += 1
-            tiles["open_value"] += order.total_amount
-            if order.received_percent < 100:
-                tiles["awaiting_count"] += 1
-                tiles["awaiting_value"] += order.on_order_value
-        if order.status == STATUS_DRAFT:
-            tiles["pending_count"] += 1
-            tiles["pending_value"] += order.total_amount
-            if not order.line_count:
-                tiles["pending_empty"] += 1
-        if order.unbilled_value:
-            tiles["unbilled_count"] += 1
-            tiles["unbilled_value"] += order.unbilled_value
-        if order.days_late:
-            tiles["overdue_count"] += 1
-        if order.status == STATUS_CLOSED:
-            tiles["closed_short_count"] += 1
-            tiles["closed_short_value"] += order.short_value or ZERO
-
-    return tiles
 
 
 BILLED_LABELS = {"none": "", "unbilled": "Not invoiced", "partial": "Part invoiced", "billed": ""}
@@ -252,16 +212,22 @@ PURCHASE_INVOICE_COLUMNS = ColumnSet("inventory.purchase_invoices", (
     Column("supplier_ref", "Supplier ref", default=False, export=lambda o: o.supplier_invoice_num or ""),
     Column("invoice_date", "Date", export=lambda o: o.invoice_date),
     Column("supplier", "Supplier", export=lambda o: o.supplier.name),
-    Column("buyer", "Entered by", export=lambda o: (
+    Column("buyer", "Prepared By", export=lambda o: (
         o.created_by.get_full_name() or o.created_by.username) if o.created_by else ""),
-    Column("lines", "Items", export=lambda o: o.line_count),
+    Column("lines", "Items", default=False, export=lambda o: o.line_count),
     Column("quantity", "Quantity", export=lambda o: o.qty_total),
     Column("order", "Order", export=lambda o: (
         o.purchase_order.purchase_num if o.purchase_order_id else "Direct")),
+    Column("manual", "Manual #", export=lambda o: o.remarks or ""),
     Column("vehicle", "Vehicle", export=lambda o: o.vehicle_no or ""),
+    Column("credit_wt", "Credit Wt", export=lambda o: o.credit_weight_total or ""),
+    Column("rate_md", "@ 40 kg", export=lambda o: next(
+        (line.rate_per_mund for line in o.items.all() if line.rate_per_mund), "")),
+    Column("freight", "Freight", default=False, export=lambda o: o.freight_amount),
     Column("godown", "Godown", default=False, export=lambda o: o.godown.name if o.godown_id else ""),
     Column("status", "Status", export=lambda o: o.get_status_display()),
     Column("value", "Amount", export=lambda o: o.total_amount),
+    Column("net", "Net Amount", export=lambda o: o.supplier_payable_amount),
 ))
 
 

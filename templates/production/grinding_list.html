@@ -3,11 +3,13 @@
 {% block content %}
 {% capture as add_url %}{% if can_add %}{{ create_url }}{% endif %}{% endcapture %}
 {% component "table/board" title=title add_url=add_url add_label="Grinding" table_id="grinding-table" search_placeholder="Search grinding vouchers" %}
-  {% slot actions %}
-    {% url 'production:conversion_list' as u %}{% include "components/ui/button.html" with label="Products Conversion" href=u icon="refresh" size="sm" only %}
-    {% url 'production:report_daily_grinding' as u %}{% include "components/ui/button.html" with label="Daily Grinding" href=u icon="chart" size="sm" only %}
-    {% url 'production:report_yield_trend' as u %}{% include "components/ui/button.html" with label="Yield Trend" href=u icon="chart" size="sm" only %}
-    {% url 'production:report_production_summary' as u %}{% include "components/ui/button.html" with label="Production Summary" href=u icon="chart" size="sm" only %}
+  {% slot more %}
+    <p class="settings-heading">Related</p>
+    {% url 'production:conversion_list' as u %}<a class="export-item" role="menuitem" href="{{ u }}">{% icon "refresh" size="sm" %}<span>Product Conversion</span></a>
+    <p class="settings-heading">Reports</p>
+    {% url 'production:report_daily_grinding' as u %}<a class="export-item" role="menuitem" href="{{ u }}">{% icon "report" size="sm" %}<span>Daily Grinding</span></a>
+    {% url 'production:report_yield_trend' as u %}<a class="export-item" role="menuitem" href="{{ u }}">{% icon "report" size="sm" %}<span>Yield Trend</span></a>
+    {% url 'production:report_production_summary' as u %}<a class="export-item" role="menuitem" href="{{ u }}">{% icon "report" size="sm" %}<span>Production Summary</span></a>
   {% endslot %}
   <thead>
     <tr>

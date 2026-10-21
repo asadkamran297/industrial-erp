@@ -1,7 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
 {% url "inventory:purchase_invoice_list" as list_base %}{% capture as cancel_url %}{{ list_base }}?kind=general{% endcapture %}
-{% component "ui/page_header" title="General Purchase Invoice" back=True back_url=cancel_url %}
+{% component "ui/page_header" title="Stores Purchase Invoice" back=True back_url=cancel_url %}
   {% slot fields %}
     <div class="head-no">{% include "components/forms/control.html" with id="invoice-no-preview" label="Invoice No" value=next_invoice_no readonly=True extra="strong num" only %}</div>
     {% firstof posted.bill_date today|date:"Y-m-d" as bill_date_value %}
@@ -11,8 +11,9 @@
 {% endcomponent %}
 
 <form method="post" id="purchase-form" class="card card-rail" data-own-keys>{% csrf_token %}
-  <div class="card-body doc-head">
-    <div class="doc-head__party">
+  <div class="card-body">
+    <div class="head-fields">
+    <div class="head-fields__wide">
       {% include "components/forms/party_picker.html" with parties=suppliers selected=posted.supplier required=True add_id="add-supplier" only %}
       {% capture as mode_attrs %}data-url="{% url 'inventory:purchase_order_detail' 0 %}"{% endcapture %}
       <div class="flex flex-wrap gap-2">
@@ -20,22 +21,20 @@
         {% include "components/ui/button.html" with type="button" id="order-pick-open" icon="file" variant="secondary" size="sm" extra="order-pick-again" label="Pick PO" only %}
       </div>
     </div>
-
-    <div class="doc-head-fields doc-head-fields--compact">
-      {% if layout.shown.bill_number %}<div class="w-32">{% include "components/forms/control.html" with name="bill_number" id="bill_number" label="Bill no" value=posted.bill_number size="sm" only %}</div>{% endif %}
-      {% if layout.shown.due_date %}<div>{% include "components/forms/control.html" with type="date" name="due_date" id="due_date" label="Due date" value=posted.due_date size="sm" only %}</div>{% endif %}
+      {% if layout.shown.bill_number %}<div>{% include "components/forms/control.html" with name="bill_number" id="bill_number" label="Bill No" value=posted.bill_number only %}</div>{% endif %}
+      {% if layout.shown.due_date %}<div class="head-fields__date">{% include "components/forms/control.html" with type="date" name="due_date" id="due_date" label="Due Date" value=posted.due_date only %}</div>{% endif %}
       {% if layout.shown.godown %}
-      <div class="w-40">
-        {% component "forms/control" type="select" name="godown" id="godown" label="Godown" size="sm" only %}
+      <div>
+        {% component "forms/control" type="select" name="godown" id="godown" label="Godown" only %}
           <option value="">&mdash;</option>
           {% for g in godowns %}<option value="{{ g.pk }}" {% if posted.godown == g.pk|stringformat:"s" %}selected{% endif %}>{{ g.code }} &mdash; {{ g.name }}</option>{% endfor %}
         {% endcomponent %}
       </div>
       {% endif %}
-      {% if layout.shown.vehicle_no %}<div class="w-28">{% include "components/forms/control.html" with name="vehicle_no" id="vehicle_no" label="Vehicle no" value=posted.vehicle_no extra="uppercase" size="sm" only %}</div>{% endif %}
+      {% if layout.shown.vehicle_no %}<div>{% include "components/forms/control.html" with name="vehicle_no" id="vehicle_no" label="Vehicle No" value=posted.vehicle_no extra="uppercase" only %}</div>{% endif %}
       {% if layout.shown.broker %}
-      <div class="w-40">
-        {% component "forms/control" type="select" name="broker" id="broker" label="Broker" size="sm" only %}
+      <div>
+        {% component "forms/control" type="select" name="broker" id="broker" label="Broker" only %}
           <option value="">&mdash;</option>
           {% for b in brokers %}<option value="{{ b.pk }}" {% if posted.broker == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.title }}</option>{% endfor %}
         {% endcomponent %}
@@ -43,14 +42,14 @@
       {% endif %}
       {% for field in layout.extra %}
       {% capture as extra_name %}extra__{{ field.code }}{% endcapture %}
-      <div class="w-36">
+      <div>
         {% if field.type == "select" %}
-        {% component "forms/control" type="select" name=extra_name label=field.label required=field.required size="sm" only %}
+        {% component "forms/control" type="select" name=extra_name label=field.label required=field.required only %}
           <option value=""></option>
           {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
         {% endcomponent %}
         {% else %}
-        {% include "components/forms/control.html" with type=field.type name=extra_name label=field.label required=field.required size="sm" only %}
+        {% include "components/forms/control.html" with type=field.type name=extra_name label=field.label required=field.required only %}
         {% endif %}
       </div>
       {% endfor %}
@@ -129,7 +128,7 @@
     {% endcomponent %}
   </div>
 
-  {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_print=True label="Save Invoice" prepared_by=request.user only %}
+  {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_print=True label="Save" prepared_by=request.user only %}
 </form>
 
 {% include "components/ui/frame_modal.html" with entity_title="New Supplier" %}

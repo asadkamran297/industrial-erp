@@ -1,19 +1,41 @@
 {% extends "base.html" %}
 {% load static %}{% block extra_head %}<script src="{% static 'js/print.js' %}" defer></script>{% endblock %}
-{% block title %}Portal | {{ system_setting.company_name }}{% endblock %}
+{% block title %}{{ brand.name }}{% endblock %}
 {% block body %}
-<script id="__org_print_data__" type="application/json">{"name":"{{ org.title|default:system_setting.company_name|escapejs }}","branch":"{{ branch.title|default:''|escapejs }}","address":"{{ org.address|default:''|escapejs }}","phone":"{{ org.phone|default:''|escapejs }}","cell":"{{ org.cell|default:''|escapejs }}","fax":"{{ org.fax|default:''|escapejs }}","email":"{{ org.email|default:''|escapejs }}","website":"{{ org.website|default:''|escapejs }}","logo":"{% if org.logo %}{{ org.logo }}{% endif %}"}</script>
-<div class="min-h-screen" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('portal-sidebar-collapsed') === 'true', profileOpen: false, notificationsOpen: false, toggleSidebarCollapse() { this.sidebarCollapsed = !this.sidebarCollapsed; localStorage.setItem('portal-sidebar-collapsed', this.sidebarCollapsed); } }">
+<script id="__org_print_data__" type="application/json">{"name":"{{ org.title|default:brand.name|escapejs }}","branch":"{{ branch.title|default:''|escapejs }}","address":"{{ org.address|default:''|escapejs }}","phone":"{{ org.phone|default:''|escapejs }}","cell":"{{ org.cell|default:''|escapejs }}","fax":"{{ org.fax|default:''|escapejs }}","email":"{{ org.email|default:''|escapejs }}","website":"{{ org.website|default:''|escapejs }}","logo":"{% if org.logo %}{{ org.logo }}{% endif %}"}</script>
+{% if request.GET.print %}
+<div class="page-print{% if request.GET.size == 'thermal' %} page-print--thermal{% endif %}" id="page-print">
+  <style id="page-size">{% if request.GET.size == "thermal" %}@page { size: 80mm 297mm; margin: 2mm 3mm; }{% endif %}</style>
+  <div class="page-print__bar">
+    {% include "components/ui/button.html" with type="button" label="Print" icon="print" variant="primary" attrs="data-print-page" only %}
+    {% include "components/ui/button.html" with type="button" label="Close" icon="close" variant="secondary" attrs="data-print-close" only %}
+    <span class="print-size" role="group" aria-label="Paper">
+      <a href="{% querystring size='a4' %}" data-paper="a4" class="{% if request.GET.size != 'thermal' %}is-on{% endif %}">A4</a>
+      <a href="{% querystring size='thermal' %}" data-paper="thermal" class="{% if request.GET.size == 'thermal' %}is-on{% endif %}">Thermal</a>
+    </span>
+  </div>
+  <header class="page-print__head">
+    <div class="page-print__logo">{% if brand.logo %}<img src="{{ brand.logo }}" alt="">{% else %}{% icon "wheat" size="lg" %}{% endif %}</div>
+    <div class="min-w-0">
+      <p class="page-print__name">{{ brand.name }}</p>
+      {% firstof org.address branch.address "" as print_addr %}{% firstof org.phone branch.phone "" as print_phone %}
+      {% if print_addr or print_phone %}<p class="page-print__meta">{{ print_addr }}{% if print_addr and print_phone %} &middot; {% endif %}{{ print_phone }}</p>{% endif %}
+    </div>
+    <p class="page-print__printed">{% now "d-m-Y h:i A" %}</p>
+  </header>
+  <main class="page-print__body">
+{% else %}
+<div class="min-h-screen" x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('portal-sidebar-collapsed') === 'true', profileOpen: false, toggleSidebarCollapse() { this.sidebarCollapsed = !this.sidebarCollapsed; localStorage.setItem('portal-sidebar-collapsed', this.sidebarCollapsed); } }">
   <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 
-  <aside class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-slate-200 bg-white/95 p-3 shadow-2xl shadow-slate-900/10 transition-all lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen, 'lg:w-20': sidebarCollapsed, 'lg:w-64': !sidebarCollapsed }">
+  <aside class="no-print fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-slate-200 bg-white/95 p-3 shadow-2xl shadow-slate-900/10 transition-all lg:translate-x-0 dark:border-slate-800 dark:bg-slate-900" :class="{ 'translate-x-0': sidebarOpen, 'lg:w-20': sidebarCollapsed, 'lg:w-64': !sidebarCollapsed }">
     <div class="flex items-center gap-3 px-2 py-2">
       <div class="grid h-10 w-10 place-items-center rounded-lg bg-[var(--primary-color)] text-sm font-bold text-white">
-        {% if system_setting.company_logo %}<img src="{{ system_setting.company_logo.url }}" alt="" class="h-10 w-10 rounded-lg object-cover">{% else %}ERP{% endif %}
+        {% if brand.logo %}<img src="{{ brand.logo }}" alt="" class="h-10 w-10 rounded-lg object-cover">{% else %}{% icon "wheat" %}{% endif %}
       </div>
       <div class="min-w-0" x-show="!sidebarCollapsed" x-transition.opacity>
-        <p class="truncate text-sm font-semibold">{{ system_setting.company_name }}</p>
-        <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ system_setting.company_tagline }}</p>
+        <p class="truncate text-sm font-semibold" title="{{ brand.name }}">{{ brand.name }}</p>
+        {% if brand.tagline %}<p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ brand.tagline }}</p>{% endif %}
       </div>
       <button type="button" class="ml-auto hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 lg:grid dark:border-slate-700 dark:hover:bg-slate-800" @click="toggleSidebarCollapse()" :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
         <span class="grid transition" :class="{ 'rotate-180': sidebarCollapsed }">{% icon "back" %}</span>
@@ -23,48 +45,19 @@
     {% include "components/navigation/sidebar.html" %}
   </aside>
 
-  <div class="transition-all" :class="sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'">
-    <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
+  <div class="shell-body transition-all" :class="sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'">
+    <header class="no-print sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
       <div class="flex h-14 items-center gap-2 px-4">
         <button type="button" class="icon-btn icon-btn--bordered lg:hidden" @click="sidebarOpen = true" title="Open menu" aria-label="Open menu">{% icon "menu" %}</button>
         <div class="hidden shrink-0 sm:block">
-          {% include "components/ui/search_box.html" with placeholder="Search records, reports..." %}
+          {% include "components/ui/search_box.html" with placeholder="Go to screen" %}
         </div>
         <nav class="fav-bar" data-fav-bar data-toggle-url="{% url 'portal:favourite_toggle' %}" aria-label="Favourites">
           {% for fav in portal_favourites %}<a href="{{ fav.href }}" class="fav-chip{% if fav.is_current %} is-current{% endif %}" data-href="{{ fav.href }}">{% icon "star" size="sm" %}<span>{{ fav.label }}</span></a>{% endfor %}
         </nav>
 
-        <div class="ml-auto flex items-center gap-2">
-        </div>
+        <div class="ml-auto"></div>
         <button type="button" class="icon-btn icon-btn--bordered" @click="toggleTheme()" title="Light / dark" aria-label="Toggle theme">{% icon "sun-moon" %}</button>
-        <input class="control h-9 w-9 p-0.5" type="color" x-model="primaryColor" @input="setPrimaryColor(primaryColor)" title="Brand colour" aria-label="Primary color">
-        <div class="relative">
-          <button type="button" class="icon-btn icon-btn--bordered relative" @click="notificationsOpen = !notificationsOpen" title="Notifications" aria-label="Notifications" :aria-expanded="notificationsOpen.toString()">
-            {% icon "bell" %}
-            <span class="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[11px] font-bold leading-none text-white">3</span>
-          </button>
-          <div x-show="notificationsOpen" x-transition @click.outside="notificationsOpen = false" class="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
-            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-              <p class="text-sm font-semibold">Notifications</p>
-              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">3 new</span>
-            </div>
-            <div class="max-h-80 overflow-y-auto">
-              <a href="#" class="block border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
-                <p class="text-sm font-medium">Payroll review pending</p>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">June payroll needs approval.</p>
-              </a>
-              <a href="#" class="block border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
-                <p class="text-sm font-medium">Employee record updated</p>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">A profile change was saved.</p>
-              </a>
-              <a href="#" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <p class="text-sm font-medium">Low stock alert</p>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Inventory item crossed reorder level.</p>
-              </a>
-            </div>
-            <a href="#" class="block border-t border-slate-200 px-4 py-3 text-center text-sm font-medium text-[var(--primary-color)] dark:border-slate-800">View all</a>
-          </div>
-        </div>
         <div class="relative">
           <button type="button" class="btn btn--secondary px-1.5" @click="profileOpen = !profileOpen">
             <span class="grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">{{ request.user.username|slice:":2"|upper }}</span>
@@ -82,10 +75,18 @@
     </header>
 
     <main class="shell-main">
+      <p class="print-only shell-print-head">{{ brand.name }}</p>
       {% include "components/ui/messages.html" %}
+{% endif %}
       {% block content %}{% endblock %}
+{% if request.GET.print %}
+  </main>
+  <footer class="page-print__foot"><span>{{ brand.name }}</span><span>Printed by {{ request.user.get_full_name|default:request.user.username }}</span></footer>
+</div>
+{% else %}
     </main>
     {% include "components/ui/confirmation_dialog.html" %}
   </div>
 </div>
+{% endif %}
 {% endblock %}

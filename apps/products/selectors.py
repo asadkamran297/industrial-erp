@@ -95,26 +95,6 @@ def stock_by_product() -> dict[int, Decimal]:
     return {row["product_id"]: row["total"] or Decimal("0") for row in rows}
 
 
-def tree_rows(queryset: QuerySet[ProductNode]) -> list[ProductNode]:
-    """The matching items, each preceded by the headings it sits under.
-
-    The list is read as a tree: a filtered item that lost its heading would
-    leave the reader with a code and no idea which part of the mill it belongs
-    to. Headings are pulled in for the matches actually shown, so an empty
-    heading never appears.
-    """
-    matches = list(queryset)
-    heading_ids = set()
-    for item in matches:
-        node = item.parent
-        while node is not None:
-            heading_ids.add(node.pk)
-            node = node.parent
-    headings = product_queryset().filter(pk__in=heading_ids)
-    rows = sorted([*headings, *matches], key=lambda node: node.display_code)
-    return rows
-
-
 def search_products(queryset: QuerySet[ProductNode], term: str) -> QuerySet[ProductNode]:
     term = (term or "").strip()
     if not term:

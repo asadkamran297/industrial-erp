@@ -51,13 +51,6 @@ def ref_family(table, pk):
     return [f"{table}{suffix}:{pk}" for suffix in ("", "_paid", "_reversal", "_paid_reversal")]
 
 
-def first_voucher_url(*source_refs):
-    from apps.finance.models import AccountVoucher
-
-    voucher = AccountVoucher.objects.filter(source_ref__in=[r for r in source_refs if r]).order_by("id").first()
-    return reverse("finance:account_voucher_detail", args=[voucher.pk]) if voucher else ""
-
-
 def source_document_link(source_ref):
     if not source_ref or ":" not in source_ref:
         return None
@@ -76,3 +69,15 @@ def source_document_link(source_ref):
             return doc_link(kind, getattr(record, number) or f"#{pk}", reverse(url_name, args=[record.pk]),
                             dead=getattr(record, "status", "") == STATUS_REVERSED)
     return None
+
+
+def guard(actions, user, page):
+    """Drop Add New / Edit when the user lacks that right on the page."""
+    from apps.access_control.selectors import user_has_permission
+
+    actions = dict(actions)
+    if actions.get("new_url") and not user_has_permission(user, f"{page}.add"):
+        actions["new_url"] = ""
+    if actions.get("edit_url") and not user_has_permission(user, f"{page}.edit"):
+        actions["edit_url"] = ""
+    return actions

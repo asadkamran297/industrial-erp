@@ -7,7 +7,7 @@
     </div>
     <div class="page-head__actions">
       {{ slots.actions }}
-      {% if add_url %}{% include "components/ui/button.html" with label=add_label|default:"New" href=add_url icon="plus" variant="primary" only %}{% endif %}
+      {% if add_url %}{% capture as add_text %}{% if add_label|slice:":4" == "Add " %}{{ add_label }}{% else %}Add {{ add_label|default:"New" }}{% endif %}{% endcapture %}{% include "components/ui/button.html" with label=add_text href=add_url icon="plus" variant="success" only %}{% endif %}
     </div>
   </div>
   {% endif %}
@@ -16,6 +16,7 @@
   <section class="board-card">
     {% if not no_filters %}{% include "components/table/filter_bar.html" with table_id=table_id|default:"board-table" %}{% endif %}
     {{ slots.bar }}
+    {% if paginator and not no_pagination %}<p class="board-count">{{ paginator.count }} record{{ paginator.count|pluralize }}{% if is_paginated %}<span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>{% endif %}</p>{% endif %}
     <div class="board-scroll{% if freeze %} board-freeze-{{ freeze }}{% endif %}">
       <table id="{{ table_id|default:'board-table' }}" class="board-table">{{ slot }}</table>
     </div>

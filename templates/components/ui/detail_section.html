@@ -1,0 +1,4 @@
+<section class="detail-section">
+  {% if title %}<h2 class="detail-section__title">{{ title }}</h2>{% endif %}
+  <dl class="detail-grid detail-grid--cols-{{ cols|default:3 }}">{{ slot }}</dl>
+</section>

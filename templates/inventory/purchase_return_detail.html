@@ -3,7 +3,7 @@
 <section class="form-stack">
   {% capture as status_label %}{% if is_posted %}Posted{% elif purchase_return.status == "reversed" %}Reversed{% elif is_draft %}Draft{% else %}{{ purchase_return.get_status_display }}{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if is_posted %}posted{% elif purchase_return.status == "reversed" %}reversed{% elif is_draft %}draft{% else %}closed{% endif %}{% endcapture %}
-  {% component "ui/detail_header" kind="Purchase Return" number=purchase_return.return_num|default:"—" date=purchase_return.return_date|dmy party=purchase_return.supplier.name status=status_label status_tone=status_tone back=True back_url=list_url extra="no-print" %}
+  {% component "ui/detail_header" kind="Purchase Return" number=purchase_return.return_num|default:"—" date=purchase_return.return_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url extra="no-print" %}
     {% slot actions %}
       {% if can_edit and is_draft %}
       <form method="post" action="{% url 'inventory:purchase_return_post' purchase_return.pk %}">{% csrf_token %}
@@ -14,17 +14,20 @@
     {% endslot %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% include "components/ui/figure.html" with label="Invoice Total" value=purchase_return.total_purchase_amount|amount tone="sky" only %}
+    {% include "components/ui/figure.html" with label="Returned" value=purchase_return.returned_amount|amount tone="rose" only %}
+    {% include "components/ui/figure.html" with label="Qty Returned" value=qty_total|qty tone="amber" only %}
+  {% endcomponent %}
 
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
-      {% include "components/ui/detail_item.html" with label="Return No" value=purchase_return.return_num only %}
-      {% include "components/ui/detail_item.html" with label="Return Date" value=purchase_return.return_date|dmy only %}
+    {% component "ui/detail_section" title="Purchase Return" %}
       {% include "components/ui/detail_item.html" with label="Supplier" value=purchase_return.supplier.name only %}
       {% capture as invoice_label %}{% if purchase_return.purchase_invoice %}{{ purchase_return.purchase_invoice.invoice_num }}{% if purchase_return.purchase_invoice.supplier_invoice_num %} &middot; {{ purchase_return.purchase_invoice.supplier_invoice_num }}{% endif %}{% else %}Direct{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Purchase Invoice" value=invoice_label only %}
-      {% if purchase_return.purchase_invoice.godown %}{% include "components/ui/detail_item.html" with label="Godown" value=purchase_return.purchase_invoice.godown.name only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Godown" value=purchase_return.purchase_invoice.godown.name only %}
       {% if purchase_return.status == "reversed" %}{% capture as reversed_label %}{{ purchase_return.reversed_on|dmy }} &middot; {{ reverse_reason_label }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Reversed" value=reversed_label only %}{% endif %}
-      {% include "components/ui/detail_item.html" with label="Entered By" value=purchase_return.created_by.get_full_name|default:purchase_return.created_by.username only %}
+      {% include "components/ui/detail_item.html" with label="Prepared By" value=purchase_return.created_by.get_full_name|default:purchase_return.created_by.username only %}
     {% endcomponent %}
   {% endcomponent %}
 

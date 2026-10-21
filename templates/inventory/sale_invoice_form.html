@@ -10,17 +10,11 @@
 {% endcomponent %}
 
 <form method="post" id="sale-form" class="card card-rail" data-own-keys>{% csrf_token %}
-  <div class="card-body flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-    <div class="w-full max-w-md">
-      <div class="notch-field notch-field--action">
-        <label class="notch-label" for="customer">Customer <span class="req">*</span></label>
-        {% component "forms/control" type="select" name="customer" id="customer" required=True attrs='data-balance-chip="customer-balance" data-balance-owed="Receivable" data-balance-credit="Advance"' only %}
-          <option value=""></option>
-          {% for row in customers %}<option value="{{ row.pk }}" data-balance="{{ row.balance }}" {% if posted.customer == row.pk|stringformat:'s' %}selected{% endif %}>{{ row.customer_name }}</option>{% endfor %}
-        {% endcomponent %}
-        {% include "components/ui/icon_button.html" with id="add-customer" icon="plus" title="New customer" extra="notch-action" only %}
-      </div>
-      <p id="customer-balance" class="bal-chip mt-1 hidden"></p>
+  <div class="card-body">
+    <div class="head-fields">
+    <div class="head-fields__wide">
+      {% include "components/forms/party_picker.html" with label="Customer" name="customer" parties=customers selected=posted.customer required=True add_id="add-customer" add_title="New customer" owed_label="Receivable" credit_label="Advance" only %}
+    </div>
     </div>
   </div>
 
@@ -57,7 +51,7 @@
     {% include "components/forms/amount_words.html" %}
   </div>
 
-  {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_print=True label="Save Invoice" prepared_by=request.user only %}
+  {% include "components/forms/submit_bar.html" with cancel_url=cancel_url show_print=True label="Save" prepared_by=request.user only %}
 </form>
 
 {% include "components/ui/frame_modal.html" with entity_title="New Customer" %}

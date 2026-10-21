@@ -1,6 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Count, Q
+from django.db.models import Q
 from django.views.generic.edit import CreateView, DeleteView, UpdateView
 from django.views.generic.detail import DetailView
 
@@ -137,7 +136,6 @@ class SearchFilterPaginationMixin:
     def get_filter_specs(self) -> list[dict]:
         return []
 
-    board_status_param = "status"
 
     def _board_specs(self) -> list[dict]:
         specs = []
@@ -147,44 +145,6 @@ class SearchFilterPaginationMixin:
                 spec["short_label"] = _short_label(spec.get("label", ""))
             specs.append(spec)
         return specs
-
-    def get_board_tiles(self, specs) -> list[dict]:
-        """Status tiles counted over the filtered set, ignoring the status filter itself."""
-        param = self.board_status_param
-        if param not in self.filter_fields and not any(spec.get("name") == param for spec in specs):
-            return []
-        model = getattr(self, "model", None) or self.get_queryset().model
-        try:
-            choices = model._meta.get_field("status").choices
-        except FieldDoesNotExist:
-            return []
-        if not choices:
-            return []
-        original = self.request.GET
-        params = original.copy()
-        params.pop(param, None)
-        params.pop("page", None)
-        self.request.GET = params
-        try:
-            counts = dict(self.get_queryset().order_by().values_list("status").annotate(n=Count("pk")))
-        finally:
-            self.request.GET = original
-        current = original.get(param, "")
-        base = params.urlencode()
-        prefix = f"{base}&" if base else ""
-        tiles = [{
-            "label": "All", "value": sum(counts.values()), "tone": "violet", "icon": "layers",
-            "href": f"?{base}", "on": not current,
-        }]
-        for value, label in choices:
-            if value not in counts and value != current:
-                continue
-            tone, icon = STATUS_TILE_TONES.get(value, ("slate", "file"))
-            tiles.append({
-                "label": label, "value": counts.get(value, 0), "tone": tone, "icon": icon,
-                "href": f"?{prefix}{param}={value}", "on": current == value,
-            })
-        return tiles
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -217,25 +177,9 @@ class SearchFilterPaginationMixin:
             "date_filters_enabled",
             any(spec["from_param"] == "date_from" and spec["to_param"] == "date_to" for spec in date_specs),
         )
-        if "board_tiles" not in context:
-            context["board_tiles"] = self.get_board_tiles(specs)
         return context
 
 
-STATUS_TILE_TONES = {
-    "active": ("green", "check"),
-    "inactive": ("amber", "deactivate"),
-    "archived": ("slate", "archive"),
-    "draft": ("slate", "file"),
-    "pending": ("amber", "clock"),
-    "approved": ("green", "check"),
-    "posted": ("green", "check"),
-    "completed": ("green", "check"),
-    "partial": ("sky", "layers"),
-    "reversed": ("rose", "reverse"),
-    "cancelled": ("rose", "deactivate"),
-    "rejected": ("rose", "deactivate"),
-}
 
 
 def _short_label(label: str) -> str:

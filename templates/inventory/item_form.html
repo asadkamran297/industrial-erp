@@ -6,10 +6,12 @@
   {% component "ui/page_header" title=form_title back=True back_url=cancel_url %}
     {% slot fields %}
       <div class="sr-only" aria-hidden="true">{{ form.item_kind }}</div>
+      {% if features.services or object.item_kind == service_value %}
       <div class="kind-switch segmented segmented--compact" role="radiogroup" aria-label="Item kind">
-        <label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=product_value extra="kind-option sr-only" checked=True only %}<span>Product</span></label>
-        {% if features.services or object.item_kind == service_value %}<label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=service_value extra="kind-option sr-only" only %}<span>Service</span></label>{% endif %}
+        <label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=product_value extra="kind-option sr-only" checked=True only %}<span>Stock Item</span></label>
+        <label class="kind-pill">{% include "components/forms/control.html" with type="radio" name="item_kind_choice" value=service_value extra="kind-option sr-only" only %}<span>Service</span></label>
       </div>
+      {% endif %}
     {% endslot %}
   {% endcomponent %}
 
@@ -95,7 +97,7 @@
         </div>
         <p id="service-no-stock" class="alert alert--warning hidden">Services carry no stock.</p>
         {% else %}
-        {% component "ui/detail_grid" cols=4 %}
+        {% component "ui/detail_grid" cols=3 %}
           {% capture as stock_qty %}{% if object.stock %}{{ object.stock.current_quantity|qty }}{% endif %}{% endcapture %}
           {% include "components/ui/detail_item.html" with label="Quantity" value=stock_qty num=True only %}
           {% capture as stock_price %}{% if object.stock %}{{ object.stock.current_price|amount }}{% endif %}{% endcapture %}

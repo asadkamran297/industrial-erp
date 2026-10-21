@@ -3,13 +3,6 @@
 {% capture as add_url %}{% if can_add and can_add_type %}{% url 'finance:account_voucher_create' %}?voucher_type={{ add_type }}{% if add_money_mode %}&amp;money_mode={{ add_money_mode }}{% endif %}{% endif %}{% endcapture %}
 {% url 'finance:account_voucher_export' as export_csv_url %}
 {% component "table/board" title=list_title add_url=add_url add_label=add_label table_id="voucher-table" search_placeholder="Search vouchers" date_filters_enabled=True export_csv_url=export_csv_url %}
-  {% slot tiles %}
-    {% capture as posted_note %}Posted {{ posted_total|amount }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="green" icon="sum" value=voucher_total|amount label="Total" note=posted_note only %}
-    {% include "components/table/tile.html" with tone="violet" icon="file" value=voucher_count label="Vouchers" only %}
-    {% capture as period_label %}{% if period_start %}{{ period_start_display }} &rarr; {{ period_end_display }}{% else %}All time{% endif %}{% endcapture %}
-    {% include "components/table/tile.html" with tone="sky" icon="calendar" value="" label="Period" note=period_label only %}
-  {% endslot %}
   {% slot filters %}
     <label class="filter-chip">
       Period
@@ -51,7 +44,7 @@
         {% url 'finance:account_voucher_detail' voucher.pk as view_url %}
         {% url 'finance:account_voucher_print' voucher.pk as print_url %}
         {% capture as edit_url %}{% if can_edit and voucher.posted != "Y" %}{% url 'finance:account_voucher_update' voucher.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url print_url=print_url only %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url print_url=print_url fixed=True locked_title="Posted" only %}
       </td>
     </tr>
     {% empty %}

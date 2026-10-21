@@ -7,8 +7,16 @@
   {% component "ui/detail_header" kind="Supplier" number=supplier.name date=supplier_meta status=supplier.get_status_display status_tone=status_tone back=True back_url=list_url %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% capture as n %}{{ purchase_count }} invoice{{ purchase_count|pluralize }}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Total Purchases" value=purchase_total|amount note=n tone="sky" only %}
+    {% capture as n %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Total Returns" value=return_total|amount note=n tone="amber" only %}
+    {% include "components/ui/figure.html" with label="Payable Balance" value=payable_balance|amount tone="rose" only %}
+  {% endcomponent %}
+
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
+    {% component "ui/detail_section" title="Supplier" %}
       {% capture as phones %}{{ supplier.tel1|default:"—" }}{% if supplier.tel2 %} &middot; {{ supplier.tel2 }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Phone" value=phones only %}
       {% include "components/ui/detail_item.html" with label="Email" value=supplier.email only %}
@@ -22,17 +30,9 @@
       {% include "components/ui/detail_item.html" with label="Credit Limit" value=credit only %}
       {% capture as opening %}{{ supplier.opening_balance|amount }}{% if supplier.opening_balance_date %} &middot; {{ supplier.opening_balance_date|dmy }}{% endif %}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Opening Balance" value=opening num=True only %}
-      {% if supplier.remarks %}{% include "components/ui/detail_item.html" with label="Remarks" value=supplier.remarks wide=True only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Remarks" value=supplier.remarks wide=True only %}
     {% endcomponent %}
   {% endcomponent %}
-
-  <div class="tiles">
-    {% capture as bought_note %}{{ purchase_count }} invoice{{ purchase_count|pluralize }} &middot; {{ order_count }} order{{ order_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="sky" icon="sum" value=purchase_total|amount label="Total Purchases" note=bought_note only %}
-    {% capture as return_note %}{{ return_count }} return{{ return_count|pluralize }}{% endcapture %}
-    {% include "components/table/tile.html" with tone="amber" icon="reverse" value=return_total|amount label="Total Returns" note=return_note only %}
-    {% include "components/table/tile.html" with tone="rose" icon="wallet" value=payable_balance|amount label="Payable Balance" note=payable_code only %}
-  </div>
 
   {% component "table/board" title="" table_id="supplier-ledger" no_filters=True no_pagination=True %}
     {% slot bar %}<div class="section__head"><h2 class="section__title">Ledger</h2></div>{% endslot %}
@@ -54,21 +54,5 @@
     </tbody>
   {% endcomponent %}
 
-  {% component "table/board" title="" table_id="supplier-invoices" no_filters=True no_pagination=True %}
-    {% slot bar %}<div class="section__head"><h2 class="section__title">Recent purchase invoices</h2></div>{% endslot %}
-    <thead><tr><th>Invoice</th><th>Date</th><th class="num">Amount</th><th class="actions-col">Actions</th></tr></thead>
-    <tbody>
-      {% for invoice in recent_invoices %}
-      <tr>
-        <td><a class="doc-num" href="{% url 'inventory:purchase_invoice_detail' invoice.pk %}">{{ invoice.invoice_num }}</a></td>
-        <td class="date">{{ invoice.invoice_date|dmy }}</td>
-        <td class="num strong">{{ invoice.total_amount|amount }}</td>
-        <td class="actions-col">{% url 'inventory:purchase_invoice_detail' invoice.pk as view_url %}{% include "components/table/actions.html" with view_url=view_url only %}</td>
-      </tr>
-      {% empty %}
-      {% include "components/table/empty_row.html" with span=4 label="No purchases." only %}
-      {% endfor %}
-    </tbody>
-  {% endcomponent %}
 </section>
 {% endblock %}

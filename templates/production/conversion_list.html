@@ -27,7 +27,8 @@
       <td class="actions-col">
         {% url 'production:conversion_detail' row.pk as view_url %}
         {% capture as edit_url %}{% if can_edit %}{% url 'production:conversion_update' row.pk %}{% endif %}{% endcapture %}
-        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url only %}
+        {% capture as print_url %}{{ view_url }}?print=1{% endcapture %}
+        {% include "components/table/actions.html" with view_url=view_url edit_url=edit_url print_url=print_url only %}
       </td>
     </tr>
     {% empty %}

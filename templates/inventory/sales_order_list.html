@@ -13,6 +13,7 @@
       <th class="num">Ordered</th>
       <th class="num">Still due</th>
       <th class="num">Value</th>
+      <th class="print-hide actions-col">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -33,8 +34,13 @@
       <td class="num">{{ order.qty_total|qty }}</td>
       <td class="num">{{ order.qty_still_due|qty }}</td>
       <td class="num strong">{{ order.value_total|amount }}</td>
+      <td class="print-hide actions-col">
+        {% component "table/actions" %}
+          {% if can_edit and not order.is_closed %}{% url 'inventory:sales_order_close' order.pk as close_url %}{% include "components/ui/icon_button.html" with icon="close" title="Close order" tone="danger" confirm="Close this order? The balance will not be shipped." post=close_url reason="reason" only %}{% endif %}
+        {% endcomponent %}
+      </td>
     </tr>
-    {% component "table/lines_row" pk=order.pk span=9 %}
+    {% component "table/lines_row" pk=order.pk span=10 %}
       <table class="lines-table">
         <thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Invoiced</th><th class="num">Pending</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
         <tbody>
@@ -52,9 +58,9 @@
       </table>
     {% endcomponent %}
     {% empty %}
-    {% include "components/table/empty_row.html" with span=9 label="No sales orders." only %}
+    {% include "components/table/empty_row.html" with span=10 label="No sales orders." only %}
     {% endfor %}
   </tbody>
-  {% if orders %}{% include "components/table/table_footer.html" with lead=8 value=page_total|amount only %}{% endif %}
+  {% if orders %}{% include "components/table/table_footer.html" with lead=8 value=page_total|amount tail=1 only %}{% endif %}
 {% endcomponent %}
 {% endblock %}

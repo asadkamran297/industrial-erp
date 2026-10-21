@@ -201,6 +201,7 @@ class RoleDetailView(MasterDetailView):
     kind = "Role"
     list_url_name = "access_control:role_list"
     edit_url_name = "access_control:role_update"
+    create_url_name = "access_control:role_create"
     detail_fields = (("Title", "title"), ("Status", "status"))
     template_name = "access_control/role_detail.html"
 
@@ -211,9 +212,6 @@ class RoleDetailView(MasterDetailView):
             {"label": "Permissions", "value": context["permissions"].count(), "num": True, "wide": False},
             {"label": "Users", "value": UserAssignment.objects.filter(role=self.object).count(), "num": True, "wide": False},
         ]
-        from apps.core.doc_links import doc_link, url_or_blank
-
-        context["doc_links"] = [doc_link("User Assignments", "List", url_or_blank("access_control:user_assignment_list", query=f"q={self.object.title}"))]
         return context
 
 
@@ -229,6 +227,7 @@ class PermissionDetailView(MasterDetailView):
     kind = "Permission"
     list_url_name = "access_control:permission_list"
     edit_url_name = "access_control:permission_update"
+    create_url_name = "access_control:permission_create"
     detail_fields = (("Title", "title"), ("Code", "code"), ("Sequence", "seq"), ("Status", "status"))
 
 
@@ -246,6 +245,7 @@ class UserAssignmentDetailView(MasterDetailView):
     subtitle_attr = "role.title"
     list_url_name = "access_control:user_assignment_list"
     edit_url_name = "access_control:user_assignment_update"
+    create_url_name = "access_control:user_assignment_create"
     detail_fields = (
         ("User", "user.display_name"), ("Role", "role"), ("Organization", "organization"), ("Branch", "branch"),
         ("Start Date", "start_date"), ("End Date", "end_date"), ("Primary", "is_primary"), ("Status", "status"),

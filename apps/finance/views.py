@@ -38,7 +38,13 @@ class VoucherNavMixin:
     def get_context_data(self, **kwargs):
         voucher = getattr(self, "object", None)
         if voucher is not None:
-            self.request.nav_query = f"voucher_type={voucher.voucher_type}"
+            from apps.core.constants import VOUCHER_ENTRY_BY_TYPE
+
+            mode = money_mode_for_account(voucher.account_no)
+            query = f"voucher_type={voucher.voucher_type}"
+            if (voucher.voucher_type, mode) in VOUCHER_ENTRY_BY_TYPE and mode:
+                query += f"&money_mode={mode}"
+            self.request.nav_query = query
         return super().get_context_data(**kwargs)
 
 
@@ -170,6 +176,7 @@ class AccountConfigurationDetailView(MasterDetailView):
     subtitle_attr = "account_no"
     list_url_name = "finance:account_configuration_list"
     edit_url_name = "finance:account_configuration_update"
+    create_url_name = "finance:account_configuration_create"
     detail_fields = (
         ("Code", "code"), ("Account No", "account_no"), ("Type", "account_type"), ("Nature", "nature"),
         ("Ledger", "account_ledger"), ("Balance / Income", "balance_income"), ("Post To", "post_to_account"), ("Account Nature", "account_nature"),
@@ -184,6 +191,7 @@ class FiscalYearDetailView(MasterDetailView):
     subtitle_attr = "code"
     list_url_name = "finance:fiscal_year_list"
     edit_url_name = "finance:fiscal_year_update"
+    create_url_name = "finance:fiscal_year_create"
     template_name = "finance/fiscal_year_detail.html"
     detail_fields = (("Code", "code"), ("Start", "start_date"), ("End", "end_date"), ("Status", "status"))
 
@@ -662,7 +670,21 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         counter = [line for line in voucher.lines.all() if line.account_no != voucher.account_no]
         context["counter_titles"] = ", ".join(titles.get(line.account_no, line.account_no) for line in counter)
         context["doc_links"], context["doc_actions"] = self.voucher_links(voucher, titles)
+        context["source_document_html"] = self.source_document_html(voucher)
         return context
+
+    def source_document_html(self, voucher):
+        from django.template.loader import render_to_string
+
+        from apps.inventory.views import PURCHASE_INVOICE_QUERYSET, purchase_invoice_body
+
+        table, _, pk = (voucher.source_ref or "").partition(":")
+        if table.removesuffix("_reversal") not in ("inv_purchase_invoices", "inv_purchase_invoices_paid") or not pk.isdigit():
+            return ""
+        invoice = PURCHASE_INVOICE_QUERYSET.filter(pk=int(pk)).first()
+        if invoice is None:
+            return ""
+        return render_to_string("inventory/_purchase_invoice_body.html", purchase_invoice_body(invoice), request=self.request)
 
     def voucher_links(self, voucher, titles):
         from apps.core.doc_links import doc_link, source_document_link, url_or_blank, voucher_links

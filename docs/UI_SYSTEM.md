@@ -96,9 +96,9 @@ Run `npm run build:css` after touching classes.
 
 | Component | Use |
 |---|---|
-| `board.html` | Every list screen: head, tiles, filter bar, scroll table, pagination |
-| `tiles.html`, `tile.html` | Status tiles (`board_tiles` from the mixin) |
-| `filter_bar.html` | Search, filters, date range, columns, export |
+| `board.html` | Every list screen: head, filter bar, record count, scroll table, pagination |
+| `tiles.html`, `tile.html` | Report summaries, ledger statement head and the POS entry totals only; never on a list or detail screen |
+| `filter_bar.html` | Search, filters, date range, columns, download menu (Download formats; `excel_url` for a server Excel of all rows; `print_url` → Print list; `import_url` / `sample_url` → Import; Copy), and a More menu from the board's `more` slot for related screens |
 | `sort_header.html` | Sortable `<th>` |
 | `status_badge.html` | Status pill. `status label tone title` |
 | `actions.html` | Row icons: `view_url edit_url print_url reverse_url deactivate_url delete_url` |
@@ -116,7 +116,8 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 ### MASTER LIST
 
 - `table/board` with `title` = plural business term, `add_label` = singular, `search_placeholder` = "Search <plural>", `table_id`.
-- Tiles All / Active / Inactive counted over the filtered set via `SearchFilterPaginationMixin.get_board_tiles`; every master view sets `filter_fields = {"status": "status"}` and `get_filter_specs` with `RECORD_STATUS_CHOICES`. Money-bearing masters (supplier, customer) add a balance-total tile.
+- List head carries one button: green "Add <singular>" from `add_label` (board adds "Add"). Excel, Print, Import, Sample and links to related screens never sit in the head; they go through `excel_url` / `print_url` / `import_url` / `sample_url` or `{% slot more %}`.
+- No tiles. Status is a filter-bar choice: every master view sets `filter_fields = {"status": "status"}` and `get_filter_specs` with `RECORD_STATUS_CHOICES`.
 - First column = name as `<a class="doc-num">` to the detail page. Every master has a detail page.
 - `SortableListMixin`; `sort_header` on every field-backed column; `default_sort = "name"`.
 - Status = `components/forms/switch.html` when `can_edit`, else `status_badge`. No delete action on any master (CLAUDE.md rule 23); deactivate only.
@@ -131,27 +132,33 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 
 ### DOCUMENT LIST
 
-- Same as the Purchase Orders board: status tiles, filter bar with date range, sort headers, `status_badge` (never switch), expand row for lines, actions view / edit-if-draft / print / reverse-if-posted, page-total footer, pagination, export, column picker.
+- Same as the Purchase Orders board: no tiles (status tabs live in the filter bar's tab select with counts), filter bar with date range, sort headers, `status_badge` (never switch), expand row for lines, actions view / edit-if-draft / print / reverse-if-posted, page-total footer, pagination, export, column picker.
 
 ### DOCUMENT FORM
 
 - `page_header` with back, header field grid, `line_items`, `totals_panel`, `submit_bar` (Cancel, Save & Print, Save), `floating` on long forms, one page without vertical scroll.
 - Document number (read-only, `strong num`, in `.head-no`) and document date sit in the `page_header` `fields` slot beside the title, never in the form body. The date carries `form_id` (or a `form=` widget attr) because the header is outside the `<form>`.
+- Supplier and customer are always `components/forms/party_picker.html` (notched tinted picker, balance chip, "+" to add): `label`, `name`, `parties`, `selected`, `owed_label`/`credit_label`, and either `add_id` (screen's own modal JS) or `add_url` + `add_kind` (shared `static/js/party-add.js`, needs `components/ui/frame_modal.html` on the page). The label is the business term: Supplier, Customer — never Sender / Party / Vendor. Header fields sit in `.head-fields` (party in `.head-fields__wide`, dates in `.head-fields__date`), normal control size; `size="sm"` only inside line tables.
 - Every party picker (supplier, customer, account) shows a balance chip under it: `select[data-balance-chip="<chip id>"]` with `data-balance-owed` / `data-balance-credit` labels, each `<option data-balance>`, `<p class="bal-chip hidden">`; `static/js/party-balance.js` paints it on load and change. Supplier lists come from `suppliers_with_balance()` / `customers_with_balance()` (`apps/inventory/views.py`), balances from the ledger account (`finance.services._party_balances`), never from the master's opening figure alone.
 - Save posts and returns to the document's list with a `messages.success`; no confirm/preview modal before save.
 
 ### DETAIL
 
-- `detail_header` (title, status pill, back, actions edit / print / ledger), `detail_grid`, then related tables as `lines-table` / `board-table`.
+- `detail_header`: back, kind, number, status pill, date, party; buttons from `doc_actions` in one order: Add New · Edit · Invoice/Print (`print_label`) · Voucher (gate-slip print), then the page's own (Post, Reverse, Delete). Build `doc_actions` in the module's `doc_links.py` and pass it through `apps.core.doc_links.guard` so Add New / Edit follow page rights.
+- `doc_links` chain under the header: only real related documents and ledgers (PO → Invoice → Return → GL voucher, party ledger). No "List" shortcuts.
+- Key figures first: `components/ui/detail_figures.html` with `components/ui/figure.html` (label, value, note, tone); a figure is not repeated in the grid.
+- Body: one card of `components/ui/detail_section.html` blocks (accented title + 3-column grid, small uppercase label over a bold value, dashed row lines), sections named as on the form, every form field shown with its form label; an empty value shows `—`, never hidden. Then line tables in a titled card.
+- No tiles; totals and balances are figures.
+- Sidebar: a page whose URL does not sit under its menu entry sets `request.nav_href` (exact menu href) or `request.nav_query`; when several entries match, the longest href wins (`apps/portal/navigation.py`).
 
 ### DASHBOARD
 
-- `components/ui/stat_card.html` only, tones/icons from `STATUS_TILE_TONES`, `|amount` for money.
+- `components/ui/stat_card.html` only, `|amount` for money.
 
 ### Adjustments from `docs/UI_AUDIT.md`
 
 - Item Categories and Units of Measure stay two-pane screens (`class_list.html`, `uom_list.html`); they are outside MASTER LIST. Their edit panes follow MASTER FORM field rules.
-- The wheat purchase slip (`wheat_purchase_form.html`) mirrors the paper slip (CLAUDE.md rule 21) and is outside DOCUMENT FORM for its body layout; the header (number + date in `page_header`), balance chip and direct save still apply.
+- The wheat purchase slip (`wheat_purchase_form.html`) mirrors the paper slip (CLAUDE.md rule 21) and is outside DOCUMENT FORM for its body layout; the header (number + date in `page_header`), balance chip, `submit_bar` and direct save still apply.
 - Purchase return invoice picker: every posted invoice is listed with a Type column (Stores / Wheat / Bardana); only fully returned ones are greyed (`row--off`, "Fully returned" pill) and do not open. A line is returned when its Return Qty is above zero (CLAUDE.md 25a).
 - Documents that post on save (purchase return, account voucher) may label the submit bar Cancel, Save Draft, Save & Post in place of Save & Print.
 - Salary Items has no status field: no tiles, no switch, no badge; the rest of MASTER LIST applies.
@@ -163,7 +170,7 @@ Every screen is one of six kinds. A kind has one shape; a screen that needs some
 
 ### Lint
 
-`python manage.py ui_lint` fails on contract breaches, listed under a `contract` heading (`--lenient` reports without failing). Checks: board template without `sort_header` (chronological ledgers, the product tree, detail pages and single-purpose grids are listed in `SORT_EXEMPT`); raw `<span class="pill pill--…">` in a board (use `table/status_badge`, which takes `status`, `label`, `tone`, `title`); master list template (`MASTER_LIST_TEMPLATES`) passing `delete_url` to `table/actions`; `*form*.html` outside `components/` that uses none of `crud_form`, `tabbed_form`, `submit_bar`.
+`python manage.py ui_lint` fails on contract breaches, listed under a `contract` heading (`--lenient` reports without failing). Checks: board template without `sort_header` (chronological ledgers, the product tree, detail pages and single-purpose grids are listed in `SORT_EXEMPT`); raw `<span class="pill pill--…">` in a board (use `table/status_badge`, which takes `status`, `label`, `tone`, `title`); master list template (`MASTER_LIST_TEMPLATES`) passing `delete_url` to `table/actions`; `*form*.html` outside `components/` that uses none of `crud_form`, `tabbed_form`, `submit_bar`; tiles on a `*_list.html` / `*_detail.html` (except `TILES_ALLOWED`); a detail field wrapped in `{% if %}` so it hides when empty; a button label outside the vocabulary (Save, Save Draft, Save & Post, Save & New, Save & Print, Post); a supplier / customer `select` in a form outside `party_picker`.
 
 ### Shared view helpers (`apps/core/views.py`, `apps/core/mixins.py`)
 
@@ -297,7 +304,7 @@ More than 12 fields:
 {% endblock %}
 ```
 
-Print screens extend `layouts/print.html` (blocks `title`, `toolbar`, `print_header`, `watermark`, `print_content`, `print_footer`).
+Print: a screen with its own paper (invoice, PO, voucher, grinding, list export PDF) extends `layouts/print.html`; any other page prints through `?print=1` on `layouts/portal.html` (same toolbar: Print, Close, A4 / Thermal switched in the browser without reload, mill header, printed-by footer). The detail header's Print button opens the dedicated print or `?print=1` in a new tab. Print screens extend `layouts/print.html` (blocks `title`, `toolbar`, `print_header`, `watermark`, `print_content`, `print_footer`).
 
 ## Rules
 
@@ -309,6 +316,9 @@ Print screens extend `layouts/print.html` (blocks `title`, `toolbar`, `print_hea
 - Labels only: no help text, placeholders that explain, or page ledes.
 - Dates use `--date-w`; weights 3 dp, money 2 dp.
 - `{# #}` single-line only.
+- Icons: name the business concept (`payable`, `bardana`, `grinding`, `vehicle`...) from `CONCEPTS` in `apps/core/icons.py`; add a concept there rather than choosing a glyph on the screen.
+- Section headings (`section__title`, `card-title`, `detail-section__title`) share one style.
+- Field labels (`field__label`, notch label, detail `dt`) are one style, rendered Title Case by CSS.
 - Keyboard: Enter moves to next field (opt out with `data-own-keys`), Ctrl+S clicks `[data-save]`, `/` focuses `[data-board-search]`, Esc closes modals.
 
 ## ui_lint

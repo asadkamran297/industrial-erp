@@ -29,7 +29,7 @@ def _views(screen):
 
 
 SUPPLIER = ("supplier", "Supplier", sel.supplier_options)
-ARHTI = ("supplier", "Arhti", sel.wheat_supplier_options)
+ARHTI = ("supplier", "Supplier", sel.wheat_supplier_options)
 
 
 # 14 ------------------------------------------------------------------------
@@ -37,7 +37,7 @@ ARHTI = ("supplier", "Arhti", sel.wheat_supplier_options)
 WHEAT_REGISTER_COLUMNS = ColumnSet("reports.wheat_register", (
     col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
-    col("supplier", "Arhti", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
+    col("supplier", "Supplier", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
     col("vehicle", "Vehicle", default=False),
     col("broker", "Broker", default=False),
     col("product", "Wheat", default=False),
@@ -151,7 +151,7 @@ PurchaseSummaryExportView, PurchaseSummaryColumnsView = _views(PurchaseSummaryVi
 # 16 ------------------------------------------------------------------------
 
 SUPPLIER_PURCHASE_COLUMNS = ColumnSet("reports.supplier_purchases", (
-    col("supplier", "Arhti", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
+    col("supplier", "Supplier", "link", locked=True, link="inventory:supplier_detail", link_key="supplier_id"),
     col("slips", "Invoices", "int", total=True),
     col("kg", "Credit Kg", "qty", places=3, total=True),
     col("mund", "Mund", "qty", places=3, total=True),
@@ -168,7 +168,7 @@ SUPPLIER_PURCHASE_COLUMNS = ColumnSet("reports.supplier_purchases", (
 
 class SupplierPurchasesView(ReportView):
     page = PAGE
-    title = "Arhti-wise Purchase"
+    title = "Supplier-wise Purchase"
     template_name = "reports/generic.html"
     columns = SUPPLIER_PURCHASE_COLUMNS
     url_name = "inventory:report_supplier_purchases"
@@ -182,11 +182,11 @@ class SupplierPurchasesView(ReportView):
         data = sel.supplier_purchases(p.start, p.end, f["supplier"] or None)
         t = data["totals"]
         tiles = [
-            _tile("Arhtis", str(len(data["rows"])), "slate", "users"),
+            _tile("Suppliers", str(len(data["rows"])), "slate", "users"),
             _tile("Mund", f"{t['mund']:,.0f}", "amber", "wheat", f"{t['slips']} slips"),
             _tile("Goods", format_amount(t["amount"]), "sky", "cash", f"avg {format_amount(t['avg_rate'])}/md"),
             _tile("Balance", format_amount(t["balance"]), "rose", "alert"),
-            _tile("Sacks held", f"{t['sacks_held']:,.0f}", "teal", "package"),
+            _tile("Sacks held", f"{t['sacks_held']:,.0f}", "teal", "bardana"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
@@ -199,7 +199,7 @@ SupplierPurchasesExportView, SupplierPurchasesColumnsView = _views(SupplierPurch
 WHEAT_QUALITY_COLUMNS = ColumnSet("reports.wheat_quality", (
     col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
-    col("supplier", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
+    col("supplier", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("vehicle", "Vehicle", default=False),
     col("weight", "Weight Kg", "qty", places=3, total=True),
     col("katla", "Katla", "qty", places=3, total=True),
@@ -302,7 +302,7 @@ WheatRateTrendExportView, WheatRateTrendColumnsView = _views(WheatRateTrendView)
 FREIGHT_COLUMNS = ColumnSet("reports.freight_brokerage", (
     col("number", "Invoice", "link", locked=True, link="inventory:purchase_invoice_detail"),
     col("date", "Date", "date", locked=True),
-    col("supplier", "Arhti", "link", link="inventory:supplier_detail", link_key="supplier_id"),
+    col("supplier", "Supplier", "link", link="inventory:supplier_detail", link_key="supplier_id"),
     col("vehicle", "Vehicle"),
     col("broker", "Broker"),
     col("credit_mund", "Mund", "qty", places=3, total=True),
@@ -334,12 +334,12 @@ class FreightBrokerageView(ReportView):
         data = sel.freight_brokerage(p.start, p.end, f["supplier"] or None, f["broker"] or None)
         t = data["totals"]
         tiles = [
-            _tile("Freight", format_amount(t["freight"]), "sky", "truck", f"{t['invoices']} slips"),
-            _tile("Freight mill paid", format_amount(t["freight_mill"]), "rose", "truck"),
-            _tile("Freight supplier paid", format_amount(t["freight_supplier"]), "green", "truck"),
-            _tile("Brokerage", format_amount(t["brokerage"]), "violet", "briefcase"),
-            _tile("Brokerage mill bears", format_amount(t["brokerage_mill"]), "amber", "briefcase"),
-            _tile("Brokerage supplier bears", format_amount(t["brokerage_supplier"]), "teal", "briefcase"),
+            _tile("Freight", format_amount(t["freight"]), "sky", "freight", f"{t['invoices']} slips"),
+            _tile("Freight mill paid", format_amount(t["freight_mill"]), "rose", "freight"),
+            _tile("Freight supplier paid", format_amount(t["freight_supplier"]), "green", "freight"),
+            _tile("Brokerage", format_amount(t["brokerage"]), "violet", "brokerage"),
+            _tile("Brokerage mill bears", format_amount(t["brokerage_mill"]), "amber", "brokerage"),
+            _tile("Brokerage supplier bears", format_amount(t["brokerage_supplier"]), "teal", "brokerage"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
 
@@ -506,7 +506,7 @@ class SupplierPaymentStatusView(ReportView):
     default_sort = "balance"
     default_sort_dir = "desc"
     sort_fields = {k: k for k in PAYMENT_STATUS_COLUMNS.keys}
-    filter_specs = (("kind", "Type", (("arhti", "Arhti (wheat)"), ("bardana", "Bardana"), ("stores", "Stores"))),)
+    filter_specs = (("kind", "Type", (("arhti", "Wheat"), ("bardana", "Bardana"), ("stores", "Stores"))),)
 
     def build(self):
         f = self.filters()

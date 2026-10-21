@@ -170,8 +170,8 @@ class PackingConsumptionView(ReportView):
         data = sel.packing_consumption(p.start, p.end, f["product"] or None)
         t = data["totals"]
         tiles = [
-            _tile("Output bags", f"{t['output_units']:,.0f}", "teal", "factory", f"{t['output_kg']:,.0f} kg"),
-            _tile("Bags consumed", f"{t['bags_used']:,.0f}", "amber", "package"),
+            _tile("Output bags", f"{t['output_units']:,.0f}", "teal", "grinding", f"{t['output_kg']:,.0f} kg"),
+            _tile("Bags consumed", f"{t['bags_used']:,.0f}", "amber", "bardana"),
             _tile("Variance", f"{t['variance']:,.0f}", "rose" if t["variance"] else "green", "alert", f"{t['variance_pct'] or 0}%"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}

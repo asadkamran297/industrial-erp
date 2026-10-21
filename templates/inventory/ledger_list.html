@@ -1,9 +1,7 @@
 {% extends "layouts/portal.html" %}
 {% block content %}
-{% url 'inventory:ledger_print' as print_base %}
-{% capture as print_href %}{{ print_base }}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}{% endcapture %}
-{% component "table/board" title="Item Ledger" table_id="ledger-table" search_placeholder="Search" %}
-  {% slot actions %}{% include "components/ui/button.html" with label="Print" href=print_href icon="print" target="_blank" only %}{% endslot %}
+{% url 'inventory:ledger_print' as print_url %}
+{% component "table/board" title="Item Ledger" table_id="ledger-table" search_placeholder="Search" print_url=print_url %}
   <thead>
     <tr><th>#</th><th>Date</th><th>Transaction</th><th>Item</th><th class="num">Opening qty</th><th class="num">Movement qty</th><th class="num">Closing qty</th><th>Ref</th></tr>
   </thead>

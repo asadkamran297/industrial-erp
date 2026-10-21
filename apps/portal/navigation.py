@@ -124,9 +124,52 @@ def get_portal_navigation(request: HttpRequest) -> list[dict[str, Any]]:
         nav_item = build_navigation_item(item, permission_codes, current_path, current_query=current_query, favourites=favourites)
         if nav_item is not None:
             navigation.append(nav_item)
+    _settle_active(navigation, getattr(request, "nav_href", ""))
 
     request.portal_favourites = _collect_favourites(navigation, favourite_hrefs)
     return navigation
+
+
+def _leaves(items):
+    for item in items:
+        if item["has_children"]:
+            yield from _leaves(item["children"])
+        else:
+            yield item
+
+
+def _settle_active(navigation: list[dict[str, Any]], forced_href: str = "") -> None:
+    """One current leaf: the view's own ``request.nav_href`` if set, else the most specific match."""
+    leaves = list(_leaves(navigation))
+    if forced_href:
+        winners = [leaf for leaf in leaves if leaf["href"] == forced_href][:1]
+    else:
+        matched = [leaf for leaf in leaves if leaf["is_current"]]
+        winners = [max(matched, key=lambda leaf: len(leaf["href"]))] if matched else []
+    if not forced_href and not winners:
+        return
+    winner = winners[0] if winners else None
+
+    def paint(items):
+        open_here = False
+        for item in items:
+            if item["has_children"]:
+                child_open = paint(item["children"])
+                item["is_current"] = False
+                item["is_open"] = child_open
+                item["is_active"] = child_open
+                item["item_class"] = get_nav_item_class(item["depth"], True, False, child_open)
+                item["icon_class"] = get_nav_icon_class(False, child_open)
+            else:
+                on = item is winner
+                item["is_current"] = item["is_active"] = on
+                item["is_open"] = False
+                item["item_class"] = get_nav_item_class(item["depth"], False, on)
+                item["icon_class"] = get_nav_icon_class(on)
+            open_here = open_here or item["is_active"]
+        return open_here
+
+    paint(navigation)
 
 
 def _collect_favourites(navigation: list[dict[str, Any]], ordered_hrefs: list[str]) -> list[dict[str, Any]]:

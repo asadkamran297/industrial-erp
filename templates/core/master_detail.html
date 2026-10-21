@@ -3,8 +3,13 @@
 <section class="form-stack">
   {% component "ui/detail_header" kind=kind number=title date=subtitle status=status_label status_tone=status_tone back=True back_url=list_url %}
   {% endcomponent %}
+  {% if figures %}
+  {% component "ui/detail_figures" %}
+    {% for figure in figures %}{% include "components/ui/figure.html" with label=figure.label value=figure.value tone=figure.tone only %}{% endfor %}
+  {% endcomponent %}
+  {% endif %}
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
+    {% component "ui/detail_section" title=kind %}
       {% for item in detail_items %}{% include "components/ui/detail_item.html" with label=item.label value=item.value num=item.num wide=item.wide only %}{% endfor %}
     {% endcomponent %}
   {% endcomponent %}

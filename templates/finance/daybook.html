@@ -3,11 +3,6 @@
 <div class="daybook-page">
   <div class="page-head">
     <div class="page-head__lead"><h1 class="page-title">Day Book</h1></div>
-    <div class="page-head__actions">
-      {% capture as excel_url %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}&amp;format=xlsx{% endcapture %}
-      {% include "components/ui/button.html" with label="Excel" href=excel_url icon="download" variant="secondary" only %}
-      {% include "components/ui/button.html" with label="Print" icon="print" variant="primary" type="button" attrs='onclick="window.print()"' only %}
-    </div>
   </div>
   <section class="board-card">
     <div class="filter-bar">
@@ -20,6 +15,17 @@
         {% include "components/ui/icon_button.html" with href=next_url icon="chevron-right" title="Next" bordered=True only %}
         {% url 'finance:daybook' as today_url %}{% include "components/ui/button.html" with label="Today" href=today_url size="sm" variant="ghost" only %}
       </form>
+      {% capture as excel_url %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}&amp;format=xlsx{% endcapture %}
+      {% capture as print_url %}?date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}&amp;print=1{% endcapture %}
+      {% include "components/ui/icon_button.html" with href=print_url icon="print" title="Print" extra="bar-btn ml-auto" target="_blank" only %}
+      <div class="settings-menu" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+        {% include "components/ui/icon_button.html" with type="button" icon="download" title="Export" extra="bar-btn" attrs='@click="open = !open"' only %}
+        <div class="settings-panel export-panel" x-show="open" x-cloak x-transition.opacity role="menu">
+          <p class="settings-heading">Download</p>
+          <a class="export-item" role="menuitem" href="{{ excel_url }}"><span class="export-badge export-badge--xls">XLS</span><span>Excel</span></a>
+          <a class="export-item" role="menuitem" target="_blank" href="{{ print_url }}"><span class="export-badge export-badge--pdf">PDF</span><span>PDF</span></a>
+        </div>
+      </div>
     </div>
 
     {% include "components/report/day_book.html" %}

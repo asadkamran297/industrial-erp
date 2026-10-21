@@ -3,82 +3,24 @@
 <section class="form-stack">
   {% capture as status_label %}{% if invoice.status == "reversed" %}Reversed{% else %}Posted{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if invoice.status == "reversed" %}reversed{% else %}posted{% endif %}{% endcapture %}
-  {% component "ui/detail_header" kind="Purchase Invoice" number=invoice.invoice_num date=invoice.invoice_date|dmy party=invoice.supplier.name status=status_label status_tone=status_tone back=True back_url=invoices_url extra="no-print" %}
+  {% component "ui/detail_header" kind="Purchase Invoice" number=invoice.invoice_num date=invoice.invoice_date|dmy status=status_label status_tone=status_tone back=True back_url=invoices_url extra="no-print" %}
     {% slot meta %}{% if invoice.legacy_bill_no %}<span class="chip" title="Earlier bill number">{{ invoice.legacy_bill_no }}</span>{% endif %}{% endslot %}
   {% endcomponent %}
 
-
-  {% component "ui/card" flush=True %}
-    <div class="card-body">
-      {% component "ui/detail_grid" cols=4 %}
-        {% include "components/ui/detail_item.html" with label="Supplier" value=invoice.supplier.name only %}
-        {% include "components/ui/detail_item.html" with label="Date" value=invoice.invoice_date|dmy only %}
-        {% if credit_weight is not None %}{% capture as credit_label %}{{ credit_weight|qty }} kg{% endcapture %}{% include "components/ui/detail_item.html" with label="Net Weight" value=credit_label num=True only %}{% endif %}
-        {% if rate_per_mund %}{% include "components/ui/detail_item.html" with label="@ / 40 kg" value=rate_per_mund|amount num=True only %}{% endif %}
-        {% include "components/ui/detail_item.html" with label="Net Amount" value=invoice.supplier_payable_amount|amount num=True only %}
-        {% if invoice.paid_amount %}{% include "components/ui/detail_item.html" with label="Paid" value=invoice.paid_amount|amount num=True only %}{% endif %}
-        {% include "components/ui/detail_item.html" with label="Balance" value=invoice.balance_amount|amount num=True only %}
-        {% if invoice.purchase_order %}{% include "components/ui/detail_item.html" with label="Purchase Order" value=invoice.purchase_order.purchase_num only %}{% endif %}
-        {% if invoice.due_date %}{% include "components/ui/detail_item.html" with label="Due Date" value=invoice.due_date|dmy only %}{% endif %}
-        {% include "components/ui/detail_item.html" with label="Supplier Invoice No" value=invoice.supplier_invoice_num only %}
-        {% if invoice.godown %}{% capture as godown_label %}{{ invoice.godown.code }} &mdash; {{ invoice.godown.name }}{% endcapture %}{% include "components/ui/detail_item.html" with label="Godown" value=godown_label only %}{% endif %}
-        {% if invoice.vehicle_no %}{% include "components/ui/detail_item.html" with label="Vehicle" value=invoice.vehicle_no only %}{% endif %}
-        {% if invoice.broker %}{% include "components/ui/detail_item.html" with label="Broker" value=invoice.broker.title only %}{% endif %}
-        {% include "components/ui/detail_item.html" with label="Entered by" value=invoice.created_by.get_full_name|default:invoice.created_by.username only %}
-      {% endcomponent %}
-    </div>
-    <div class="overflow-x-auto">
-      {% doc_columns lines "purchase" as cols %}
-      <table class="data-table doc-table">
-        <thead><tr><th class="w-10">#</th><th>Item</th><th class="num">Qty</th>{% if any_returned %}<th class="num">Returned</th>{% endif %}<th>Unit</th><th class="num">Rate</th>{% if cols.discount %}<th class="num">Discount</th>{% endif %}<th class="num">Amount</th></tr></thead>
-        <tbody>
-          {% for line in lines %}
-          <tr>
-            <td class="muted">{{ line.seq_num }}</td>
-            <td>
-              <span class="strong">{{ line.descr }}</span>
-              {% if line.inventory_item.item_code %}<span class="sub">{{ line.inventory_item.item_code }}</span>{% endif %}
-              {% if line.product %}<span class="sub">{{ line.product.complete_code }}</span>{% endif %}
-              {% if line.credit_weight %}
-              <span class="sub">Party {{ line.party_weight|qty }} &middot; Mill {{ line.mill_weight|qty }} &middot; Selected {{ line.selected_weight|qty }} &minus; katla {{ line.katla|default:0|qty }}, impurities {{ line.khoot|default:0|qty }}, moisture {{ line.moisture|default:0|qty }}, sacks {{ line.sack_weight_deduction|default:0|qty }} = credit {{ line.credit_weight|qty }} kg @ {{ line.rate_per_mund|amount }}/mund</span>
-              {% endif %}
-              {% if line.bardana_ownership %}<span class="sub">{{ line.get_bardana_ownership_display }}{% if not line.is_purchased_bardana %} &middot; held, not bought{% endif %}</span>{% endif %}
-            </td>
-            <td class="num">{{ line.quantity|qty }}</td>
-            {% if any_returned %}<td class="num {% if line.qty_returned %}fig-due{% else %}fig-nil{% endif %}">{{ line.qty_returned|qty }}</td>{% endif %}
-            <td>{{ line.uom.title|default:"—" }}</td>
-            <td class="num">{{ line.rate|amount }}</td>
-            {% if cols.discount %}<td class="num">{{ line.discount_amount|amount }}</td>{% endif %}
-            <td class="num strong">{{ line.amount|amount }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="7" class="empty-note">No items.</td></tr>
-          {% endfor %}
-        </tbody>
-        {% if lines %}
-        <tfoot><tr class="doc-total"><td colspan="2">Total</td><td class="num">{{ qty_total|qty }}</td>{% if any_returned %}<td></td>{% endif %}<td colspan="{% if cols.discount %}3{% else %}2{% endif %}"></td><td class="num">{{ goods_total|amount }}</td></tr></tfoot>
-        {% endif %}
-      </table>
-    </div>
-    <div class="card-body doc-foot">
-      <div><p class="doc-cap">Narration</p><p class="doc-narration">{{ invoice.remarks|default:"—"|linebreaksbr }}</p></div>
-      <div class="sums">
-        <div><span>Goods</span><b>{{ invoice.goods_amount|amount }}</b></div>
-        {% if invoice.discount_amount %}<div><span>Discount</span><b>{{ invoice.discount_amount|amount }}</b></div>{% endif %}
-        {% if invoice.freight_amount %}<div><span>Freight</span><b>{{ invoice.freight_amount|amount }}</b></div>{% endif %}
-        {% if invoice.tax_amount %}<div><span>Sales tax</span><b>{{ invoice.tax_amount|amount }}</b></div>{% endif %}
-        <div class="sums-net"><span>Invoice total</span><b>{{ invoice.total_amount|amount }}</b></div>
-        {% if invoice.brokerage_amount %}<div><span>Brokerage @ {{ invoice.brokerage_rate_per_100kg|amount }}/100kg</span><b>{{ invoice.brokerage_amount|amount }}</b></div>{% endif %}
-        {% if invoice.withholding_amount %}
-        <div><span>Withheld @ {{ invoice.withholding_rate_per_40kg|amount }}/40kg</span><b>&minus;{{ invoice.withholding_amount|amount }}</b></div>
-        <div class="sums-net"><span>Payable to supplier</span><b>{{ invoice.supplier_payable_amount|amount }}</b></div>
-        {% endif %}
-        {% if invoice.paid_amount %}
-        <div><span>Paid</span><b>{{ invoice.paid_amount|amount }}</b></div>
-        <div><span>Balance</span><b>{{ invoice.balance_amount|amount }}</b></div>
-        {% endif %}
-      </div>
-    </div>
+  {% component "ui/detail_figures" %}
+    {% if wheat_line %}
+    {% capture as credit_kg %}{{ wheat_line.credit_weight|qty }} kg{% endcapture %}
+    {% include "components/ui/figure.html" with label="Credit Weight" value=credit_kg tone="amber" only %}
+    {% include "components/ui/figure.html" with label="Rate @ 40 kg" value=wheat_line.rate_per_mund|amount tone="violet" only %}
+    {% else %}
+    {% include "components/ui/figure.html" with label="Goods" value=invoice.goods_amount|amount tone="violet" only %}
+    {% include "components/ui/figure.html" with label="Items" value=lines|length tone="amber" only %}
+    {% endif %}
+    {% include "components/ui/figure.html" with label="Total Bill" value=invoice.supplier_payable_amount|amount tone="sky" only %}
+    {% capture as balance_tone %}{% if invoice.balance_amount %}rose{% else %}green{% endif %}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Balance" value=invoice.balance_amount|amount tone=balance_tone only %}
   {% endcomponent %}
+
+  {% include "inventory/_purchase_invoice_body.html" %}
 </section>
 {% endblock %}

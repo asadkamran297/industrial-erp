@@ -8,13 +8,12 @@
     <a href="{% url 'finance:trial_balance' %}" class="alert alert--danger block"><b>Figures exclude unaccounted entries.</b> Trial balance</a>
   {% endif %}
 
-  <section class="tiles">
-    {% for kpi in kpis %}
-      {% capture as mask_key %}kpi-show-{{ kpi.key }}{% endcapture %}
-      {% capture as negative %}{% if kpi.signed and kpi.value < 0 %}1{% endif %}{% endcapture %}
-      {% include "components/ui/stat_card.html" with tone=kpi.tone icon=kpi.icon label=kpi.label value=kpi.value|amount hint=kpi.note mask_key=mask_key negative=negative only %}
-    {% endfor %}
-  </section>
+  <h2 class="dash-row-title">Today at the Mill</h2>
+  {% include "components/table/tiles.html" with tiles=today_tiles only %}
+  <h2 class="dash-row-title">Money</h2>
+  {% include "components/table/tiles.html" with tiles=money_tiles only %}
+  <h2 class="dash-row-title">Activity</h2>
+  {% include "components/table/tiles.html" with tiles=activity_tiles only %}
 
   <section class="panel">
     <div class="panel-head">
@@ -129,12 +128,6 @@
     </div>
   </section>
 
-  <section class="tiles">
-    {% for stat in secondary %}
-      {% capture as stat_value %}{% if stat.money %}{{ stat.value|amount }}{% else %}{{ stat.value }}{% endif %}{% endcapture %}
-      {% include "components/ui/stat_card.html" with tone="slate" icon=stat.icon value=stat_value label=stat.label only %}
-    {% endfor %}
-  </section>
 </div>
 
 {{ trend|json_script:"trend-data" }}

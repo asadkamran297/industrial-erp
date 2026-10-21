@@ -14,9 +14,18 @@
     {% endslot %}
   {% endcomponent %}
 
+  {% component "ui/detail_figures" %}
+    {% capture as v %}{{ voucher.total_output_kg|floatformat:0|intcomma }} kg{% endcapture %}
+    {% include "components/ui/figure.html" with label="Total Output" value=v tone="teal" only %}
+    {% capture as v %}{{ voucher.yield_percent|floatformat:2 }}%{% endcapture %}{% capture as n %}Standard {{ voucher.standard_yield_percent|floatformat:2 }}%{% endcapture %}
+    {% capture as yt %}{% if voucher.is_below_standard %}rose{% else %}green{% endif %}{% endcapture %}
+    {% include "components/ui/figure.html" with label="Yield" value=v note=n tone=yt only %}
+    {% capture as v %}{{ voucher.shortage_kg|floatformat:0|intcomma }} kg{% endcapture %}{% capture as n %}{{ voucher.shortage_percent|floatformat:2 }}%{% endcapture %}
+    {% include "components/ui/figure.html" with label="Shortage" value=v note=n tone="amber" only %}
+  {% endcomponent %}
+
   {% component "ui/card" %}
-    {% component "ui/detail_grid" cols=4 %}
-      {% include "components/ui/detail_item.html" with label="Date" value=voucher.date|dmy only %}
+    {% component "ui/detail_section" title="Grinding" %}
       {% capture as production %}{{ voucher.production_from|time:"H:i" }} &ndash; {{ voucher.production_to|time:"H:i" }}{% endcapture %}
       {% include "components/ui/detail_item.html" with label="Production" value=production only %}
       {% include "components/ui/detail_item.html" with label="Godown" value=voucher.godown.name only %}
@@ -28,7 +37,7 @@
       {% include "components/ui/detail_item.html" with label="Bag Qty" value=voucher.disposal_bag_qty|floatformat:0|intcomma num=True only %}
       {% firstof voucher.prepared_by.get_full_name voucher.prepared_by.username voucher.created_by.get_full_name voucher.created_by.username "" as prepared %}
       {% include "components/ui/detail_item.html" with label="Prepared By" value=prepared only %}
-      {% if voucher.description %}{% include "components/ui/detail_item.html" with label="Description" value=voucher.description wide=True only %}{% endif %}
+      {% include "components/ui/detail_item.html" with label="Description" value=voucher.description wide=True only %}
     {% endcomponent %}
   {% endcomponent %}
 
@@ -49,11 +58,5 @@
     </tbody>
   {% endcomponent %}
 
-  <div class="tiles">
-    {% capture as v %}{{ voucher.total_output_kg|floatformat:0|intcomma }} kg{% endcapture %}{% include "components/table/tile.html" with tone="green" icon="box" value=v label="Total Output" only %}
-    {% capture as yt %}{% if voucher.is_below_standard %}rose{% else %}sky{% endif %}{% endcapture %}{% include "components/table/tile.html" with tone=yt icon="chart" value=voucher.yield_percent|floatformat:2 label="Yield %" only %}
-    {% capture as v %}{{ voucher.shortage_kg|floatformat:0|intcomma }} kg{% endcapture %}{% include "components/table/tile.html" with tone="amber" icon="minus" value=v label="Shortage" note=voucher.shortage_percent|floatformat:2 only %}
-    {% capture as v %}{{ voucher.standard_yield_percent|floatformat:2 }} / {{ voucher.yield_variance|floatformat:2 }}{% endcapture %}{% include "components/table/tile.html" with tone="slate" icon="sum" value=v label="Standard / Variance" only %}
-  </div>
 </section>
 {% endblock %}
