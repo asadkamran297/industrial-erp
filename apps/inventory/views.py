@@ -34,7 +34,7 @@ from apps.finance.models import AccountVoucherLine, ChartOfAccount
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, customer_receivable_balances, supplier_payable_balances, sync_customer_opening_balance, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
-from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSDetailForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
+from .forms import PurchaseApprovalLimitForm, PurchaseOrderCancelForm, PurchaseOrderCloseShortForm, ReversalReasonForm, CustomerForm, InventoryClassForm, InventoryItemForm, InventoryItemImportForm, ManualTransactionForm, POSMasterForm, POSReturnDetailForm, POSReturnMasterForm, PurchaseOrderForm, PurchaseOrderItemForm, PurchaseReturnDetailForm, PurchaseReturnMasterForm, UOMConversionForm, UOMForm, SupplierForm
 from .models import PurchaseInvoice, PurchaseInvoiceLine, SalesOrder, SalesOrderItem, Customer, CustomerLedger, InventoryClass, InventoryItem, ItemLedger, ManualTransaction, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster, PurchaseOrder, PurchaseOrderItem, PurchaseReturnDetail, PurchaseReturnMaster, Stock, UOM, UOMConversion, Supplier
 from .purchase_board import RETURN_COLUMNS, RETURN_TAB_ALL, RETURN_TAB_DRAFT, RETURN_TAB_POSTED, RETURN_TAB_REVERSED, RETURN_TABS, COLUMNS, PURCHASE_INVOICE_COLUMNS, SALE_COLUMNS, TAB_ALL, TAB_LIVE, TABS, TAB_STATUSES, column_menu, decorate, export_columns, set_visible_columns, visible_columns
 from .form_layout import EXTRA_FIELD_TYPES, FORM_PURCHASE_INVOICE, FORM_PURCHASE_ORDER, add_extra_field, get_layout, read_extra_values, remove_extra_field, set_hidden
@@ -4243,7 +4243,6 @@ class POSDetailView(InventoryListMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["item_form"] = POSDetailForm()
         items = self.object.items.all()
         bill_amount = sum((i.total_price or Decimal("0") for i in items), Decimal("0"))
         discount_total = sum((i.discount_amount or Decimal("0") for i in items), Decimal("0"))

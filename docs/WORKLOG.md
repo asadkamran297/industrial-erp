@@ -5,6 +5,23 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-10-27
+
+### Local
+
+- Sale detail 500 on draft sales (`/inventory/pos-sales/51/`): template reversed removed routes `inventory:pos_post` and `inventory:pos_item_create`. Dead Post button and Add item form dropped from `pos_detail.html`; unused `POSDetailForm` context removed.
+- Scan of every `{% url %}` / `reverse()` name in templates and apps: no other undefined route.
+
+### Live
+
+- Crawl of live portal (~1,160 GETs, 186 page types): only `/inventory/pos-sales/51/` returned 500. Fix not deployed yet.
+
+### Open
+
+- Draft sales come only from the old header-only `pos-sales/new/` form, which has no way to add lines or post; decide whether to retire it.
+
+---
+
 ## 2026-10-21
 
 ### Local — design consistency, round 1 (not committed)
