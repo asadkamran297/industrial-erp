@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flour Mill ERP — Complete Functional Overview</title>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#1d2433;--mute:#5f6b7a;--line:#e3e7ec;--acc:#1f7a4d;--acc2:#e9f5ee;--warn:#9a5b00;--warnbg:#fff6e5;--red:#b42318;--redbg:#fdecea;--blue:#1d4ed8;--bluebg:#eaf0fd}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  nav{position:fixed;top:0;left:0;bottom:0;width:270px;overflow-y:auto;background:#14261d;color:#d9e8df;padding:18px 14px}
+  nav h1{font-size:16px;margin:0 0 4px;color:#fff}
+  nav .sub{font-size:12px;color:#9fbfae;margin-bottom:14px}
+  nav a{display:block;color:#cfe2d7;text-decoration:none;font-size:13px;padding:4px 8px;border-radius:6px}
+  nav a:hover{background:#21402f;color:#fff}
+  nav a.l2{padding-left:20px;font-size:12.5px;color:#a9c6b6}
+  main{margin-left:270px;padding:28px 40px 80px;max-width:1180px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 26px;margin:0 0 22px}
+  h2{margin:0 0 12px;font-size:22px;color:var(--acc);border-bottom:2px solid var(--acc2);padding-bottom:8px}
+  h3{margin:22px 0 8px;font-size:17px}
+  h4{margin:16px 0 6px;font-size:15px;color:#334}
+  p{margin:6px 0 10px}
+  ul,ol{margin:6px 0 12px;padding-left:22px}
+  li{margin:3px 0}
+  code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#eef2f0;font-weight:600}
+  tr:nth-child(even) td{background:#fafbfc}
+  .note{background:var(--bluebg);border-left:4px solid var(--blue);padding:10px 14px;border-radius:6px;margin:10px 0}
+  .warn{background:var(--warnbg);border-left:4px solid var(--warn);padding:10px 14px;border-radius:6px;margin:10px 0}
+  .rule{background:var(--acc2);border-left:4px solid var(--acc);padding:10px 14px;border-radius:6px;margin:10px 0}
+  .gap{background:var(--redbg);border-left:4px solid var(--red);padding:10px 14px;border-radius:6px;margin:10px 0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+  .flow .b{background:#fff;border:2px solid var(--acc);border-radius:10px;padding:8px 12px;font-weight:600;font-size:13.5px;text-align:center;min-width:120px}
+  .flow .b small{display:block;font-weight:400;color:var(--mute);font-size:11.5px}
+  .flow .b.alt{border-color:var(--blue)}
+  .flow .b.gl{border-color:#7c3aed}
+  .flow .ar{font-size:20px;color:var(--mute)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fcfdfc}
+  .card h4{margin-top:0}
+  .pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:20px;background:#eef2f0;border:1px solid var(--line);margin:1px 2px}
+  .pill.g{background:var(--acc2);color:var(--acc);border-color:#bfe3cf}
+  .pill.r{background:var(--redbg);color:var(--red);border-color:#f3c2bd}
+  .pill.b{background:var(--bluebg);color:var(--blue);border-color:#c5d5f8}
+  .formula{font-family:Consolas,monospace;background:#1e293b;color:#e2e8f0;padding:10px 14px;border-radius:8px;font-size:13.5px;margin:8px 0;white-space:pre-wrap}
+  .review{margin-top:16px;border-top:1px dashed #c9d2cc;padding-top:10px}
+  .review label{font-size:12.5px;font-weight:600;color:var(--warn)}
+  .review textarea{width:100%;min-height:60px;border:1px solid #d8c9a8;background:#fffdf7;border-radius:8px;padding:8px;font:inherit;font-size:13.5px;resize:vertical}
+  .toolbar{position:fixed;right:18px;bottom:18px;display:flex;gap:8px;z-index:5}
+  .toolbar button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .toolbar button.sec{background:#475569}
+  .hero{background:linear-gradient(135deg,#14261d,#1f7a4d);color:#fff;border:0}
+  .hero h2{color:#fff;border-color:rgba(255,255,255,.25)}
+  .hero .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+  .hero .kv div{background:rgba(255,255,255,.1);border-radius:8px;padding:10px}
+  .hero .kv b{display:block;font-size:20px}
+  .chk li{list-style:none;margin-left:-18px}
+  .chk input{margin-right:6px}
+  @media print{nav,.toolbar,.review textarea{display:none}main{margin:0;padding:0}section{break-inside:avoid-page;border:0}}
+  @media (max-width:900px){nav{display:none}main{margin:0;padding:14px}.grid2,.grid3,.hero .kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>Flour Mill ERP</h1>
+  <div class="sub">Complete functional overview · 5 Nov 2026</div>
+  <a href="#intro">1. What this system is</a>
+  <a href="#bigflow">2. End-to-end business flow</a>
+  <a href="#rules">3. Golden rules of the system</a>
+  <a href="#menu">4. Menu map</a>
+  <a href="#common">5. Common screen behaviour</a>
+  <a href="#dashboard">6. Login & Dashboard</a>
+  <a href="#purchase">7. Purchase</a>
+  <a class="l2" href="#po">7.1 Purchase Order</a>
+  <a class="l2" href="#wpi">7.2 Wheat Purchase Invoice</a>
+  <a class="l2" href="#spi">7.3 Stores Purchase Invoice</a>
+  <a class="l2" href="#pret">7.4 Purchase Return</a>
+  <a class="l2" href="#supp">7.5 Suppliers</a>
+  <a href="#sales">8. Sales</a>
+  <a class="l2" href="#so">8.1 Sales Order</a>
+  <a class="l2" href="#si">8.2 Sale Invoice / POS</a>
+  <a class="l2" href="#sret">8.3 Sale Return</a>
+  <a class="l2" href="#cust">8.4 Customers & Ledger</a>
+  <a href="#products">9. Products (mill stock)</a>
+  <a href="#production">10. Production</a>
+  <a href="#stores">11. Stores stock</a>
+  <a href="#accounts">12. Accounts</a>
+  <a class="l2" href="#coa">12.1 Chart of Accounts</a>
+  <a class="l2" href="#vouchers">12.2 Vouchers</a>
+  <a class="l2" href="#autopost">12.3 Automatic postings</a>
+  <a class="l2" href="#cos">12.4 Cost of Sales (month end)</a>
+  <a class="l2" href="#fs">12.5 Financial statements</a>
+  <a class="l2" href="#close">12.6 Period close & valuation</a>
+  <a href="#reports">13. Reports (all)</a>
+  <a href="#hr">14. HR & Payroll</a>
+  <a href="#setup">15. Setup, Users & Settings</a>
+  <a href="#numbers">16. Document numbers & statuses</a>
+  <a href="#tech">17. Technical summary</a>
+  <a href="#gaps">18. Known gaps / open items</a>
+  <a href="#test">19. Test scenarios for reviewer</a>
+  <a href="#feedback">20. Overall feedback</a>
+</nav>
+
+<main>
+
+<section class="hero" id="intro">
+  <h2>1. What this system is</h2>
+  <p>A web-based ERP built specifically for a <b>flour mill</b> (atta chakki / flour mill industry). It covers the full cycle: buying wheat at the gate (weighbridge slip), keeping wheat and bardana (sack) stock per godown, grinding wheat into atta / maida / fine / suji / bran, repacking, selling to dealers and bakeries, collecting money, and producing complete accounts (ledger, trial balance, P&amp;L, balance sheet, cash flow) plus 70+ reports.</p>
+  <p>The demo company in the system is <b>Zafaran Flour Mills (ZFM)</b> with a mill, head office and two sales depots. The product is being designed so it can be sold to many flour mills, with the old mill software (simple screens) as the reference for look and simplicity.</p>
+  <div style="background:rgba(255,255,255,.12);border-radius:8px;padding:10px 14px;margin-top:12px">
+    <b>Try it</b> — open <b>ERP_Interactive_Prototype.html</b> (same folder) &nbsp;·&nbsp; Username: <b>admin</b> &nbsp;·&nbsp; Password: <b>admin</b>
+  </div>
+  <div class="kv">
+    <div><b>13</b>business modules</div>
+    <div><b>~180</b>screens</div>
+    <div><b>70+</b>reports</div>
+    <div><b>3</b>separate stock books</div>
+  </div>
+</section>
+
+<section id="bigflow">
+  <h2>2. End-to-end business flow</h2>
+  <h3>Main mill cycle</h3>
+  <div class="flow">
+    <div class="b">Wheat arrives<small>truck at gate</small></div><span class="ar">→</span>
+    <div class="b">Wheat Purchase Invoice<small>weighbridge slip, WPI-</small></div><span class="ar">→</span>
+    <div class="b">Godown stock<small>wheat + bardana in</small></div><span class="ar">→</span>
+    <div class="b">Grinding<small>WG- voucher</small></div><span class="ar">→</span>
+    <div class="b">Finished goods<small>atta, maida, fine, suji, bran</small></div><span class="ar">→</span>
+    <div class="b alt">Sale Invoice<small>SAL-, from a godown</small></div><span class="ar">→</span>
+    <div class="b alt">Cash / Bank Receipt<small>CR- / BR-</small></div>
+  </div>
+  <div class="flow">
+    <div class="b">Finished goods</div><span class="ar">→</span>
+    <div class="b">Product Conversion<small>repack 40 kg → 20 kg etc., PC-</small></div><span class="ar">→</span>
+    <div class="b">Re-packed stock</div>
+  </div>
+  <h3>Stores (spare parts, lubricants, PPE, etc.)</h3>
+  <div class="flow">
+    <div class="b alt">Purchase Order<small>optional, PO-</small></div><span class="ar">→</span>
+    <div class="b alt">Stores Purchase Invoice<small>PI-, stock in</small></div><span class="ar">→</span>
+    <div class="b alt">Stores stock<small>item ledger</small></div><span class="ar">→</span>
+    <div class="b alt">Stock Adjustment / Issue</div>
+  </div>
+  <h3>Money and books</h3>
+  <div class="flow">
+    <div class="b gl">Every posted document<small>auto voucher</small></div><span class="ar">→</span>
+    <div class="b gl">General Ledger</div><span class="ar">→</span>
+    <div class="b gl">Month-end Closing Stock rates</div><span class="ar">→</span>
+    <div class="b gl">Cost of Sales JV</div><span class="ar">→</span>
+    <div class="b gl">TB · P&amp;L · Balance Sheet · Cash Flow</div>
+  </div>
+  <div class="note"><b>Key idea:</b> the operator never types a purchase or sale voucher by hand. Saving an invoice automatically moves stock <i>and</i> posts the accounting voucher in one go. Only cash/bank payments, receipts and journal entries are typed manually.</div>
+  <div class="review"><label>Reviewer notes on the overall flow</label><textarea data-key="bigflow"></textarea></div>
+</section>
+
+<section id="rules">
+  <h2>3. Golden rules of the system</h2>
+  <ol>
+    <li><b>Two documents only for purchase and sale.</b> Order (optional, moves nothing) → Invoice (mandatory, the only thing that moves stock and posts accounts).</li>
+    <li><b>Posted documents are never deleted.</b> A mistake is corrected by <b>Reverse</b>, which creates a mirror entry (stock back out, voucher <code>…-REV</code>). Masters (suppliers, items, products, employees…) are never deleted, only <b>deactivated</b>.</li>
+    <li><b>Three separate stock books</b>, never mixed:
+      <ul>
+        <li><b>Mill Product Ledger</b> — wheat, mill-owned bardana, atta/maida/bran etc. (per godown).</li>
+        <li><b>Party Bardana Ledger</b> — sacks that belong to a supplier (party / returnable), tracked per supplier.</li>
+        <li><b>Stores Item Ledger</b> — spare parts and consumables.</li>
+      </ul></li>
+    <li><b>Snapshots:</b> values that drive figures (unit weight, rate, credit weight, yield) are saved on the document. Changing a master later does not change old documents or old reports.</li>
+    <li><b>One number per document</b> from its own series (PO-, WPI-, PI-, SAL-…). The auto voucher carries the same number as the document.</li>
+    <li><b>Precision:</b> weights keep 3 decimals (weighbridge), money 2 decimals. 1 mund = 40 kg.</li>
+    <li><b>Reports read posted entries only.</b> Drafts never show in statements.</li>
+    <li><b>Cost of goods sold is periodic</b> (owner's decision): one month-end Cost of Sales voucher from Opening + Purchases − Closing Stock, not per sale.</li>
+  </ol>
+  <div class="review"><label>Reviewer notes on the rules</label><textarea data-key="rules"></textarea></div>
+</section>
+
+<section id="menu">
+  <h2>4. Menu map (sidebar)</h2>
+  <table>
+    <tr><th style="width:18%">Section</th><th style="width:20%">Menu</th><th>Screens inside</th></tr>
+    <tr><td>Workspace</td><td>Dashboard</td><td>Today at the mill, money position, activity, charts</td></tr>
+    <tr><td rowspan="5">Day to Day</td><td>Purchase</td><td>Purchase Orders · Wheat Purchase Invoices · Stores Purchase Invoices · Purchase Returns · Suppliers · Purchase Report</td></tr>
+    <tr><td>Sales</td><td>Sale Invoices · Sales Orders · New Sale (POS) · Sale Returns · Customers · Customer Ledger</td></tr>
+    <tr><td>Stock</td><td>Items &amp; Stock · Stock Adjustment · Item Ledger · Ledger Report</td></tr>
+    <tr><td>Products</td><td>Product List · Account Linking · Raw Bardana Linking · Finish Bardana Linking · Opening Balance · Rate Update · Closing Stock</td></tr>
+    <tr><td>Production</td><td>Grinding · Product Conversion · Daily Grinding · Yield Trend · Production Summary</td></tr>
+    <tr><td rowspan="4">Accounts</td><td>Vouchers</td><td>Cash Payment · Cash Receipt · Bank Payment · Bank Receipt · Journal Voucher · All Vouchers</td></tr>
+    <tr><td>Financial Reports</td><td>Trial Balance · Profit and Loss · Balance Sheet · Cash Flow · Inventory Valuation</td></tr>
+    <tr><td>Accounting Setup</td><td>Chart of Accounts · Account Master · Opening Balances · Fiscal Years</td></tr>
+    <tr><td>Period Close</td><td>Year / period closing</td></tr>
+    <tr><td>Reports</td><td>10 groups</td><td>Owner · Sales · Purchase · Weighbridge · Bardana · Production · Stock · Accounts · HR · Setup (details in section 13)</td></tr>
+    <tr><td>People</td><td>Employees, Payroll</td><td>Employees · Payroll Runs · Salary Items</td></tr>
+    <tr><td rowspan="4">Setup</td><td>Master Data</td><td>Item Categories · Units of Measure · UOM Conversions · Godowns (+ hidden: Departments, Designations, Job Types, Cities, Banks, Allowances &amp; Deductions)</td></tr>
+    <tr><td>Company</td><td>Organizations · Branches</td></tr>
+    <tr><td>Users &amp; Access</td><td>User Assignments · Roles · Permissions</td></tr>
+    <tr><td>General Settings</td><td>Features · Numbering · Company · Wheat</td></tr>
+  </table>
+  <p>The top bar search box is a <b>menu finder</b>: type a screen name and press Enter to open it. Menu entries a user has no permission for are hidden.</p>
+  <div class="review"><label>Reviewer notes on menu / navigation</label><textarea data-key="menu"></textarea></div>
+</section>
+
+<section id="common">
+  <h2>5. Common screen behaviour (same on every screen)</h2>
+  <div class="grid2">
+    <div class="card"><h4>List screens (registers)</h4>
+      <ul>
+        <li>One filter bar: search, status select with counts, date range, extra filters.</li>
+        <li>Green <b>Add &lt;thing&gt;</b> button top right.</li>
+        <li>"N records · Page x of y", sortable columns, status pill, page total footer, pagination.</li>
+        <li>Row icons in fixed order: View · Edit (or lock if posted) · Print · Ledger · status actions.</li>
+        <li>Column picker (show/hide columns, remembered per browser).</li>
+        <li>Export: Excel, CSV, Word, PDF, Image (PNG), Print.</li>
+      </ul></div>
+    <div class="card"><h4>Detail screens</h4>
+      <ul>
+        <li>Header buttons: Add New · Edit · Invoice (print) · Voucher · Back, then Post / Reverse where allowed.</li>
+        <li>Key-figure strip (amounts, weights, balance).</li>
+        <li>Titled sections in 3-column <i>label : value</i> grid; every form field shown, empty = "—".</li>
+        <li><b>Linked documents bar</b>: PO ↔ Invoice ↔ Return ↔ Voucher ↔ Supplier, reversed ones struck through.</li>
+      </ul></div>
+    <div class="card"><h4>Entry forms</h4>
+      <ul>
+        <li>Document number and date in the page header.</li>
+        <li>Supplier/customer picker shows a <b>balance chip</b> (what they owe / are owed) and "+ New supplier/customer" quick add without leaving the form.</li>
+        <li>All dropdowns are searchable.</li>
+        <li>Buttons: Save · Save Draft · Save &amp; Post · Save &amp; New · Save &amp; Print. Save goes straight back to the list with a success message.</li>
+        <li>Keyboard: Enter moves to next field, Ctrl+S saves, "/" focuses search.</li>
+        <li>Entry forms are designed to fit one page without vertical scroll.</li>
+      </ul></div>
+    <div class="card"><h4>Printing</h4>
+      <ul>
+        <li>Every print opens a paper preview with toolbar: Print · Close · <b>A4 / Thermal (80 mm)</b>.</li>
+        <li>Mill header (logo, name, address, phone), printed-by footer, page numbers.</li>
+        <li>Invoice prints show previous balance and total payable/receivable.</li>
+        <li>Wheat invoice has a separate gate-slip "Voucher" print (weight box + bardana table + totals).</li>
+        <li>Light and dark theme supported.</li>
+      </ul></div>
+  </div>
+  <div class="review"><label>Reviewer notes on UI / UX</label><textarea data-key="common"></textarea></div>
+</section>
+
+<section id="dashboard">
+  <h2>6. Login &amp; Dashboard</h2>
+  <p>Login with username or email. Branding (company name, logo) comes from General Settings.</p>
+  <table>
+    <tr><th>Row</th><th>Tiles (each opens its screen)</th></tr>
+    <tr><td>Today at the Mill</td><td>Wheat bought today · Wheat ground today · Bags sold · Wheat stock (in days of grinding)</td></tr>
+    <tr><td>Money</td><td>Receivable · Payable · Cash &amp; Bank · Net profit with margin</td></tr>
+    <tr><td>Activity</td><td>Employees · Payroll net (approved only) · Posted vouchers · Sales recorded</td></tr>
+  </table>
+  <p>Below the tiles: purchase / sales trend charts and recent lists. Large money is shortened (e.g. "Rs 433.25 M") with the exact figure on hover.</p>
+  <div class="review"><label>Reviewer notes on dashboard</label><textarea data-key="dashboard"></textarea></div>
+</section>
+
+<section id="purchase">
+  <h2>7. Purchase</h2>
+  <p>Two invoice types: <b>Wheat Purchase Invoice</b> (mill goods: wheat and bardana, number <code>WPI-</code>) and <b>Stores Purchase Invoice</b> (spare parts etc., number <code>PI-</code>). Purchase Order is optional.</p>
+
+  <h3 id="po">7.1 Purchase Order (PO-)</h3>
+  <ul>
+    <li>Supplier, date, godown, lines (item, qty, rate, unit). Currently used for <b>stores items</b> (the wheat/bardana section was removed from PO in the Oct review).</li>
+    <li>Lifecycle: <span class="pill">Draft</span> → <span class="pill b">Submitted</span> → <span class="pill b">Partially Invoiced</span> → <span class="pill g">Fully Invoiced</span> (automatic) / <span class="pill">Closed</span> / <span class="pill r">Cancelled</span>.</li>
+    <li>Approve action (with approval permission); <b>Close</b> asks a reason (supplier short, season over, quality rejected, over-ordered, accepted as final); <b>Cancel</b> asks a reason (entered in error, wrong supplier, duplicate, rate renegotiated, no longer required).</li>
+    <li>PO board shows Ordered / Received / Balance qty; opens on the "live" tab (submitted + partly invoiced).</li>
+    <li>A PO never touches stock or accounts.</li>
+  </ul>
+
+  <h3 id="wpi">7.2 Wheat Purchase Invoice (WPI-) — the gate slip</h3>
+  <p>One flat page that mirrors the mill's paper slip. Sections:</p>
+  <table>
+    <tr><th style="width:20%">Section</th><th>Fields</th></tr>
+    <tr><td>Header</td><td>V.No (auto), Date, Supplier (with balance chip), Godown, Vehicle No, Broker (a ledger account under "Brokers"), Brokerage per 100 kg, WHT per 40 kg, Manual remark / supplier invoice no.</td></tr>
+    <tr><td>Weight (KG)</td><td>Party load &amp; tare → Party weight; Mill load &amp; tare → Mill weight; <b>Selected weight</b> = Party or Mill (choose). Difference shown.</td></tr>
+    <tr><td>Deductions</td><td>Katla, Impurities (khoot), Moisture, Sack weight deduction (bag weight × bags)</td></tr>
+    <tr><td>Bardana detail</td><td>Bag type (driven by Raw Bardana Linking of that wheat), number of bags, bag weight, ownership: <b>Mill's own</b> / <b>Party</b> / <b>Returnable</b>, rate (only mill's own bags are bought).</td></tr>
+    <tr><td>Stock details</td><td>Wheat item, Credit weight, Rate per mund, Amount</td></tr>
+    <tr><td>Carrier</td><td>Freight amount, freight paid by mill (at gate) or by supplier, builty no, driver phone, transporter</td></tr>
+    <tr><td>Total bill</td><td>Wheat amount + bardana − discount ± freight, brokerage, WHT → Net payable to supplier</td></tr>
+  </table>
+  <div class="formula">Credit weight  = Selected weight − Katla − Impurities − Moisture − Sack deduction   (never below 0)
+Wheat amount   = Credit weight ÷ 40 × Rate per mund
+Brokerage      = Total credit weight ÷ 100 × Brokerage rate
+WHT            = Total credit weight ÷ 40 × WHT rate
+Supplier payable = Total − WHT − (freight if mill paid it) − (brokerage if supplier bears it)</div>
+  <h4>What happens on Save</h4>
+  <ul>
+    <li><b>Wheat stock +</b> credit weight in the chosen godown (Mill Product Ledger).</li>
+    <li><b>Mill's own bags +</b> in mill bardana stock; <b>Party/Returnable bags +</b> in that supplier's Party Bardana Ledger (mill is only holding them).</li>
+    <li>Auto voucher numbered same as invoice (see 12.3): Dr Wheat Stock / Bardana Stock, Dr Freight, Dr Brokerage, Cr Broker, Cr WHT Payable, Cr Supplier.</li>
+    <li>Rule: fewer than 20 kg per sack is refused; deductions bigger than load are refused; duplicate supplier invoice no. is refused.</li>
+    <li>Prints: <b>Invoice</b> (A4, weights + amounts + previous balance) and <b>Voucher</b> (gate slip).</li>
+    <li>Correction: <b>Reverse</b> (stock out of both bardana books and wheat, mirror voucher). No delete.</li>
+  </ul>
+
+  <h3 id="spi">7.3 Stores Purchase Invoice (PI-)</h3>
+  <ul>
+    <li>Pick supplier → if the supplier has open POs, an order picker opens and lines are pulled (qty capped at pending, rate/tax defaulted, editable). Several POs can go on one invoice.</li>
+    <li>No open POs → empty line grid for direct entry.</li>
+    <li>Over-receipt against PO is allowed with a warning (recorded on the invoice).</li>
+    <li>Optional columns controlled from General Settings: sales tax, discount, freight.</li>
+    <li>On Save: stores stock + (weighted-average cost), item ledger, auto voucher, PO status advances.</li>
+  </ul>
+
+  <h3 id="pret">7.4 Purchase Return (PR-)</h3>
+  <ul>
+    <li>Supplier → pick invoice → returnable lines (qty capped at what's left). Or <b>Direct return</b> (no invoice), rate defaults to that supplier's last purchase rate.</li>
+    <li>Returns stores lines (item ledger), wheat and mill bardana (mill ledger), party bardana (party bardana ledger).</li>
+    <li>Save Draft / Save &amp; Post. Post = stock out + Dr Supplier / Cr Stock voucher. Reverse available.</li>
+    <li>Invoice detail shows "Returned qty".</li>
+  </ul>
+
+  <h3 id="supp">7.5 Suppliers</h3>
+  <ul>
+    <li>Name, code, contact, city, NTN, opening balance + date, credit limit, credit period days, status.</li>
+    <li>Each supplier gets its own payable ledger account automatically.</li>
+    <li>Detail shows ledger; row actions: View · Edit · Ledger · Activate/Deactivate.</li>
+    <li>Supplier type (Wheat / Bardana / Stores) is derived from what was bought.</li>
+  </ul>
+  <div class="review"><label>Reviewer notes on Purchase</label><textarea data-key="purchase"></textarea></div>
+</section>
+
+<section id="sales">
+  <h2>8. Sales</h2>
+  <h3 id="so">8.1 Sales Order (SO-) — optional</h3>
+  <ul>
+    <li>Customer, date, lines (mill products and/or stores items). Moves nothing.</li>
+    <li>Same lifecycle as PO: Submitted → Partially Invoiced → Fully Invoiced / Closed (with reason).</li>
+  </ul>
+  <h3 id="si">8.2 Sale Invoice (SAL-) and POS</h3>
+  <ul>
+    <li>Customer (balance chip, quick add), date, <b>Godown (required)</b>, pay mode: Cash / Card / Online / Credit.</li>
+    <li>If the customer has open sales orders they are offered (optional).</li>
+    <li>Lines: sellable mill products (atta, maida, bran…) and stores items together in one picker; qty, rate (defaults from Product Rate), discount, tax (switchable).</li>
+    <li>Stock is checked against the chosen godown; it cannot go negative.</li>
+    <li>On post: product stock − from godown, auto voucher: Dr Cash (paid) / Dr Customer (balance), Dr Sales Discount, Cr Sales Revenue, Cr Sales Tax Payable.</li>
+    <li>POS screen: quick counter sale with thermal receipt.</li>
+  </ul>
+  <h3 id="sret">8.3 Sale Return (SR-)</h3>
+  <ul><li>Against a sale: lines and qty returned; stock goes back into the same godown; voucher Dr Sales Returns / Cr Customer. Refund in cash is a separate payment voucher.</li></ul>
+  <h3 id="cust">8.4 Customers &amp; Customer Ledger</h3>
+  <ul>
+    <li>Same form as suppliers: opening balance + date, credit limit, credit period, city, contacts.</li>
+    <li>Own receivable account auto-created. Customer Ledger shows invoices, receipts, returns with running balance.</li>
+  </ul>
+  <div class="review"><label>Reviewer notes on Sales</label><textarea data-key="sales"></textarea></div>
+</section>
+
+<section id="products">
+  <h2>9. Products (mill stock)</h2>
+  <p>Mill goods live in a 3-level code tree <code>GG-SS-III</code> (Group – Sub group – Item). Only level-3 items can be used in documents. Headings end in <code>000</code>.</p>
+  <table>
+    <tr><th>Specification</th><th>Examples</th><th>Buy</th><th>Produce</th><th>Sell</th><th>Stock account</th></tr>
+    <tr><td>Raw Item</td><td>Wheat (local, govt.)</td><td>✔</td><td>—</td><td>✔</td><td>Wheat Stock</td></tr>
+    <tr><td>Raw Packing</td><td>Empty jute / PP sacks received with wheat</td><td>✔</td><td>—</td><td></td><td>Bardana &amp; Packing</td></tr>
+    <tr><td>Finish Item</td><td>Atta, Maida, Fine, Suji brands</td><td>—</td><td>✔</td><td>✔</td><td>Finished Goods</td></tr>
+    <tr><td>Finish Packing</td><td>Printed 10/20/40/50 kg bags</td><td>✔</td><td>—</td><td></td><td>Bardana &amp; Packing</td></tr>
+    <tr><td>By-product</td><td>Bran (choker), refraction</td><td>—</td><td>✔</td><td>✔</td><td>Finished Goods</td></tr>
+    <tr><td>Service / Wage item</td><td>Grinding wages, services (for costing)</td><td colspan="4">used for cost per bag, no stock</td></tr>
+  </table>
+  <p>Item fields: name, code, quick code, unit (Kg / Piece / Mund), unit weight, fix weight, actual weight, colour, standard yield %, starting date, status (Active / Inactive / Closed — closed is final).</p>
+  <table>
+    <tr><th style="width:24%">Screen</th><th>Purpose</th></tr>
+    <tr><td>Product List</td><td>Flat list: name, code, category, type, unit, stock qty, rate, stock (kg), status; page total kg.</td></tr>
+    <tr><td>Account Linking</td><td>Links a product to its sale / purchase / expense accounts (also wage/service accounts used in cost per bag).</td></tr>
+    <tr><td>Raw Bardana Linking</td><td>Which sack a wheat item comes in → drives "Bag Type" dropdown on wheat slip.</td></tr>
+    <tr><td>Finish Bardana Linking</td><td>Which printed bag a finished product is packed in → used on grinding/conversion.</td></tr>
+    <tr><td>Opening Balance</td><td>Opening qty per product per godown (single active godown is auto-picked).</td></tr>
+    <tr><td>Rate Update</td><td>Sale rate history with effective date; sale invoices default to the rate in force.</td></tr>
+    <tr><td>Closing Stock</td><td>As-of date: closing qty per product, editable closing rate, value, total. Default rate: saved for date → average purchase rate → last saved → list rate. Feeds Cost of Sales.</td></tr>
+    <tr><td>Party Bardana</td><td>Per supplier: sacks received, returned, held, returnable due.</td></tr>
+  </table>
+  <div class="rule">Stock and total kg are always calculated from the ledger, never typed. Mill stock can only be moved by documents (purchase, return, grinding, conversion, sale, opening, adjustment, reversal).</div>
+  <div class="review"><label>Reviewer notes on Products</label><textarea data-key="products"></textarea></div>
+</section>
+
+<section id="production">
+  <h2>10. Production</h2>
+  <h3>10.1 Grinding (WG-)</h3>
+  <table>
+    <tr><th style="width:22%">Part</th><th>Fields</th></tr>
+    <tr><td>Header</td><td>Voucher no (auto), Date, Production from / to time, Godown, Issue area, Prepared by, Description</td></tr>
+    <tr><td>Input</td><td>Wheat item + wheat consumed (kg); sack released (raw packing item) + bag qty emptied</td></tr>
+    <tr><td>Output lines</td><td>Product (finish item or by-product), quantity (bags), unit weight (snapshot), packing bag used + pack qty</td></tr>
+    <tr><td>Calculated &amp; saved</td><td>Total output kg, <b>Yield %</b>, Shortage kg, Shortage %, Standard yield % (snapshot), variance vs standard</td></tr>
+  </table>
+  <div class="formula">Yield %     = Total output kg ÷ Wheat consumed × 100
+Shortage kg = Wheat consumed − Total output kg</div>
+  <ul>
+    <li>Stock: wheat −, emptied sacks −, packing bags −, finished goods + (same godown). Stock shown on form is as of voucher date.</li>
+    <li>Quantity only — no accounting entry (costing is periodic via Cost of Sales). Editing reverses old movements and reposts, so nothing double counts.</li>
+  </ul>
+  <h3>10.2 Product Conversion (PC-)</h3>
+  <ul><li>Repacking: one product (qty × unit weight) consumed → one or more products produced, with packing bags. Example: loose maida into 50 kg bags; 40 kg bags into 20 kg bags. Quantity only.</li></ul>
+  <div class="review"><label>Reviewer notes on Production</label><textarea data-key="production"></textarea></div>
+</section>
+
+<section id="stores">
+  <h2>11. Stores stock (spares &amp; consumables)</h2>
+  <ul>
+    <li><b>Items &amp; Stock</b>: item name, code, category, UOM, rates, current stock and average cost. Import / export.</li>
+    <li><b>Item Categories, Units of Measure (incl. MUND), UOM Conversions</b>.</li>
+    <li><b>Stock Adjustment</b> (manual transaction): in / out with reason; posts an Inventory Adjustment voucher.</li>
+    <li><b>Item Ledger</b>: two books selectable — Stores (item ledger) and Mill Products (product ledger) with running opening / closing.</li>
+    <li>Cost method: weighted average.</li>
+  </ul>
+  <div class="review"><label>Reviewer notes on Stores</label><textarea data-key="stores"></textarea></div>
+</section>
+
+<section id="accounts">
+  <h2>12. Accounts</h2>
+  <h3 id="coa">12.1 Chart of Accounts</h3>
+  <ul>
+    <li>Tree: Assets / Liabilities / Capital / Revenue / Expenses → groups → leaf accounts. Only active leaf accounts can be posted.</li>
+    <li>Stock in Trade split into 4 accounts: <b>Wheat Stock, Finished Goods, Bardana &amp; Packing Stock, Stores &amp; Spares</b>.</li>
+    <li>Seeded accounts include Cash, Bank, Sales Revenue, Sales Discount, Sales Returns, COGS, Freight, Brokerage, Brokers (group), Withholding Tax Payable, Input/Output Sales Tax, Salaries &amp; Wages, Salaries Payable, Salary Deductions Payable, Electricity &amp; Fuel, Repairs, Office, Retained Earnings, Opening Balance Equity.</li>
+    <li>Each supplier / customer gets its own ledger account automatically.</li>
+    <li>Opening Balances screen; Fiscal Years with periods (fallback year starts 1 July).</li>
+  </ul>
+  <h3 id="vouchers">12.2 Manual vouchers</h3>
+  <table>
+    <tr><th>Voucher</th><th>Series</th><th>Use</th></tr>
+    <tr><td>Cash Payment</td><td>CP-</td><td>Pay supplier / expense from cash</td></tr>
+    <tr><td>Cash Receipt</td><td>CR-</td><td>Receive from customer in cash</td></tr>
+    <tr><td>Bank Payment</td><td>BP-</td><td>Cheque / transfer out (cheque no &amp; date)</td></tr>
+    <tr><td>Bank Receipt</td><td>BR-</td><td>Cheque / transfer in</td></tr>
+    <tr><td>Journal Voucher</td><td>JV-</td><td>Adjustments; shows Dr/Cr difference and blocks Save until equal</td></tr>
+  </table>
+  <p>Lines: account, narration, person, method, debit, credit. Draft → Posted. Posted vouchers are reversed, not deleted.</p>
+
+  <h3 id="autopost">12.3 Automatic postings (no manual entry)</h3>
+  <table>
+    <tr><th style="width:20%">Document</th><th>Voucher created</th></tr>
+    <tr><td>Wheat / Stores Purchase Invoice</td><td>Dr Stock (wheat / packing / stores bucket per line) · Dr Freight <i>or</i> (Dr Supplier / Cr Cash if mill paid freight at gate) · Dr Input Tax · Dr Brokerage <i>or</i> Dr Supplier if supplier bears it · Cr Broker · Cr WHT Payable · Cr Supplier (total − WHT)</td></tr>
+    <tr><td>Invoice payment</td><td>Dr Supplier / Cr Cash-Bank (number <code>PI-…-PMT</code>)</td></tr>
+    <tr><td>Purchase Return</td><td>Dr Supplier / Cr Stock bucket</td></tr>
+    <tr><td>Sale Invoice</td><td>Dr Cash (paid) + Dr Customer (balance) + Dr Sales Discount / Cr Sales Revenue + Cr Sales Tax Payable (stores lines also Dr COGS / Cr Stores)</td></tr>
+    <tr><td>Sale Return</td><td>Dr Sales Returns / Cr Customer</td></tr>
+    <tr><td>Stock Adjustment</td><td>Inventory Adjustment expense vs Stock</td></tr>
+    <tr><td>Payroll (on approval)</td><td>Dr Salaries &amp; Wages / Cr Salaries Payable + Cr Salary Deductions Payable; un-approve / edit reverses</td></tr>
+    <tr><td>Cost of Sales (month end)</td><td>Dr Cost of Goods Sold / Cr each stock bucket</td></tr>
+    <tr><td>Any reversal</td><td>Mirror voucher <code>&lt;original&gt;-REV</code></td></tr>
+  </table>
+
+  <h3 id="cos">12.4 Cost of Sales (month end, periodic)</h3>
+  <div class="formula">Cost of Sales = Opening Stock + Purchases (net of returns) + Direct Expenses − Closing Stock
+Gross Profit  = Sales − Sale Returns − Cost of Sales</div>
+  <ul>
+    <li>Step 1: Products → Closing Stock, check/edit rates for the period end date.</li>
+    <li>Step 2: Reports → Owner → Cost of Sales → <b>Post Voucher</b>. One JV dated period end. Posting the same period again reverses the old one and reposts; overlapping periods refused.</li>
+  </ul>
+
+  <h3 id="fs">12.5 Financial statements</h3>
+  <ul>
+    <li><b>Trial Balance</b>: opening / period / closing Dr-Cr, flat or tree, integrity check banner.</li>
+    <li><b>Profit &amp; Loss</b>: Income, COGS, Gross Profit, Expenses, Net Operating Income, Other, Net Income. Variants: by month, comparison with previous year (change, % change), as % of income, detail.</li>
+    <li><b>Balance Sheet</b>: as-of, comparison, by month, detail; "Current Year Profit" line; red row if out of balance.</li>
+    <li><b>Cash Flow</b>: indirect and direct method; <b>Changes in Equity</b>.</li>
+    <li>Options: period presets (quarter, YTD, fiscal YTD…), columns by month/quarter/year, rows active / non-zero / all, ÷1000, without paisa, collapse levels. Every amount drills down to the account ledger.</li>
+    <li><b>Memorize</b>: save current report settings by name (personal or shared).</li>
+    <li>Day Book in the mill's paper format (Bank Payment, Bank Received, Cash Payment, Cash Received, Wheat Purchase, Purchase, Credit Sale, Freight, WHT, Broker Commission, Returns, Journal) with B/F and C/F.</li>
+  </ul>
+  <h3 id="close">12.6 Period Close &amp; Inventory Valuation</h3>
+  <ul>
+    <li>Period Close: preview then post closing journal to Retained Earnings (posted entries only).</li>
+    <li>Inventory Valuation: mill goods at Closing Stock rate + stores at average cost, one reconcile line per stock account vs ledger.</li>
+  </ul>
+  <div class="review"><label>Reviewer notes on Accounts</label><textarea data-key="accounts"></textarea></div>
+</section>
+
+<section id="reports">
+  <h2>13. Reports (all groups)</h2>
+  <p>All reports share: period presets (today, yesterday, this/last week, month, year, fiscal, custom), filters, sorting, totals, Excel / CSV / Word / PDF / PNG export, letterhead print, drill-down links.</p>
+  <div class="grid2">
+    <div class="card"><h4>Owner</h4><ul>
+      <li>Daily Position (one-page print)</li><li>Month at a Glance (day-wise, running cash)</li><li>Profitability by Product (cost per bag based; bran at sale price)</li><li>Cost of Sales (+ Post Voucher)</li><li>Receivables Aging (0-30/31-60/61-90/90+)</li><li>Payables Aging</li></ul></div>
+    <div class="card"><h4>Sales</h4><ul>
+      <li>Sales Register</li><li>Sales Summary (day/week/month)</li><li>Customer-wise Sales</li><li>Product-wise Sales</li><li>Sale Rate History (billed vs list rate)</li><li>Sale Returns</li><li>POS Day Sheet (cash/card/online by cashier)</li><li>Customer Ledger</li></ul></div>
+    <div class="card"><h4>Purchase</h4><ul>
+      <li>Wheat Purchase Register (all weights, deductions, net payable)</li><li>Purchase Summary</li><li>Supplier-wise Purchase</li><li>Wheat Quality (impurities / moisture averages)</li><li>Wheat Rate Trend</li><li>Freight &amp; Brokerage</li><li>WHT Register</li><li>Stores Purchase Register</li><li>Purchase Returns</li><li>Supplier Payment Status</li></ul></div>
+    <div class="card"><h4>Weighbridge</h4><ul>
+      <li>Weighbridge Register (party vs mill weight, difference)</li><li>Vehicle-wise Report</li><li>Weight Variance (tolerance, cost impact)</li><li>Daily Gate Sheet</li></ul></div>
+    <div class="card"><h4>Bardana</h4><ul>
+      <li>Bardana Stock (Mill) — purchased, returned, emptied in grinding, issued to packing</li><li>Party Bardana Balances</li><li>Bardana Movement Register</li><li>Packing Consumption</li></ul></div>
+    <div class="card"><h4>Production</h4><ul>
+      <li>Grinding Register</li><li>Daily Grinding (downtime days flagged)</li><li>Yield Trend (vs standard, moving average)</li><li>Product Output Mix</li><li>Shortage / Refraction</li><li>Product Conversion Register</li><li>Production Cost per Bag</li><li>Production Summary</li></ul></div>
+    <div class="card"><h4>Stock</h4><ul>
+      <li>Mill Product Stock (product × godown, kg + mund, value)</li><li>Stores Stock</li><li>Stock Ageing / Slow Moving</li><li>Stock Adjustment Register</li><li>Godown-wise Stock</li><li>Wheat Stock in Days</li><li>Item Ledger</li><li>Stock Valuation</li></ul></div>
+    <div class="card"><h4>Accounts</h4><ul>
+      <li>Cash Book · Bank Book</li><li>Party Ledger · Account Ledger · General Ledger</li><li>Voucher Register / Transaction List by Date</li><li>Journal · Daybook</li><li>Expense Analysis (month grid)</li><li>Receivable / Payable Summary</li><li>Open Invoices · Unpaid Bills</li><li>A/R &amp; A/P Aging</li><li>Opening Balances · Audit Trail</li><li>TB, P&amp;L (4 variants), BS (4 variants), Changes in Equity, Cash Flow, Period Close</li></ul></div>
+    <div class="card"><h4>HR</h4><ul>
+      <li>Employee Register</li><li>Salary Sheet (bank/cash, signature column)</li><li>Payroll Summary</li><li>Allowance / Deduction Breakdown</li></ul></div>
+    <div class="card"><h4>Setup</h4><ul>
+      <li>Supplier / Customer Directory (with balances, over-limit)</li><li>Product Master with Rates</li><li>Chart of Accounts with balances</li><li>User Access (user × role × organization)</li></ul></div>
+  </div>
+  <div class="review"><label>Reviewer notes on Reports</label><textarea data-key="reports"></textarea></div>
+</section>
+
+<section id="hr">
+  <h2>14. HR &amp; Payroll</h2>
+  <ul>
+    <li><b>Employees</b>: personal info, department, designation, job type, organization, branch, joining date, bank details, experience and qualification records. Deactivate only.</li>
+    <li><b>Salary Items</b>: per employee allowances and deductions (types from Allowance &amp; Deduction master).</li>
+    <li><b>Payroll Runs</b>: Month + Year → base salary, total allowances, total deductions, net salary. Status Pending → Approved. One payroll per employee per month.</li>
+    <li>On approval the salary voucher posts automatically (see 12.3).</li>
+  </ul>
+  <div class="review"><label>Reviewer notes on HR &amp; Payroll</label><textarea data-key="hr"></textarea></div>
+</section>
+
+<section id="setup">
+  <h2>15. Setup, Users &amp; Settings</h2>
+  <h3>Users &amp; Access</h3>
+  <ul>
+    <li>Every screen has permissions per action: <b>index (list), view, add, edit, delete, approve, reverse</b> (e.g. <code>inventory.purchase_orders.approve</code>).</li>
+    <li><b>Roles</b> = a set of permissions. <b>User Assignments</b> = user + role + organization + branch + start/end date + primary flag.</li>
+    <li>Menus, buttons (Add New, Edit, Post, Reverse) and pages all respect permissions.</li>
+  </ul>
+  <h3>Company</h3>
+  <ul><li>Organizations and Branches (mill, head office, depots). Godowns are a separate master.</li></ul>
+  <h3>General Settings</h3>
+  <table>
+    <tr><th style="width:18%">Tab</th><th>Contents</th></tr>
+    <tr><td>Features</td><td>On/off switches: Purchase sales tax, Purchase discount, Purchase freight, Wheat WHT, Wheat brokerage, Sales tax, Sales discount, Services (off by default). Switching off hides the field on forms, lists and prints (old documents with a value still show it).</td></tr>
+    <tr><td>Numbering</td><td>Prefix and start number for each document series (e.g. start at PI-000000); cannot be lowered below a used number.</td></tr>
+    <tr><td>Company</td><td>Name, logo, address, phone used on sidebar, login and prints</td></tr>
+    <tr><td>Wheat</td><td>Wheat slip defaults</td></tr>
+  </table>
+  <h3>Master Data</h3>
+  <p>Item Categories, UOMs, UOM Conversions, Godowns. Hidden for the flour-mill demo (still working): Departments, Designations, Job Types, Cities, Banks, Allowances &amp; Deductions, Genders, Qualifications, Specializations, Salutations, Blood Groups, Religions, Marital Statuses, Expense Types, Payment Methods, Manufacturers, Image Types.</p>
+  <div class="review"><label>Reviewer notes on Setup / Access</label><textarea data-key="setup"></textarea></div>
+</section>
+
+<section id="numbers">
+  <h2>16. Document numbers &amp; statuses</h2>
+  <table>
+    <tr><th>Document</th><th>Prefix</th><th>Statuses</th></tr>
+    <tr><td>Purchase Order</td><td>PO-</td><td>Draft, Submitted, Partially Invoiced, Fully Invoiced, Closed, Cancelled</td></tr>
+    <tr><td>Wheat Purchase Invoice</td><td>WPI-</td><td>Posted, Reversed</td></tr>
+    <tr><td>Stores Purchase Invoice</td><td>PI-</td><td>Posted, Reversed</td></tr>
+    <tr><td>Purchase Return</td><td>PR-</td><td>Draft, Posted, Reversed</td></tr>
+    <tr><td>Sales Order</td><td>SO-</td><td>Submitted, Partially Invoiced, Fully Invoiced, Closed</td></tr>
+    <tr><td>Sale Invoice</td><td>SAL-</td><td>Created (draft), Posted</td></tr>
+    <tr><td>Sale Return</td><td>SR-</td><td>Draft, Posted</td></tr>
+    <tr><td>Grinding</td><td>WG-</td><td>Saved (editable, reposts)</td></tr>
+    <tr><td>Product Conversion</td><td>PC-</td><td>Saved (editable, reposts)</td></tr>
+    <tr><td>Vouchers</td><td>CP- CR- BP- BR- JV-</td><td>Draft, Posted, Reversed</td></tr>
+    <tr><td>Payroll</td><td>month/year</td><td>Pending, Approved</td></tr>
+  </table>
+  <div class="review"><label>Reviewer notes on numbering / statuses</label><textarea data-key="numbers"></textarea></div>
+</section>
+
+<section id="tech">
+  <h2>17. Technical summary</h2>
+  <ul>
+    <li>Python 3.12, Django 5.2 LTS, Django templates + HTMX + Alpine.js, Tailwind CSS (built locally, no CDN).</li>
+    <li>Database: PostgreSQL/SQLite locally, MySQL on live (cPanel hosting, HTTPS).</li>
+    <li>Modules (Django apps): core, accounts (login), access_control, configurations, organizations, hr, payroll, inventory (purchase, sales, stores), products, production, godowns, finance, portal (dashboard, reports).</li>
+    <li>Soft delete + audit fields (created/updated by/at) on every table; indexes on list and history queries.</li>
+    <li>Business logic in services (one transaction per posting); one component library for all screens with an automatic UI lint check.</li>
+    <li>Automated tests for inventory, finance reports, products, portal, settings.</li>
+  </ul>
+</section>
+
+<section id="gaps">
+  <h2>18. Known gaps / open items (honest list)</h2>
+  <div class="gap"><ul>
+    <li>Cost of goods sold is <b>month-end (periodic)</b>, not per sale — product profit on a single invoice is not exact until month-end closing rates are set.</li>
+    <li>Grinding moves quantity only (no cost transfer entry); cost per bag is a report calculation.</li>
+    <li>Wheat Purchase Invoice cannot be linked to a PO (PO currently carries stores lines only).</li>
+    <li>Receipts are not allocated to specific invoices; aging is an allocation (newest first), not exact settlement.</li>
+    <li>Product sale stock check is against current stock, not stock as of sale date.</li>
+    <li>No separate weighbridge document — weighbridge reports read wheat slip lines; outbound (dispatch) weighment not recorded.</li>
+    <li>Sales have no broker / salesman commission fields.</li>
+    <li>Old header-only "pos-sales/new" draft form cannot add lines — to be retired.</li>
+    <li>Stores items have no reorder level and no godown dimension.</li>
+    <li>Payroll stores totals only; allowance breakdown report uses current salary items.</li>
+    <li>Item Categories / UOM screens are still two-pane, not the standard list board.</li>
+    <li>Latest accounts-review fixes (stock split into 4 accounts, payroll to GL, godown on sale, posted-only reports) are built locally; data repair command <code>repair_books</code> not yet run and not yet on live.</li>
+  </ul></div>
+  <div class="review"><label>Reviewer notes on gaps — which ones matter most?</label><textarea data-key="gaps"></textarea></div>
+</section>
+
+<section id="test">
+  <h2>19. Test scenarios for the reviewer</h2>
+  <p>Tick each one after checking. Ticks are saved in this browser.</p>
+  <ol class="chk">
+    <li><label><input type="checkbox" data-key="t1"> Create a supplier with opening balance; check its ledger and balance chip on the wheat slip.</label></li>
+    <li><label><input type="checkbox" data-key="t2"> Enter a Wheat Purchase Invoice with party and mill weights, katla, impurities, moisture, mixed bardana (mill's own + party), freight paid by mill, broker and WHT. Verify credit weight and net payable by hand.</label></li>
+    <li><label><input type="checkbox" data-key="t3"> Open its Voucher — check every Dr/Cr; open Products stock, Party Bardana, Godown-wise Stock.</label></li>
+    <li><label><input type="checkbox" data-key="t4"> Print Invoice (A4 and Thermal) and gate-slip Voucher.</label></li>
+    <li><label><input type="checkbox" data-key="t5"> Reverse that invoice; confirm stock, bardana and ledger are back to before.</label></li>
+    <li><label><input type="checkbox" data-key="t6"> Raise a stores PO → Submit → Stores Purchase Invoice partly, then fully; watch PO status move.</label></li>
+    <li><label><input type="checkbox" data-key="t7"> Purchase Return: one against an invoice, one direct.</label></li>
+    <li><label><input type="checkbox" data-key="t8"> Grinding: consume wheat, release sacks, produce atta + maida + bran with packing bags; check yield / shortage and stock.</label></li>
+    <li><label><input type="checkbox" data-key="t9"> Product Conversion: 40 kg bags into 20 kg bags.</label></li>
+    <li><label><input type="checkbox" data-key="t10"> Sale Invoice on credit from a godown; try selling more than stock (should be refused).</label></li>
+    <li><label><input type="checkbox" data-key="t11"> Cash Receipt from that customer; check customer ledger and receivable aging.</label></li>
+    <li><label><input type="checkbox" data-key="t12"> Sale Return; check stock back in same godown.</label></li>
+    <li><label><input type="checkbox" data-key="t13"> Cash/Bank Payment to supplier; Journal voucher with unequal Dr/Cr (Save must be blocked).</label></li>
+    <li><label><input type="checkbox" data-key="t14"> Payroll: add salary items, run month, approve; check salary voucher.</label></li>
+    <li><label><input type="checkbox" data-key="t15"> Month end: Closing Stock rates → Cost of Sales → Post Voucher.</label></li>
+    <li><label><input type="checkbox" data-key="t16"> Trial Balance balances; P&amp;L and Balance Sheet tie; Cash Flow matches cash + bank.</label></li>
+    <li><label><input type="checkbox" data-key="t17"> Create a role with limited rights, assign to a user, log in as that user and verify hidden menus/buttons.</label></li>
+    <li><label><input type="checkbox" data-key="t18"> General Settings: switch off a feature (e.g. sales discount) and see it disappear from forms; change a number series start.</label></li>
+    <li><label><input type="checkbox" data-key="t19"> Export any list to Excel/PDF; use column picker; print a report.</label></li>
+    <li><label><input type="checkbox" data-key="t20"> Check the dashboard figures against the reports they link to.</label></li>
+  </ol>
+</section>
+
+<section id="feedback">
+  <h2>20. Overall feedback</h2>
+  <div class="review" style="border:0;padding:0"><label>Missing features you expect in a flour mill ERP</label><textarea data-key="missing" style="min-height:90px"></textarea></div>
+  <div class="review"><label>Things that are wrong / confusing</label><textarea data-key="wrong" style="min-height:90px"></textarea></div>
+  <div class="review"><label>Priority list of changes (most important first)</label><textarea data-key="priority" style="min-height:90px"></textarea></div>
+  <p style="color:var(--mute);font-size:13px">Notes are saved automatically in this browser. Use <b>Export notes</b> (bottom right) to download them as a text file and send back.</p>
+</section>
+
+</main>
+
+<div class="toolbar">
+  <button class="sec" type="button" onclick="window.print()">Print</button>
+  <button type="button" id="exportNotes">Export notes</button>
+</div>
+
+<script>
+(function () {
+  var PREFIX = "erp-review:";
+  document.querySelectorAll("textarea[data-key]").forEach(function (t) {
+    t.value = localStorage.getItem(PREFIX + t.dataset.key) || "";
+    t.addEventListener("input", function () { localStorage.setItem(PREFIX + t.dataset.key, t.value); });
+  });
+  document.querySelectorAll("input[type=checkbox][data-key]").forEach(function (c) {
+    c.checked = localStorage.getItem(PREFIX + c.dataset.key) === "1";
+    c.addEventListener("change", function () { localStorage.setItem(PREFIX + c.dataset.key, c.checked ? "1" : "0"); });
+  });
+  document.getElementById("exportNotes").addEventListener("click", function () {
+    var out = ["Flour Mill ERP — Reviewer notes", "Exported: " + new Date().toLocaleString(), ""];
+    document.querySelectorAll("textarea[data-key]").forEach(function (t) {
+      if (!t.value.trim()) return;
+      var label = t.previousElementSibling ? t.previousElementSibling.textContent : t.dataset.key;
+      out.push("## " + label, t.value.trim(), "");
+    });
+    out.push("## Test scenarios");
+    document.querySelectorAll("input[type=checkbox][data-key]").forEach(function (c, i) {
+      out.push((c.checked ? "[x] " : "[ ] ") + (i + 1) + ". " + c.parentElement.textContent.trim());
+    });
+    var blob = new Blob([out.join("\n")], { type: "text/plain" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "erp-review-notes.txt";
+    a.click();
+  });
+})();
+</script>
+</body>
+</html>
