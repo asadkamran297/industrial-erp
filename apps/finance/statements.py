@@ -40,7 +40,7 @@ from apps.core.constants import (
 )
 from apps.core.reporting import money
 
-from .models import AccountVoucherLine, ChartOfAccount, FiscalYear
+from .models import AccountVoucherLine, ChartOfAccount, FiscalYear, posted_lines
 
 Column = namedtuple("Column", "key label start end")
 
@@ -446,7 +446,7 @@ def balance_sheet(columns, *, show=SHOW_ACTIVE, drill=None, posted_only=True) ->
     if not computed:
         equity_rows.append(_row("computed", 2, "Retained Earnings", retained_line, row_id="retained_earnings", parent="equity"))
         equity = _add(equity, retained_line)
-    equity_rows.append(_row("computed", 2, "Net Income", net_income, row_id="net_income", parent="equity"))
+    equity_rows.append(_row("computed", 2, "Current Year Profit", net_income, row_id="net_income", parent="equity"))
     total_equity = _add(equity, net_income)
 
     total_le = _add(total_liabilities, total_equity)
@@ -976,7 +976,7 @@ def resolve_options(request, *, as_of=False, default_preset=PRESET_FISCAL_YTD, t
 
 def _first_posting_date():
     return (
-        AccountVoucherLine.objects.filter(voucher__posted=YES).order_by("voucher_date")
+        posted_lines().order_by("voucher_date")
         .values_list("voucher_date", flat=True).first()
     )
 

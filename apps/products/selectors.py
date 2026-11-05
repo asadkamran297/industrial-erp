@@ -2,11 +2,19 @@
 
 from decimal import Decimal
 
-from django.db.models import DecimalField, Max, Q, QuerySet, Sum, Value
+from django.db.models import DecimalField, F, Max, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
+    GL_STOCK_STORES,
     PRD_BUYABLE_SPECS,
+    PRD_SPEC_STOCK_ACCOUNT,
+    PRD_MOUND_RATE_SPECS,
+    PRD_UNIT_BASE_WEIGHT,
+    PRD_UNIT_KG,
+    PRD_UNIT_MOUND,
+    PRD_LEDGER_OPENING,
+    PRD_LEDGER_PURCHASE,
     PRODUCTION_OPEN_STOCK_PACK_NAME,
     PRD_LEVEL_ITEM,
     PRD_LEVEL_SUB_GROUP,
@@ -18,7 +26,7 @@ from apps.core.constants import (
     STATUS_ACTIVE,
 )
 
-from .models import PartyBardanaLedger, ProductLedger, ProductNode, RawBardanaLink
+from .models import PartyBardanaLedger, ProductClosingRate, ProductLedger, ProductNode, RawBardanaLink
 
 QUANTITY_FIELD = DecimalField(max_digits=14, decimal_places=3)
 
@@ -138,6 +146,26 @@ def current_rate_map() -> dict[int, Decimal]:
     }
 
 
+def rate_per_stock_unit(specification, unit, rate):
+    """List rate converted to the unit stock is counted in; wheat is quoted per maund but kept in kg."""
+    rate = rate or Decimal("0")
+    if specification in PRD_MOUND_RATE_SPECS and unit == PRD_UNIT_KG:
+        return (rate / Decimal(PRD_UNIT_BASE_WEIGHT[PRD_UNIT_MOUND])).quantize(Decimal("0.0001"))
+    return rate
+
+
+def unit_rate_map() -> dict[int, Decimal]:
+    """Current list rate per stock unit (kg for wheat), for valuing quantities."""
+    from .models import ProductRate
+
+    return {
+        product_id: rate_per_stock_unit(specification, unit, rate)
+        for product_id, specification, unit, rate in ProductRate.objects.filter(is_current=True)
+        .order_by("product_id", "-effective_date")
+        .values_list("product_id", "product__specification", "product__unit", "rate")
+    }
+
+
 def stock_as_of(product: ProductNode, on_date=None, godown=None) -> Decimal:
     """What was on hand at the close of ``on_date``.
 
@@ -214,3 +242,76 @@ def party_bardana_balance_queryset() -> QuerySet:
 def raw_bardana_map() -> dict[int, int]:
     """wheat item id -> linked bardana item id."""
     return dict(RawBardanaLink.objects.values_list("wheat_item_id", "bardana_item_id"))
+
+
+def average_purchase_rates(on_date) -> dict[int, Decimal]:
+    """Weighted rate of every costed opening and purchase up to ``on_date``."""
+    rows = (
+        ProductLedger.objects.filter(
+            entry_date__lte=on_date, quantity__gt=0, rate__gt=0,
+            source__in=(PRD_LEDGER_OPENING, PRD_LEDGER_PURCHASE),
+        )
+        .values("product_id")
+        .annotate(
+            value=Coalesce(Sum(F("quantity") * F("rate")), Value(Decimal("0")), output_field=DecimalField(max_digits=20, decimal_places=5)),
+            qty=Coalesce(Sum("quantity"), Value(Decimal("0")), output_field=QUANTITY_FIELD),
+        )
+        .order_by()
+    )
+    return {
+        row["product_id"]: (row["value"] / row["qty"]).quantize(Decimal("0.01"))
+        for row in rows if row["qty"]
+    }
+
+
+def closing_rate_map(on_date) -> dict[int, tuple[Decimal, bool]]:
+    """``{product_id: (rate, saved)}`` used to value stock at the close of ``on_date``.
+
+    A rate saved for that exact date wins; otherwise average purchase rate,
+    then the last saved closing rate, then the current list rate.
+    """
+    saved = dict(ProductClosingRate.objects.filter(as_of=on_date).values_list("product_id", "rate"))
+    earlier = {}
+    for product_id, rate in ProductClosingRate.objects.filter(as_of__lt=on_date).order_by("-as_of").values_list("product_id", "rate"):
+        earlier.setdefault(product_id, rate)
+    averages = average_purchase_rates(on_date)
+    listed = unit_rate_map()
+    rates = {}
+    for product_id in set(saved) | set(earlier) | set(averages) | set(listed):
+        if product_id in saved:
+            rates[product_id] = (saved[product_id], True)
+        else:
+            rate = averages.get(product_id) or earlier.get(product_id) or listed.get(product_id) or Decimal("0")
+            rates[product_id] = (rate, False)
+    return rates
+
+
+def closing_stock(on_date) -> list[dict]:
+    """Every stocked item with its quantity, rate and value at the close of ``on_date``."""
+    quantities = stock_map_as_of(on_date)
+    rates = closing_rate_map(on_date)
+    rows = []
+    for product in stocked_items().order_by("complete_code"):
+        quantity = quantities.get(product.pk) or Decimal("0")
+        rate, saved = rates.get(product.pk, (Decimal("0"), False))
+        rows.append({
+            "product": product,
+            "quantity": quantity,
+            "rate": rate,
+            "saved": saved,
+            "value": (quantity * rate).quantize(Decimal("0.01")),
+        })
+    return rows
+
+
+def closing_stock_value(on_date) -> Decimal:
+    return sum((row["value"] for row in closing_stock(on_date)), Decimal("0.00"))
+
+
+def closing_stock_by_account(on_date) -> dict[str, Decimal]:
+    """Closing stock value per stock account bucket (wheat, finished, packing)."""
+    totals = {}
+    for row in closing_stock(on_date):
+        bucket = PRD_SPEC_STOCK_ACCOUNT.get(row["product"].specification, GL_STOCK_STORES)
+        totals[bucket] = totals.get(bucket, Decimal("0.00")) + row["value"]
+    return totals

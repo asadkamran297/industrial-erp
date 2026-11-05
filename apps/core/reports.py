@@ -35,6 +35,7 @@ REPORTS: tuple[Report, ...] = (
     Report("owner.daily_position", "Daily Position", "portal", "Owner", "portal:report_daily_position", "reports.owner.index", GROUP_OWNER),
     Report("owner.month_glance", "Month at a Glance", "portal", "Owner", "portal:report_month_glance", "reports.owner.index", GROUP_OWNER),
     Report("owner.product_profit", "Profitability by Product", "portal", "Owner", "portal:report_product_profit", "reports.owner.index", GROUP_OWNER),
+    Report("owner.cost_of_sales", "Cost of Sales", "portal", "Owner", "portal:report_cost_of_sales", "reports.owner.index", GROUP_OWNER),
     Report("owner.receivables_aging", "Receivables Aging", "portal", "Owner", "portal:report_receivables_aging", "reports.owner.index", GROUP_OWNER),
     Report("owner.payables_aging", "Payables Aging", "portal", "Owner", "portal:report_payables_aging", "reports.owner.index", GROUP_OWNER),
 

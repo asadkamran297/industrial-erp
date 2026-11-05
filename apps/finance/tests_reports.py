@@ -465,3 +465,42 @@ class StatementScreenTests(StatementFixture):
         self.assertEqual(SavedReport.objects.count(), 1)
         self.client.post(reverse("finance:saved_report_delete", args=[saved.pk]))
         self.assertEqual(SavedReport.objects.count(), 0)
+
+
+class CostOfSalesPostingTests(AccountsReportFixture):
+    def test_repost_reverses_and_overlap_is_refused(self):
+        from django.core.exceptions import ValidationError
+
+        from apps.core.constants import GL_COGS_PATH
+        from apps.finance.services import cost_of_sales_voucher, cost_of_sales_voucher_amount, post_cost_of_sales
+
+        start, end = date(2026, 9, 1), date(2026, 9, 30)
+        first = post_cost_of_sales(start=start, end=end, amount=Decimal("1000"), user=self.user)
+        self.assertEqual(cost_of_sales_voucher_amount(first), Decimal("1000.00"))
+        self.assertEqual(post_cost_of_sales(start=start, end=end, amount=Decimal("1000"), user=self.user).pk, first.pk)
+
+        second = post_cost_of_sales(start=start, end=end, amount=Decimal("-250"), user=self.user)
+        self.assertNotEqual(second.pk, first.pk)
+        self.assertEqual(cost_of_sales_voucher(start, end).pk, second.pk)
+        self.assertTrue(AccountVoucher.objects.filter(source_ref=f"{first.source_ref}:rev").exists())
+        cogs = gl_account(GL_COGS_PATH).code
+        net = sum(
+            (line.debit_amount - line.credit_amount)
+            for voucher in AccountVoucher.objects.filter(source_ref__startswith="cost_of_sales:")
+            for line in voucher.lines.filter(account_no=cogs)
+        )
+        self.assertEqual(net, Decimal("-250.00"))
+
+        with self.assertRaises(ValidationError):
+            post_cost_of_sales(start=date(2026, 9, 15), end=date(2026, 10, 15), amount=Decimal("10"), user=self.user)
+
+    def test_screens_render_and_post(self):
+        from django.contrib.auth import get_user_model
+
+        self.client.force_login(get_user_model().objects.create_superuser("cos", "cos@example.com", "pass12345"))
+        query = {"preset": "custom", "date_from": "2026-09-01", "date_to": "2026-09-30"}
+        self.assertContains(self.client.get(reverse("portal:report_cost_of_sales"), query), "Post Voucher")
+        self.assertEqual(self.client.get(reverse("products:closing_stock"), {"as_of": "2026-09-30"}).status_code, 200)
+        url = reverse("portal:report_cost_of_sales_post") + "?preset=custom&date_from=2026-09-01&date_to=2026-09-30"
+        self.assertEqual(self.client.post(url).status_code, 302)
+        self.assertEqual(self.client.get(reverse("portal:report_cost_of_sales"), query).status_code, 200)

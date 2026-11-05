@@ -427,12 +427,19 @@ class CustomerForm(StyledModelForm):
 class POSMasterForm(StyledModelForm):
     class Meta:
         model = POSMaster
-        fields = ("sale_date", "pay_mode", "customer")
+        fields = ("sale_date", "pay_mode", "customer", "godown")
         widgets = {"sale_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
         labels = {"sale_date": "Sale Date"}
 
     def __init__(self, *args, **kwargs):
+        from apps.godowns.models import Godown
+
         super().__init__(*args, **kwargs)
+        godowns = Godown.objects.filter(status=STATUS_ACTIVE).order_by("name")
+        self.fields["godown"].queryset = godowns
+        self.fields["godown"].required = True
+        if not self.instance.pk and godowns.count() == 1:
+            self.fields["godown"].initial = godowns.first().pk
         self.fields["pay_mode"].initial = "cash"
         self.fields["sale_date"].initial = timezone.localdate()
         if not self.instance.pk and not self.initial.get("customer"):

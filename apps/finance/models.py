@@ -533,3 +533,8 @@ class SavedReport(BaseModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+def posted_lines():
+    """Voucher lines that count in the books: posted, and not on a deleted voucher."""
+    return AccountVoucherLine.objects.filter(voucher__posted=YES, voucher__deleted_at__isnull=True)

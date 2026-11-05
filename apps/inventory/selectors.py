@@ -20,7 +20,7 @@ from apps.core.constants import (
     YES,
 )
 from apps.core.reporting import ZERO, group_by, money, period_label, weight
-from apps.finance.models import AccountVoucherLine, ChartOfAccount
+from apps.finance.models import AccountVoucherLine, ChartOfAccount, posted_lines
 from apps.products.models import ProductNode, ProductRate
 
 from .models import Customer, POSDetail, POSMaster, POSReturnDetail, POSReturnMaster
@@ -213,7 +213,7 @@ def customer_sales(start, end, customer=None, city=None):
     }
     codes = _customer_codes(customers)
     code_to_customer = {code: cid for cid, (code, _o) in codes.items()}
-    lines = AccountVoucherLine.objects.filter(account_no__in=code_to_customer.keys())
+    lines = posted_lines().filter(account_no__in=code_to_customer.keys())
     received = {
         code_to_customer[row["account_no"]]: row["credit"]
         for row in lines.filter(voucher__voucher_type=VOUCHER_TYPE_RECEIPT, voucher_date__range=(start, end))

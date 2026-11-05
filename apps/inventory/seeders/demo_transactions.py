@@ -46,7 +46,7 @@ SALE_MARKER = "DEMO-SALE-%03d"
 
 BROKERS = ("Haji Sadiq Broker", "Mian Aslam Commission Agent", "Ch. Riaz Broker")
 WHEAT_CODES = ("01-01-001", "01-01-002", "01-02-001")
-BAG_CODES = ("03-01-001", "03-01-002", "03-01-003", "03-02-002", "03-02-003", "03-02-004",
+BAG_CODES = ("03-02-002", "03-02-003", "03-02-004",
              "03-02-007", "03-02-008", "03-02-009", "03-02-011", "03-02-001", "03-02-006")
 RATE_PER_MUND = (Decimal("4830"), Decimal("4790"), Decimal("4860"), Decimal("4750"), Decimal("4900"))
 LOADS_KG = (Decimal("74567"), Decimal("38420"), Decimal("52110"), Decimal("61880"), Decimal("29760"), Decimal("45300"))
@@ -400,6 +400,7 @@ def seed_demo_product_sales(count: int = 50, *, user=None) -> int:
             lines=lines,
             paid_amount=paid,
             remarks=marker,
+            godown=_mill_godown(),
             user=user,
         )
         created_count += 1

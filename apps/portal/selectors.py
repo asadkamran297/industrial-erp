@@ -10,24 +10,29 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
+    GL_COGS_PATH,
+    GL_STOCK_STORES,
     PRD_LEDGER_OPENING,
-    PRD_LEDGER_PRODUCTION_IN,
     PRD_LEDGER_PURCHASE,
+    PRD_LEDGER_PURCHASE_RETURN,
+    PRD_LEDGER_REVERSAL,
     PRD_SPEC_RAW_ITEM,
     PRD_SPEC_RAW_PACKING,
+    PRD_SPEC_STOCK_ACCOUNT,
     PRD_UNIT_BASE_WEIGHT,
     STATUS_ACTIVE,
     STATUS_POSTED,
     YES,
 )
 from apps.core.reporting import ZERO, money, weight
-from apps.finance.models import AccountVoucherLine, ChartOfAccount
-from apps.finance.services import DEBIT_NATURE_TYPES, cash_bank_account_codes
+from apps.finance.models import AccountVoucherLine, ChartOfAccount, posted_lines
+from apps.finance.services import DEBIT_NATURE_TYPES, _descendant_leaf_codes, cash_bank_account_codes
 from apps.inventory.models import (
-    Customer, POSDetail, POSMaster, PurchaseInvoice, PurchaseInvoiceLine, Supplier,
+    Customer, POSDetail, POSMaster, POSReturnDetail, PurchaseInvoice, PurchaseInvoiceLine, Supplier,
 )
 from apps.production.models import GrindingOutput, GrindingVoucher
-from apps.products.models import ProductLedger, ProductRate
+from apps.products.models import ProductLedger
+from apps.products.selectors import closing_stock_by_account
 
 MONEY = DecimalField(max_digits=18, decimal_places=2)
 KG = DecimalField(max_digits=18, decimal_places=3)
@@ -57,7 +62,7 @@ def _codes_balance_as_of(codes, day, debit_natured=True):
     if not codes:
         return ZERO
     opening = ChartOfAccount.objects.filter(code__in=codes).aggregate(total=_sum("opening_balance"))["total"]
-    moved = AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__lte=day).aggregate(
+    moved = posted_lines().filter(account_no__in=codes, voucher_date__lte=day).aggregate(
         debit=_sum("debit_amount"), credit=_sum("credit_amount"),
     )
     net = moved["debit"] - moved["credit"]
@@ -78,7 +83,7 @@ def _party_balances_as_of(parties, name_attr, day):
     openings = dict(ChartOfAccount.objects.filter(code__in=codes.values()).values_list("code", "opening_balance"))
     moved = {
         row["account_no"]: (row["debit"], row["credit"])
-        for row in AccountVoucherLine.objects.filter(account_no__in=codes.values(), voucher_date__lte=day)
+        for row in posted_lines().filter(account_no__in=codes.values(), voucher_date__lte=day)
         .values("account_no").annotate(debit=_sum("debit_amount"), credit=_sum("credit_amount"))
     }
     result = {}
@@ -181,7 +186,7 @@ def wheat_stock_days(day, window=30):
 
 def cash_movement(start, end, codes=None):
     codes = codes if codes is not None else cash_bank_account_codes()
-    row = AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__range=(start, end)).aggregate(
+    row = posted_lines().filter(account_no__in=codes, voucher_date__range=(start, end)).aggregate(
         cash_in=_sum("debit_amount"), cash_out=_sum("credit_amount"),
     )
     return {"cash_in": money(row["cash_in"]), "cash_out": money(row["cash_out"])}
@@ -235,7 +240,7 @@ def month_glance(start, end):
     codes = cash_bank_account_codes()
     cash = {
         row["voucher_date"]: row
-        for row in AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__range=(start, end))
+        for row in posted_lines().filter(account_no__in=codes, voucher_date__range=(start, end))
         .values("voucher_date").annotate(cash_in=_sum("debit_amount"), cash_out=_sum("credit_amount"))
     }
     balance = cash_bank_closing(start - timedelta(days=1), codes)
@@ -284,21 +289,32 @@ def month_glance_totals(start, end):
 # ---------------------------------------------------------------------------
 
 def product_cost_rates(as_of):
-    """Weighted average inbound rate per product from the product ledger up to ``as_of``.
+    """Cost per unit of each product up to ``as_of``.
 
-    Rows with no rate (a grinding receipt carries none) do not count; a product
-    with no costed row falls back to its current list rate and says so.
+    Milled products take their weighted production cost (Cost per Bag); bought
+    ones their weighted purchase rate; anything else its list rate, flagged.
     """
+    from datetime import date
+
+    from apps.production.report_selectors import cost_per_bag
+    from apps.products.selectors import unit_rate_map
+
+    rates = {
+        row["product_id"]: (row["cost_per_bag"], "production")
+        for row in cost_per_bag(date(2000, 1, 1), as_of)["rows"] if row["units"] and row["cost_per_bag"]
+    }
     costed = (
         ProductLedger.objects.filter(
             entry_date__lte=as_of, quantity__gt=0, rate__gt=0,
-            source__in=(PRD_LEDGER_OPENING, PRD_LEDGER_PURCHASE, PRD_LEDGER_PRODUCTION_IN),
+            source__in=(PRD_LEDGER_OPENING, PRD_LEDGER_PURCHASE),
         )
         .values("product_id").annotate(value=_sum(F("quantity") * F("rate")), qty=_sum("quantity", KG))
     )
-    rates = {row["product_id"]: (money(row["value"] / row["qty"]), "ledger") for row in costed if row["qty"]}
-    for rate in ProductRate.objects.filter(is_current=True).order_by("product_id", "-effective_date"):
-        rates.setdefault(rate.product_id, (money(rate.rate), "list"))
+    for row in costed:
+        if row["qty"]:
+            rates.setdefault(row["product_id"], (money(row["value"] / row["qty"]), "ledger"))
+    for product_id, rate in unit_rate_map().items():
+        rates.setdefault(product_id, (money(rate), "list"))
     return rates
 
 
@@ -518,3 +534,86 @@ def open_documents(side, as_of, party_id=None):
     for key, *_ in AGING_BUCKETS:
         totals[key] = sum((row["open"] for row in rows if row["bucket_key"] == key), ZERO)
     return {"rows": rows, "totals": totals}
+
+
+def _direct_expense_accounts():
+    """Leaf accounts under Direct Expenses, less the per-sale COGS account."""
+    root, heading, cogs_title = GL_COGS_PATH
+    group = ChartOfAccount.objects.filter(title=heading, parent__title=root, parent__parent__isnull=True).first()
+    if group is None:
+        return []
+    codes = _descendant_leaf_codes(group)
+    return list(
+        ChartOfAccount.objects.filter(code__in=codes).exclude(title=cogs_title, parent=group)
+        .order_by("code").values_list("code", "title")
+    )
+
+
+def cost_of_sales(start, end) -> dict:
+    opening_date = start - timedelta(days=1)
+    opening_by = closing_stock_by_account(opening_date)
+    closing_by = closing_stock_by_account(end)
+    opening = money(sum(opening_by.values(), ZERO))
+    closing = money(sum(closing_by.values(), ZERO))
+
+    purchases_by = {}
+    for row in (
+        ProductLedger.objects.filter(
+            entry_date__range=(start, end),
+            source__in=(PRD_LEDGER_PURCHASE, PRD_LEDGER_PURCHASE_RETURN, PRD_LEDGER_REVERSAL),
+        ).values("product__specification").annotate(value=_sum(F("quantity") * F("rate"))).order_by()
+    ):
+        bucket = PRD_SPEC_STOCK_ACCOUNT.get(row["product__specification"], GL_STOCK_STORES)
+        purchases_by[bucket] = purchases_by.get(bucket, ZERO) + (row["value"] or ZERO)
+    purchases = money(sum(purchases_by.values(), ZERO))
+    shares = {
+        bucket: money(opening_by.get(bucket, ZERO) + purchases_by.get(bucket, ZERO) - closing_by.get(bucket, ZERO))
+        for bucket in set(opening_by) | set(purchases_by) | set(closing_by)
+    }
+
+    accounts = _direct_expense_accounts()
+    movement = {
+        row["account_no"]: money(row["debit"] - row["credit"])
+        for row in AccountVoucherLine.objects.filter(
+            account_no__in=[code for code, _ in accounts], voucher_date__range=(start, end),
+            voucher__posted=YES, voucher__deleted_at__isnull=True,
+        ).values("account_no").annotate(debit=_sum("debit_amount"), credit=_sum("credit_amount")).order_by()
+    }
+    expenses = [(title, movement[code]) for code, title in accounts if movement.get(code)]
+
+    sales = money(
+        POSDetail.objects.filter(pos_master__posted=YES, pos_master__sale_date__range=(start, end), product__isnull=False)
+        .aggregate(value=_sum("net_total"))["value"]
+    )
+    returns = money(
+        POSReturnDetail.objects.filter(
+            pos_return_master__posted=YES, pos_return_master__return_date__range=(start, end), product__isnull=False,
+        ).aggregate(value=_sum("net_total"))["value"]
+    )
+
+    available = opening + purchases + sum((amount for _, amount in expenses), ZERO)
+    cost = available - closing
+    net_sales = sales - returns
+    gross = net_sales - cost
+
+    rows = [{"line": f"Opening Stock ({opening_date:%d-%m-%Y})", "amount": opening}]
+    rows.append({"line": "Add: Purchases", "amount": purchases})
+    rows += [{"line": f"Add: {title}", "amount": amount} for title, amount in expenses]
+    rows.append({"line": "Total", "amount": available})
+    rows.append({"line": f"Less: Closing Stock ({end:%d-%m-%Y})", "amount": closing})
+    rows.append({"line": "Cost of Sales", "amount": cost})
+    rows.append({"line": "Sales", "amount": sales})
+    rows.append({"line": "Less: Sale Returns", "amount": returns})
+    rows.append({"line": "Net Sales", "amount": net_sales})
+    rows.append({"line": "Gross Profit", "amount": gross})
+    return {
+        "rows": rows,
+        "cost": cost,
+        "net_sales": net_sales,
+        "gross": gross,
+        "gross_pct": (gross / net_sales * 100).quantize(Decimal("0.01")) if net_sales else ZERO,
+        "opening": opening,
+        "closing": closing,
+        "consumed": opening + purchases - closing,
+        "shares": {bucket: amount for bucket, amount in shares.items() if amount},
+    }

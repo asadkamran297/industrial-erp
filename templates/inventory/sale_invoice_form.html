@@ -15,6 +15,12 @@
     <div class="head-fields__wide">
       {% include "components/forms/party_picker.html" with label="Customer" name="customer" parties=customers selected=posted.customer required=True add_id="add-customer" add_title="New customer" owed_label="Receivable" credit_label="Advance" only %}
     </div>
+    <div>
+      {% component "forms/control" type="select" name="godown" id="godown" label="Godown" required=True only %}
+        <option value="">&mdash;</option>
+        {% for g in godowns %}<option value="{{ g.pk }}" {% if posted.godown == g.pk|stringformat:"s" or not posted.godown and godowns|length == 1 %}selected{% endif %}>{{ g.code }} &mdash; {{ g.name }}</option>{% endfor %}
+      {% endcomponent %}
+    </div>
     </div>
   </div>
 

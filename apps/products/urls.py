@@ -4,6 +4,7 @@ from . import report_views as rv
 
 from .views import (
     AccountLinkView,
+    ClosingStockView,
     CodePreviewView,
     FinishBardanaLinkView,
     OpeningBalanceView,
@@ -33,6 +34,7 @@ urlpatterns = [
     path("finish-bardana-linking/", FinishBardanaLinkView.as_view(), name="finish_bardana_linking"),
     path("opening-balance/", OpeningBalanceView.as_view(), name="opening_balance"),
     path("rate-update/", RateUpdateView.as_view(), name="rate_update"),
+    path("closing-stock/", ClosingStockView.as_view(), name="closing_stock"),
     path("party-bardana/", PartyBardanaListView.as_view(), name="party_bardana"),
     path("reports/bardana-stock/", rv.BardanaStockView.as_view(), name="report_bardana_stock"),
     path("reports/bardana-stock/export/", rv.BardanaStockExportView.as_view(), name="report_bardana_stock_export"),

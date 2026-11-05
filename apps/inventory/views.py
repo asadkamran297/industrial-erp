@@ -20,7 +20,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from apps.core.constants import PRD_UNIT_CHOICES, INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, YES
+from apps.core.constants import PRD_UNIT_CHOICES, INV_RETURN_DRAFT_STATUSES, GL_BROKERS_GROUP_TITLE, INV_BARDANA_OWNERSHIP_CHOICES, INV_SALES_ORDER_STATUS_CHOICES, STATUS_CLOSED, STATUS_SUBMITTED, STATUS_PARTIALLY_INVOICED, STATUS_FULLY_INVOICED, INV_PO_CANCEL_REASONS, INV_PO_CLOSE_SHORT_REASONS, INV_REVERSAL_REASONS, INVENTORY_KIND_PRODUCT, INVENTORY_KIND_SERVICE, INV_POS_STATUS_CHOICES, INV_PURCHASE_ORDER_STATUS_CHOICES, INV_TRANSACTION_TYPE_CHOICES, NO, RECORD_STATUS_CHOICES, STATUS_ACTIVE, STATUS_CREATED, STATUS_DRAFT, STATUS_INACTIVE, STATUS_CANCELLED, STATUS_POSTED, STATUS_REVERSED, WHEAT_MIN_KG_PER_SACK, YES
 from apps.access_control.selectors import user_has_permission
 from apps.core.models import SystemSetting
 from apps.core.table_columns import Column, ColumnSet
@@ -30,7 +30,7 @@ from apps.core.doc_links import guard
 from . import doc_links as links
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, PrintContextMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.core.views import SaveAndNewMixin, MasterDetailView
-from apps.finance.models import AccountVoucherLine, ChartOfAccount
+from apps.finance.models import AccountVoucherLine, ChartOfAccount, posted_lines
 from apps.finance.services import account_balances, account_ledger, create_customer_receivable_account, customer_receivable_balances, supplier_payable_balances, sync_customer_opening_balance, sync_supplier_opening_balance
 from apps.finance.views import AuditSaveMixin
 
@@ -947,7 +947,7 @@ def _ledger_entries(codes):
     if not codes:
         return entries
     lines = (
-        AccountVoucherLine.objects.filter(account_no__in=codes)
+        posted_lines().filter(account_no__in=codes)
         .select_related("voucher")
         .order_by("voucher_date", "voucher_no", "line_number")
     )
@@ -3786,6 +3786,17 @@ class SaleInvoiceExportView(InventoryListMixin, TableExportView):
         return rows
 
 
+def _active_godowns():
+    from apps.godowns.models import Godown
+
+    return Godown.objects.filter(status=STATUS_ACTIVE).order_by("name")
+
+
+def _active_godown(raw):
+    raw = (raw or "").strip()
+    return _active_godowns().filter(pk=int(raw)).first() if raw.isdigit() else None
+
+
 class SaleInvoiceCreateView(InventoryManageMixin, View):
     """A sale written up as an invoice, rather than rung through the POS screen.
 
@@ -3811,6 +3822,7 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
             "customers": customers_with_balance(),
             "units": UOM.objects.order_by("title"),
             "product_units": PRD_UNIT_CHOICES,
+            "godowns": _active_godowns(),
             "today": timezone.localdate(),
             "items_json": json.dumps(sale_item_options(items)),
         }
@@ -3881,6 +3893,7 @@ class SaleInvoiceCreateView(InventoryManageMixin, View):
                 tax_amount=money("tax_amount"),
                 paid_amount=money("paid_amount"),
                 remarks=(posted.get("remarks") or "").strip(),
+                godown=_active_godown(posted.get("godown")),
                 user=request.user,
             )
         except ValidationError as error:
@@ -4172,6 +4185,7 @@ class POSCheckoutView(InventoryManageMixin, View):
             sale_date=request.POST.get("sale_date") or timezone.localdate(),
             pay_mode=request.POST.get("pay_mode") or "cash",
             customer_id=request.POST.get("customer") or None,
+            godown=_active_godown(request.POST.get("godown")),
             remarks=f"Walking customer {timezone.now():%Y-%m-%d %H:%M:%S}",
             created_by=request.user,
             updated_by=request.user,
@@ -4887,7 +4901,7 @@ def balance_of_grn_clearing():
     from apps.finance.services import gl_account
 
     account = gl_account(GL_GRN_CLEARING_PATH)
-    rows = AccountVoucherLine.objects.filter(account_no=account.code).aggregate(
+    rows = posted_lines().filter(account_no=account.code).aggregate(
         debit=Sum("debit_amount"), credit=Sum("credit_amount")
     )
     return (rows["debit"] or Decimal("0")) - (rows["credit"] or Decimal("0"))
@@ -4987,6 +5001,13 @@ class WheatPurchaseEntryView(InventoryManageMixin, View):
             "sack_weight_deduction": sack_deduction or None,
             "rate_per_mund": weight("rate_per_mund"),
         }
+
+        sacks = sum((line["quantity"] for line in bardana_lines), Decimal("0"))
+        loaded = weight("selected_weight") or mill_net or party_net or Decimal("0")
+        if sacks and loaded > 0 and loaded / sacks < WHEAT_MIN_KG_PER_SACK:
+            return JsonResponse({"errors": [
+                f"{sacks:,.0f} bags for {loaded:,.0f} kg is {loaded / sacks:,.1f} kg per bag. Check the bag count."
+            ]}, status=400)
 
         text_payload = {key: ("" if value is None else str(value)) for key, value in payload.items()
                         if not isinstance(value, (list, dict))}

@@ -5,6 +5,51 @@ One entry per working day. **Local** = changes in the repo/dev environment.
 
 ---
 
+## 2026-11-04
+
+### Local (not committed)
+
+Accounts review from the owner's auditor (11 points, "Zafaran ERP – Issues for Developer"):
+
+- Reports, statements, dashboard and Cost per Bag count posted, non-deleted voucher lines only (`finance.models.posted_lines()`); `account_balances` / `account_ledger` default to posted only.
+- Stock split into four accounts under Current Assets → Stock in Trade: Wheat Stock, Finished Goods, Bardana & Packing Stock, Stores & Spares. Purchase invoice and purchase return post to the bucket of each line; Cost of Sales voucher credits each bucket.
+- Payroll posts on approval (`apps/payroll/services.sync_payroll_gl`): Dr Salaries & Wages / Cr Salaries Payable and Salary Deductions Payable; edit, un-approve or delete reverses. Dashboard Payroll Net counts approved only.
+- Sale invoice carries a required godown (`inventory/0060_sale_godown`); stock is checked and taken from that godown; sale return puts it back there.
+- Wheat valued per kg (maund rate ÷ 40) on mill stock reports; quantity totals removed where units are mixed; Inventory Valuation now covers mill goods at the Closing Stock rate, one reconcile line per stock account.
+- Product profitability uses the Cost per Bag production cost; by-products (bran) are valued at their sale price and the remaining cost goes to the main products.
+- Wheat slip refuses fewer than 20 kg per sack; raw bardana report shows "Emptied in Grinding" separately from "Issued to Packing".
+- Chart of accounts seeder adds Bank, Salaries, Electricity & Fuel, Repairs, Office, Salaries Payable and the stock accounts, and fixes group flags. Balance sheet line renamed "Current Year Profit".
+- New `python manage.py repair_books` (dry run unless `--apply`; `--godown <id>`, `--post-manual`) to bring existing data in line: chart flags, demo vouchers soft-deleted, godown-less sales moved, old Inventory balance reclassed, approved payrolls posted, short-sack wheat slips listed.
+- `ProductSaleTests` updated for the godown rule; `apps.inventory.tests` OK (36). `apps.finance.tests` still has the 3 errors that fail on a clean tree.
+
+### Open
+
+- `repair_books` not run yet (local or live); review the dry run first.
+- Mill opening balances had no godown, so opening stock could not be sold under the godown rule. Now `repair_books --godown` moves existing openings too, and a new opening goes to the only active godown when there is just one (with several, it stays blank).
+- COGS is the month-end Cost of Sales voucher, not per sale as the review asks; tell the reviewer.
+
+---
+
+## 2026-10-28
+
+### Local (not committed)
+
+- Cost of Sales, easy (periodic) version. New `ProductClosingRate` (`prod_closing_rates`, migration `products/0004`) holds a rate per product per date.
+- Products → Closing Stock (`/products/closing-stock/?as_of=`): closing qty per stocked product, editable rate, value, total. Default rate: saved for that date, else average purchase rate, else last saved closing rate, else list rate.
+- Reports → Owner → Cost of Sales (`/portal/reports/cost-of-sales/`): Opening Stock + Purchases (mill ledger, net of returns/reversals) + Direct Expenses accounts (excluding the per-sale COGS account) − Closing Stock = Cost of Sales; Sales − Returns − Cost = Gross Profit.
+- Page `products.closing_stock` added; `seed` run.
+
+- Sale / sale return no longer book COGS for mill product lines (it used the sale list rate). Stores lines unchanged.
+- Cost of Sales report: Post Voucher button (permission `finance.period_close.add`) posts one JV dated period end, Dr Cost of Goods Sold / Cr Inventory = Opening + Purchases − Closing (direct expenses already sit in P&L). Same period again → old voucher reversed (`…:rev`) and reposted; an overlapping period is refused. Voucher number button links to it.
+- Tests: `CostOfSalesPostingTests` in `apps/finance/tests_reports.py`. `apps.finance.tests` has 3 errors that also fail on a clean tree.
+
+### Open
+
+- Sales posted before today still carry the old list-rate COGS lines in GL; owner says that data is dummy, no cleanup needed.
+- Grinding still moves quantity at rate 0 (fine for the periodic method).
+
+---
+
 ## 2026-10-27
 
 ### Local

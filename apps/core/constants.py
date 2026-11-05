@@ -200,8 +200,36 @@ GL_BROKERAGE_PATH: Final = ("EXPENSES", "Direct Expenses", "Brokerage")
 GL_WITHHOLDING_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Withholding Tax Payable")
 BROKERAGE_WEIGHT_UNIT_KG: Final = "100"
 WITHHOLDING_WEIGHT_UNIT_KG: Final = "40"
+WHEAT_MIN_KG_PER_SACK: Final = 20
 GL_BROKERS_GROUP_TITLE: Final = "Brokers"
 GL_RETAINED_EARNINGS_PATH: Final = ("CAPITAL", "Reserves & Surplus", "Retained Earnings")
+
+GL_STOCK_WHEAT: Final = "wheat"
+GL_STOCK_FINISHED: Final = "finished"
+GL_STOCK_PACKING: Final = "packing"
+GL_STOCK_STORES: Final = "stores"
+GL_STOCK_GROUP_PATH: Final = ("ASSETS", "Current Assets", "Stock in Trade")
+GL_STOCK_PATHS: Final[dict[str, tuple[str, ...]]] = {
+    GL_STOCK_WHEAT: GL_STOCK_GROUP_PATH + ("Wheat Stock",),
+    GL_STOCK_FINISHED: GL_STOCK_GROUP_PATH + ("Finished Goods",),
+    GL_STOCK_PACKING: GL_STOCK_GROUP_PATH + ("Bardana & Packing Stock",),
+    GL_STOCK_STORES: GL_STOCK_GROUP_PATH + ("Stores & Spares",),
+}
+GL_STOCK_LABELS: Final[dict[str, str]] = {
+    GL_STOCK_WHEAT: "Wheat",
+    GL_STOCK_FINISHED: "Finished Goods",
+    GL_STOCK_PACKING: "Bardana & Packing",
+    GL_STOCK_STORES: "Stores & Spares",
+}
+GL_BANK_PATH: Final = ("ASSETS", "Current Assets", "Bank")
+GL_SALARIES_EXPENSE_PATH: Final = ("EXPENSES", "Indirect Expenses", "Salaries & Wages")
+GL_SALARIES_PAYABLE_PATH: Final = ("LIABILITIES", "Current Liabilities", "Salaries Payable")
+GL_SALARY_DEDUCTIONS_PATH: Final = ("LIABILITIES", "Current Liabilities", "Salary Deductions Payable")
+PAYROLL_GL_PREFIX: Final = "hr_payrolls:"
+PAYROLL_GL_REVERSAL_PREFIX: Final = "hr_payrolls_reversal:"
+GL_ELECTRICITY_PATH: Final = ("EXPENSES", "Direct Expenses", "Electricity & Fuel")
+GL_REPAIRS_PATH: Final = ("EXPENSES", "Direct Expenses", "Repairs & Maintenance")
+GL_OFFICE_EXPENSE_PATH: Final = ("EXPENSES", "Indirect Expenses", "Office & General")
 
 GL_INVENTORY_ADJUSTMENT_PATH: Final = ("EXPENSES", "Direct Expenses", "Inventory Adjustment")
 GL_OPENING_EQUITY_PATH: Final = ("CAPITAL", "Owner's Capital", "Opening Balance Equity")
@@ -225,6 +253,7 @@ CASH_FLOW_SECTION_LABELS: Final[dict[str, str]] = {
 }
 
 FS_PERIOD_CLOSE_PREFIX: Final = "period_close:"
+FS_COST_OF_SALES_PREFIX: Final = "cost_of_sales:"
 FS_CURRENT_ASSETS_PATH: Final = ("ASSETS", "Current Assets")
 FS_CURRENT_LIABILITIES_PATH: Final = ("LIABILITIES", "Current Liabilities")
 FS_CASH_GROUP_TITLES: Final = ("Cash", "Bank")
@@ -613,6 +642,14 @@ PRD_SELLABLE_SPECS: Final[tuple[str, ...]] = tuple(
 )
 PRD_PACKABLE_SPECS: Final[tuple[str, ...]] = (PRD_SPEC_FINISH_ITEM, PRD_SPEC_BYPRODUCT)
 
+PRD_SPEC_STOCK_ACCOUNT: Final[dict[str, str]] = {
+    PRD_SPEC_RAW_ITEM: GL_STOCK_WHEAT,
+    PRD_SPEC_RAW_PACKING: GL_STOCK_PACKING,
+    PRD_SPEC_FINISH_PACKING: GL_STOCK_PACKING,
+    PRD_SPEC_FINISH_ITEM: GL_STOCK_FINISHED,
+    PRD_SPEC_BYPRODUCT: GL_STOCK_FINISHED,
+}
+
 PRD_STATUS_CHOICES: Final[StatusChoices] = (
     (STATUS_ACTIVE, "Active"),
     (STATUS_INACTIVE, "Inactive"),
@@ -633,6 +670,8 @@ PRD_UNIT_BASE_WEIGHT: Final[dict[str, str]] = {
     PRD_UNIT_KG: "1",
     PRD_UNIT_MOUND: "40",
 }
+
+PRD_MOUND_RATE_SPECS: Final[tuple[str, ...]] = (PRD_SPEC_RAW_ITEM,)
 
 PRD_LEDGER_OPENING: Final = "opening"
 PRD_LEDGER_PURCHASE: Final = "purchase"

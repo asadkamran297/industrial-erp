@@ -41,7 +41,7 @@ from apps.core.constants import (
 )
 from apps.core.reporting import ZERO, money
 
-from .models import AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalYear
+from .models import AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalYear, posted_lines
 from .services import DEBIT_NATURE_TYPES, voucher_kind
 
 MONEY = DecimalField(max_digits=18, decimal_places=2)
@@ -153,7 +153,7 @@ def voucher_user_options():
 
 def _money_book(codes, start, end):
     """Opening before ``start`` and the day-wise receipts/payments over ``codes``: two queries."""
-    lines = AccountVoucherLine.objects.filter(account_no__in=codes)
+    lines = posted_lines().filter(account_no__in=codes)
     opening_master = ChartOfAccount.objects.filter(code__in=codes).aggregate(v=_sum("opening_balance"))["v"]
     earlier = lines.filter(voucher_date__lt=start).aggregate(d=_sum("debit_amount"), c=_sum("credit_amount"))
     opening = money(opening_master + earlier["d"] - earlier["c"])
@@ -187,7 +187,7 @@ def bank_book(start, end, account=None):
     opening, _daily = _money_book(codes, start, end)
     titles = _titles()
     lines = list(
-        AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__range=(start, end))
+        posted_lines().filter(account_no__in=codes, voucher_date__range=(start, end))
         .select_related("voucher", "voucher__payment_method").order_by("voucher_date", "voucher_no", "line_number")
     )
     voucher_ids = {l.voucher_id for l in lines}
@@ -228,7 +228,7 @@ def party_ledger(start, end, code):
     debit_natured = account.account_type in DEBIT_NATURE_TYPES
     party_type = PARTY_CUSTOMER if debit_natured else PARTY_SUPPLIER
     signed = (lambda d, c: d - c) if debit_natured else (lambda d, c: c - d)
-    lines = AccountVoucherLine.objects.filter(account_no=code)
+    lines = posted_lines().filter(account_no=code)
     earlier = lines.filter(voucher_date__lt=start).aggregate(d=_sum("debit_amount"), c=_sum("credit_amount"))
     opening = money((account.opening_balance or ZERO) + signed(earlier["d"], earlier["c"]))
 
@@ -327,7 +327,7 @@ def expense_analysis(start, end, group=None):
     codes = [a.code for a in accounts]
     figures = defaultdict(dict)
     for r in (
-        AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__range=(start, end))
+        posted_lines().filter(account_no__in=codes, voucher_date__range=(start, end))
         .annotate(month=TruncMonth("voucher_date")).values("account_no", "month").annotate(v=_sum(F("debit_amount") - F("credit_amount")))
     ):
         figures[r["account_no"]][f"m_{r['month']:%Y_%m}"] = money(r["v"])
@@ -372,7 +372,7 @@ def receivable_payable(as_of, party_type=None):
     accounts = list(ChartOfAccount.objects.filter(parent__in=[g for g, *_ in groups], children__isnull=True).exclude(code="").order_by("title"))
     kinds = {g.pk: (kind, label) for g, kind, label in groups}
     figures = {
-        r["account_no"]: r for r in AccountVoucherLine.objects.filter(account_no__in=[a.code for a in accounts], voucher_date__lte=as_of)
+        r["account_no"]: r for r in posted_lines().filter(account_no__in=[a.code for a in accounts], voucher_date__lte=as_of)
         .values("account_no").annotate(d=_sum("debit_amount"), c=_sum("credit_amount"), last=Max("voucher_date"), n=Count("id"))
     }
     rows = []
@@ -418,7 +418,7 @@ def opening_balances(start, account_type=None):
         accounts = accounts.filter(account_type=account_type)
     accounts = list(accounts.order_by("code"))
     carried = {
-        r["account_no"]: r for r in AccountVoucherLine.objects.filter(voucher_date__lt=start, account_no__in=[a.code for a in accounts])
+        r["account_no"]: r for r in posted_lines().filter(voucher_date__lt=start, account_no__in=[a.code for a in accounts])
         .values("account_no").annotate(d=_sum("debit_amount"), c=_sum("credit_amount"))
     }
     closed = AccountVoucher.objects.filter(source_ref__startswith="period_close:", voucher_date__lt=start).order_by("-voucher_date").first()

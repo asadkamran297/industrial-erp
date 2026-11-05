@@ -794,7 +794,12 @@ class ProductSaleTests(TestCase):
             specification=PRD_SPEC_FINISH_ITEM, unit=PRD_UNIT_PIECE, unit_weight=Decimal("15"),
             starting_date=timezone.localdate(),
         )
+        from apps.godowns.models import Godown
+        from apps.products.models import ProductLedger
+
         set_opening_balance(self.atta, Decimal("500"), rate=Decimal("1900"), user=self.user)
+        self.godown = Godown.objects.create(code="G1", name="Main Godown")
+        ProductLedger.objects.filter(product=self.atta).update(godown=self.godown)
 
     def test_direct_sale_of_a_product_leaves_the_product_ledger(self):
         from apps.core.constants import PRD_LEDGER_SALE
@@ -804,7 +809,7 @@ class ProductSaleTests(TestCase):
         from .services import create_direct_sale
 
         sale, net = create_direct_sale(
-            customer=self.customer, sale_date=timezone.localdate(),
+            customer=self.customer, sale_date=timezone.localdate(), godown=self.godown,
             lines=[{"product": self.atta, "quantity": Decimal("120"), "price": Decimal("2050")}],
             paid_amount=Decimal("100000"), user=self.user,
         )
@@ -824,7 +829,7 @@ class ProductSaleTests(TestCase):
 
         with self.assertRaises(ValidationError):
             create_direct_sale(
-                customer=self.customer, sale_date=timezone.localdate(),
+                customer=self.customer, sale_date=timezone.localdate(), godown=self.godown,
                 lines=[{"product": self.atta, "quantity": Decimal("501"), "price": Decimal("2050")}],
                 user=self.user,
             )
@@ -843,7 +848,7 @@ class ProductSaleTests(TestCase):
         self.assertEqual(order_line.descr, "Atta Zafaran 15 kg")
 
         create_direct_sale(
-            customer=self.customer, sale_date=timezone.localdate(),
+            customer=self.customer, sale_date=timezone.localdate(), godown=self.godown,
             lines=[{"product": self.atta, "quantity": Decimal("80"), "price": Decimal("2000"),
                     "order_item": order_line}],
             user=self.user,
@@ -861,7 +866,7 @@ class ProductSaleTests(TestCase):
         from .services import create_direct_sale
 
         sale, _net = create_direct_sale(
-            customer=self.customer, sale_date=timezone.localdate(),
+            customer=self.customer, sale_date=timezone.localdate(), godown=self.godown,
             lines=[{"product": self.atta, "quantity": Decimal("50"), "price": Decimal("2050")}],
             user=self.user,
         )

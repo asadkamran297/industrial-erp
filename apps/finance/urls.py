@@ -33,6 +33,7 @@ from .views import (
     AccountVoucherExportView,
     AccountVoucherListView,
     AccountVoucherUpdateView,
+    AccountVoucherPostView,
     DaybookView,
     AccountBalanceView,
     AccountVoucherPrintView,
@@ -90,6 +91,7 @@ urlpatterns = [
     path("vouchers/<int:pk>/", AccountVoucherDetailView.as_view(), name="account_voucher_detail"),
     path("vouchers/<int:pk>/print/", AccountVoucherPrintView.as_view(), name="account_voucher_print"),
     path("vouchers/<int:pk>/edit/", AccountVoucherUpdateView.as_view(), name="account_voucher_update"),
+    path("vouchers/<int:pk>/post/", AccountVoucherPostView.as_view(), name="account_voucher_post"),
     path("vouchers/<int:voucher_pk>/lines/new/", AccountVoucherLineCreateView.as_view(), name="account_voucher_line_create"),
     path("vouchers/<int:voucher_pk>/lines/<int:pk>/delete/", AccountVoucherLineDeleteView.as_view(), name="account_voucher_line_delete"),
 ]

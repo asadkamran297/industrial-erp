@@ -543,7 +543,7 @@ def _refresh_sales_order_status(order, *, user=None):
 
 
 def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0"),
-                       tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", user):
+                       tax_amount=Decimal("0"), paid_amount=Decimal("0"), remarks="", godown=None, user):
     """A sale entered as an invoice, posted the moment it is saved.
 
     The counterpart of ``create_purchase_invoice``: the same shape of entry, and
@@ -593,6 +593,7 @@ def create_direct_sale(*, customer, sale_date, lines, discount_amount=Decimal("0
         sale_date=sale_date,
         customer=customer,
         sales_order=list(touched_orders.values())[0] if len(touched_orders) == 1 else None,
+        godown=godown,
         remarks=remarks or "",
         created_by=user,
         updated_by=user,
@@ -680,17 +681,17 @@ def post_sale(*, sale, user):
     tax_total = Decimal("0.00")
     discount_total = Decimal("0.00")
     cost_total = Decimal("0.00")
-    product_rates = product_selectors.current_rate_map()
     for item in sale.items.all():
         if item.is_product_line:
-            on_hand = product_selectors.product_stock(item.product)
+            if sale.godown_id is None:
+                raise ValidationError("Pick the godown the goods leave from.")
+            on_hand = product_selectors.stock_as_of(item.product, godown=sale.godown)
             if item.quantity > on_hand:
-                raise ValidationError(f"Insufficient stock for {item.item_name}: {on_hand} on hand.")
-            cost_total += item.quantity * (product_rates.get(item.product_id) or Decimal("0.00"))
+                raise ValidationError(f"Insufficient stock for {item.item_name} in {sale.godown}: {on_hand} on hand.")
             product_services.post_movement(
                 item.product, -item.quantity, PRD_LEDGER_SALE,
                 entry_date=sale.sale_date, reference=sale.sale_num, rate=item.price,
-                remarks=sale.remarks, user=user,
+                remarks=sale.remarks, godown=sale.godown, user=user,
             )
             total += item.total_price
             tax_total += item.tax_amount
@@ -733,7 +734,6 @@ def post_sale_return(*, sale_return, user):
         raise ValidationError("Posted return cannot be changed.")
     total_return = Decimal("0.00")
     cost_total = Decimal("0.00")
-    product_rates = product_selectors.current_rate_map()
     for item in sale_return.items.all():
         already_returned = sale_return.pos_master.returns.filter(posted=YES).exclude(pk=sale_return.pk).filter(items__pos_detail=item.pos_detail).aggregate(total=Sum("items__quantity"))["total"] or Decimal("0.0000")
         allowed = item.pos_detail.quantity - already_returned
@@ -743,10 +743,10 @@ def post_sale_return(*, sale_return, user):
             product_services.post_movement(
                 item.product, item.quantity, PRD_LEDGER_SALE_RETURN,
                 entry_date=sale_return.return_date, reference=sale_return.return_num, rate=item.price,
-                remarks=f"Sale Return {sale_return.return_num} against {sale_return.sale_num}", user=user,
+                remarks=f"Sale Return {sale_return.return_num} against {sale_return.sale_num}",
+                godown=sale_return.pos_master.godown, user=user,
             )
             total_return += item.net_total
-            cost_total += item.quantity * (product_rates.get(item.product_id) or Decimal("0.00"))
             continue
         stock = Stock.objects.select_for_update().get(inventory_item=item.inventory_item)
         old_quantity = stock.current_quantity

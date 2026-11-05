@@ -17,6 +17,7 @@ from .models import (
     FinishBardanaLink,
     PartyBardanaLedger,
     ProductAccountLink,
+    ProductClosingRate,
     ProductLedger,
     ProductNode,
     ProductOpeningBalance,
@@ -128,6 +129,12 @@ def set_opening_balance(product: ProductNode, quantity, as_of_date=None, rate=No
     entry = ProductLedger.objects.filter(product=product, source=PRD_LEDGER_OPENING).first()
     if entry is None:
         entry = ProductLedger(product=product, source=PRD_LEDGER_OPENING)
+    if entry.godown_id is None:
+        from apps.godowns.models import Godown
+
+        godowns = list(Godown.objects.filter(status=STATUS_ACTIVE)[:2])
+        if len(godowns) == 1:
+            entry.godown = godowns[0]
     entry.entry_date = as_of_date
     entry.quantity = quantity
     entry.rate = rate
@@ -199,3 +206,20 @@ def post_party_bardana(party, bardana_item: ProductNode, quantity, source: str, 
     _stamp(entry, user)
     entry.save()
     return entry
+
+
+@transaction.atomic
+def save_closing_rates(on_date, rates: dict, user=None) -> int:
+    """``rates`` is ``{product: rate}``; one row per product and date, rewritten in place."""
+    saved = 0
+    for product, rate in rates.items():
+        rate = Decimal(rate or 0).quantize(Decimal("0.01"))
+        row = ProductClosingRate.objects.filter(product=product, as_of=on_date).first()
+        if row is None:
+            row = ProductClosingRate(product=product, as_of=on_date)
+        row.rate = rate
+        _stamp(row, user)
+        row.full_clean(validate_constraints=False)
+        row.save()
+        saved += 1
+    return saved

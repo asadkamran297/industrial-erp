@@ -1,0 +1,30 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% url 'products:product_list' as back_url %}
+<form method="get" id="closing-date-form"></form>
+<form method="post" class="form-stack">{% csrf_token %}
+  <input type="hidden" name="as_of" value="{{ as_of|date:'Y-m-d' }}">
+  {% component "table/board" title=title back=True back_url=back_url table_id="closing-stock-table" no_filters=True no_pagination=True %}
+    {% slot actions %}<label class="filter-chip">As of {% include "components/forms/control.html" with type="date" name="as_of" value=as_of|date:"Y-m-d" cell=True attrs='form="closing-date-form" onchange="this.form.submit()" aria-label="As of"' only %}</label>{% endslot %}
+    <thead><tr><th>Code</th><th>Product</th><th>Unit</th><th class="num">Closing Qty</th><th class="num">Rate</th><th class="num">Value</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="muted">{{ row.product.display_code }}</td>
+        <td class="strong">{{ row.product.name }}</td>
+        <td class="muted">{{ row.product.get_unit_display }}</td>
+        <td class="num">{{ row.quantity|floatformat:3 }}</td>
+        <td class="num">{% capture as n %}rate_{{ row.product.pk }}{% endcapture %}{% include "components/forms/control.html" with type="number" step="0.01" name=n value=row.rate kind="num" size="sm" extra="w-32" attrs='data-no-amount aria-label="Rate"' only %}</td>
+        <td class="num">{{ row.value|amount }}</td>
+      </tr>
+      {% empty %}
+      {% include "components/table/empty_row.html" with span=6 label="No stocked products." only %}
+      {% endfor %}
+    </tbody>
+    {% if rows %}
+    <tfoot><tr class="board-foot"><td colspan="5">Total</td><td class="num">{{ total|amount }}</td></tr></tfoot>
+    {% endif %}
+  {% endcomponent %}
+  {% include "components/forms/submit_bar.html" with cancel_url=back_url label="Save" floating=True only %}
+</form>
+{% endblock %}

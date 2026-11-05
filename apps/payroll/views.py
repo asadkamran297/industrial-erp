@@ -1,16 +1,18 @@
 from decimal import Decimal
 
 from django.contrib import messages
+from django.db import transaction
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView, View
 
-from apps.core.constants import ALLOWANCE_DEDUCTION_TYPE_CHOICES, WORKFLOW_STATUS_CHOICES
+from apps.core.constants import ALLOWANCE_DEDUCTION_TYPE_CHOICES, STATUS_APPROVED, WORKFLOW_STATUS_CHOICES
 from apps.core.mixins import PagePermissionRequiredMixin, PortalPermissionRequiredMixin, SearchFilterPaginationMixin, SortableListMixin
 from apps.core.views import SaveAndNewMixin, MasterDetailView
 
 from .forms import EmployeeSalaryForm, PayrollForm
 from .models import EmployeeSalary, Payroll
+from .services import sync_payroll_gl
 from apps.hr.models import Employee
 
 
@@ -110,8 +112,13 @@ class PayrollCreateView(PagePermissionRequiredMixin, CreateView):
         form.instance.created_by = self.request.user
         form.instance.updated_by = self.request.user
         form.instance.generated_by = self.request.user
+        if form.instance.status == STATUS_APPROVED and not form.instance.approved_by_id:
+            form.instance.approved_by = self.request.user
+        with transaction.atomic():
+            response = super().form_valid(form)
+            sync_payroll_gl(self.object, user=self.request.user)
         messages.success(self.request, "Payroll saved.")
-        return super().form_valid(form)
+        return response
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -122,8 +129,13 @@ class PayrollCreateView(PagePermissionRequiredMixin, CreateView):
 class PayrollUpdateView(PayrollCreateView, UpdateView):
     def form_valid(self, form):
         form.instance.updated_by = self.request.user
+        if form.instance.status == STATUS_APPROVED and not form.instance.approved_by_id:
+            form.instance.approved_by = self.request.user
+        with transaction.atomic():
+            response = UpdateView.form_valid(self, form)
+            sync_payroll_gl(self.object, user=self.request.user)
         messages.success(self.request, "Payroll updated.")
-        return super().form_valid(form)
+        return response
 
 
 class PayrollDeleteView(PagePermissionRequiredMixin, View):
@@ -131,6 +143,9 @@ class PayrollDeleteView(PagePermissionRequiredMixin, View):
     action = "delete"
 
     def post(self, request, pk):
-        Payroll.objects.get(pk=pk).soft_delete(request.user)
+        payroll = Payroll.objects.get(pk=pk)
+        with transaction.atomic():
+            payroll.soft_delete(request.user)
+            sync_payroll_gl(payroll, user=request.user)
         messages.success(request, "Payroll deleted.")
         return redirect("payroll:payroll_list")

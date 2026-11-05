@@ -1044,6 +1044,8 @@ class POSMaster(BaseModel):
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, db_column="inv_customer_id")
     sales_order = models.ForeignKey(SalesOrder, null=True, blank=True, related_name="invoices",
                                     on_delete=models.PROTECT, db_column="inv_sales_order_id")
+    godown = models.ForeignKey("godowns.Godown", null=True, blank=True, related_name="sales",
+                               on_delete=models.PROTECT)
     posted_at = models.DateTimeField(null=True, blank=True)
     posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.PROTECT,
                                   related_name="posted_sales_invoices", db_column="posted_by_id")

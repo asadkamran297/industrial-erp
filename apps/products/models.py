@@ -340,6 +340,34 @@ class ProductRate(BaseModel):
         return f"{self.product.name} @ {self.rate}"
 
 
+class ProductClosingRate(BaseModel):
+    product = models.ForeignKey(
+        ProductNode,
+        related_name="closing_rates",
+        on_delete=models.PROTECT,
+    )
+    as_of = models.DateField()
+    rate = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = "prod_closing_rates"
+        ordering = ["-as_of", "product_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "as_of"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="prod_closing_rate_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["product", "-as_of"], name="prod_close_prod_date_idx"),
+            models.Index(fields=["-as_of"], name="prod_close_date_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.name} closing @ {self.rate} on {self.as_of}"
+
+
 class ProductLedger(BaseModel):
     """Every movement of a stocked product. Stock is the sum of this table.
 

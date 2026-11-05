@@ -18,7 +18,8 @@ from apps.core.constants import (
 )
 from apps.core.reporting import ZERO, money, mund, weight
 from apps.godowns.models import Godown
-from apps.products.models import ProductLedger, ProductNode, ProductRate
+from apps.products.models import ProductLedger, ProductNode
+from apps.products.selectors import closing_rate_map
 
 from .models import InventoryClass, InventoryItem, ItemLedger, ManualTransaction, Stock
 
@@ -63,6 +64,11 @@ def _family_label(spec, parent):
     return parent or "Products"
 
 
+def _valuation_rates(on_date):
+    """Per-stock-unit rate the books close on: the Closing Stock rate for that date."""
+    return {pid: rate for pid, (rate, _saved) in closing_rate_map(on_date).items()}
+
+
 # ---------------------------------------------------------------------------
 # 41. Mill Product Stock
 # ---------------------------------------------------------------------------
@@ -83,7 +89,7 @@ def mill_stock(start, end, product=None, godown=None, family=None):
     }
     products = {p.pk: p for p in ProductNode.objects.filter(pk__in={k[0] for k in set(opening) | set(moved)}).select_related("parent")}
     godowns = dict(Godown.objects.values_list("pk", "name"))
-    rates = {r.product_id: r.rate for r in ProductRate.objects.filter(is_current=True)}
+    rates = _valuation_rates(end)
     rows = []
     for key in sorted(set(opening) | set(moved), key=lambda k: (products[k[0]].complete_code, godowns.get(k[1], "") if k[1] else "")):
         p = products[key[0]]
@@ -98,7 +104,7 @@ def mill_stock(start, end, product=None, godown=None, family=None):
             "godown": godowns.get(key[1], "—") if key[1] else "—", "opening": open_q, "qty_in": qin, "qty_out": qout, "closing": closing,
             "closing_kg": weight(closing * unit_kg), "closing_mund": mund(closing * unit_kg), "rate": money(rate), "value": money(closing * rate),
         })
-    totals = {k: sum((r[k] for r in rows), ZERO) for k in ("opening", "qty_in", "qty_out", "closing", "closing_kg", "closing_mund", "value")}
+    totals = {k: sum((r[k] for r in rows), ZERO) for k in ("closing_kg", "closing_mund", "value")}
     families = defaultdict(lambda: {"closing_kg": ZERO, "value": ZERO})
     for r in rows:
         families[r["family"]]["closing_kg"] += r["closing_kg"]
@@ -174,7 +180,7 @@ def slow_moving(as_of, book="", item_class=None):
             })
     if book in ("", "mill") and not item_class:
         stock = {r["product_id"]: r for r in ProductLedger.objects.filter(entry_date__lte=as_of).values("product_id").annotate(q=_sum("quantity"), last=Max("entry_date"), last_out=Max("entry_date", filter=Q(quantity__lt=0)))}
-        rates = {r.product_id: r.rate for r in ProductRate.objects.filter(is_current=True)}
+        rates = _valuation_rates(as_of)
         for p in ProductNode.objects.filter(pk__in=[k for k, v in stock.items() if v["q"] > 0]).select_related("parent"):
             s = stock[p.pk]
             moved = s["last_out"] or s["last"]
@@ -248,7 +254,7 @@ def godown_stock(as_of):
         ProductLedger.objects.filter(entry_date__lte=as_of).values("godown_id", "godown__name", "product__specification", "product__parent__name")
         .annotate(qty=_sum("quantity"), kg=_sum(F("quantity") * _unit_kg()))
     )
-    rates = {r.product_id: r.rate for r in ProductRate.objects.filter(is_current=True)}
+    rates = _valuation_rates(as_of)
     values = {
         (r["godown_id"], r["product_id"]): r["qty"] for r in ProductLedger.objects.filter(entry_date__lte=as_of).values("godown_id", "product_id").annotate(qty=_sum("quantity"))
     }

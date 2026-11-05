@@ -11,7 +11,7 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.urls import reverse
 
-from apps.core.constants import STATUS_POSTED
+from apps.core.constants import STATUS_APPROVED, STATUS_POSTED
 from apps.core.formatting import format_amount
 from apps.core.mixins import PagePermissionRequiredMixin
 from apps.finance.models import AccountVoucher
@@ -181,7 +181,7 @@ class DashboardView(PagePermissionRequiredMixin, TemplateView):
         context["activity_tiles"] = [
             {"label": "Active Employees", "value": f"{Employee.objects.filter(status='active').count():,}", "tone": "slate",
              "icon": "employee", "href": reverse("hr:employee_list")},
-            {"label": "Payroll Net", "value": format_amount(Payroll.objects.aggregate(net=Sum("net_salary"))["net"] or ZERO),
+            {"label": "Payroll Net", "value": format_amount(Payroll.objects.filter(status=STATUS_APPROVED).aggregate(net=Sum("net_salary"))["net"] or ZERO),
              "tone": "slate", "icon": "payroll", "href": reverse("payroll:payroll_list")},
             {"label": "Posted Vouchers", "value": f"{AccountVoucher.objects.filter(posted='Y').count():,}", "tone": "slate",
              "icon": "voucher", "href": reverse("finance:account_voucher_list")},

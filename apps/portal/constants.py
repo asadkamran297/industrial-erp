@@ -66,6 +66,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Finish Bardana Linking", permission="products.finish_bardana.index", url_name="products:finish_bardana_linking"),
         NavigationItem("Opening Balance", permission="products.opening_balances.index", url_name="products:opening_balance"),
         NavigationItem("Rate Update", permission="products.rates.index", url_name="products:rate_update"),
+        NavigationItem("Closing Stock", permission="products.closing_stock.index", url_name="products:closing_stock"),
     )),
     NavigationItem("Production", permission=None, section=SECTION_OPERATIONS, icon="grinding", children=(
         NavigationItem("Grinding", permission="production.grinding.index", url_name="production:grinding_list",
@@ -108,6 +109,7 @@ NAV_ITEMS: tuple[NavigationItem, ...] = (
         NavigationItem("Daily Position", permission="reports.owner.index", url_name="portal:report_daily_position"),
         NavigationItem("Month at a Glance", permission="reports.owner.index", url_name="portal:report_month_glance"),
         NavigationItem("Profitability by Product", permission="reports.owner.index", url_name="portal:report_product_profit"),
+        NavigationItem("Cost of Sales", permission="reports.owner.index", url_name="portal:report_cost_of_sales"),
         NavigationItem("Receivables Aging", permission="reports.owner.index", url_name="portal:report_receivables_aging"),
         NavigationItem("Payables Aging", permission="reports.owner.index", url_name="portal:report_payables_aging"),
     )),

@@ -48,7 +48,7 @@ MASTER_LIST_TEMPLATES = (
 )
 # Boards that are not registers (detail pages, dashboard, single-purpose grids) need no sort header.
 SORT_EXEMPT = (
-    "_detail.html", "portal/dashboard.html", "products/link_grid.html", "products/opening_balances.html", "products/rate_update.html",
+    "_detail.html", "portal/dashboard.html", "products/link_grid.html", "products/opening_balances.html", "products/rate_update.html", "products/closing_stock.html",
     "inventory/manual_transaction.html", "inventory/pos_list.html", "products/product_list.html",
     # Chronological ledgers carry a running balance; reordering them would make the balance column meaningless.
     "finance/account_ledger.html", "finance/daybook.html", "inventory/ledger_list.html", "inventory/customer_ledger_list.html",

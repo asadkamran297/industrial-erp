@@ -1,0 +1,12 @@
+{% extends "layouts/portal.html" %}
+{% block content %}
+{% has_perm "finance.period_close.add" as can_post %}
+<form method="post" action="{{ cos_post_url }}" id="cos-post-form">{% csrf_token %}</form>
+{% component "report/shell" title=title table_id=table_id no_pagination=False %}
+  {% slot actions %}
+    {% if cos_voucher %}{% url 'finance:account_voucher_detail' cos_voucher.pk as voucher_url %}{% include "components/ui/button.html" with label=cos_voucher.voucher_no href=voucher_url icon="file" only %}{% endif %}
+    {% if can_post and not cos_voucher or can_post and cos_stale %}{% include "components/ui/button.html" with label=cos_stale|yesno:"Re-post Voucher,Post Voucher" form_id="cos-post-form" icon="check" variant="success" only %}{% endif %}
+  {% endslot %}
+  {% include "components/report/table.html" %}
+{% endcomponent %}
+{% endblock %}

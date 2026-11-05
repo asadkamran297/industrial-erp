@@ -25,7 +25,8 @@ from apps.core.constants import INVENTORY_ADJUSTMENT_REASONS, STATUS_INACTIVE
 from .forms import AccountConfigurationForm, AccountVoucherForm, AccountVoucherLineForm, FiscalYearForm
 from .models import AccountConfiguration, AccountVoucher, AccountVoucherLine, ChartOfAccount, FiscalPeriod, FiscalYear
 from .report_selectors import day_book
-from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, cash_bank_account_codes, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
+from apps.access_control.selectors import user_has_permission
+from .services import DEBIT_NATURE_TYPES, account_balances, account_ledger, account_role, amount_in_words, money_mode_for_account, cash_bank_account_codes, close_period_to_retained_earnings, dr_cr_to_signed, income_statement, inventory_valuation, money_account_codes, post_inventory_adjustment, post_manual_voucher, receivable_account_codes, signed_to_dr_cr, next_voucher_number, sync_customer_from_coa, voucher_kind
 
 
 class VoucherNavMixin:
@@ -663,6 +664,8 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         context["balance_difference"] = voucher.balance_difference
         context["kind"] = voucher_kind(voucher)
         context["is_locked"] = voucher.posted == "Y"
+        if voucher.posted != "Y" and user_has_permission(self.request.user, "finance.vouchers.edit"):
+            context["post_url"] = reverse("finance:account_voucher_post", args=[voucher.pk])
         context["money_mode"] = money_mode_for_account(voucher.account_no)
         total = voucher.debit_amount or Decimal("0")
         context["voucher_total"] = total
@@ -705,6 +708,21 @@ class AccountVoucherDetailView(VoucherNavMixin, PagePermissionRequiredMixin, Det
         if voucher.posted != "Y":
             actions["edit_url"] = reverse("finance:account_voucher_update", args=[voucher.pk])
         return [link for link in links if link], actions
+
+
+class AccountVoucherPostView(PagePermissionRequiredMixin, View):
+    page = "finance.vouchers"
+    action = "edit"
+
+    def post(self, request, pk):
+        voucher = get_object_or_404(AccountVoucher, pk=pk)
+        try:
+            post_manual_voucher(voucher=voucher, user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Voucher {voucher.voucher_no} posted.")
+        return redirect("finance:account_voucher_detail", pk=voucher.pk)
 
 
 class AccountVoucherLineCreateView(PagePermissionRequiredMixin, View):
@@ -950,7 +968,7 @@ class AccountLedgerView(PagePermissionRequiredMixin, TemplateView):
         context["selected_account"] = code
         context["date_from"] = date_from.isoformat() if date_from else ""
         context["date_to"] = date_to.isoformat() if date_to else ""
-        context["posted_only"] = self.request.GET.get("posted") == "1"
+        context["posted_only"] = self.request.GET.get("posted", "1") != "0"
         context["ledger"] = account_ledger(code, date_from=date_from, date_to=date_to, posted_only=context["posted_only"]) if code else None
         return context
 
@@ -1079,7 +1097,7 @@ class InventoryValuationView(PagePermissionRequiredMixin, TemplateView):
         context.update(inventory_valuation())
         rows, sort_context = report_sort(
             self.request, list(context.get("rows") or []),
-            {"code": "item_code", "item": "item_name", "quantity": "quantity", "cost": "cost", "value": "value"}, default="code",
+            {"code": "item_code", "item": "item_name", "book": "book", "quantity": "quantity", "cost": "cost", "value": "value"}, default="code",
         )
         context["rows"] = rows
         context.update(sort_context)

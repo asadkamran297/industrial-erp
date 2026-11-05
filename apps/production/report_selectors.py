@@ -9,14 +9,18 @@ from django.db.models.functions import Coalesce
 
 from apps.core.constants import (
     PRD_LEDGER_PURCHASE,
+    PRD_SPEC_BYPRODUCT,
+    PRD_SPEC_FINISH_PACKING,
     PRD_SPEC_RAW_ITEM,
     PRD_SPEC_RAW_PACKING,
     PRD_SPEC_SERVICE_ITEM,
     PRD_SPEC_WAGE_ITEM,
+    PRD_UNIT_BASE_WEIGHT,
     STATUS_ACTIVE,
+    YES,
 )
 from apps.core.reporting import GROUP_MONTH, ZERO, group_by, money, mund, period_label, weight
-from apps.finance.models import AccountVoucherLine
+from apps.finance.models import AccountVoucherLine, posted_lines
 from apps.godowns.models import Godown
 from apps.products.models import ProductAccountLink, ProductLedger, ProductNode
 
@@ -73,8 +77,35 @@ def wheat_rate_per_kg(end):
     return money(row["value"] / row["qty"]) if row["qty"] else ZERO
 
 
+def byproduct_rate_per_kg(start, end):
+    """By-product value per kg: average sale price in the period, else its list rate."""
+    from apps.inventory.models import POSDetail
+    from apps.products.selectors import unit_rate_map
+
+    rates = {}
+    sold = (
+        POSDetail.objects.filter(pos_master__posted=YES, pos_master__sale_date__range=(start, end), product__specification=PRD_SPEC_BYPRODUCT)
+        .values("product_id", "product__unit_weight", "product__unit")
+        .annotate(value=_sum("net_total", MONEY), qty=_sum("quantity"))
+    )
+    for row in sold:
+        kg = row["qty"] * _unit_kg(row["product__unit"], row["product__unit_weight"])
+        if kg:
+            rates[row["product_id"]] = row["value"] / kg
+    listed = unit_rate_map()
+    for product in ProductNode.objects.filter(specification=PRD_SPEC_BYPRODUCT, pk__in=listed).exclude(pk__in=rates):
+        kg = _unit_kg(product.unit, product.unit_weight)
+        if kg:
+            rates[product.pk] = listed[product.pk] / kg
+    return rates
+
+
+def _unit_kg(unit, unit_weight):
+    return Decimal(PRD_UNIT_BASE_WEIGHT.get(unit) or unit_weight or 0)
+
+
 def bardana_rate_per_bag(end):
-    row = ProductLedger.objects.filter(product__specification=PRD_SPEC_RAW_PACKING, source=PRD_LEDGER_PURCHASE, quantity__gt=0, rate__gt=0, entry_date__lte=end).aggregate(
+    row = ProductLedger.objects.filter(product__specification=PRD_SPEC_FINISH_PACKING, source=PRD_LEDGER_PURCHASE, quantity__gt=0, rate__gt=0, entry_date__lte=end).aggregate(
         value=_sum(F("quantity") * F("rate"), MONEY), qty=_sum("quantity"),
     )
     return money(row["value"] / row["qty"]) if row["qty"] else ZERO
@@ -274,27 +305,46 @@ def cost_per_bag(start, end):
     wheat_rate = wheat_rate_per_kg(end)
     bag_rate = bardana_rate_per_bag(end)
     codes = direct_expense_codes()
-    expenses = AccountVoucherLine.objects.filter(account_no__in=codes, voucher_date__range=(start, end)).aggregate(
+    expenses = posted_lines().filter(account_no__in=codes, voucher_date__range=(start, end)).aggregate(
         amount=Coalesce(Sum(F("debit_amount") - F("credit_amount")), Value(Decimal("0")), output_field=MONEY),
     )["amount"] if codes else ZERO
-    grouped = (
-        GrindingOutput.objects.filter(voucher__in=qs).values("product_id", "product__name", "product__parent__name")
+    grouped = list(
+        GrindingOutput.objects.filter(voucher__in=qs).values("product_id", "product__name", "product__parent__name", "product__specification")
         .annotate(units=_sum("quantity"), kg=_sum(F("quantity") * F("unit_weight")), bags=_sum("pack_qty")).order_by("-kg")
     )
-    total_out = sum((r["kg"] for r in grouped), ZERO)
+    joint = money(wheat_kg * wheat_rate) + money(expenses)
+    byproduct_rates = byproduct_rate_per_kg(start, end)
+    byproduct_value = {
+        r["product_id"]: money(r["kg"] * byproduct_rates.get(r["product_id"], ZERO))
+        for r in grouped if r["product__specification"] == PRD_SPEC_BYPRODUCT
+    }
+    credit = sum(byproduct_value.values(), ZERO)
+    if credit > joint:
+        scale = joint / credit if credit else ZERO
+        byproduct_value = {pid: money(value * scale) for pid, value in byproduct_value.items()}
+        credit = sum(byproduct_value.values(), ZERO)
+    main_kg = sum((r["kg"] for r in grouped if r["product_id"] not in byproduct_value), ZERO)
     wheat_cost = money(wheat_kg * wheat_rate)
+    main_wheat = wheat_cost - credit * (wheat_cost / joint if joint else ZERO)
+    main_expense = money(expenses) - credit * (money(expenses) / joint if joint else ZERO)
     rows = []
     for r in grouped:
-        share = (r["kg"] / total_out) if total_out else ZERO
-        w = money(wheat_cost * share)
+        byproduct = r["product_id"] in byproduct_value
+        share = ZERO if byproduct or not main_kg else r["kg"] / main_kg
+        if byproduct:
+            w = money(byproduct_value[r["product_id"]] * (wheat_cost / joint if joint else ZERO))
+            e = money(byproduct_value[r["product_id"]] - w)
+        else:
+            w = money(main_wheat * share)
+            e = money(main_expense * share)
         b = money(r["bags"] * bag_rate)
-        e = money(expenses * share)
         total = money(w + b + e)
         units = weight(r["units"])
         rows.append({
             "product_id": r["product_id"], "product": r["product__name"], "family": r["product__parent__name"] or "", "units": units, "kg": weight(r["kg"]),
             "share_pct": (share * 100).quantize(Decimal("0.01")), "wheat_cost": w, "bardana_cost": b, "expense_cost": e, "total_cost": total,
             "cost_per_bag": money(total / units) if units else ZERO, "cost_per_kg": money(total / r["kg"]) if r["kg"] else ZERO,
+            "byproduct": byproduct,
         })
     totals = {k: sum((r[k] for r in rows), ZERO) for k in ("units", "kg", "wheat_cost", "bardana_cost", "expense_cost", "total_cost")}
     totals["cost_per_bag"] = money(totals["total_cost"] / totals["units"]) if totals["units"] else ZERO

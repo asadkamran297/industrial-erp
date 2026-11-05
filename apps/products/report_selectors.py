@@ -74,7 +74,8 @@ def bardana_stock(start, end, item=None, godown=None):
             purchased=_sum("quantity", filter=Q(source=PRD_LEDGER_PURCHASE, quantity__gt=0)),
             returned_in=_sum("quantity", filter=Q(source=PRD_LEDGER_SALE_RETURN, quantity__gt=0)),
             other_in=_sum("quantity", filter=Q(quantity__gt=0) & ~Q(source__in=(PRD_LEDGER_PURCHASE, PRD_LEDGER_SALE_RETURN))),
-            packed=_sum("quantity", filter=Q(source__in=(PRD_LEDGER_PACKING_OUT, PRD_LEDGER_PRODUCTION_OUT), quantity__lt=0)),
+            packed=_sum("quantity", filter=Q(source=PRD_LEDGER_PACKING_OUT, quantity__lt=0)),
+            emptied=_sum("quantity", filter=Q(source=PRD_LEDGER_PRODUCTION_OUT, quantity__lt=0)),
             returned_out=_sum("quantity", filter=Q(source=PRD_LEDGER_PURCHASE_RETURN, quantity__lt=0)),
             other_out=_sum("quantity", filter=Q(quantity__lt=0) & ~Q(source__in=(PRD_LEDGER_PACKING_OUT, PRD_LEDGER_PRODUCTION_OUT, PRD_LEDGER_PURCHASE_RETURN))),
         )
@@ -87,15 +88,15 @@ def bardana_stock(start, end, item=None, godown=None):
         p = period.get(key, {})
         open_qty = weight(opening.get(key))
         ins = weight(p.get("purchased")) + weight(p.get("returned_in")) + weight(p.get("other_in"))
-        outs = weight(p.get("packed")) + weight(p.get("returned_out")) + weight(p.get("other_out"))
+        outs = weight(p.get("packed")) + weight(p.get("emptied")) + weight(p.get("returned_out")) + weight(p.get("other_out"))
         rows.append({
             "item_id": key[0], "item": names.get(key[0], ""), "kind": "Raw sack" if specs.get(key[0]) == PRD_SPEC_RAW_PACKING else "Finished bag",
             "godown": godowns.get(key[1], "—") if key[1] else "—", "opening": open_qty, "purchased": weight(p.get("purchased")),
             "returned_in": weight(p.get("returned_in")), "other_in": weight(p.get("other_in")), "total_in": ins,
-            "packed": weight(-(p.get("packed") or ZERO)), "returned_out": weight(-(p.get("returned_out") or ZERO)), "other_out": weight(-(p.get("other_out") or ZERO)),
+            "packed": weight(-(p.get("packed") or ZERO)), "emptied": weight(-(p.get("emptied") or ZERO)), "returned_out": weight(-(p.get("returned_out") or ZERO)), "other_out": weight(-(p.get("other_out") or ZERO)),
             "total_out": weight(-outs), "closing": weight(open_qty + ins + outs),
         })
-    totals = {k: sum((r[k] for r in rows), ZERO) for k in ("opening", "purchased", "returned_in", "other_in", "total_in", "packed", "returned_out", "other_out", "total_out", "closing")}
+    totals = {k: sum((r[k] for r in rows), ZERO) for k in ("opening", "purchased", "returned_in", "other_in", "total_in", "packed", "emptied", "returned_out", "other_out", "total_out", "closing")}
     return {"rows": rows, "totals": totals}
 
 

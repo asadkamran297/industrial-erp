@@ -6,6 +6,13 @@
   {% capture as status_label %}{% if voucher.posted == "Y" %}Posted{% else %}{{ voucher.get_status_display }}{% endif %}{% endcapture %}
   {% capture as status_tone %}{% if voucher.posted == "Y" %}posted{% else %}pending{% endif %}{% endcapture %}
   {% component "ui/detail_header" kind=voucher.get_voucher_type_display number=voucher.voucher_no date=voucher.voucher_date|dmy status=status_label status_tone=status_tone back=True back_url=list_url %}
+    {% slot actions %}
+      {% if post_url %}
+      <form method="post" action="{{ post_url }}">{% csrf_token %}
+        {% include "components/ui/button.html" with label="Post" icon="post" variant="primary" only %}
+      </form>
+      {% endif %}
+    {% endslot %}
   {% endcomponent %}
 
   {% component "ui/detail_figures" %}

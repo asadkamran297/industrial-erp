@@ -1,8 +1,12 @@
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, ListView, UpdateView, View
 from urllib.parse import parse_qsl, urlencode
 
@@ -355,6 +359,47 @@ class OpeningBalanceView(PagePermissionRequiredMixin, View):
             saved += 1
         messages.success(request, f"{saved} opening balance(s) saved.")
         return redirect(request.path)
+
+
+class ClosingStockView(PagePermissionRequiredMixin, View):
+
+    page = "products.closing_stock"
+    template_name = "products/closing_stock.html"
+
+    def _as_of(self, raw):
+        try:
+            return date.fromisoformat((raw or "").strip())
+        except ValueError:
+            return timezone.localdate()
+
+    def get(self, request):
+        as_of = self._as_of(request.GET.get("as_of"))
+        rows = selectors.closing_stock(as_of)
+        return render(
+            request,
+            self.template_name,
+            {
+                "title": "Closing Stock",
+                "as_of": as_of,
+                "rows": rows,
+                "total": sum((row["value"] for row in rows), Decimal("0.00")),
+                "breadcrumbs": _crumbs(("Closing Stock", "")),
+            },
+        )
+
+    def post(self, request):
+        as_of = self._as_of(request.POST.get("as_of"))
+        products = {str(p.pk): p for p in selectors.stocked_items()}
+        rates = {}
+        for key, value in request.POST.items():
+            if key.startswith("rate_") and key[5:] in products and (value or "").strip():
+                try:
+                    rates[products[key[5:]]] = Decimal(value)
+                except InvalidOperation:
+                    continue
+        saved = services.save_closing_rates(as_of, rates, user=request.user)
+        messages.success(request, f"{saved} closing rate(s) saved for {as_of:%d-%m-%Y}.")
+        return redirect(f"{request.path}?as_of={as_of:%Y-%m-%d}")
 
 
 class RateUpdateView(PagePermissionRequiredMixin, View):

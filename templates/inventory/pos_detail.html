@@ -18,6 +18,7 @@
   {% component "ui/card" %}
     {% component "ui/detail_section" title="Sale Invoice" %}
       {% include "components/ui/detail_item.html" with label="Customer" value=sale.customer.customer_name|default:"Walk-in" only %}
+      {% include "components/ui/detail_item.html" with label="Godown" value=sale.godown.name only %}
       {% include "components/ui/detail_item.html" with label="Paid By" value=sale.get_pay_mode_display only %}
       {% include "components/ui/detail_item.html" with label="Sales Order" value=sale.sales_order.order_num only %}
       {% include "components/ui/detail_item.html" with label="Reference" value=sale.transaction_id only %}

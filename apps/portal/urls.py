@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .report_views import (
+    CostOfSalesColumnsView,
+    CostOfSalesExportView,
+    CostOfSalesPostView,
+    CostOfSalesView,
     DailyPositionColumnsView,
     DailyPositionExportView,
     DailyPositionView,
@@ -50,6 +54,10 @@ urlpatterns = [
     path("reports/product-profit/", ProductProfitView.as_view(), name="report_product_profit"),
     path("reports/product-profit/export/", ProductProfitExportView.as_view(), name="report_product_profit_export"),
     path("reports/product-profit/columns/", ProductProfitColumnsView.as_view(), name="report_product_profit_columns"),
+    path("reports/cost-of-sales/", CostOfSalesView.as_view(), name="report_cost_of_sales"),
+    path("reports/cost-of-sales/export/", CostOfSalesExportView.as_view(), name="report_cost_of_sales_export"),
+    path("reports/cost-of-sales/columns/", CostOfSalesColumnsView.as_view(), name="report_cost_of_sales_columns"),
+    path("reports/cost-of-sales/post/", CostOfSalesPostView.as_view(), name="report_cost_of_sales_post"),
     path("reports/receivables-aging/", ReceivablesAgingView.as_view(), name="report_receivables_aging"),
     path("reports/receivables-aging/export/", ReceivablesAgingExportView.as_view(), name="report_receivables_aging_export"),
     path("reports/receivables-aging/columns/", ReceivablesAgingColumnsView.as_view(), name="report_receivables_aging_columns"),

@@ -26,7 +26,7 @@
       {% if "kg" in columns %}<td class="num">{{ row.kg|floatformat:3|intcomma }}</td>{% endif %}
       {% if "net" in columns %}<td class="num">{{ row.net|amount }}</td>{% endif %}
       {% if "avg_rate" in columns %}<td class="num">{{ row.avg_rate|amount }}</td>{% endif %}
-      {% if "cost_rate" in columns %}<td class="num" title="{% if row.cost_source == 'ledger' %}Weighted average of costed ledger receipts{% elif row.cost_source == 'list' %}Current list rate; no costed receipt in the ledger{% else %}No cost on record{% endif %}">{{ row.cost_rate|amount }}{% if row.cost_source == 'list' %} *{% endif %}</td>{% endif %}
+      {% if "cost_rate" in columns %}<td class="num" title="{% if row.cost_source == 'production' %}Weighted production cost (Cost per Bag){% elif row.cost_source == 'ledger' %}Weighted average purchase rate{% elif row.cost_source == 'list' %}Current list rate; no costed receipt in the ledger{% else %}No cost on record{% endif %}">{{ row.cost_rate|amount }}{% if row.cost_source == 'list' %} *{% endif %}</td>{% endif %}
       {% if "cogs" in columns %}<td class="num">{{ row.cogs|amount }}</td>{% endif %}
       {% if "margin" in columns %}<td class="num strong{% if row.margin < 0 %} fig-bad{% endif %}">{{ row.margin|amount }}</td>{% endif %}
       {% if "margin_pct" in columns %}<td class="num{% if row.margin_pct < 0 %} fig-bad{% endif %}">{{ row.margin_pct|floatformat:2 }}</td>{% endif %}

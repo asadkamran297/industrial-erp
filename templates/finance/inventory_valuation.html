@@ -5,27 +5,32 @@
 <div class="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
   <section class="statement-section">
     <header class="statement-header">Reconciliation</header>
+    {% for row in accounts %}
     <div class="tree-row tree-row--flat" style="--depth: 1">
-      <span class="tree-title">Stock on hand ({{ rows|length }} item{{ rows|length|pluralize }})</span>
-      <span class="tree-amount">{{ stock_value|amount }}</span>
+      <span class="tree-title">{{ row.label }} <a href="{% url 'finance:account_ledger' %}?account_no={{ row.account.code }}" class="tree-code">{{ row.account.code }}</a></span>
+      <span class="tree-amount" title="Stock on hand">{{ row.stock_value|amount }}</span>
     </div>
-    <div class="tree-row tree-row--flat" style="--depth: 1">
-      <span class="tree-title">
-        Inventory account
-        <a href="{% url 'finance:balance_sheet' %}" class="tree-code">{{ account.code }}</a>
-      </span>
-      <span class="tree-amount">{{ ledger_value|amount }}</span>
+    <div class="tree-row tree-row--flat" style="--depth: 2">
+      <span class="tree-title">Books</span>
+      <span class="tree-amount">{{ row.ledger_value|amount }}</span>
     </div>
+    <div class="tree-row tree-row--flat" style="--depth: 2">
+      <span class="tree-title">Difference</span>
+      <span class="tree-amount{% if row.difference %} is-negative{% endif %}">{{ row.difference|amount }}</span>
+    </div>
+    {% endfor %}
     <div class="statement-total statement-total--grand">
-      <span>Difference</span>
-      <span class="tree-amount{% if not reconciles %} is-negative{% endif %}">{{ difference|amount }}</span>
+      <span>Stock on hand</span>
+      <span class="tree-amount">{{ total_stock|amount }}</span>
     </div>
-
-    {% if reconciles %}
-      <p class="statement-empty">Reconciled.</p>
-    {% else %}
-      <p class="statement-empty fig-bad">Balance sheet {% if difference > 0 %}understates{% else %}overstates{% endif %} stock by <b class="num">{{ difference|amount }}</b>.</p>
-    {% endif %}
+    <div class="statement-total">
+      <span>Books</span>
+      <span class="tree-amount">{{ total_ledger|amount }}</span>
+    </div>
+    <div class="statement-total">
+      <span>Difference</span>
+      <span class="tree-amount{% if total_difference %} is-negative{% endif %}">{{ total_difference|amount }}</span>
+    </div>
   </section>
 
   <div class="space-y-4">
@@ -60,18 +65,19 @@
   <thead><tr>
     {% include "components/table/sort_header.html" with label="Code" field="code" %}
     {% include "components/table/sort_header.html" with label="Item" field="item" %}
+    {% include "components/table/sort_header.html" with label="Account" field="book" %}
     {% include "components/table/sort_header.html" with label="Quantity" field="quantity" align="right" %}
     {% include "components/table/sort_header.html" with label="Unit cost" field="cost" align="right" %}
     {% include "components/table/sort_header.html" with label="Value" field="value" align="right" %}
   </tr></thead>
   <tbody>
     {% for row in rows %}
-    <tr><td class="muted">{{ row.item_code }}</td><td class="truncate">{{ row.item_name }}</td><td class="num">{{ row.quantity|qty }}</td><td class="num">{{ row.cost|amount }}</td><td class="num">{{ row.value|amount }}</td></tr>
+    <tr><td class="muted">{{ row.item_code }}</td><td class="truncate">{{ row.item_name }}</td><td>{{ row.book }}</td><td class="num">{{ row.quantity|qty }}</td><td class="num">{{ row.cost|amount }}</td><td class="num">{{ row.value|amount }}</td></tr>
     {% empty %}
-    {% include "components/table/empty_row.html" with span=5 label="No stock on hand." only %}
+    {% include "components/table/empty_row.html" with span=6 label="No stock on hand." only %}
     {% endfor %}
   </tbody>
-  {% include "components/table/table_footer.html" with lead=4 value=stock_value|amount label="Total stock value" only %}
+  {% include "components/table/table_footer.html" with lead=5 value=total_stock|amount label="Total stock value" only %}
 {% endcomponent %}
 </section>
 {% endblock %}

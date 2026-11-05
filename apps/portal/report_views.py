@@ -2,10 +2,15 @@
 
 from decimal import Decimal
 
+from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.shortcuts import redirect
 from django.urls import reverse
+from django.views import View
 
 from apps.core.constants import STATUS_ACTIVE
 from apps.core.formatting import format_amount
+from apps.core.mixins import PagePermissionRequiredMixin
 from apps.core.reporting import (
     PRESET_MONTH,
     PRESET_TODAY,
@@ -15,8 +20,10 @@ from apps.core.reporting import (
     delta,
     mund,
     previous_period,
+    resolve_period,
 )
-from apps.core.table_columns import Column, ColumnSet
+from apps.core.table_columns import Column, ColumnSet, col
+from apps.finance.services import cost_of_sales_voucher, cost_of_sales_voucher_amount, post_cost_of_sales
 from apps.inventory.models import Customer, Supplier
 
 from . import selectors
@@ -261,6 +268,74 @@ class ProductProfitExportView(ReportExportView):
 class ProductProfitColumnsView(ReportColumnsView):
     page = REPORT_PAGE
     report_view = ProductProfitView
+
+
+COST_OF_SALES_COLUMNS = ColumnSet("reports.cost_of_sales", (
+    col("line", "Particulars", locked=True),
+    col("amount", "Amount", "money", locked=True),
+))
+
+
+class CostOfSalesView(ReportView):
+    page = REPORT_PAGE
+    title = "Cost of Sales"
+    template_name = "reports/cost_of_sales.html"
+    columns = COST_OF_SALES_COLUMNS
+    url_name = "portal:report_cost_of_sales"
+    landscape = False
+
+    def build(self):
+        period = self.period()
+        data = selectors.cost_of_sales(period.start, period.end)
+        tiles = [
+            _tile("Net Sales", format_amount(data["net_sales"]), "sky", "receipt"),
+            _tile("Cost of Sales", format_amount(data["cost"]), "amber", "box"),
+            _tile("Gross Profit", format_amount(data["gross"]), "green", "cash", f"{data['gross_pct']}%"),
+            _tile("Closing Stock", format_amount(data["closing"]), "violet", "layers", href=reverse("products:closing_stock") + f"?as_of={period.end:%Y-%m-%d}"),
+        ]
+        return {"rows": data["rows"], "totals": {}, "tiles": tiles, "consumed": data["consumed"]}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        period = self.period()
+        voucher = cost_of_sales_voucher(period.start, period.end)
+        consumed = self.data()["consumed"]
+        context.update({
+            "cos_voucher": voucher,
+            "cos_stale": voucher is not None and cost_of_sales_voucher_amount(voucher) != consumed,
+            "cos_post_url": reverse("portal:report_cost_of_sales_post") + f"?preset=custom&date_from={period.start:%Y-%m-%d}&date_to={period.end:%Y-%m-%d}",
+        })
+        return context
+
+
+class CostOfSalesPostView(PagePermissionRequiredMixin, View):
+    page = "finance.period_close"
+    action = "add"
+
+    def post(self, request):
+        period = resolve_period(request, PRESET_MONTH)
+        data = selectors.cost_of_sales(period.start, period.end)
+        back = reverse("portal:report_cost_of_sales") + f"?{period.query}"
+        try:
+            voucher = post_cost_of_sales(start=period.start, end=period.end, shares=data["shares"], user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect(back)
+        if voucher is None:
+            messages.info(request, "Nothing to post for this period.")
+        else:
+            messages.success(request, f"Cost of Sales voucher {voucher.voucher_no} posted.")
+        return redirect(back)
+
+
+class CostOfSalesExportView(ReportExportView):
+    page = REPORT_PAGE
+    report_view = CostOfSalesView
+
+
+class CostOfSalesColumnsView(ReportColumnsView):
+    page = REPORT_PAGE
+    report_view = CostOfSalesView
 
 
 # ---------------------------------------------------------------------------

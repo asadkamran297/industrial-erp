@@ -7,6 +7,7 @@ from django.db.models import Sum
 from django.core.exceptions import ValidationError
 
 from apps.core.constants import (
+    FS_COST_OF_SALES_PREFIX,
     GL_BROKERAGE_PATH,
     GL_BROKERS_GROUP_PATH,
     GL_WITHHOLDING_PAYABLE_PATH,
@@ -28,6 +29,11 @@ from apps.core.constants import (
     GL_INVENTORY_ADJUSTMENT_PATH,
     GL_INVENTORY_PATH,
     GL_OPENING_EQUITY_PATH,
+    GL_STOCK_FINISHED,
+    GL_STOCK_LABELS,
+    GL_STOCK_PATHS,
+    GL_STOCK_STORES,
+    PRD_SPEC_STOCK_ACCOUNT,
     GL_PAYABLES_PARENT,
     GL_PAYABLES_TITLES,
     GL_RETAINED_EARNINGS_PATH,
@@ -183,7 +189,7 @@ def account_role(account, money_groups, customer_codes):
     return FIN_ACCOUNT_TYPE_ROLES.get(account.account_type, "other")
 
 
-def account_balances(*, posted_only=False):
+def account_balances(*, posted_only=True):
     """Opening, voucher movement and closing balance for every account, by code.
 
     Every amount is signed on the account's own natural side: a debit-natured
@@ -392,12 +398,74 @@ def gl_account(path, *, user=None):
     """
     root_title = path[0]
     node = _get_or_create_group(parent=None, title=root_title, account_type=_ROOT_TYPES[root_title], user=user)
-    for title in path[1:]:
+    for title in path[1:-1]:
         node = _get_or_create_group(parent=node, title=title, account_type=node.account_type, user=user)
+    leaf = ChartOfAccount.objects.filter(parent=node, title=path[-1]).first()
+    if leaf is None:
+        leaf = _get_or_create_group(parent=node, title=path[-1], account_type=node.account_type, user=user)
+        leaf.is_group = False
+        leaf.save(update_fields=["is_group"])
+    node = leaf
     if not node.code:
         ChartOfAccount.rebuild_codes()
         node.refresh_from_db(fields=["code"])
     return node
+
+
+def stock_account(bucket, *, user=None):
+    return gl_account(GL_STOCK_PATHS[bucket], user=user)
+
+
+def stock_bucket(*, product=None):
+    """Stock account bucket for a document line: mill products by specification, the rest stores."""
+    if product is None:
+        return GL_STOCK_STORES
+    return PRD_SPEC_STOCK_ACCOUNT.get(product.specification, GL_STOCK_STORES)
+
+
+def split_by_bucket(weighted, total):
+    """Spread ``total`` over buckets in proportion to ``[(bucket, weight)]``; pennies go to the largest."""
+    zero = Decimal("0.00")
+    total = (total or zero).quantize(TWO_DP)
+    weights = {}
+    for bucket, weight in weighted:
+        weights[bucket] = weights.get(bucket, zero) + (weight or zero)
+    base = sum(weights.values(), zero)
+    if not total:
+        return {}
+    if not base:
+        return {GL_STOCK_STORES: total}
+    shares = {bucket: (total * weight / base).quantize(TWO_DP) for bucket, weight in weights.items() if weight}
+    largest = max(shares, key=lambda bucket: abs(shares[bucket]))
+    shares[largest] += total - sum(shares.values(), zero)
+    return {bucket: amount for bucket, amount in shares.items() if amount}
+
+
+def stock_entries(shares, *, debit, remark, user=None):
+    """Voucher entries for ``{bucket: amount}`` on the stock accounts."""
+    zero = Decimal("0.00")
+    entries = []
+    for bucket, amount in sorted(shares.items()):
+        code = stock_account(bucket, user=user).code
+        if (amount > 0) == debit:
+            entries.append((code, abs(amount), zero, remark))
+        else:
+            entries.append((code, zero, abs(amount), remark))
+    return entries
+
+
+def purchase_invoice_stock_split(invoice):
+    zero = Decimal("0.00")
+    stock_value = ((invoice.goods_amount or zero) - (invoice.discount_amount or zero)).quantize(TWO_DP)
+    lines = invoice.items.select_related("product")
+    return split_by_bucket([(stock_bucket(product=line.product), line.amount) for line in lines], stock_value)
+
+
+def purchase_return_stock_split(purchase_return):
+    lines = purchase_return.items.select_related("product")
+    return split_by_bucket(
+        [(stock_bucket(product=line.product), line.total_price) for line in lines], purchase_return.returned_amount
+    )
 
 
 def get_payables_group(*, user=None):
@@ -572,7 +640,7 @@ def post_sale_to_gl(*, sale, cost_of_goods, user=None):
     sales_discount = gl_account(GL_SALES_DISCOUNT_PATH, user=user)
     tax_payable = gl_account(GL_SALES_TAX_PAYABLE_PATH, user=user)
     cogs = gl_account(GL_COGS_PATH, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+    inventory = stock_account(GL_STOCK_STORES, user=user)
 
     on_credit = receivable > 0
     return _post_voucher(
@@ -623,7 +691,7 @@ def post_sale_return_to_gl(*, sale_return, cost_of_goods, user=None):
 
     sales_return = gl_account(GL_SALES_RETURN_PATH, user=user)
     cogs = gl_account(GL_COGS_PATH, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+    inventory = stock_account(GL_STOCK_STORES, user=user)
 
     return _post_voucher(
         source_ref=f"inv_pos_return_masters:{sale_return.pk}",
@@ -669,7 +737,7 @@ def post_purchase_receipt_to_gl(*, receipt, supplier, amount, user=None):
     if not supplier:
         raise ValidationError("A supplier is required to post a goods receipt to the general ledger.")
     clearing = gl_account(GL_GRN_CLEARING_PATH, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
+    inventory = stock_account(GL_STOCK_STORES, user=user)
 
     return _post_voucher(
         source_ref=f"inv_purchase_order_item_received:{receipt.pk}",
@@ -735,14 +803,12 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
     tax = (invoice.tax_amount or zero).quantize(TWO_DP)
     payable = (invoice.total_amount or zero).quantize(TWO_DP)
 
-    stock_value = (goods - discount).quantize(TWO_DP)
-
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
     reference = invoice.supplier_invoice_num or invoice.invoice_num
 
-    entries = [(inventory.code, stock_value, zero, f"Stock taken in on {invoice.invoice_num}")]
+    entries = stock_entries(purchase_invoice_stock_split(invoice), debit=True,
+                            remark=f"Stock taken in on {invoice.invoice_num}", user=user)
     if freight and invoice.freight_paid_by_mill:
         entries.append((supplier_account.code, freight, zero,
                         f"Freight paid for {supplier.name} on {invoice.invoice_num}"))
@@ -785,6 +851,23 @@ def post_purchase_invoice_to_gl(*, invoice, user=None):
         entries=entries,
         user=user,
     )
+
+
+@transaction.atomic
+def post_manual_voucher(*, voucher, user=None):
+    """Put a hand-entered voucher into the books."""
+    voucher = AccountVoucher.objects.select_for_update().get(pk=voucher.pk)
+    if voucher.posted == YES:
+        raise ValidationError("Voucher is already posted.")
+    if not voucher.lines.exists():
+        raise ValidationError("Voucher has no lines.")
+    if not voucher.is_balanced:
+        raise ValidationError("Debit and credit must match before posting.")
+    voucher.status = STATUS_SUBMITTED
+    voucher.posted = YES
+    voucher.updated_by = user
+    voucher.save()
+    return voucher
 
 
 def reverse_gl_posting(*, source_ref, reversal_ref, voucher_date, remarks, user=None):
@@ -872,7 +955,6 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
     if not supplier:
         raise ValidationError("A supplier is required to post a purchase return to the general ledger.")
     supplier_account = create_supplier_payable_account(supplier=supplier, user=user)
-    inventory = gl_account(GL_INVENTORY_PATH, user=user)
 
     return _post_voucher(
         source_ref=f"inv_purchase_return_masters:{purchase_return.pk}",
@@ -883,24 +965,116 @@ def post_purchase_return_to_gl(*, purchase_return, user=None):
         remarks=f"Auto-posted from purchase return {purchase_return.return_num}",
         entries=[
             (supplier_account.code, returned, zero, f"Payable reduced on {purchase_return.return_num}"),
-            (inventory.code, zero, returned, f"Stock returned to {supplier.name} on {purchase_return.return_num}"),
-        ],
+        ] + stock_entries(purchase_return_stock_split(purchase_return), debit=False,
+                          remark=f"Stock returned to {supplier.name} on {purchase_return.return_num}", user=user),
         user=user,
     )
 
 
-def inventory_valuation():
-    """Reconcile the Inventory control account against the stock records.
+def _cost_of_sales_ref(start, end, number):
+    return f"{FS_COST_OF_SALES_PREFIX}{start:%Y-%m-%d}:{end:%Y-%m-%d}:{number}"
 
-    Stock is a subsidiary ledger: each item row says how many units are held
-    and what they cost. The Inventory account in the chart is the control
-    account that is supposed to equal their total. When the two disagree the
-    balance sheet is overstating or understating what the business owns, so
-    the difference is reported rather than smoothed over.
+
+def active_cost_of_sales_vouchers():
+    """``[(voucher, start, end)]`` for every month-end Cost of Sales voucher not yet reversed."""
+    from datetime import date
+
+    refs = set(AccountVoucher.objects.filter(source_ref__startswith=FS_COST_OF_SALES_PREFIX).values_list("source_ref", flat=True))
+    active = []
+    for voucher in AccountVoucher.objects.filter(source_ref__startswith=FS_COST_OF_SALES_PREFIX).exclude(source_ref__endswith=":rev"):
+        if f"{voucher.source_ref}:rev" in refs:
+            continue
+        _start, _end = voucher.source_ref[len(FS_COST_OF_SALES_PREFIX):].split(":")[:2]
+        active.append((voucher, date.fromisoformat(_start), date.fromisoformat(_end)))
+    return active
+
+
+def cost_of_sales_voucher(start, end):
+    for voucher, posted_start, posted_end in active_cost_of_sales_vouchers():
+        if (posted_start, posted_end) == (start, end):
+            return voucher
+    return None
+
+
+def cost_of_sales_voucher_amount(voucher):
+    """Signed: positive when it charged Cost of Goods Sold, negative when it credited it."""
+    cogs = gl_account(GL_COGS_PATH)
+    row = voucher.lines.filter(account_no=cogs.code).aggregate(debit=Sum("debit_amount"), credit=Sum("credit_amount"))
+    return ((row["debit"] or Decimal("0")) - (row["credit"] or Decimal("0"))).quantize(TWO_DP)
+
+
+def _voucher_stock_shares(voucher):
+    codes = {stock_account(bucket).code: bucket for bucket in GL_STOCK_PATHS}
+    shares = {}
+    for line in voucher.lines.filter(account_no__in=codes):
+        bucket = codes[line.account_no]
+        shares[bucket] = shares.get(bucket, Decimal("0.00")) + (line.credit_amount or 0) - (line.debit_amount or 0)
+    return {bucket: amount for bucket, amount in shares.items() if amount}
+
+
+@transaction.atomic
+def post_cost_of_sales(*, start, end, amount=None, shares=None, user=None):
+    """Mill stock consumed in the period: Dr Cost of Goods Sold / Cr each stock account.
+
+    ``shares`` is ``{stock bucket: consumed}``; a negative share means that stock grew.
+    Posting the same period again reverses the earlier voucher first.
+    """
+    zero = Decimal("0.00")
+    if shares is None:
+        shares = {GL_STOCK_FINISHED: amount or zero}
+    shares = {bucket: (value or zero).quantize(TWO_DP) for bucket, value in shares.items()}
+    shares = {bucket: value for bucket, value in shares.items() if value}
+    amount = sum(shares.values(), zero)
+    current = None
+    for voucher, posted_start, posted_end in active_cost_of_sales_vouchers():
+        if (posted_start, posted_end) == (start, end):
+            current = voucher
+        elif posted_start <= end and start <= posted_end:
+            raise ValidationError(
+                f"Cost of Sales already posted for {posted_start:%d-%m-%Y} to {posted_end:%d-%m-%Y} ({voucher.voucher_no})."
+            )
+    if current is not None:
+        if cost_of_sales_voucher_amount(current) == amount and _voucher_stock_shares(current) == shares:
+            return current
+        reverse_gl_posting(
+            source_ref=current.source_ref, reversal_ref=f"{current.source_ref}:rev", voucher_date=end,
+            remarks=f"Cost of Sales re-posted for {start:%d-%m-%Y} to {end:%d-%m-%Y}", user=user,
+        )
+    if not shares:
+        return None
+    number = AccountVoucher.objects.filter(
+        source_ref__startswith=f"{FS_COST_OF_SALES_PREFIX}{start:%Y-%m-%d}:{end:%Y-%m-%d}:"
+    ).exclude(source_ref__endswith=":rev").count() + 1
+
+    cogs = gl_account(GL_COGS_PATH, user=user)
+    label = f"Cost of Sales {start:%d-%m-%Y} to {end:%d-%m-%Y}"
+    entries = [(cogs.code, amount, zero, label) if amount >= 0 else (cogs.code, zero, -amount, label)]
+    entries += stock_entries({bucket: -value for bucket, value in shares.items()}, debit=True,
+                             remark=f"Mill stock consumed, {label}", user=user)
+    return _post_voucher(
+        source_ref=_cost_of_sales_ref(start, end, number),
+        voucher_type=VOUCHER_TYPE_JOURNAL,
+        voucher_date=end,
+        account_no=cogs.code,
+        remarks=label,
+        entries=entries,
+        user=user,
+    )
+
+
+def inventory_valuation(on_date=None):
+    """Stock on hand against the stock accounts, one line per account.
+
+    Stores come from the item stock records at their running cost; mill goods
+    from the product ledger at the Closing Stock rate, the same figure the
+    Cost of Sales voucher closes the books on. Only the stores difference is
+    adjusted from here; mill accounts are trued by the Cost of Sales voucher.
     """
     from apps.inventory.models import Stock  # lazy: inventory imports finance
+    from apps.products.selectors import closing_stock  # lazy: products imports finance
 
     zero = Decimal("0.00")
+    on_date = on_date or timezone.localdate()
     rows = []
     for stock in Stock.objects.filter(status=STATUS_ACTIVE).order_by("item_name"):
         quantity = stock.current_quantity or Decimal("0")
@@ -909,27 +1083,60 @@ def inventory_valuation():
         if not quantity and not value:
             continue
         rows.append({
+            "bucket": GL_STOCK_STORES,
             "item_code": stock.item_code,
             "item_name": stock.item_name,
             "quantity": quantity,
             "cost": cost,
             "value": value,
         })
+    for row in closing_stock(on_date):
+        if not row["quantity"] and not row["value"]:
+            continue
+        rows.append({
+            "bucket": stock_bucket(product=row["product"]),
+            "item_code": row["product"].complete_code,
+            "item_name": row["product"].name,
+            "quantity": row["quantity"],
+            "cost": row["rate"],
+            "value": row["value"],
+        })
+    for row in rows:
+        row["book"] = GL_STOCK_LABELS[row["bucket"]]
 
-    stock_value = sum((row["value"] for row in rows), zero)
-    account = gl_account(GL_INVENTORY_PATH)
-    ledger_value = (account_balances().get(account.code) or {}).get("closing", zero)
+    balances = account_balances()
+    accounts = []
+    for bucket in GL_STOCK_PATHS:
+        account = stock_account(bucket)
+        stock_value = sum((row["value"] for row in rows if row["bucket"] == bucket), zero)
+        ledger_value = (balances.get(account.code) or {}).get("closing", zero)
+        accounts.append({
+            "bucket": bucket, "label": GL_STOCK_LABELS[bucket], "account": account,
+            "stock_value": stock_value, "ledger_value": ledger_value, "difference": stock_value - ledger_value,
+        })
+    legacy = ChartOfAccount.objects.filter(title=GL_INVENTORY_PATH[-1], parent__title=GL_INVENTORY_PATH[-2]).first()
+    legacy_value = (balances.get(legacy.code) or {}).get("closing", zero) if legacy and legacy.code else zero
+    if legacy_value:
+        accounts.append({
+            "bucket": "", "label": legacy.title, "account": legacy,
+            "stock_value": zero, "ledger_value": legacy_value, "difference": -legacy_value,
+        })
 
-    largest = sorted(rows, key=lambda row: -row["value"])[:5]
-
+    stores = accounts[list(GL_STOCK_PATHS).index(GL_STOCK_STORES)]
+    total_stock = sum((row["stock_value"] for row in accounts), zero)
+    total_ledger = sum((row["ledger_value"] for row in accounts), zero)
     return {
         "rows": rows,
-        "largest": largest,
-        "stock_value": stock_value,
-        "ledger_value": ledger_value,
-        "difference": stock_value - ledger_value,
-        "reconciles": stock_value == ledger_value,
-        "account": account,
+        "largest": sorted(rows, key=lambda row: -row["value"])[:5],
+        "accounts": accounts,
+        "total_stock": total_stock,
+        "total_ledger": total_ledger,
+        "total_difference": total_stock - total_ledger,
+        "stock_value": stores["stock_value"],
+        "ledger_value": stores["ledger_value"],
+        "difference": stores["difference"],
+        "reconciles": not stores["difference"],
+        "account": stores["account"],
     }
 
 
@@ -1233,7 +1440,7 @@ def sync_customer_from_coa(*, node, user=None):
     )
 
 
-def account_ledger(account_no, *, date_from=None, date_to=None, posted_only=False):
+def account_ledger(account_no, *, date_from=None, date_to=None, posted_only=True):
     """One account's statement: opening balance, its entries, running balance.
 
     The opening balance is the account's own opening plus everything posted

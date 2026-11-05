@@ -23,6 +23,7 @@ BARDANA_STOCK_COLUMNS = ColumnSet("reports.bardana_stock", (
     col("returned_in", "Returned by Party", "qty", total=True),
     col("other_in", "Other In", "qty", total=True, default=False),
     col("total_in", "In", "qty", total=True),
+    col("emptied", "Emptied in Grinding", "qty", total=True),
     col("packed", "Issued to Packing", "qty", total=True),
     col("returned_out", "Returned to Party", "qty", total=True),
     col("other_out", "Other Out", "qty", total=True, default=False),
@@ -48,7 +49,7 @@ class BardanaStockView(ReportView):
         tiles = [
             _tile("Opening", f"{t['opening']:,.0f}", "slate", "box"),
             _tile("In", f"{t['total_in']:,.0f}", "green", "plus", f"purchased {t['purchased']:,.0f}"),
-            _tile("Out", f"{t['total_out']:,.0f}", "rose", "minus", f"packing {t['packed']:,.0f}"),
+            _tile("Out", f"{t['total_out']:,.0f}", "rose", "minus", f"grinding {t['emptied']:,.0f} · packing {t['packed']:,.0f}"),
             _tile("Closing", f"{t['closing']:,.0f}", "amber", "layers"),
         ]
         return {"rows": data["rows"], "totals": t, "tiles": tiles}
